@@ -1,0 +1,37 @@
+schema: spec-driven
+githubCopilot:
+  cloudAgent: false
+
+# Project context, shown to AI agents when they create change artifacts.
+# Keep it short: it points to the real sources of truth instead of copying them.
+context: |
+  Read AGENTS.md at the repository root first; it is the canonical guide for this project.
+  Decisions: docs/decisions/ (MADR ADRs, decision log in docs/decisions/README.md).
+    Accepted ADRs are binding; proposed ADRs are open questions and must not be assumed decided.
+  Vocabulary: docs/glossary.md. Use its terms verbatim in specs.
+  Architecture (current state): docs/architecture/README.md.
+  Implementation language: NOT decided yet (ADR-0005, Java is the leading candidate).
+    Until it is accepted, do not add build files, source trees or language-specific tooling.
+  Process: docs/process/development-workflow.md.
+
+# Per-artifact rules, applied on top of the schema's own instructions.
+rules:
+  proposal:
+    - Reference related ADRs by ID (for example ADR-0002) and say whether the change depends on a proposed (undecided) ADR.
+    - Include a "Non-goals" bullet list under What Changes when scope could be misread.
+  specs:
+    - Use terms from docs/glossary.md; if a new domain term is needed, the tasks must include adding it to the glossary.
+    - Specify observable behavior only; implementation choices belong in design.md or an ADR.
+  design:
+    - Keep local, easily reversible decisions here. For any decision that is costly to reverse or affects other capabilities, create an ADR with `npm run adr:new -- "<title>"` and link it instead of repeating its reasoning.
+  tasks:
+    - End with a "Documentation" task group covering affected docs (architecture, guides, reference, glossary), ADR status updates and `npm run check`.
+
+# Per-operation guidance, applied when implementing and archiving.
+operations:
+  apply:
+    guidance:
+      - Keep specs and code in sync; if implementation shows a requirement is wrong, update the delta spec first and tell the user.
+  archive:
+    guidance:
+      - Before archiving, move ADRs linked from this change out of `proposed` status (accepted or rejected) and run `npm run check`.

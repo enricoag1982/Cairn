@@ -1,0 +1,12 @@
+# Owners are requested for review automatically when matching files change.
+# The last matching pattern wins. Replace the placeholders and uncomment.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# *                      @your-org/maintainers
+# /openspec/specs/       @your-org/product-owners
+# /docs/decisions/       @your-org/architects
+# /docs/principles.md    @your-org/architects
+# /AGENTS.md             @your-org/maintainers
+# **/CLAUDE.md           @your-org/maintainers
+# /.claude/              @your-org/maintainers
+# /.github/workflows/    @your-org/maintainers

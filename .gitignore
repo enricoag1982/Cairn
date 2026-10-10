@@ -1,0 +1,27 @@
+# Tooling
+node_modules/
+
+# Local agent settings (personal, never shared)
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Obsidian: share settings, not personal workspace state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.obsidian/plugins/*/data.json
+.trash/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.iml
+
+# Build output (add language-specific entries once ADR-0005 is decided)
+build/
+target/
+out/
+dist/

@@ -1,0 +1,30 @@
+# Obsidian Bases view of the decision records (core "Bases" plugin).
+# Convenience only: docs/decisions/README.md is the authoritative, generated decision log.
+filters:
+  and:
+    - file.inFolder("docs/decisions")
+    - file.ext == "md"
+    - file.name != "README.md"
+properties:
+  status:
+    displayName: Status
+  date:
+    displayName: Date
+  decision-makers:
+    displayName: Decision makers
+views:
+  - type: table
+    name: All decisions
+    order:
+      - file.name
+      - status
+      - date
+      - decision-makers
+  - type: table
+    name: Open questions
+    filters:
+      and:
+        - status == "proposed"
+    order:
+      - file.name
+      - date

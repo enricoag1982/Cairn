@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run check)",
+      "Bash(npm run specs:*)",
+      "Bash(npm run changes:list)",
+      "Bash(npm run docs:*)",
+      "Bash(npm run adr:new:*)",
+      "Bash(openspec list:*)",
+      "Bash(openspec show:*)",
+      "Bash(openspec status:*)",
+      "Bash(openspec validate:*)",
+      "Bash(openspec context:*)",
+      "Bash(openspec instructions:*)",
+      "Bash(openspec templates:*)",
+      "Bash(openspec schemas:*)",
+      "Bash(npx openspec list:*)",
+      "Bash(npx openspec show:*)",
+      "Bash(npx openspec status:*)",
+      "Bash(npx openspec validate:*)",
+      "Bash(npx openspec context:*)",
+      "Bash(npx openspec instructions:*)"
+    ]
+  }
+}

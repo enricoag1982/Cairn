@@ -1,0 +1,30 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  specs-and-docs:
+    runs-on: ubuntu-latest
+    env:
+      OPENSPEC_TELEMETRY: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate OpenSpec specs and changes
+        run: npm run specs:validate
+      - name: Check archived changes are complete
+        run: npx openspec validate --archived --no-interactive
+      - name: Lint Markdown
+        run: npm run docs:lint
+      - name: Check decisions, links, review dates, skills
+        run: npm run docs:check

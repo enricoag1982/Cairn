@@ -1,0 +1,26 @@
+{
+  "name": "project-knowledge-tooling",
+  "private": true,
+  "description": "Documentation and spec tooling only (OpenSpec, markdownlint, docs checks). Not the application build; see AGENTS.md.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "check": "npm run specs:validate && npm run docs:lint && npm run docs:check",
+    "specs:validate": "openspec validate --all --strict --no-interactive",
+    "specs:list": "openspec list --specs",
+    "changes:list": "openspec list",
+    "docs:lint": "markdownlint-cli2",
+    "docs:lint:fix": "markdownlint-cli2 --fix",
+    "docs:check": "node scripts/docs.mjs check",
+    "docs:index": "node scripts/docs.mjs index",
+    "adr:new": "node scripts/docs.mjs new-adr",
+    "agents:update": "node scripts/openspec-update.mjs"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "1.13.2",
+    "markdownlint-cli2": "0.23.3",
+    "yaml": "2.9.1"
+  }
+}
