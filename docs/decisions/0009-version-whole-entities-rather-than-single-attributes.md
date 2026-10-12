@@ -40,7 +40,7 @@ Every attribute is versioned with its entity, so attributes carry no "temporal" 
 The costs of A are contained like this:
 
 - **Modeling rule:** data that changes often, or comes from another source (balances, prices, ratings), goes into its own entity or relationship. Versions then stay small and stable.
-- **Conflict detection per attribute:** the single writer ([ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)) checks whether the attributes a write changes were modified since the caller's basis. Two writers that change different attributes of one entity do not conflict.
+- **Conflict detection down to single attributes:** the single writer ([ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)) can check whether the attributes a write changes were modified since the caller's basis. The caller chooses the check: none, per attribute or per entity. With the per-attribute check, two writers that change different attributes of one entity do not conflict.
 - **Evolvable encoding:** each stored field carries the attribute's identifier, as in Protobuf. Versions written under an older schema read correctly under a newer one, without rewriting history.
 - **Append-only storage:** each write adds versions for an effective period; where versions overlap, the most recently recorded one wins. Nothing is updated in place.
 - **Aggregations:** scanning whole versions is fast enough on the heap for millions of entities. Columnar copies, each tied to a basis, can be added later as an optimization.

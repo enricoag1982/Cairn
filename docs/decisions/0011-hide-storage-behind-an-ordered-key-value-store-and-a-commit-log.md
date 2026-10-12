@@ -45,7 +45,7 @@ Backends in-memory | RocksDB | hybrid heap and disk | FoundationDB (later, if ev
 - The **in-memory implementation is the reference implementation**. It defines correct behavior, serves as the test double for applications, and is a production option for data that fits in memory when combined with a durable commit log.
 - A **conformance suite**, built from the OpenSpec scenarios, runs against every implementation. An implementation is valid only if it passes.
 - Order of implementations: in-memory with a file-based commit log and periodic snapshots first, then RocksDB. A custom split between heap (current state) and disk (history) is built only if measurements show RocksDB is not enough.
-- Backends may later offer optional push-down capabilities (for example range filters), discovered at runtime and never required for correctness.
+- Backends may later offer optional push-down features (for example range filters), declared as storage capabilities, discovered at runtime and never required for correctness.
 
 ### Consequences
 

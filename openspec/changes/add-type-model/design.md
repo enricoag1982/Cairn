@@ -9,7 +9,8 @@ Constraints that shape the approach:
 - Java 25 (ADR-0005, accepted). The build uses Maven, proposed in ADR-0014. No code is written until ADR-0014 is accepted.
 - The meta-model follows ADR-0010 (proposed): single inheritance, traits, first-class relationship types, and the schema stored as data with history in transaction time.
 - Types will be written as annotated Java interfaces (ADR-0012, proposed). The definition format built here is what the annotation processor will produce, and what runtime tools will produce later (ADR-0012, rules 1 and 5).
-- The storage interface of ADR-0011 does not exist yet, so the schema lives in memory in this change.
+- Registration is serialized because of the single writer of ADR-0007 (proposed).
+- The storage interface of ADR-0011 does not exist yet, so the schema lives in memory in this change. ADR-0011 is context only; this change does not depend on it.
 - Transaction time and basis follow ADR-0008 (proposed): UTC instants with microsecond precision, strictly increasing.
 - Small API types are immutable records that never rely on identity, as ADR-0005 recommends.
 
@@ -78,6 +79,9 @@ Constraints that shape the approach:
 
 ### D5. Store-local identifiers, matched by name and alias
 
+ADR-0010 (proposed) decides that schema identifiers are local to the store, never change and are never reused, and that stored data refers to them instead of names. This section covers only how they are represented and matched.
+
+
 - `TypeId` and `AttributeId` are records wrapping a `long`. They are assigned from one counter per store and never reused. Entity types, traits and relationship types share the `TypeId` space.
 - Between two versions of an origin, elements are matched in this order:
   1. type by name, then by the aliases of the new version
@@ -111,11 +115,11 @@ Constraints that shape the approach:
 - JUnit 5 and AssertJ, as test-only dependencies.
 - A fixture in the test sources builds the reference domain model.
 - Every scenario in the two specs has one test, whose display name is the scenario's name, so a scenario can be traced to its test.
-- There is no conformance-suite module yet. Schema behavior does not depend on storage, so the suite starts with `add-entity-versions`.
+- There is no conformance-suite module yet. Schema behavior does not depend on storage in this change, so the suite starts with `add-entity-versions`. The schema scenarios join the suite in `add-durable-commit-log`, when the schema moves onto the storage interface.
 
 ## Risks / Trade-offs
 
-- [ADR-0008, ADR-0010, ADR-0012 and ADR-0014 are still proposed and may change at review] → Code starts only after ADR-0014 is accepted, and the definition format (D2) is reviewed in this change's pull request first.
+- [ADR-0007, ADR-0008, ADR-0010, ADR-0012 and ADR-0014 are still proposed and may change at review] → Code starts only after ADR-0014 is accepted, and the definition format (D2) is reviewed in this change's pull request first.
 - [Matching attribute identity for moved and renamed attributes is subtle] → Dedicated tests for moving up, renaming, and renaming plus moving.
 - [Without migrations, the compatibility rules are strict: making an attribute required is always breaking] → Accepted until a later change adds defaults, backfills and migrations.
 - [Java modules can cause friction with test tooling and, later, the annotation processor] → Drop `module-info.java` if it costs more than it protects (D1).

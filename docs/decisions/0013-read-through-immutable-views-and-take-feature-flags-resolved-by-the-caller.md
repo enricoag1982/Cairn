@@ -51,7 +51,7 @@ Proposed option: "Immutable views bound to a context, with flags resolved by the
 ### Three kinds of "feature"
 
 - *Typed options* change what a query means, for example "include history". They are typed parameters, not flags.
-- *Capabilities* are features a storage implementation may lack. They are discoverable at runtime, and asking for a missing one fails immediately.
+- *Storage capabilities* are features a storage implementation may lack. They are discoverable at runtime, and asking for a missing one fails immediately.
 - *Feature flags* switch behavior for rollout and A/B testing.
 
 ### Feature flags

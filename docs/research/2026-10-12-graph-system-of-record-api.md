@@ -2,7 +2,7 @@
 status: concluded
 date: 2026-10-12
 authors: [enricoag1982, Claude Code]
-related: [ADR-0005, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013]
+related: [ADR-0005, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014]
 ---
 
 # Research: the API of a graph-shaped, bitemporal system of record
@@ -10,7 +10,7 @@ related: [ADR-0005, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, 
 ## Question
 
 What should the API of sysRec look like?
-sysRec is a primitive for defining and keeping business and enterprise data. Users define types with inheritance and relationships. The engine stores instances consistently, with history on two time axes, and answers traversals and complex aggregations.
+sysRec is a primitive for defining and keeping business and enterprise data. Users define types with inheritance and relationships. The engine stores entities and relationships consistently, with history on two time axes, and answers traversals and complex aggregations.
 Every access passes its own parameters plus a standard context (effective time, transaction time, feature flags). The API hides the storage implementation: in memory, a key-value store, or a hybrid of heap and disk.
 
 This note records the brainstorming sessions of 2026-10-10 and 2026-10-12. The decisions moved into ADRs; the rest feeds the first OpenSpec changes.
@@ -59,7 +59,7 @@ This note records the brainstorming sessions of 2026-10-10 and 2026-10-12. The d
 | 6 | Which kind of graph? | Typed property graph with binary, first-class relationships | ADR-0010 |
 | 7 | Version whole entities or single attributes? | Whole entities, with measures that contain the costs | ADR-0009 |
 | 8 | Inheritance? | Single inheritance plus traits, polymorphic queries | ADR-0010 |
-| 9 | Can an entity change type? Can types evolve? | An instance's type is fixed, roles cover things that come and go; type definitions evolve under compatibility rules | ADR-0010, [below](#type-evolution) |
+| 9 | Can an entity change type? Can types evolve? | An entity's type is fixed, roles cover things that come and go; type definitions evolve under compatibility rules | ADR-0010, [below](#type-evolution) |
 | 10 | How do polymorphic queries find subtypes? | Index under the concrete type, expand to subtypes when querying | ADR-0010 |
 | 11 | Schema-first? Schema stored as data? | Schema-first, stored as data, versioned in transaction time | ADR-0010 |
 | 12 | Composition or association? | Both, set per relationship type | ADR-0010 |
@@ -72,7 +72,7 @@ This note records the brainstorming sessions of 2026-10-10 and 2026-10-12. The d
 | 19 | Partial updates | Patch is the default write | [Below](#writes) |
 | 20 | When are constraints checked? | At commit; rules spanning several entities after version 1 (tentative) | [Below](#writes) |
 | 21 | Context on every call or a bound view? | Immutable view | ADR-0013 |
-| 22 | What do feature flags mean? | Typed options, capabilities, and flags resolved by the caller | ADR-0013 |
+| 22 | What do feature flags mean? | Typed options, storage capabilities, and flags resolved by the caller | ADR-0013 |
 | 23 | Synchronous or asynchronous API? | Synchronous, with streamed results | ADR-0007 |
 | 24 | Query language | Queries as data, built through a typed builder | [Below](#queries-and-aggregation) |
 | 25 | How consistent are aggregations? | Always one snapshot; columnar copies only make them faster | [Below](#queries-and-aggregation) |
@@ -90,18 +90,20 @@ sysRec gets its own compatibility checker over the meta-model, borrowing the com
 
 | Change | Compatible? |
 | --- | --- |
-| Add an optional attribute, a type, a subtype or a relationship type | yes |
+| Add an optional attribute, a type or a subtype | yes |
+| Add a relationship type | yes, unless it requires a relationship for an entity type that already exists |
 | Rename an attribute or type, keeping the old name as an alias | yes |
-| Widen a value type (int to long), a cardinality (one to many) or a relationship target (Organization to Party) | yes |
+| Widen a value type (int to long), a multiplicity (exactly one to unbounded) or a relationship target (Organization to Party) | yes |
 | Make a required attribute optional, or relax a constraint | yes |
-| Move an attribute up to a supertype | yes |
+| Move an attribute up to a supertype | yes, if it is optional and not unique |
 | Deprecate an attribute (no new writes, history kept) | yes |
 | Remove an attribute or type | no: deprecate it instead |
 | Narrow anything (long to int, Party to Organization, many to one) | no: needs a migration |
-| Make an attribute required, or add a stricter constraint | only with a default or a backfill, checked against existing data |
+| Make an attribute required, or add a stricter constraint | not until defaults and migrations exist; then only with a default or a backfill, checked against existing data |
 | Change a type's supertype | no |
 
 A migration is an explicit, reviewed transformation that runs as a transaction, so it is recorded in history.
+The normative list is the `schema-evolution` capability, proposed in the OpenSpec change `add-type-model`.
 
 ### Identity
 
@@ -129,7 +131,7 @@ IDs are opaque in the API. The generator is a setting of the store, not of each 
   - **End-date** ends the entity or relationship from a point in effective time.
 - An effective period can start in the future. A future-dated fact becomes visible to reads at later effective times without any transaction, so the change feed is silent at that moment. A scheduler for "now effective" events is a possible follow-up.
 - The caller chooses the conflict check: none (the last commit wins), per attribute ("I expect the rating to still be BBB") or per entity. The writer checks it against the caller's basis.
-- Partial data never means partial validation. Types, cardinality, uniqueness and relationship lifetimes are checked at commit, against the state the transaction would produce.
+- Partial data never means partial validation. Types, multiplicities, uniqueness and relationship lifetimes are checked at commit, against the state the transaction would produce.
 - Rules that span several entities, such as "a party's ownership shares add up to at most 100%", must hold at every point in effective time. They are planned after version 1.
 
 ### Feature flags and A/B testing
@@ -180,18 +182,19 @@ Each ADR lists its options with their pros and cons. Two trade-offs shaped most 
   5. Explicit over implicit: time coordinates, context and flags are passed explicitly and reported back.
   6. The model is a contract: type changes are checked for compatibility before they reach production.
 - Still open:
-  - Gradle or Maven. The lean is Maven, declarative and predictable; switch if build times hurt.
+  - Gradle or Maven. ADR-0014 proposes Maven, declarative and predictable; switch if build times hurt.
+  - The entity ID decisions (opaque IDs, one generator per store, UUIDv7 by default) need an ADR before `add-entity-versions`.
   - "Now effective" events for future-dated facts.
   - Compact internal IDs, or UUIDs used directly as storage keys.
   - Rules that span several entities, tentatively after version 1.
 - Next steps, as OpenSpec changes in this order:
   1. `add-type-model`: the meta-model, the programmatic schema API, the schema stored as data, and compatibility checks
   2. `add-entity-versions`: create, patch, replace and end-date entities on two time axes, read through views, in memory
-  3. `add-relationships`: relationship instances, integrity at both ends, navigation and traversal
+  3. `add-relationships`: relationships as data, integrity at both ends, navigation and traversal
   4. `add-java-type-definitions`: annotations, the annotation processor, generated builders and typed access
   5. `add-durable-commit-log`: a file-based commit log, snapshots and recovery
   6. `add-queries-and-aggregation`
-  7. Later: feature flags and capabilities, change feed, purge, a RocksDB store, types defined at runtime
+  7. Later: feature flags and storage capabilities, change feed, purge, a RocksDB store, types defined at runtime
 
 ## Sources
 

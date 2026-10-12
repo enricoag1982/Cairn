@@ -53,7 +53,7 @@ The system SHALL support traits that declare attributes for entity types to incl
 ### Requirement: Attributes
 
 Every attribute SHALL have a name and exactly one value type from: string, boolean, int (32-bit), long (64-bit), decimal, date and instant.
-An attribute MAY be marked required, unique or deprecated. Attributes of type int, long, decimal, date or instant MAY declare a range, with a lower and an upper bound, each optional and each inclusive or exclusive.
+An attribute MAY be marked required or unique. Attributes of type int, long, decimal, date or instant MAY declare a range, with a lower and an upper bound, each optional and each inclusive or exclusive.
 Attribute names MUST be unique across an entity type, its supertypes and the traits they include. A range MUST NOT be declared on a string or boolean attribute, and its lower bound MUST NOT exceed its upper bound.
 
 #### Scenario: Name declared twice in a hierarchy
@@ -78,8 +78,8 @@ Attribute names MUST be unique across an entity type, its supertypes and the tra
 
 ### Requirement: Relationship types
 
-The system SHALL support relationship types that declare a source entity type, a target entity type, a multiplicity at each end, an inverse name, and whether they are a composition or an association. They MAY be marked symmetric, MAY declare attributes, and MAY have at most one relationship supertype.
-A multiplicity SHALL state how many targets each source can have and how many sources each target can have, each as a minimum of 0 or 1 and a maximum of 1 or unbounded.
+The system SHALL support relationship types that declare a source entity type, a target entity type, an inverse name, two multiplicities, and whether they are a composition or an association. They MAY be marked symmetric, MAY declare attributes, and MAY have at most one relationship supertype.
+The two multiplicities SHALL state how many targets each source can have and how many sources each target can have. Each multiplicity SHALL be a minimum of 0 or 1 and a maximum of 1 or unbounded.
 Further rules:
 - In a composition, each target MUST have exactly one source, and the relationship type MUST NOT be symmetric.
 - A symmetric relationship type MUST have the same source and target entity type, and the same multiplicity at both ends.
@@ -112,18 +112,24 @@ Further rules:
 
 ### Requirement: Names
 
-Entity types, traits and relationship types SHALL each have a name that is unique within the schema. Inverse names SHALL be unique within the schema and SHALL differ from every type name. Aliases (see the `schema-evolution` capability) count as names for these rules.
-Every name MUST start with a letter, contain only ASCII letters, digits and underscores, and be at most 128 characters long.
+The names of entity types, traits and relationship types SHALL be unique among all type names in the schema. Relationship type names and inverse names, which name the two directions of navigation, SHALL be unique among each other. Attribute names SHALL be unique as stated in the attribute rules.
+Names SHALL be compared without regard to case and kept as written. Aliases (see the `schema-evolution` capability) count as names for all of these rules.
+Every name of a type, attribute or inverse direction MUST start with an ASCII letter, contain only ASCII letters, digits and underscores, and be at most 128 characters long.
 
 #### Scenario: Duplicate type name
 
 - **WHEN** a definition declares an entity type and a trait both named Party
 - **THEN** validation fails with a problem that names both declarations
 
-#### Scenario: Inverse name equal to a type name
+#### Scenario: Names that differ only in case
 
-- **WHEN** a relationship type declares the inverse name `Person` and an entity type Person exists
-- **THEN** validation fails with a problem located at that relationship type
+- **WHEN** a definition declares the entity type Party and the trait `party`
+- **THEN** validation fails with a problem that names both declarations
+
+#### Scenario: Inverse name equal to a relationship type name
+
+- **WHEN** the relationship type Employs declares the inverse name `owns`, and the relationship type Owns exists
+- **THEN** validation fails with a problem located at Employs
 
 #### Scenario: Invalid characters
 
@@ -132,24 +138,33 @@ Every name MUST start with a letter, contain only ASCII letters, digits and unde
 
 ### Requirement: Type hierarchy is queryable
 
-For every entity type and relationship type in a valid schema, the system SHALL report its supertypes in order (nearest first), its subtypes (transitively), whether it is abstract, and its complete set of attributes with the type or trait that declares each one.
+For every entity type and relationship type in a valid schema, the system SHALL report its supertypes in order (nearest first), its subtypes (transitively), and its complete set of attributes with the type or trait that declares each one. For an entity type it SHALL also report whether it is abstract.
 
 #### Scenario: Subtypes of an abstract type
 
 - **WHEN** the schema of the reference domain is queried for the subtypes of Party
 - **THEN** the answer is Person and Organization
 
-#### Scenario: Origin of an inherited attribute
+#### Scenario: Declaring element of an inherited attribute
 
 - **WHEN** the schema of the reference domain is queried for the attributes of Organization
 - **THEN** the answer contains `lei`, declared by Organization, and `name`, declared by the trait Named
 
 ### Requirement: Validation reports every problem
 
-WHEN a schema definition is invalid, THE SYSTEM SHALL report every problem it finds, not only the first. Each problem SHALL have a stable code, the path of the element it concerns (for example `Organization.lei`) and a readable message. An invalid definition MUST NOT change the stored schema.
+WHEN a schema definition is invalid, THE SYSTEM SHALL report every problem it finds, not only the first. Each problem SHALL have a stable code, the path of the element it concerns (a type name, or a type name and an attribute or inverse name joined by a dot) and a readable message. An invalid definition MUST NOT change the stored schema.
 
 #### Scenario: Several problems at once
 
-- **WHEN** a definition contains a duplicate type name and a range on a boolean attribute
-- **THEN** validation reports two problems, each with its code and path
+- **WHEN** a definition declares two types named Party and a range on the boolean attribute `active` of Account
+- **THEN** validation reports two problems, each with its code, one with the path `Party` and one with the path `Account.active`
 - **AND** the stored schema is unchanged
+
+### Requirement: Deprecation marks
+
+Entity types, traits, relationship types and attributes MAY be marked deprecated. The system SHALL keep the mark in the schema and SHALL report it in schema queries. In this capability the mark has no other effect.
+
+#### Scenario: Deprecated attribute is reported
+
+- **WHEN** the attribute `birthDate` of Person is marked deprecated, and the schema is queried for the attributes of Person
+- **THEN** `birthDate` is reported, marked as deprecated

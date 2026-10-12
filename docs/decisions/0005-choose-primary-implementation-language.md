@@ -31,19 +31,19 @@ The [API research note](../research/2026-10-12-graph-system-of-record-api.md) ha
 
 ## Decision Outcome
 
-Chosen option: "Java (current LTS)", which is **Java 25**, because it fits an embedded engine on the JVM best:
+Chosen option: "Java (current LTS) with Gradle or Maven", which means **Java 25**, because it fits an embedded engine on the JVM best:
 
 - On-heap and off-heap memory (the Foreign Function and Memory API), and a choice of garbage collectors
 - Virtual threads, which make the synchronous API of ADR-0007 cheap
 - Mature bindings for RocksDB and FoundationDB
 - A clear path to value classes (Project Valhalla) for dense data on the heap
 
-The build tool (Gradle or Maven) is a separate decision, still open.
+The build tool is a separate decision: [ADR-0014](0014-build-the-java-code-with-maven.md) proposes Maven.
 Until it is made, the remaining steps of accepting this ADR wait: build files and source layout, the commands in `AGENTS.md`, language entries in `.gitignore` and `.editorconfig`, and a CI job for build and test.
 
 Guidance that follows from this decision:
 
-- Turn on compact object headers (`-XX:+UseCompactObjectHeaders`, the default from Java 27).
+- Turn on compact object headers (`-XX:+UseCompactObjectHeaders`).
 - Keep preview and incubating APIs (value classes, the Vector API, structured concurrency) out of the engine core. They may be used behind a feature flag in an experimental module.
 - Make small API types immutable records that never rely on identity, so they can become value classes later.
 - Build on Java 25, also run CI on the newest Java release, and plan the move to the next LTS release, Java 29 (September 2027).
@@ -82,3 +82,4 @@ Guidance that follows from this decision:
 ## More Information
 
 - Release status of later Java versions, and why they matter to sysRec, is summarized in the research note.
+- The drivers above rely on the proposed ADR-0007 and ADR-0012. If either is rejected, check that this decision still holds.

@@ -24,28 +24,37 @@ Why it looks like this: [API research note](../research/2026-10-12-graph-system-
           | Person      |       | Organization   |
           +-------------+       +----------------+
 
- Relationships
-   Organization --Owns {share}----------> Party          many-to-many, recursive
-   Organization --Employs {title}-------> Person         many-to-many
-   Account      --HeldBy----------------> Party          exactly one per account at any time
-   Party        <>-HasAddress-----------> Address        composition, one-to-many
-   CustomerRole --PlayedBy--------------> Party          many-to-one (a role)
+ Relationships (targets per source / sources per target)
+   Organization --Owns {share}-----> Party      0..* / 0..*   recursive
+   Organization --Employs {title}--> Person     0..* / 0..*
+   Account      --HeldBy-----------> Party      1    / 0..*
+   Party        <>-HasAddress------> Address    0..* / 1      composition
+   CustomerRole --PlayedBy---------> Party      1    / 0..*   a role
 ```
 
-| Type | Kind | Attributes | Notes |
-| --- | --- | --- | --- |
-| `Named` | trait | `name: String`, required | |
-| `Party` | abstract entity type | from `Named` | |
-| `Person` | entity type, extends `Party` | `birthDate: Date` | |
-| `Organization` | entity type, extends `Party` | `lei: String`, unique | Legal Entity Identifier |
-| `Address` | entity type | `street`, `city`, `country: String` | Exists only through `HasAddress` |
-| `Account` | entity type | `number: String`, unique; `currency: String`; `balance: Decimal` | Small, so frequent balance changes are cheap |
-| `CustomerRole` | entity type | `segment: String` | A role, linked by `PlayedBy` |
-| `Owns` | relationship type, association | `share: Decimal`, required, `0 < share <= 100` | Inverse `ownedBy` |
-| `Employs` | relationship type, association | `title: String` | Inverse `employedBy` |
-| `HeldBy` | relationship type, association | none | Inverse `holds` |
-| `HasAddress` | relationship type, composition | none | Inverse `party` |
-| `PlayedBy` | relationship type, association | none | Inverse `roles` |
+Entity types and traits:
+
+| Type | Kind | Attributes |
+| --- | --- | --- |
+| `Named` | trait | `name: string`, required |
+| `Party` | abstract entity type, includes `Named` | none of its own |
+| `Person` | entity type, extends `Party` | `birthDate: date`, optional |
+| `Organization` | entity type, extends `Party` | `lei: string`, optional, unique (Legal Entity Identifier) |
+| `Address` | entity type | `street: string`, `city: string`, `country: string`, all required |
+| `Account` | entity type | `number: string`, required, unique; `currency: string`, required; `balance: decimal`, required |
+| `CustomerRole` | entity type | `segment: string`, required |
+
+`Account` is kept small, so frequent balance changes stay cheap ([ADR-0009](../decisions/0009-version-whole-entities-rather-than-single-attributes.md)).
+
+Relationship types. Multiplicities are written as minimum..maximum, with `*` for unbounded:
+
+| Type | Source | Target | Targets per source | Sources per target | Kind | Attributes | Inverse name |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `Owns` | `Organization` | `Party` | 0..* | 0..* | association | `share: decimal`, required, 0 (exclusive) to 100 (inclusive) | `ownedBy` |
+| `Employs` | `Organization` | `Person` | 0..* | 0..* | association | `title: string`, optional | `employedBy` |
+| `HeldBy` | `Account` | `Party` | 1..1 | 0..* | association | none | `holds` |
+| `HasAddress` | `Party` | `Address` | 0..* | 1..1 | composition | none | `party` |
+| `PlayedBy` | `CustomerRole` | `Party` | 1..1 | 0..* | association | none | `roles` |
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 
@@ -59,10 +68,10 @@ Scenarios reuse these stories and cite them by ID. Dates are in 2026 unless stat
 | RD-2 | Recorded 10 February: ACME owns 60% of Beta from 1 February. Recorded 2 May: correction, the share was 55% from 1 February. | Relationships with attributes, corrections |
 | RD-3 | Recorded 1 March: Beta employs Alice as "Analyst" from 1 March. | Relationships to a subtype |
 | RD-4 | Recorded 1 March: Beta is a customer, segment "Corporate", from 1 March until 1 October. | Roles, closed periods |
-| RD-5 | Account A-1 is held by Beta and A-2 by ACME, both from 1 January, with balances 1,000 and 2,000. Recorded 16 March: A-1's balance is 1,500 from 15 March. Recorded 20 April: correction, A-1's balance was 1,200 from 15 March. | Patch, corrections, aggregation |
+| RD-5 | Recorded 5 January: account A-1 is held by Beta and A-2 by ACME, both from 1 January, with balances 1,000 and 2,000. Recorded 16 March: A-1's balance is 1,500 from 15 March. Recorded 20 April: correction, A-1's balance was 1,200 from 15 March. | Patch, corrections, aggregation |
 | RD-6 | Total balance by ultimate parent, effective 31 March: as known on 5 April, ACME's group has 3,500; as known now, 3,200. | Two time axes, recursive traversal, aggregation |
 | RD-7 | Recorded 12 October: ACME is renamed "ACME Holdings" from 1 January 2027. Effective 31 December 2026 the name is "ACME"; effective 1 January 2027 it is "ACME Holdings". | Future-dated changes |
-| RD-8 | Ending Beta from 1 June is rejected while relationships to Beta continue after that date, such as A-1's `HeldBy`. It succeeds when the same transaction also ends them (`HeldBy`, `Owns`, `Employs`, `PlayedBy`) from 1 June. | Relationship lifetimes within their endpoints' |
+| RD-8 | Ending Beta from 1 June is rejected while relationships to Beta continue after that date, such as A-1's `HeldBy`. It succeeds when the same transaction, from 1 June, moves A-1 to ACME (ends `HeldBy` Beta and starts `HeldBy` ACME, keeping exactly one holder), ends `Owns` and `Employs` involving Beta, and ends Beta's customer role together with its `PlayedBy`. | Relationship lifetimes within their endpoints', multiplicities over time |
 | RD-9 | Creating another organization with ACME's LEI is rejected while ACME's LEI is effective. | Uniqueness over time |
 | RD-10 | Effective 31 March, querying `Party` returns ACME, Beta and Alice; querying `Organization` returns ACME and Beta. | Polymorphic queries |
 | RD-11 | Purging Alice removes her facts from all of history and leaves a record that a purge happened. | Purge |

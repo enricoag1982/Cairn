@@ -8,7 +8,7 @@ Defines how a schema definition is registered with sysRec, how the stored schema
 
 ### Requirement: Registering a schema
 
-The system SHALL accept a schema definition together with an origin, which is a name and a version, and SHALL validate it (see the `type-model` capability).
+The system SHALL accept a schema definition together with an origin, which is a name and a version, and SHALL validate it (see the `type-model` capability). An origin name MUST be non-empty and contain only ASCII letters, digits, dots, hyphens and underscores. A version MUST be one or more numbers separated by dots.
 A valid definition that changes the stored schema SHALL be applied as a schema transaction. The transaction SHALL get a transaction time and a basis, each greater than those of every earlier transaction.
 The result of an applied registration SHALL contain the transaction time, the basis and the identifier of every type and attribute in the stored schema.
 
@@ -17,6 +17,11 @@ The result of an applied registration SHALL contain the transaction time, the ba
 - **WHEN** an empty store receives the reference domain model with the origin `reference-model` version `1.0.0`
 - **THEN** the registration is applied as a schema transaction
 - **AND** the result contains its transaction time, its basis and an identifier for every type and attribute
+
+#### Scenario: Malformed origin
+
+- **WHEN** a registration carries the origin version `1.x`
+- **THEN** the registration is rejected with a problem located at the origin
 
 #### Scenario: Invalid definition
 
@@ -73,13 +78,20 @@ Every type SHALL record the origin that registered it. A registration SHALL cont
 
 ### Requirement: Versions of an origin
 
-A registration whose definition differs from the stored definition of its origin MUST carry a higher version than the stored one. Versions SHALL be compared as sequences of numbers separated by dots.
-WHEN an origin registers a lower version than the stored one, and the stored definition is a compatible evolution of the submitted one, THE SYSTEM SHALL report the registration as unchanged and keep the stored schema. This lets an application roll back to an earlier release.
+Versions SHALL be compared as sequences of numbers separated by dots. When a registration's definition differs from the stored definition of its origin, the system SHALL handle it by version:
+- a higher version SHALL be checked for compatibility, then applied or rejected as the following requirements state
+- the same version MUST be rejected
+- a lower version SHALL be reported as unchanged, keeping the stored schema, when the stored definition is a compatible evolution of the submitted one. This lets an application roll back to an earlier release. Otherwise it MUST be rejected.
 
 #### Scenario: Rolling back to an earlier release
 
 - **WHEN** version `1.1.0` of `reference-model` is stored and version `1.0.0` is registered with its original definition
 - **THEN** the result is "unchanged", and the stored schema still contains `email`
+
+#### Scenario: Lower version that is not a predecessor
+
+- **WHEN** version `1.1.0` of `reference-model` is stored and version `1.0.5` is registered with the optional attribute `nickname` on Person, which `1.1.0` does not have
+- **THEN** the registration is rejected, reporting that the stored definition removes `Person.nickname`
 
 #### Scenario: Changed definition with the same version
 
@@ -95,7 +107,7 @@ The system SHALL apply a registration whose differences from the stored definiti
 - renaming a type, attribute or inverse name while declaring the previous name as an alias
 - widening a value type: int to long, int to decimal, or long to decimal
 - making a required attribute optional, removing a unique constraint, or widening a range
-- moving an attribute to a supertype, keeping its definition
+- moving an optional attribute without a unique constraint to a supertype, keeping its definition
 - marking an attribute or type as deprecated
 - making an abstract entity type concrete
 - changing a relationship type's source or target to one of its supertypes
@@ -125,6 +137,7 @@ The system SHALL reject a registration whose differences from the stored definit
 - adding a required attribute to an existing type, or making an optional attribute required
 - adding a relationship type that requires at least one relationship for an entity type that already exists
 - adding a unique constraint to an existing attribute
+- moving a required or unique attribute to a supertype
 - adding, removing or changing an entity type's or relationship type's supertype
 - making a concrete entity type abstract
 - changing a relationship type between composition and association, or between symmetric and not symmetric
@@ -153,7 +166,7 @@ The system SHALL reject a registration whose differences from the stored definit
 
 ### Requirement: Aliases resolve to renamed elements
 
-WHEN a type, attribute or inverse name is looked up in the schema by a name declared as its alias, THE SYSTEM SHALL return the renamed element. An alias MUST NOT be used as the name or alias of any other element of the same kind in the schema.
+WHEN a type, attribute or inverse name is looked up in the schema by a name declared as its alias, THE SYSTEM SHALL return the renamed element. Aliases SHALL follow the same uniqueness rules as names (see the `type-model` capability).
 
 #### Scenario: Looking up an old name
 

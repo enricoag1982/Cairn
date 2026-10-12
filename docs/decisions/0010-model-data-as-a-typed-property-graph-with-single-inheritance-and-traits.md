@@ -38,15 +38,15 @@ Proposed option: "Typed property graph with single inheritance and traits", beca
 
 - An entity has a stable identity, exactly one entity type, attributes and its own effective timeline.
 - An entity's type is fixed when it is created.
-- An entity type has at most one entity supertype. It can be abstract, which means it has no instances of its own.
-- A **trait** declares attributes that any number of entity types can include. A trait has no instances and no storage of its own.
+- An entity type has at most one entity supertype. It can be abstract, which means it has no entities of its own.
+- A **trait** declares attributes that any number of entity types can include. A trait has no entities and no storage of its own.
 - Queries on a type include its subtypes by default, with an option to match the exact type only. The engine expands a type to its subtypes when a query runs, so entities are indexed under their concrete type only.
 
 ### Relationships and relationship types
 
 - A relationship is a first-class, directed link between two entities, with its own identity, attributes and effective timeline.
 - A relationship is stored once. The engine maintains the reverse index, so it can be navigated in both directions at the same cost. The schema names the inverse direction.
-- A relationship type declares its source and target entity types (subtypes are accepted), its cardinality and its inverse name. Cardinality is checked at both ends, at every point in effective time.
+- A relationship type declares its source and target entity types (subtypes are accepted), its inverse name and two **multiplicities**: how many targets each source can have, and how many sources each target can have. Each is a minimum of 0 or 1 and a maximum of 1 or unbounded. Multiplicities are checked at every point in effective time.
 - A relationship type is either a **composition**, where the target cannot exist without the source and ends with it, or an **association**, a plain link.
 - A relationship type can be declared symmetric. Its two ends then form an unordered pair.
 - Relationship types can also have one relationship supertype.
@@ -56,6 +56,7 @@ Proposed option: "Typed property graph with single inheritance and traits", beca
 
 - Something an entity is only for a while, such as being a customer, is modeled as a **role**: an entity linked to it by a relationship with its own effective period.
 - The schema is itself data in the store, versioned in transaction time only. Schema changes are transactions and are checked for compatibility before they are applied.
+- Every type and attribute gets a **schema identifier** when it is first registered. It is local to the store and never changes or gets reused. Names are labels: a rename keeps the identifier and keeps the old name as an alias. Stored data refers to schema identifiers, never to names; [ADR-0009](0009-version-whole-entities-rather-than-single-attributes.md) puts them in every stored field.
 
 ### Consequences
 
@@ -67,7 +68,7 @@ Proposed option: "Typed property graph with single inheritance and traits", beca
 
 ### Confirmation
 
-The type-model specification and its conformance scenarios cover inheritance, traits, polymorphic queries, relationship cardinality and inverse navigation.
+The type-model specification and its conformance scenarios cover inheritance, traits, polymorphic queries, relationship multiplicities and inverse navigation.
 
 ## Pros and Cons of the Options
 

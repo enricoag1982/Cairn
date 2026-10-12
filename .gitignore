@@ -20,7 +20,7 @@ Thumbs.db
 !.vscode/extensions.json
 *.iml
 
-# Build output (add Java and build-tool entries when the build is added, see ADR-0005)
+# Build output (add Java and build-tool entries when the build is added, see ADR-0014)
 build/
 target/
 out/

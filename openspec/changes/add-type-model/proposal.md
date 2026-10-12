@@ -10,7 +10,8 @@ Building it first gives the later changes a stable, testable schema API. It also
 - A programmatic schema API that describes a schema as plain data:
   - entity types: concrete or abstract, with at most one entity supertype, any number of traits, and attributes
   - traits
-  - attributes, each with a value type and optional constraints (required, unique, range) and a deprecation mark
+  - attributes, each with a value type and optional constraints (required, unique, range)
+  - deprecation marks on types and attributes
   - relationship types: source and target entity types, a multiplicity at each end, an inverse name, composition or association, an optional symmetric mark, attributes, and at most one relationship supertype
 - Validation of a schema definition that reports every problem at once, with its location.
 - Registration of a schema definition, submitted with an origin (a name and a version), as a schema transaction with a transaction time and a basis. The schema is stored as data. Its history is readable as of any earlier transaction time. Every type and attribute gets a stable identifier.
@@ -24,7 +25,7 @@ Building it first gives the later changes a stable, testable schema API. It also
 ### Non-goals
 
 - The Java annotation processor and generated types, which come with `add-java-type-definitions` (ADR-0012)
-- Entities and relationships as data: creating, versioning or reading instances, polymorphic queries and integrity checks on data
+- Entities and relationships as data: creating, versioning or reading them, polymorphic queries over them, and integrity checks on them
 - Migrations for breaking changes, and default values or backfills
 - Durable storage of the schema: it is kept in memory until the commit log exists (`add-durable-commit-log`)
 - Types defined at runtime through a user interface. The design keeps them possible (ADR-0012)
@@ -44,8 +45,8 @@ None. No specs exist yet.
 
 ## Impact
 
-- **Decisions:** builds on ADR-0010 and ADR-0012 and on the transaction time of ADR-0008. All three are still `proposed`, so this change depends on undecided ADRs: they must be accepted, or this change revised, before it is archived. The build tool decision (ADR-0014, `proposed`) must be accepted before any code is written.
+- **Decisions:** builds on ADR-0010 and ADR-0012, on the transaction time of ADR-0008, and on the single writer of ADR-0007. All four are still `proposed`, so this change depends on undecided ADRs: they must be accepted, or this change revised, before it is archived. ADR-0011 is context only: this change does not build the storage interface. The build tool decision (ADR-0014, `proposed`) must be accepted before any code is written.
 - **Code:** the first source tree: a Maven multi-module build with `sysrec-api` (public types) and `sysrec-core` (validation, compatibility, the in-memory schema store).
 - **Dependencies:** test-only, JUnit 5 and AssertJ. Nothing at runtime.
-- **CI:** a new job that builds and tests the Java code on Java 25.
+- **CI:** a new job that builds and tests the Java code on Java 25 and on the newest Java release, as ADR-0005 recommends.
 - **Docs:** `AGENTS.md` commands, the architecture page (building blocks), the glossary (new terms), and the decision log.
