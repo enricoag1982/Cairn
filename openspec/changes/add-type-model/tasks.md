@@ -10,10 +10,10 @@
 
 ## 2. Definition format (`sysrec-api`)
 
-- [ ] 2.1 Add `ValueType`, `Multiplicity` with its four constants, `Range` with typed literals, and `AttributeDefinition` (required, unique, range, aliases, deprecated); verify with unit tests that constructors reject nulls and minimums or maximums outside 0/1 and 1/unbounded
-- [ ] 2.2 Add `EntityTypeDefinition`, `TraitDefinition`, `RelationshipTypeDefinition` (ends, both multiplicities, inverse name and aliases, composition or association, symmetric, supertype, attributes, deprecated) and `SchemaDefinition`; verify equality and immutability with unit tests
-- [ ] 2.3 Add the fluent builder, and a test fixture that builds the complete reference domain model of `docs/reference/reference-domain.md`; verify the fixture test checks every type, attribute and relationship type in that page
-- [ ] 2.4 Write Javadoc for every public type, naming the spec capability it serves; verify `./gradlew build` runs Javadoc without warnings
+- [x] 2.1 Add `ValueType`, `Multiplicity` with its four constants, `Range` with typed literals, and `AttributeDefinition` (required, unique, range, aliases, deprecated); verify with unit tests that constructors reject nulls and minimums or maximums outside 0/1 and 1/unbounded
+- [x] 2.2 Add `EntityTypeDefinition`, `TraitDefinition`, `RelationshipTypeDefinition` (ends, both multiplicities, inverse name and aliases, composition or association, symmetric, supertype, attributes, deprecated) and `SchemaDefinition`; verify equality and immutability with unit tests
+- [x] 2.3 Add the fluent builder, and a test fixture that builds the complete reference domain model of `docs/reference/reference-domain.md`; verify the fixture test checks every type, attribute and relationship type in that page
+- [x] 2.4 Write Javadoc for every public type, naming the spec capability it serves; verify `./gradlew build` runs Javadoc without warnings
 
 ## 3. Validation (`type-model`)
 

@@ -40,7 +40,7 @@ Entity types and traits:
 | `Party` | abstract entity type, includes `Named` | none of its own |
 | `Person` | entity type, extends `Party` | `birthDate: date`, optional |
 | `Organization` | entity type, extends `Party` | `lei: string`, optional, unique (Legal Entity Identifier) |
-| `Address` | entity type | `street: string`, `city: string`, `country: string`, all required |
+| `Address` | entity type | `street: string`, required; `city: string`, required; `country: string`, required |
 | `Account` | entity type | `number: string`, required, unique; `currency: string`, required; `balance: decimal`, required |
 | `CustomerRole` | entity type | `segment: string`, required |
 
