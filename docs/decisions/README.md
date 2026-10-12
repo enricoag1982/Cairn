@@ -26,6 +26,7 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0011](0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md) | Hide storage behind an ordered key-value store and a commit log | proposed | 2026-10-12 |
 | [ADR-0012](0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md) | Define types as annotated Java interfaces processed at compile time | proposed | 2026-10-12 |
 | [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md) | Read through immutable views and take feature flags resolved by the caller | proposed | 2026-10-12 |
-| [ADR-0014](0014-build-the-java-code-with-maven.md) | Build the Java code with Maven | proposed | 2026-10-12 |
+| [ADR-0014](0014-build-the-java-code-with-maven.md) | Build the Java code with Maven | rejected | 2026-10-12 |
+| [ADR-0015](0015-build-the-java-code-with-gradle.md) | Build the Java code with Gradle | accepted | 2026-10-12 |
 
 <!-- decision-log:end -->

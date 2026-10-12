@@ -1,19 +1,19 @@
 # Tasks
 
-## 1. Build setup (blocked until ADR-0014 is accepted)
+## 1. Build setup
 
-- [ ] 1.1 Get the user's decision on ADR-0014 (Maven), set its status, run `npm run docs:index`, and verify the decision log shows the final status
-- [ ] 1.2 Add the Maven Wrapper and a root `pom.xml` (release 25, pinned plugin versions, JUnit 5 and AssertJ in test scope, tests run with `-XX:+UseCompactObjectHeaders`) with the modules `sysrec-api` and `sysrec-core`, each with a `module-info.java`; verify `./mvnw verify` succeeds
-- [ ] 1.3 Add Java and Maven entries to `.gitignore` and `.editorconfig`; verify `git status` shows no build output after `./mvnw verify`
-- [ ] 1.4 Add a CI job that runs `./mvnw verify` on Java 25 and on the newest Java release, after confirming the new CI job with the user; verify the job passes on the pull request
-- [ ] 1.5 Finish ADR-0005's checklist: replace the build line and the status line in `AGENTS.md` with the exact commands and current state, update the build-files boundary (with the user's approval) and the language line in `openspec/config.yaml`, update the build notes in `README.md`, and add the build to the architecture constraints; verify `npm run check` passes
+- [x] 1.1 Record the build-tool decision: Gradle (ADR-0015, accepted), with ADR-0014 (Maven) rejected; verify the decision log shows both
+- [ ] 1.2 Add the Gradle Wrapper, `settings.gradle.kts`, the version catalog `gradle/libs.versions.toml`, the convention plugin `sysrec.java-library` in `build-logic/` (Java 25 toolchain, JUnit 5 and AssertJ for tests, tests run with `-XX:+UseCompactObjectHeaders`, Javadoc checks), `gradle.properties` with the build and configuration caches on, and the subprojects `sysrec-api` and `sysrec-core`, each with a `module-info.java`; verify `./gradlew build` succeeds
+- [ ] 1.3 Add Gradle and Java entries to `.gitignore` and `.editorconfig`; verify `git status` shows no build output after `./gradlew build`
+- [ ] 1.4 Add a CI job that runs `./gradlew build` on Java 25 and on the newest Java release, after confirming the new CI job with the user; verify the job passes on the pull request
+- [ ] 1.5 Finish ADR-0005's checklist: replace the build line and the status line in `AGENTS.md` with the exact commands and current state, update the build-files boundary (with the user's approval) and the build line in `openspec/config.yaml`, update the build notes in `README.md`, and add the build to the architecture constraints; verify `npm run check` passes
 
 ## 2. Definition format (`sysrec-api`)
 
 - [ ] 2.1 Add `ValueType`, `Multiplicity` with its four constants, `Range` with typed literals, and `AttributeDefinition` (required, unique, range, aliases, deprecated); verify with unit tests that constructors reject nulls and minimums or maximums outside 0/1 and 1/unbounded
 - [ ] 2.2 Add `EntityTypeDefinition`, `TraitDefinition`, `RelationshipTypeDefinition` (ends, both multiplicities, inverse name and aliases, composition or association, symmetric, supertype, attributes, deprecated) and `SchemaDefinition`; verify equality and immutability with unit tests
 - [ ] 2.3 Add the fluent builder, and a test fixture that builds the complete reference domain model of `docs/reference/reference-domain.md`; verify the fixture test checks every type, attribute and relationship type in that page
-- [ ] 2.4 Write Javadoc for every public type, naming the spec capability it serves; verify `./mvnw verify` runs Javadoc without warnings
+- [ ] 2.4 Write Javadoc for every public type, naming the spec capability it serves; verify `./gradlew build` runs Javadoc without warnings
 
 ## 3. Validation (`type-model`)
 
@@ -49,4 +49,4 @@
 - [ ] 7.1 Check the glossary entries that this proposal added (alias, breaking change, compatible change, deprecated, inverse name, multiplicity, origin, problem, schema definition, schema identifier, schema transaction, symmetric relationship type, value type) against the implemented behavior and correct them; verify `npm run docs:check` passes
 - [ ] 7.2 Describe the `sysrec-api` and `sysrec-core` building blocks and their capabilities in `docs/architecture/README.md` and bump `last-reviewed`; verify `npm run docs:check` passes
 - [ ] 7.3 Before archiving, ask the user to accept or reject ADR-0007, ADR-0008, ADR-0010 and ADR-0012, which this change relies on; update their status and run `npm run docs:index`. If one is rejected, update the delta specs first. Verify the decision log
-- [ ] 7.4 Run `npm run check` and `./mvnw verify`, then delegate a drift review to the `docs-reviewer` subagent and fix its findings; verify both commands pass and the review reports no open drift
+- [ ] 7.4 Run `npm run check` and `./gradlew build`, then delegate a drift review to the `docs-reviewer` subagent and fix its findings; verify both commands pass and the review reports no open drift

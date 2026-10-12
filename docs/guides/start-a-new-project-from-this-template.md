@@ -1,11 +1,32 @@
 ---
-last-reviewed: 2026-09-30
+last-reviewed: 2026-10-12
 owner: ""
 ---
 
 # Start a new project from this template
 
 How to turn a fresh copy of this template into your project's repository.
+
+## Status in sysRec
+
+sysRec was created from this template on 2026-10-10. Where each step stands, checked on 2026-10-12:
+
+| Step | Status |
+| --- | --- |
+| 1. Install and verify the tooling | Done |
+| 2. Describe the project in `AGENTS.md` | Done |
+| 3. Set the principles | Open. Candidate principles are in the [API research note](../research/2026-10-12-graph-system-of-record-api.md#conclusion) |
+| 4. Seed the glossary | Done |
+| 5. Review the template's decisions | Open. ADR-0001 to ADR-0004 still name `project maintainers` as decision-makers |
+| 6. Decide ADR-0005 | Done: Java 25 ([ADR-0005](../decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)). The build itself arrives with the `add-type-model` change |
+| 7. Tailor `openspec/config.yaml` | Partly. The context names the language, the build and the reference domain; the rules are unchanged |
+| 8. Check the agent setup | Done: Claude Code |
+| 9. Set ownership | Open. `CODEOWNERS` is commented out and living documents have an empty `owner` |
+| 10. Protect `main` | Open. `main` exists; add branch protection in GitHub |
+| 11. Write the first change | Done: `add-type-model` is proposed |
+| 12. Rewrite `README.md` | Done |
+
+The steps below are the template's generic instructions.
 
 ## Before you start
 

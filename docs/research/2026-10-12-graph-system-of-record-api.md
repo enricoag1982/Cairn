@@ -2,7 +2,7 @@
 status: concluded
 date: 2026-10-12
 authors: [enricoag1982, Claude Code]
-related: [ADR-0005, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014]
+related: [ADR-0005, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015]
 ---
 
 # Research: the API of a graph-shaped, bitemporal system of record
@@ -172,7 +172,7 @@ Each ADR lists its options with their pros and cons. Two trade-offs shaped most 
 
 ## Conclusion
 
-- ADR-0005 is accepted: Java 25. The build tool is still open.
+- ADR-0005 and ADR-0015 are accepted: Java 25, built with Gradle. ADR-0014 (Maven) was rejected.
 - ADR-0007 to ADR-0013 record the proposed design and wait for acceptance.
 - Candidate product principles, to be agreed and recorded through an ADR before they enter [the principles](../principles.md):
   1. Nothing recorded is lost: history only grows, and only an audited purge removes data.
@@ -182,7 +182,6 @@ Each ADR lists its options with their pros and cons. Two trade-offs shaped most 
   5. Explicit over implicit: time coordinates, context and flags are passed explicitly and reported back.
   6. The model is a contract: type changes are checked for compatibility before they reach production.
 - Still open:
-  - Gradle or Maven. ADR-0014 proposes Maven, declarative and predictable; switch if build times hurt.
   - The entity ID decisions (opaque IDs, one generator per store, UUIDv7 by default) need an ADR before `add-entity-versions`.
   - "Now effective" events for future-dated facts.
   - Compact internal IDs, or UUIDs used directly as storage keys.

@@ -5,7 +5,7 @@ You define typed entities and relationships, with inheritance. An engine embedde
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** design phase, no code yet. Java 25 is chosen; the build tool (Maven) and the core design are in `proposed` decision records, open for review. The first change, `add-type-model`, is proposed in `openspec/changes/`.
+> **Status:** design phase, no code yet. Java 25 and Gradle are chosen; the core design is in `proposed` decision records, open for review. The first change, `add-type-model`, is proposed in `openspec/changes/`.
 
 ## Ideas in one page
 
@@ -26,6 +26,7 @@ The reasoning behind all of this is in the [API research note](docs/research/202
 - [Glossary](docs/glossary.md): the terms used in specs, code and conversation
 - [Reference domain](docs/reference/reference-domain.md): the example model used in scenarios and tests
 - [Architecture](docs/architecture/README.md): how it is built (nothing yet)
+- [Setup status](docs/guides/start-a-new-project-from-this-template.md#status-in-sysrec): the template setup steps that are still open
 
 ## How this repository works
 
@@ -39,7 +40,7 @@ It was created from the [openSpecProjectStructure](https://github.com/enricoag19
 | Vocabulary and principles | `docs/glossary.md`, `docs/principles.md` |
 | Explorations | `docs/research/` (dated, non-normative) |
 
-Requirements: Node.js 20.19 or later. The Java build is not set up yet ([ADR-0014](docs/decisions/0014-build-the-java-code-with-maven.md)).
+Requirements: Node.js 20.19 or later. The Java build (Gradle, [ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)) is not set up yet.
 
 ```bash
 npm ci          # install the doc and spec tooling (pinned versions)

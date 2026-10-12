@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: rejected
 date: 2026-10-12
 decision-makers: [enricoag1982]
 consulted: []
@@ -57,3 +57,4 @@ CI builds and tests with `./mvnw verify`. `AGENTS.md` lists the exact commands.
 ## More Information
 
 - Revisit if full builds become slow enough to hurt the feedback loop.
+- Rejected on 2026-10-12 in favor of Gradle: [ADR-0015](0015-build-the-java-code-with-gradle.md).

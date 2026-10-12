@@ -6,7 +6,7 @@ This change adds the first code to the repository. See `proposal.md` for why; th
 
 Constraints that shape the approach:
 
-- Java 25 (ADR-0005, accepted). The build uses Maven, proposed in ADR-0014. No code is written until ADR-0014 is accepted.
+- Java 25 (ADR-0005) and Gradle with the Kotlin DSL (ADR-0015), both accepted: convention plugins in `build-logic/`, a version catalog, and a Java 25 toolchain.
 - The meta-model follows ADR-0010 (proposed): single inheritance, traits, first-class relationship types, and the schema stored as data with history in transaction time.
 - Types will be written as annotated Java interfaces (ADR-0012, proposed). The definition format built here is what the annotation processor will produce, and what runtime tools will produce later (ADR-0012, rules 1 and 5).
 - Registration is serialized because of the single writer of ADR-0007 (proposed).
@@ -31,12 +31,13 @@ Constraints that shape the approach:
 
 ## Decisions
 
-### D1. Two Maven modules, using Java modules
+### D1. Two Gradle subprojects, using Java modules
 
 - `sysrec-api` holds the public types: definitions, the resolved schema, registration results and problems. It has no dependencies.
 - `sysrec-core` holds the validator, the compatibility checker and the in-memory schema registry. It depends on `sysrec-api`.
 - Both have a `module-info.java`. Core exports only its entry point, not its internals, so internals cannot become API by accident.
-- Maven coordinates and the base package are `io.github.enricoag1982.sysrec`, with `...sysrec.schema` for the API and `...sysrec.core` for the engine.
+- One convention plugin, `sysrec.java-library` in `build-logic/`, configures both subprojects: the Java 25 toolchain, JUnit 5, compact object headers for tests, and Javadoc checks. CI tests the newest Java release by overriding the toolchain version through a Gradle property.
+- The publishing group and the base package are `io.github.enricoag1982.sysrec`, with `...sysrec.schema` for the API and `...sysrec.core` for the engine.
 - Alternatives:
   - a single module, which is simpler but lets internals leak into the API
   - no Java modules, which avoids friction with test tooling but gives a weaker boundary. We fall back to this if the friction outweighs the benefit; the change is local.
@@ -119,7 +120,7 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 
 ## Risks / Trade-offs
 
-- [ADR-0007, ADR-0008, ADR-0010, ADR-0012 and ADR-0014 are still proposed and may change at review] → Code starts only after ADR-0014 is accepted, and the definition format (D2) is reviewed in this change's pull request first.
+- [ADR-0007, ADR-0008, ADR-0010 and ADR-0012 are still proposed and may change at review] → The definition format (D2) is reviewed in this change's pull request before code is written.
 - [Matching attribute identity for moved and renamed attributes is subtle] → Dedicated tests for moving up, renaming, and renaming plus moving.
 - [Without migrations, the compatibility rules are strict: making an attribute required is always breaking] → Accepted until a later change adds defaults, backfills and migrations.
 - [Java modules can cause friction with test tooling and, later, the annotation processor] → Drop `module-info.java` if it costs more than it protects (D1).
@@ -131,4 +132,4 @@ None: there is no existing data and there are no users.
 
 ## Open Questions
 
-- Maven coordinates: confirm `io.github.enricoag1982.sysrec` before publishing the first artifact. Until then they are easy to change.
+- Publishing group: confirm `io.github.enricoag1982.sysrec` before publishing the first artifact. Until then they are easy to change.

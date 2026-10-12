@@ -38,8 +38,8 @@ Chosen option: "Java (current LTS) with Gradle or Maven", which means **Java 25*
 - Mature bindings for RocksDB and FoundationDB
 - A clear path to value classes (Project Valhalla) for dense data on the heap
 
-The build tool is a separate decision: [ADR-0014](0014-build-the-java-code-with-maven.md) proposes Maven.
-Until it is made, the remaining steps of accepting this ADR wait: build files and source layout, the commands in `AGENTS.md`, language entries in `.gitignore` and `.editorconfig`, and a CI job for build and test.
+The build tool is a separate decision: Gradle ([ADR-0015](0015-build-the-java-code-with-gradle.md)).
+The remaining steps of accepting this ADR come with the first change that needs code, `add-type-model`: build files and source layout, the commands in `AGENTS.md`, language entries in `.gitignore` and `.editorconfig`, and a CI job for build and test.
 
 Guidance that follows from this decision:
 
