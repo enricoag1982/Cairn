@@ -5,7 +5,7 @@ You define typed entities and relationships, with inheritance. An engine embedde
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** design phase, no code yet. Java 25 and Gradle are chosen; the core design is in `proposed` decision records, open for review. The first change, `add-type-model`, is proposed in `openspec/changes/`.
+> **Status:** early. The first change, `add-type-model` (the schema API), is being implemented in `openspec/changes/`. The core design is in `proposed` decision records, open for review.
 
 ## Ideas in one page
 
@@ -40,11 +40,12 @@ It was created from the [openSpecProjectStructure](https://github.com/enricoag19
 | Vocabulary and principles | `docs/glossary.md`, `docs/principles.md` |
 | Explorations | `docs/research/` (dated, non-normative) |
 
-Requirements: Node.js 20.19 or later. The Java build (Gradle, [ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)) is not set up yet.
+Requirements: Node.js 20.19 or later for the doc and spec tooling, and a JDK 25 for the Java build (Gradle, [ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)).
 
 ```bash
 npm ci          # install the doc and spec tooling (pinned versions)
 npm run check   # validate specs, lint Markdown, check decisions, links and review dates
+./gradlew build # compile, test and build Javadoc for the Java modules
 ```
 
 The workflow, from idea to merged change, is in [development workflow](docs/process/development-workflow.md). With Claude Code: `/opsx:explore`, `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.

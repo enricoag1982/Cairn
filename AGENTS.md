@@ -8,7 +8,7 @@ Keep it short and link rather than copy. Every line should prevent a real mistak
 sysRec is a system of record for enterprise data. Users define typed entities and relationships, with inheritance. An engine embedded in the application's JVM stores them with history on two time axes (effective time and transaction time), commits consistent transactions, and answers traversals and aggregations through an API that hides the storage implementation (in memory, or a key-value store on disk).
 What makes it hard: identical behavior across storage implementations, integrity rules that must hold over whole timelines, and aggregations over a key-value store.
 Run with spec-driven development: behavior is specified in OpenSpec and decisions are recorded as ADRs.
-**Status:** design phase, no implementation yet. Java 25 ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)) and Gradle ([ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)) are chosen; the build is not set up yet. The core design is in `proposed` ADRs 0007 to 0013, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md).
+**Status:** first code in progress (the `add-type-model` change). Java 25 ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). The core design is in `proposed` ADRs 0007 to 0013, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md).
 
 ## Sources of truth
 
@@ -37,7 +37,11 @@ Documentation and spec tooling (Node.js 20.19 or later):
 - `npx openspec list [--specs]`, `npx openspec show <id>`, `npx openspec validate <id> --strict`, `npx openspec archive <id> -y`
 - The `/opsx:*` commands call `openspec` directly. If it is not on `PATH`, run the same command with `npx openspec`.
 
-Application build and test: **none yet**. The Gradle build (ADR-0015) arrives with the `add-type-model` change. Replace this line with the exact commands then.
+Application build and test (Gradle, [ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). Needs a local JDK 25, which Gradle finds as a toolchain; nothing is downloaded automatically:
+
+- `./gradlew build`: compile (lint warnings are errors), run the tests, and build Javadoc (warnings are errors)
+- `./gradlew :sysrec-core:test --tests '<TestClass>'`: run one test class
+- Shared build configuration lives only in the convention plugin in `build-logic/`; versions live in `gradle/libs.versions.toml`. Module build files stay declarative.
 
 ## Workflow
 
@@ -60,7 +64,7 @@ Bug fixes that restore specified behavior and pure refactors need no spec change
 
 ### Ask first
 
-- Adding dependencies, build files, source trees or CI jobs. The build is not set up yet; it arrives with the `add-type-model` change (ADR-0015).
+- Adding dependencies, subprojects, source trees or CI jobs, or build logic outside `build-logic/` (ADR-0015).
 - Anything that contradicts an accepted ADR. Propose a superseding ADR instead of working around it.
 - Changing `AGENTS.md` boundaries, `.claude/settings.json`, `openspec/config.yaml` or CI workflows.
 - Deleting or renaming specs, ADRs or docs.
@@ -81,6 +85,8 @@ docs/                    decisions, architecture, guides, reference, process, re
 .claude/                 Claude Code: skills, /opsx commands (generated), docs-reviewer subagent, settings
 .github/                 PR/issue templates, CI
 scripts/                 docs.mjs (checks, ADRs, decision log); openspec-update.mjs (agents:update)
+sysrec-api/, sysrec-core/  Java modules: public API, and the engine
+build-logic/, gradle/    Gradle convention plugin, version catalog and wrapper
 ```
 
 ## Maintaining this guidance

@@ -24,7 +24,7 @@ It is a living document: update it in the same pull request that changes the arc
 
 <!-- Technical, organizational and regulatory constraints. Link the ADR that introduced each one. -->
 
-- Implementation language: Java 25, see [ADR-0005](../decisions/0005-choose-primary-implementation-language.md). Built with Gradle, see [ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md); the build is not set up yet.
+- Implementation language: Java 25, see [ADR-0005](../decisions/0005-choose-primary-implementation-language.md). Built with Gradle, see [ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md): a convention plugin in `build-logic/`, a version catalog, and a Java 25 toolchain. CI also runs the build on the newest Java release, without blocking.
 
 ## 3. Context and scope
 

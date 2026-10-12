@@ -11,7 +11,7 @@ context: |
   Vocabulary: docs/glossary.md. Use its terms verbatim in specs.
   Architecture (current state): docs/architecture/README.md.
   Implementation language: Java 25 (ADR-0005), built with Gradle (ADR-0015), both accepted.
-    The build is NOT set up yet: it arrives with the add-type-model change; do not add build files elsewhere.
+    Build and test with ./gradlew build; shared build configuration only in build-logic/, versions in gradle/libs.versions.toml.
   Spec scenarios use the reference domain in docs/reference/reference-domain.md (cite stories by ID, RD-n);
     its names never appear in normative requirement text.
   Process: docs/process/development-workflow.md.

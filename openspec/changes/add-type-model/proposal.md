@@ -47,6 +47,6 @@ None. No specs exist yet.
 
 - **Decisions:** builds on ADR-0010 and ADR-0012, on the transaction time of ADR-0008, and on the single writer of ADR-0007. All four are still `proposed`, so this change depends on undecided ADRs: they must be accepted, or this change revised, before it is archived. ADR-0011 is context only: this change does not build the storage interface. The build uses Gradle (ADR-0015, accepted).
 - **Code:** the first source tree: a Gradle multi-project build with `sysrec-api` (public types) and `sysrec-core` (validation, compatibility, the in-memory schema store).
-- **Dependencies:** test-only, JUnit 5 and AssertJ. Nothing at runtime.
+- **Dependencies:** test-only, JUnit 6 and AssertJ. Nothing at runtime.
 - **CI:** a new job that builds and tests the Java code on Java 25 and on the newest Java release, as ADR-0005 recommends.
 - **Docs:** `AGENTS.md` commands, the architecture page (building blocks), the glossary (new terms), and the decision log.
