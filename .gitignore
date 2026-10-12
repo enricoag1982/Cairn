@@ -20,7 +20,7 @@ Thumbs.db
 !.vscode/extensions.json
 *.iml
 
-# Build output (add language-specific entries once ADR-0005 is decided)
+# Build output (add Java and build-tool entries when the build is added, see ADR-0005)
 build/
 target/
 out/

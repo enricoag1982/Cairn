@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-09-30
+last-reviewed: 2026-10-12
 owner: ""
 ---
 
@@ -9,7 +9,7 @@ This page describes the system as it is now, using the [arc42](https://arc42.org
 It is a living document: update it in the same pull request that changes the architecture, and bump `last-reviewed`.
 
 > [!NOTE]
-> **Template state:** nothing is built yet. Fill in each section once the first capabilities are specified. Write "n/a" for sections that do not apply yet instead of deleting them.
+> **Current state:** nothing is built yet. The intended design is in `proposed` ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md). Fill in each section once the first capabilities are specified and built. Write "n/a" for sections that do not apply yet instead of deleting them.
 > Split a section into its own file in this folder when it outgrows a screen, and link it from here.
 
 ## 1. Introduction and goals
@@ -24,7 +24,7 @@ It is a living document: update it in the same pull request that changes the arc
 
 <!-- Technical, organizational and regulatory constraints. Link the ADR that introduced each one. -->
 
-- Implementation language: not decided yet, see [ADR-0005](../decisions/0005-choose-primary-implementation-language.md).
+- Implementation language: Java 25, see [ADR-0005](../decisions/0005-choose-primary-implementation-language.md). The build tool is not chosen yet.
 
 ## 3. Context and scope
 
@@ -39,6 +39,16 @@ flowchart LR
 ## 4. Solution strategy
 
 <!-- The handful of fundamental choices (style, stack, key patterns), each linking to its ADR. -->
+
+Proposed, not yet accepted:
+
+- An embedded engine on one node, with a single writer and snapshot readers: [ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)
+- History on two time axes, effective time and transaction time: [ADR-0008](../decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)
+- Versions of whole entities: [ADR-0009](../decisions/0009-version-whole-entities-rather-than-single-attributes.md)
+- A typed property graph with single inheritance and traits: [ADR-0010](../decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md)
+- Storage behind an ordered key-value store and a commit log, with the in-memory implementation as the reference: [ADR-0011](../decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md)
+- Types defined as annotated Java interfaces: [ADR-0012](../decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)
+- Reads through immutable views; feature flags resolved by the caller: [ADR-0013](../decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md)
 
 ## 5. Building block view
 

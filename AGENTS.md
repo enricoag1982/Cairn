@@ -5,9 +5,10 @@ Keep it short and link rather than copy. Every line should prevent a real mistak
 
 ## Project overview
 
-<!-- Replace this paragraph: what the product is, who it is for, the one or two things that make it hard. -->
-A long-lived project run with spec-driven development. Behavior is specified in OpenSpec and decisions are recorded as ADRs.
-**Status:** no implementation yet. The implementation language is **not decided** ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md), Java is the leading candidate).
+sysRec is a system of record for enterprise data. Users define typed entities and relationships, with inheritance. An engine embedded in the application's JVM stores them with history on two time axes (effective time and transaction time), commits consistent transactions, and answers traversals and aggregations through an API that hides the storage implementation (in memory, or a key-value store on disk).
+What makes it hard: identical behavior across storage implementations, integrity rules that must hold over whole timelines, and aggregations over a key-value store.
+Run with spec-driven development: behavior is specified in OpenSpec and decisions are recorded as ADRs.
+**Status:** design phase, no implementation yet. Java 25 is chosen ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)); the build tool is not. The core design is in `proposed` ADRs 0007 to 0013, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md).
 
 ## Sources of truth
 
@@ -36,7 +37,7 @@ Documentation and spec tooling (Node.js 20.19 or later):
 - `npx openspec list [--specs]`, `npx openspec show <id>`, `npx openspec validate <id> --strict`, `npx openspec archive <id> -y`
 - The `/opsx:*` commands call `openspec` directly. If it is not on `PATH`, run the same command with `npx openspec`.
 
-Application build and test: **none yet**. Replace this line with the exact commands once ADR-0005 is accepted.
+Application build and test: **none yet**. Java 25 is chosen (ADR-0005), the build tool is not. Replace this line with the exact commands once the build is added.
 
 ## Workflow
 
@@ -59,7 +60,7 @@ Bug fixes that restore specified behavior and pure refactors need no spec change
 
 ### Ask first
 
-- Adding dependencies, build files, source trees or CI jobs. The stack is undecided (ADR-0005).
+- Adding dependencies, build files, source trees or CI jobs. The build tool and project layout are not chosen yet (ADR-0005).
 - Anything that contradicts an accepted ADR. Propose a superseding ADR instead of working around it.
 - Changing `AGENTS.md` boundaries, `.claude/settings.json`, `openspec/config.yaml` or CI workflows.
 - Deleting or renaming specs, ADRs or docs.

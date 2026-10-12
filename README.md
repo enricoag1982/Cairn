@@ -1,91 +1,49 @@
-# OpenSpec Project Structure
+# sysRec
 
-A reusable repository structure for complex, long-lived projects with many decisions and fast-changing documentation, built to be worked on by humans and AI coding agents together.
+A system of record for enterprise data.
+You define typed entities and relationships, with inheritance. An engine embedded in your JVM application stores them with full history on two time axes, commits consistent transactions, and answers traversals and aggregations.
+The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
-It combines:
+> [!NOTE]
+> **Status:** design phase, no code yet. Java 25 is chosen; the core design is in `proposed` decision records, open for review.
 
-- [OpenSpec](https://github.com/Fission-AI/OpenSpec) for spec-driven development
-- [MADR](https://adr.github.io/madr/) decision records
-- a trimmed [arc42](https://arc42.org/) architecture page
-- a canonical [AGENTS.md](https://agents.md/), set up for [Claude Code](https://code.claude.com/) with project skills and OpenSpec slash commands
-- plain Markdown that you can also browse as an [Obsidian](https://obsidian.md/) vault
+## Ideas in one page
 
-A small `npm run check` keeps it all honest in CI.
-The implementation language is deliberately not chosen yet ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)).
+- **Two time axes.** Every fact has an *effective time* (when it is true in the real world, past or future) and a *transaction time* (when sysRec recorded it). Any past answer can be reproduced, even after corrections. [ADR-0008](docs/decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)
+- **A typed graph.** Entity types with single inheritance and traits; first-class, directed relationships with their own attributes and history. [ADR-0010](docs/decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md)
+- **Whole-entity versions.** Each change records a new version of the entity for an effective period; nothing is overwritten. [ADR-0009](docs/decisions/0009-version-whole-entities-rather-than-single-attributes.md)
+- **Embedded, single writer.** One writer orders all commits; any number of readers work on immutable snapshots. [ADR-0007](docs/decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)
+- **Views and context.** Reads go through immutable views bound to a context: time coordinates, caller, limits and feature flags resolved by a gateway. [ADR-0013](docs/decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md)
+- **Storage behind a narrow interface.** An ordered key-value store and a commit log; the in-memory implementation is the reference, and every implementation passes the same conformance suite. [ADR-0011](docs/decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md)
+- **Types as Java interfaces.** Annotated interfaces, checked and turned into immutable values and builders at compile time. [ADR-0012](docs/decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)
 
-## Why this structure
+The reasoning behind all of this is in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md).
 
-Complex projects lose knowledge in three ways: people forget **why** something was decided, nobody knows **what** the system is currently supposed to do, and docs silently **rot**. AI agents make all three worse, because they only know what is in the repository.
-Every kind of knowledge therefore has exactly one home, a lifecycle and a check:
+## Where to start
 
-| Knowledge | Home | Lifecycle | Checked by |
-| --- | --- | --- | --- |
-| What the system must do | `openspec/specs/` | Changed only through reviewed OpenSpec changes | `openspec validate --strict` |
-| What we are changing | `openspec/changes/` | Proposal, then implementation, then archive | `openspec validate --strict` |
-| Why it is built this way | `docs/decisions/` (ADRs) | Append-only; superseded, never rewritten | `docs:check` (status, dates, log) |
-| How it is built now | `docs/architecture/`, `guides/`, `reference/` | Living; `last-reviewed` date | `docs:check` (freshness, links) |
-| Shared vocabulary and principles | `docs/glossary.md`, `docs/principles.md` | Living | `docs:check` |
-| Explorations | `docs/research/` | Dated, non-normative | `docs:check` (links) |
-| How agents should behave | `AGENTS.md`, `CLAUDE.md` files, skills | Grows from real mistakes | `docs:check` (skill format, no duplicate skills) |
+- [AGENTS.md](AGENTS.md): how this repository works, for humans and AI agents
+- [Decision log](docs/decisions/README.md): what is decided and what is still open
+- [Glossary](docs/glossary.md): the terms used in specs, code and conversation
+- [Reference domain](docs/reference/reference-domain.md): the example model used in scenarios and tests
+- [Architecture](docs/architecture/README.md): how it is built (nothing yet)
 
-## Layout
+## How this repository works
 
-```text
-.
-├── AGENTS.md                  # canonical guide for AI agents (and a good summary for humans)
-├── CLAUDE.md                  # Claude Code adapter: imports AGENTS.md
-├── openspec/
-│   ├── config.yaml            # project context + rules injected into OpenSpec workflows
-│   ├── CLAUDE.md              # spec format rules
-│   ├── specs/                 # current behavior, one folder per capability
-│   └── changes/               # in-flight changes; archive/ holds finished ones
-├── docs/
-│   ├── CLAUDE.md              # documentation rules
-│   ├── principles.md          # the project's "constitution"
-│   ├── glossary.md            # ubiquitous language
-│   ├── decisions/             # ADRs (MADR 4) + generated decision log
-│   ├── architecture/          # arc42-style overview with Mermaid C4 diagrams
-│   ├── process/               # development workflow, documentation lifecycle, working with agents
-│   ├── guides/                # how-to guides (created as needed)
-│   ├── reference/             # facts to look up (created as needed)
-│   ├── research/              # dated research notes and spikes
-│   └── templates/             # ADR, guide, research note, living doc (also Obsidian templates)
-├── .claude/                   # Claude Code: skills, /opsx commands (generated), docs-reviewer subagent, settings
-├── .obsidian/                 # shared Obsidian settings (Markdown links, templates, exclusions)
-├── .github/                   # PR/issue templates, CODEOWNERS, CI
-└── scripts/                   # docs.mjs: ADRs, decision log, checks; openspec-update.mjs: regenerate /opsx commands
-```
+It was created from the [openSpecProjectStructure](https://github.com/enricoag1982/openSpecProjectStructure) template and keeps its rules:
 
-## Quick start
+| Knowledge | Home |
+| --- | --- |
+| What the system must do | `openspec/specs/`, changed only through OpenSpec changes in `openspec/changes/` |
+| Why it is built this way | `docs/decisions/` (MADR ADRs, append-only) |
+| How it is built now | `docs/architecture/`, `docs/guides/`, `docs/reference/` |
+| Vocabulary and principles | `docs/glossary.md`, `docs/principles.md` |
+| Explorations | `docs/research/` (dated, non-normative) |
 
-Requirements: Node.js 20.19 or later, and git. Obsidian is optional.
+Requirements: Node.js 20.19 or later. The Java build is not set up yet.
 
 ```bash
-npm ci                                  # install doc/spec tooling (pinned versions)
-npm run check                           # validate specs, lint Markdown, check decisions/links/freshness
-npm run adr:new -- "Use PostgreSQL for persistence"   # record a decision (status: proposed)
-npx openspec new change add-user-login  # start a change by hand (or /opsx:propose in your agent)
+npm ci          # install the doc and spec tooling (pinned versions)
+npm run check   # validate specs, lint Markdown, check decisions, links and review dates
 ```
 
-The `/opsx:*` slash commands call `openspec` directly, so install the CLI globally once: `npm install -g @fission-ai/openspec@1.13.2`.
-
-Then, in Claude Code:
-
-1. `/opsx:explore`: think an idea through
-2. `/opsx:propose "..."`: proposal, delta specs, design and tasks
-3. `/opsx:apply`: implement
-4. `/opsx:archive`: merge the deltas into the specs
-
-The full loop and definition of done are in [development workflow](docs/process/development-workflow.md).
-
-## Using this as a template
-
-1. On GitHub, open **Settings → General** and tick **Template repository**. Then create new projects with **Use this template**.
-2. Follow [Start a new project from this template](docs/guides/start-a-new-project-from-this-template.md). It covers what to replace, what to keep and what to delete.
-
-## Documentation map
-
-- [AGENTS.md](AGENTS.md): start here, whether human or agent
-- [Principles](docs/principles.md) · [Glossary](docs/glossary.md) · [Decision log](docs/decisions/README.md) · [Architecture](docs/architecture/README.md)
-- Process: [Development workflow](docs/process/development-workflow.md) · [Documentation lifecycle](docs/process/documentation-lifecycle.md) · [Working with AI agents](docs/process/working-with-agents.md)
-- Background: [Research on the standards behind this structure](docs/research/2026-09-30-standards-for-agent-maintained-project-knowledge.md)
+The workflow, from idea to merged change, is in [development workflow](docs/process/development-workflow.md). With Claude Code: `/opsx:explore`, `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.

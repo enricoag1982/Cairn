@@ -17,7 +17,14 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0002](0002-use-openspec-for-spec-driven-development.md) | Use OpenSpec for spec-driven development | accepted | 2026-09-30 |
 | [ADR-0003](0003-use-agents-md-as-canonical-agent-guidance.md) | Use AGENTS.md as the canonical agent guidance, with thin tool-specific adapters | superseded by ADR-0006 | 2026-09-30 |
 | [ADR-0004](0004-keep-docs-as-plain-markdown-browsable-in-obsidian.md) | Keep all project knowledge as plain Markdown in the repository, browsable in Obsidian | accepted | 2026-09-30 |
-| [ADR-0005](0005-choose-primary-implementation-language.md) | Choose the primary implementation language | proposed | 2026-09-30 |
+| [ADR-0005](0005-choose-primary-implementation-language.md) | Choose the primary implementation language | accepted | 2026-10-12 |
 | [ADR-0006](0006-target-claude-code-without-duplicated-agent-files.md) | Target Claude Code, keep AGENTS.md canonical, and store each agent file once | accepted | 2026-09-30 |
+| [ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md) | Run sysRec as an embedded single-node engine with a single writer | proposed | 2026-10-12 |
+| [ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md) | Record history on two time axes: effective time and transaction time | proposed | 2026-10-12 |
+| [ADR-0009](0009-version-whole-entities-rather-than-single-attributes.md) | Version whole entities rather than single attributes | proposed | 2026-10-12 |
+| [ADR-0010](0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md) | Model data as a typed property graph with single inheritance and traits | proposed | 2026-10-12 |
+| [ADR-0011](0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md) | Hide storage behind an ordered key-value store and a commit log | proposed | 2026-10-12 |
+| [ADR-0012](0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md) | Define types as annotated Java interfaces processed at compile time | proposed | 2026-10-12 |
+| [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md) | Read through immutable views and take feature flags resolved by the caller | proposed | 2026-10-12 |
 
 <!-- decision-log:end -->
