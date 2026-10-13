@@ -18,6 +18,10 @@ import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TotalOwnershipRule;
+import io.github.enricoag1982.cairn.query.Query;
+import io.github.enricoag1982.cairn.query.QueryResult;
+import io.github.enricoag1982.cairn.query.Row;
+import io.github.enricoag1982.cairn.reference.types.Account;
 import io.github.enricoag1982.cairn.reference.types.Address;
 import io.github.enricoag1982.cairn.reference.types.HasAddress;
 import io.github.enricoag1982.cairn.reference.types.LeiChecksumRuleV1;
@@ -64,6 +68,33 @@ class GeneratedTypesScenariosTest {
                     context.problem(LeiChecksumRule.INVALID_CHECK_DIGITS, "lei",
                             "The check digits of the LEI " + lei + " are wrong (ISO 7064 MOD 97-10)."));
         }
+    }
+
+    // ------------------------------------------------------------------ typed queries
+
+    @Test
+    @DisplayName("Scenario: A typed query")
+    void aTypedQuery() {
+        ReferenceDomain domain = new ReferenceDomain();
+        Receipt parties = domain.replay(ReferenceStories.rd1Parties());
+        Receipt accounts = domain.replay(ReferenceStories.rd5Accounts(ReferenceDomain.entityId(parties, BETA),
+                ReferenceDomain.entityId(parties, ACME)));
+        EntityId a1 = ReferenceDomain.entityId(accounts, ReferenceStories.A1);
+        domain.replay(ReferenceStories.rd5BalancePatch(a1));
+        domain.replay(ReferenceStories.rd5BalanceCorrection(a1));
+        Query query = Query.from(Account.TYPE, "a")
+                .where(Account.BALANCE.of("a").gt(new BigDecimal("1200")))
+                .build();
+
+        QueryResult result = domain.view(on(3, 31)).query(query);
+
+        assertThat(result).isInstanceOf(QueryResult.Rows.class);
+        List<Row> rows = ((QueryResult.Rows) result).rows();
+        assertThat(rows).singleElement().satisfies(row -> {
+            Account account = Account.from(row.entity("a").orElseThrow());
+            assertThat(account.number()).isEqualTo("A-2");
+            assertThat(account.balance()).isEqualByComparingTo("2000");
+        });
     }
 
     // ------------------------------------------------------------------ reading states

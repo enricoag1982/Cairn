@@ -17,6 +17,7 @@ import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.fixtures.ReferenceQueries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.query.AttributeRef;
 import io.github.enricoag1982.cairn.query.Column;
@@ -72,7 +73,7 @@ class TypedQueriesTest {
                 .groupBy("party")
                 .aggregate(BALANCE.of("a").sum("total"))
                 .build();
-        Query untyped = QueriesScenariosTest.totalBalanceByUltimateParent();
+        Query untyped = ReferenceQueries.totalBalanceByUltimateParent();
 
         assertThat(typed).isEqualTo(untyped);
         for (Coordinates coordinates : new Coordinates[] {Coordinates.effectiveAt(on(3, 31)),

@@ -33,5 +33,15 @@
  * {@link io.github.enricoag1982.cairn.documents.JsonSchemas#transactions(io.github.enricoag1982.cairn.schema.Schema)}
  * the one for transaction payloads, which checks the values of {@code create} and {@code relate} writes against the
  * types they name.
+ *
+ * <p>Queries (capability {@code queries}):
+ * {@link io.github.enricoag1982.cairn.documents.Queries#read(String)} reads a query, written in YAML 1.2 or as JSON in a form
+ * that mirrors the records of the query API, into a {@link io.github.enricoag1982.cairn.query.Query}, strictly and with the
+ * same located problems as the other documents. A {@link io.github.enricoag1982.cairn.documents.LocatedQuery} that was
+ * read can {@linkplain io.github.enricoag1982.cairn.documents.LocatedQuery#locate(java.util.List) locate} the problems
+ * that running it returns, by their {@code @query...} paths.
+ * {@link io.github.enricoag1982.cairn.documents.Queries#toJson(io.github.enricoag1982.cairn.query.QueryResult)} writes the
+ * result of a query as JSON, and {@link io.github.enricoag1982.cairn.documents.Queries#jsonSchema()} returns the
+ * published JSON Schema (draft 2020-12, {@code urn:cairn:query:1}) of the form.
  */
 package io.github.enricoag1982.cairn.documents;

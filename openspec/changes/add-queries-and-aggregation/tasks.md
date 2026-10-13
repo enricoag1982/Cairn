@@ -13,14 +13,14 @@
 
 ## 3. JSON, tools and generated types
 
-- [ ] 3.1 Reading queries as JSON or YAML, locating problems, the published JSON Schema, and results as JSON (D4)
-- [ ] 3.2 The tool `cairn_query`, and the kind `query` of `cairn_json_schema` (D5)
-- [ ] 3.3 Attribute constants on generated types, and reading rows as generated types (D6)
+- [x] 3.1 Reading queries as JSON or YAML, locating problems, the published JSON Schema, and results as JSON (D4)
+- [x] 3.2 The tool `cairn_query`, and the kind `query` of `cairn_json_schema` (D5)
+- [x] 3.3 Attribute constants on generated types, and reading rows as generated types (D6)
 
 ## 4. Tests
 
-- [ ] 4.1 One test per scenario of `queries`, `agent-tools` and `java-types` in this change, named `Scenario: <name>`
-- [ ] 4.2 The same reference queries through the builder, generated types and JSON give the same rows; verify `./gradlew build` passes
+- [x] 4.1 One test per scenario of `queries`, `agent-tools` and `java-types` in this change, named `Scenario: <name>`
+- [x] 4.2 The same reference queries through the builder, generated types and JSON give the same rows; verify `./gradlew build` passes
 
 ## 5. Documentation
 

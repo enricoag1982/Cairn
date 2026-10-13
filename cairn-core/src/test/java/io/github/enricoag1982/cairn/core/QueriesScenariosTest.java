@@ -21,6 +21,7 @@ import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.fixtures.ReferenceQueries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.query.Aggregate;
 import io.github.enricoag1982.cairn.query.Column;
@@ -43,17 +44,6 @@ import org.junit.jupiter.api.Test;
 class QueriesScenariosTest {
 
     private final ReferenceStore reference = new ReferenceStore();
-
-    /** The query of RD-6: the total balance of accounts by ultimate parent. */
-    static Query totalBalanceByUltimateParent() {
-        return Query.from("Account", "a")
-                .follow("a", "HeldBy", "holder")
-                .traverse("holder", "ownedBy", 0, 10, "party")
-                .where(Condition.not(Condition.hasLink("party", "ownedBy")))
-                .groupBy("party")
-                .aggregate(Aggregate.sum(Operand.attribute("a", "balance"), "total"))
-                .build();
-    }
 
     private static Condition nameIs(String binding, String name) {
         return Condition.eq(Operand.attribute(binding, "name"), Operand.literal(name));
@@ -83,8 +73,8 @@ class QueriesScenariosTest {
         reference.createParties();
         View view = reference.view(on(3, 31));
 
-        QueryResult.Rows parties = rows(view.query(Query.from("Party", "p").build()));
-        QueryResult.Rows organizations = rows(view.query(Query.from("Organization", "o").build()));
+        QueryResult.Rows parties = rows(view.query(ReferenceQueries.parties()));
+        QueryResult.Rows organizations = rows(view.query(ReferenceQueries.organizations()));
 
         assertThat(names(parties, "p")).containsExactly("ACME", "Beta", "Alice");
         assertThat(names(organizations, "o")).containsExactly("ACME", "Beta");
@@ -197,7 +187,7 @@ class QueriesScenariosTest {
     @DisplayName("Scenario: Total balance by ultimate parent")
     void totalBalanceByUltimateParentScenario() {
         recordRd1Rd2Rd5();
-        Query query = totalBalanceByUltimateParent();
+        Query query = ReferenceQueries.totalBalanceByUltimateParent();
 
         QueryResult.Rows knownOnApril5 = rows(march31KnownOnApril5().query(query));
         QueryResult.Rows knownNow = rows(reference.view(on(3, 31)).query(query));

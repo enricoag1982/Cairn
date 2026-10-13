@@ -5,8 +5,9 @@ import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
+import java.util.regex.Pattern;
 
 /**
  * How queries compare and order values (design D2): numbers by value across int, long and decimal, dates and instants in
@@ -34,6 +35,10 @@ final class Comparing {
         }
     }
 
+    private static final Pattern DATE_FORM = Pattern.compile("^(?:[0-9]{4}|-[0-9]{4,9}|\\+[0-9]{5,9})-[0-9]{2}-[0-9]{2}$");
+    private static final Pattern INSTANT_FORM = Pattern.compile("^[+-]?[0-9]{4,10}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}"
+            + ":[0-9]{2}(\\.[0-9]{0,9})?([Zz]|[+-][0-9]{2}:[0-9]{2}(:[0-9]{2})?)$");
+
     private Comparing() {
     }
 
@@ -54,18 +59,24 @@ final class Comparing {
     }
 
     /**
-     * Gives a literal the value type of the attribute it is compared with where it can: a string that spells a date or an
-     * instant in ISO 8601 form becomes one for a date or an instant attribute. A number needs no conversion, because
-     * numbers compare by value; anything else is returned as it is.
+     * Gives a literal the value type of the attribute it is compared with where it can: a string that spells a date, or
+     * an instant in the form that transaction payloads use, becomes one for a date or an instant attribute. A number
+     * needs no conversion, because numbers compare by value; anything else is returned as it is.
+     *
+     * <p>The forms are decided by patterns, as the document reader decides them, because what {@code java.time} accepts
+     * differs between Java versions: a date such as {@code 2026-03-31}, and an instant with seconds, a fraction of up to
+     * nine digits if need be, and {@code Z} or an offset {@code ±hh:mm}, such as {@code 2026-03-31T00:00:00Z}. This
+     * engine does not depend on the module of the documents, so the patterns are repeated here; a test of that module
+     * compares the two.
      */
     static Value coerce(Value literal, ValueType target) {
         if (literal instanceof Value.StringValue(String text)) {
             try {
-                if (target == ValueType.DATE) {
+                if (target == ValueType.DATE && DATE_FORM.matcher(text).matches()) {
                     return Value.of(LocalDate.parse(text));
                 }
-                if (target == ValueType.INSTANT) {
-                    return Value.of(OffsetDateTime.parse(text).toInstant());
+                if (target == ValueType.INSTANT && INSTANT_FORM.matcher(text).matches()) {
+                    return Value.of(Instant.parse(text));
                 }
             } catch (DateTimeException e) {
                 return literal;

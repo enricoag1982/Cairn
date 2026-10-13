@@ -104,30 +104,32 @@ public enum ProblemCode {
     DOCUMENT_SYNTAX("The text of a schema document or of a transaction payload is not valid YAML 1.2 or JSON, so it "
             + "cannot be read at all. Reading stops at the first syntax error; fix the syntax at the given line and "
             + "column, and read the text again. An agent tool reports it too, with the path @arguments, when the "
-            + "arguments of the call are not valid JSON."),
+            + "arguments of the call are not valid JSON. A query reports it too, with the path @query."),
     /** A schema document or a transaction payload declares a format version that this reader does not know. */
     UNSUPPORTED_FORMAT_VERSION("This reader knows schema documents and transaction payloads of format version 1, "
             + "written as 'cairn: 1'. Set the key cairn to 1, or use a reader for the version that the text "
-            + "declares."),
+            + "declares. A query that declares another format version than 1 gets it too."),
     /** A schema document or a transaction payload uses a YAML feature outside the supported subset. */
     UNSUPPORTED_YAML_FEATURE("Schema documents and transaction payloads use a safe subset of YAML 1.2, without "
             + "anchors, aliases, merge keys and explicit tags, and with one document in a stream. Write the value out "
-            + "in full, and remove the tag or the extra document."),
+            + "in full, and remove the tag or the extra document. A query is read the same way."),
     /** A mapping in a schema document or a transaction payload has the same key twice. */
     DUPLICATE_KEY("A mapping in a schema document or a transaction payload has the same key twice, for example a type "
             + "that is defined twice, or an attribute that is given twice in the values of a write. Remove one of "
-            + "them, or rename it."),
+            + "them, or rename it. A query is read the same way."),
     /** A key in a schema document or a transaction payload is not one that is known at that position. */
     UNKNOWN_KEY("A key is not one of the keys that a schema document or a transaction payload knows at that "
             + "position, for example a kind of write that does not exist. The expected details list the known keys, "
             + "and the hint names the closest one. Correct the key, or remove it. An agent tool reports it too, with a "
             + "path such as @arguments.id, for an argument that it does not take, or for a key of knownAt other than "
-            + "basis and transactionTime."),
+            + "basis and transactionTime. A query reports it too, with a path such as "
+            + "@query.steps.1, for a key that it does not know."),
     /** A key that a schema document or a transaction payload requires at a position is missing. */
     MISSING_KEY("A key that is required at that position is missing, for example the source, the target, the inverse "
             + "name and both multiplicities of a relationship type, or the principal and the writes of a transaction "
             + "payload. Add the key. An agent tool reports it too, with a path such as @arguments.id, when an argument "
-            + "that it needs is missing."),
+            + "that it needs is missing. A query reports it too, with a path such as "
+            + "@query.from, for a key that it needs."),
     /** A value in a schema document or a transaction payload has the wrong kind, or is written in a form that is not allowed. */
     INVALID_VALUE("A value in a schema document or a transaction payload has the wrong kind, for example a number "
             + "where text is expected, or is written in a form that is not allowed, for example a multiplicity other "
@@ -136,7 +138,8 @@ public enum ProblemCode {
             + "details say which. Correct the value; put text that YAML would read as another kind, such as "
             + "\"1.10\" or \"true\", in quotes. An agent tool reports it too when an argument has the wrong kind or "
             + "form, such as an instant that is not ISO 8601 or a negative maximum depth, or names nothing that "
-            + "exists, such as a problem code or an approval request."),
+            + "exists, such as a problem code or an approval request. A query reports it too, with a path such as "
+            + "@query.limit, for a value of the wrong kind or form, such as a negative limit."),
     /** A write creates an entity of a name that is not an entity type. */
     UNKNOWN_ENTITY_TYPE("A write creates an entity of a type name that the schema does not have as an entity type. "
             + "Type names and aliases are compared without regard to case. Correct the name, which the hint suggests, "

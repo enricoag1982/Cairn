@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.agents;
 import io.github.enricoag1982.cairn.agents.AgentPolicy.Decision;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.documents.JsonSchemas;
+import io.github.enricoag1982.cairn.documents.Queries;
 import io.github.enricoag1982.cairn.documents.SchemaDocuments;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -113,6 +114,7 @@ public final class AgentTools {
                 Map.entry(ToolCatalog.TIMELINE, this::timeline),
                 Map.entry(ToolCatalog.NAVIGATE, this::navigate),
                 Map.entry(ToolCatalog.TRAVERSE, this::traverse),
+                Map.entry(ToolCatalog.QUERY, this::query),
                 Map.entry(ToolCatalog.APPROVAL_STATUS, this::approvalStatus));
     }
 
@@ -122,7 +124,7 @@ public final class AgentTools {
      * @return the tools: {@code cairn_describe}, {@code cairn_json_schema}, {@code cairn_explain_problem},
      *         {@code cairn_plan_schema}, {@code cairn_register_schema}, {@code cairn_dry_run}, {@code cairn_commit},
      *         {@code cairn_read_entity}, {@code cairn_read_relationship}, {@code cairn_list_entities},
-     *         {@code cairn_timeline}, {@code cairn_navigate}, {@code cairn_traverse} and
+     *         {@code cairn_timeline}, {@code cairn_navigate}, {@code cairn_traverse}, {@code cairn_query} and
      *         {@code cairn_approval_status}
      */
     public static List<ToolDescription> toolDescriptions() {
@@ -202,9 +204,9 @@ public final class AgentTools {
 
     /**
      * {@code cairn_json_schema}: the published JSON Schema of schema documents ({@code kind} {@code document}), the
-     * generated JSON Schema of transaction payloads ({@code payload}), or the generated JSON Schema of the values of
-     * the entity type or relationship type named in {@code type} ({@code values}). The result is the JSON Schema
-     * itself.
+     * generated JSON Schema of transaction payloads ({@code payload}), the generated JSON Schema of the values of
+     * the entity type or relationship type named in {@code type} ({@code values}), or the published JSON Schema of
+     * queries ({@code query}). The result is the JSON Schema itself.
      *
      * @param arguments the arguments: {@code {kind, type?}}
      * @return the JSON Schema as JSON text, or the problems
@@ -219,6 +221,7 @@ public final class AgentTools {
         Schema schema = store.schema().current();
         return switch (kind) {
             case "document" -> SchemaDocuments.jsonSchema();
+            case "query" -> Queries.jsonSchema();
             case "payload" -> JsonSchemas.transactions(schema);
             case "values" -> {
                 if (type.isEmpty()) {
@@ -232,8 +235,8 @@ public final class AgentTools {
             }
             default -> Json.render(Operations.problemsOnly(List.of(new Problem(ProblemCode.INVALID_VALUE,
                     "@arguments.kind", "There is no JSON Schema of the kind '" + kind + "'.",
-                    Optional.of("document, payload or values"), Optional.of(kind),
-                    Arguments.closest(kind, "document", "payload", "values")
+                    Optional.of("document, payload, values or query"), Optional.of(kind),
+                    Arguments.closest(kind, "document", "payload", "values", "query")
                             .map(closest -> "Did you mean '" + closest + "'?")))));
         };
     }
@@ -414,6 +417,17 @@ public final class AgentTools {
      */
     public String traverse(String arguments) {
         return Json.render(reads.traverse(arguments));
+    }
+
+    /**
+     * {@code cairn_query}: runs a query, written as JSON or YAML, through a view.
+     *
+     * @param arguments the arguments: {@code {query, effectiveAt, knownAt?}}
+     * @return {@code {effectiveAt, basis, result: {columns, rows}}} as JSON text, or the problems, located in the text of
+     *         the query where they concern it
+     */
+    public String query(String arguments) {
+        return Json.render(reads.query(arguments));
     }
 
     // ------------------------------------------------------------------ approval

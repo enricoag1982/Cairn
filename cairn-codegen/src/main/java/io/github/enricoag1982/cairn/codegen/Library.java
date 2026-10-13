@@ -30,6 +30,7 @@ final class Library {
 
     private static final String DATA = "io.github.enricoag1982.cairn.data.";
     private static final String SCHEMA = "io.github.enricoag1982.cairn.schema.";
+    private static final String QUERY = "io.github.enricoag1982.cairn.query.";
 
     static final String CONFLICT_CHECK = DATA + "ConflictCheck";
     static final String EFFECTIVE_PERIOD = DATA + "EffectivePeriod";
@@ -49,6 +50,9 @@ final class Library {
     static final String RULE_CODE = SCHEMA + "RuleCode";
     static final String RULE_DESCRIPTOR = SCHEMA + "RuleDescriptor";
     static final String VALUE = SCHEMA + "Value";
+    static final String ATTRIBUTE_REF = QUERY + "AttributeRef";
+    static final String ORDERED_ATTRIBUTE_REF = QUERY + "OrderedAttributeRef";
+    static final String NUMERIC_ATTRIBUTE_REF = QUERY + "NumericAttributeRef";
 
     /**
      * The simple names of the types that generated code uses before a dot, such as {@code Optional.empty()}. A
@@ -56,7 +60,8 @@ final class Library {
      */
     static final Set<String> QUALIFIERS = Set.of(BIG_DECIMAL, LOCAL_DATE, INSTANT, LIST, LINKED_HASH_MAP,
             LINKED_HASH_SET, MAP, OPTIONAL, SET, STRING, BOOLEAN, INTEGER, LONG, CONFLICT_CHECK, EFFECTIVE_PERIOD,
-            ENTITY_ID, ENTITY_STATE, REF, RELATIONSHIP_ID, RELATIONSHIP_STATE, TEMPORARY_ID, TYPED_VALUES, WRITE, VALUE)
+            ENTITY_ID, ENTITY_STATE, REF, RELATIONSHIP_ID, RELATIONSHIP_STATE, TEMPORARY_ID, TYPED_VALUES, WRITE, VALUE,
+            ATTRIBUTE_REF)
             .stream().map(Library::simpleName).collect(Collectors.toUnmodifiableSet());
 
     private Library() {

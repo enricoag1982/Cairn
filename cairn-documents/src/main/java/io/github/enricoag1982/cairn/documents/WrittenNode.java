@@ -89,18 +89,16 @@ sealed interface WrittenNode {
     }
 
     /**
-     * A sequence of scalars and mappings.
+     * A sequence of scalars, mappings and, in JSON only, sequences, as the rows of the result of a query are. A schema
+     * document is never written with a sequence of sequences, and {@link YamlText} refuses one.
      *
      * @param items the items, in order
      */
     record Sequence(List<WrittenNode> items) implements WrittenNode {
 
-        /** Copies the items; a sequence of sequences is not part of the format. */
+        /** Copies the items. */
         public Sequence {
             items = List.copyOf(items);
-            if (items.stream().anyMatch(item -> item instanceof Sequence)) {
-                throw new IllegalArgumentException("a sequence of sequences is not part of schema documents");
-            }
         }
     }
 

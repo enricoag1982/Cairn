@@ -25,7 +25,7 @@ class McpAdapterTest {
     private static final List<String> TOOLS = List.of("cairn_describe", "cairn_json_schema", "cairn_explain_problem",
             "cairn_plan_schema", "cairn_register_schema", "cairn_dry_run", "cairn_commit", "cairn_read_entity",
             "cairn_read_relationship", "cairn_list_entities", "cairn_timeline", "cairn_navigate", "cairn_traverse",
-            "cairn_approval_status");
+            "cairn_query", "cairn_approval_status");
 
     private final AgentFixture fixture = new AgentFixture();
     private McpSyncServer server;
@@ -71,6 +71,24 @@ class McpAdapterTest {
             assertThat(tool.description()).as("description of %s", tool.name()).isNotBlank();
             assertThat(tool.inputSchema()).as("input schema of %s", tool.name()).containsEntry("type", "object");
         });
+    }
+
+    @Test
+    void aQueryRunsOverTheProtocolAndItsProblemsAreResults() {
+        connect(fixture.tools);
+        fixture.createParties();
+        String query = "{\"from\": {\"type\": \"Party\", \"as\": \"p\"}, \"limit\": 2}";
+
+        McpSchema.CallToolResult rows = call("cairn_query", Map.of("query", query, "effectiveAt", "2026-03-31T00:00:00Z"));
+        McpSchema.CallToolResult problems = call("cairn_query",
+                Map.of("query", query.replace("Party", "Prty"), "effectiveAt", "2026-03-31T00:00:00Z"));
+
+        assertThat(rows.isError()).isNotEqualTo(true);
+        assertThat(Json.parse(text(rows)).get("result").get("rows")).hasSize(2);
+        assertThat(text(rows)).isEqualTo(fixture.tools.query(Json.render(Json.object().put("query", query)
+                .put("effectiveAt", "2026-03-31T00:00:00Z"))));
+        assertThat(problems.isError()).isNotEqualTo(true);
+        assertThat(Json.parse(text(problems)).get("problems").get(0).get("hint").stringValue()).contains("Party");
     }
 
     @Test

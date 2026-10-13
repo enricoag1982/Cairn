@@ -34,6 +34,21 @@ import tools.jackson.databind.JsonNode;
 class AgentToolsScenariosTest {
 
     private static final String MARCH_1 = "2026-03-01T00:00:00Z";
+    private static final String MARCH_31 = "2026-03-31T00:00:00Z";
+
+    /** The query of RD-6, the total balance by ultimate parent, in the form of the published JSON Schema of queries. */
+    private static final String TOTAL_BALANCE_BY_ULTIMATE_PARENT = """
+            {
+              "from": { "type": "Account", "as": "a" },
+              "steps": [
+                { "follow": { "from": "a", "name": "HeldBy", "as": "holder" } },
+                { "traverse": { "from": "holder", "name": "ownedBy", "maxDepth": 10, "as": "party" } },
+                { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy" } } } }
+              ],
+              "groupBy": [ { "of": "party" } ],
+              "aggregates": [ { "function": "sum", "attribute": "balance", "of": "a", "as": "total" } ]
+            }
+            """;
 
     private final AgentFixture fixture = new AgentFixture();
 
@@ -195,6 +210,36 @@ class AgentToolsScenariosTest {
             assertThat(link.get("entity").get("values").get("name").stringValue()).isEqualTo("ACME");
             assertThat(link.get("relationship").get("relationshipType").stringValue()).isEqualTo("Owns");
             assertThat(link.get("relationship").get("values").get("share").decimalValue()).isEqualByComparingTo("55");
+        });
+    }
+
+    @Test
+    @DisplayName("Scenario: An agent totals balances")
+    void anAgentTotalsBalances() {
+        Receipt parties = fixture.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        Receipt accounts = fixture.replay(ReferenceStories.rd5Accounts(beta, acme));
+        Receipt ownership = fixture.replay(ReferenceStories.rd2Ownership(acme, beta));
+        EntityId a1 = entity(accounts, ReferenceStories.A1);
+        fixture.replay(ReferenceStories.rd5BalancePatch(a1));
+        fixture.replay(ReferenceStories.rd5BalanceCorrection(a1));
+        fixture.replay(ReferenceStories.rd2ShareCorrection(relationship(ownership, ACME_OWNS_BETA)));
+
+        JsonNode answer = fixture.call("cairn_query", args("query", TOTAL_BALANCE_BY_ULTIMATE_PARENT,
+                "effectiveAt", MARCH_31));
+
+        assertThat(answer.has("problems")).isFalse();
+        assertThat(answer.get("effectiveAt").stringValue()).isEqualTo(MARCH_31);
+        assertThat(answer.get("basis").longValue()).isEqualTo(fixture.store.latestBasis().value());
+        JsonNode result = answer.get("result");
+        assertThat(result.get("columns")).map(JsonNode::stringValue).containsExactly("party", "total");
+        assertThat(result.get("rows")).singleElement().satisfies(row -> {
+            assertThat(row).hasSize(2);
+            assertThat(row.get(0).get("id").stringValue()).isEqualTo(acme.value());
+            assertThat(row.get(0).get("entityType").stringValue()).isEqualTo("Organization");
+            assertThat(row.get(0).get("values").get("name").stringValue()).isEqualTo("ACME");
+            assertThat(row.get(1).decimalValue()).isEqualByComparingTo("3200");
         });
     }
 

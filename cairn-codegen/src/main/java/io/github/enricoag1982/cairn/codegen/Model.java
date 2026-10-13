@@ -22,6 +22,8 @@ import java.util.Set;
  * @param elements     the traits, entity types and relationship types, sorted by name
  * @param rules        the rules the documents name, sorted by name and version
  * @param types        the Java names of everything in the package: interfaces and rule base classes
+ * @param constants    for each element by its name in the documents, the name of the constant of each attribute it
+ *                     declares itself, by the attribute's name
  */
 record Model(
         String packageName,
@@ -30,7 +32,8 @@ record Model(
         boolean deprecations,
         List<Element> elements,
         List<RuleBase> rules,
-        Set<String> types) {
+        Set<String> types,
+        Map<String, Map<String, String>> constants) {
 
     /**
      * A rule base class.
@@ -72,7 +75,13 @@ record Model(
         rules.forEach(rule -> types.add(rule.java()));
         boolean deprecations = elements.stream().anyMatch(element -> element.deprecated()
                 || element.attributes().stream().anyMatch(Attribute::deprecated));
-        return new Model(packageName, documents, names, deprecations, elements, rules, Set.copyOf(types));
+        return new Model(packageName, documents, names, deprecations, elements, rules, Set.copyOf(types),
+                Constants.of(elements, Set.copyOf(types)));
+    }
+
+    /** The name of the constant that holds the typed reference of an attribute that an element declares itself. */
+    String constant(Element element, Attribute attribute) {
+        return constants.get(element.name()).get(attribute.name());
     }
 
     Element element(String name) {

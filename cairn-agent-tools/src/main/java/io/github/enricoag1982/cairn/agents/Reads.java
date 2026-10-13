@@ -12,6 +12,9 @@ import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.documents.IdLookup;
 import io.github.enricoag1982.cairn.documents.Payloads;
+import io.github.enricoag1982.cairn.documents.Queries;
+import io.github.enricoag1982.cairn.documents.QueryReadResult;
+import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
@@ -27,7 +30,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The tools that read a store through a view (design D2 of {@code add-agent-tools}): an entity, a relationship, the
- * entities of a type, a timeline, navigation and traversal. Every result reports the coordinates it was read at, as
+ * entities of a type, a timeline, navigation and traversal, and queries. Every result reports the coordinates it was read at, as
  * {@code {effectiveAt, basis, result}}; a timeline has no effective time, so it reports the basis only.
  */
 final class Reads {
@@ -150,6 +153,37 @@ final class Reads {
         }
         List<Step> steps = view.traverse(new EntityId(id), name, relationship -> true, maxDepth);
         return result(view, true, Json.parse(Payloads.stepsToJson(steps)));
+    }
+
+    /**
+     * {@code cairn_query}: runs a query. The text is read first, and a problem of reading is located in it; then the
+     * view checks the query against its schema, and a problem it returns is located in the text by its path. The result
+     * holds the columns and the rows, and the coordinates are reported as the other reads report them.
+     */
+    ObjectNode query(String text) {
+        Arguments in = Arguments.parse(text, "query", "effectiveAt", "knownAt");
+        String query = in.string("query");
+        Instant effectiveAt = in.instant("effectiveAt");
+        KnownAt knownAt = in.knownAt();
+        if (!in.valid()) {
+            return Operations.problemsOnly(in.problems());
+        }
+        return switch (Queries.read(query)) {
+            case QueryReadResult.Invalid invalid -> Operations.problemsOnly(invalid.problems());
+            case QueryReadResult.Read read -> {
+                View view = view(effectiveAt, knownAt);
+                yield switch (view.query(read.query().query())) {
+                    case QueryResult.Invalid invalid ->
+                            Operations.problemsOnly(read.query().locate(invalid.problems()));
+                    case QueryResult.Rows rows -> {
+                        ObjectNode result = (ObjectNode) Json.parse(Queries.toJson(rows));
+                        result.remove("effectiveAt");
+                        result.remove("basis");
+                        yield result(view, true, result);
+                    }
+                };
+            }
+        };
     }
 
     // ------------------------------------------------------------------ helpers

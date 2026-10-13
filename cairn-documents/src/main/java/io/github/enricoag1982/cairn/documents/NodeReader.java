@@ -110,6 +110,11 @@ final class NodeReader {
         return !problems.isEmpty();
     }
 
+    /** How many problems were found so far: a reader that wants to know whether reading a part found one counts them. */
+    int problemCount() {
+        return problems.size();
+    }
+
     /**
      * The problems in the order of the text. An alias makes the same node appear in two places, so its problems are
      * found twice; they are the same problem, at the same place of the text, and are reported once.

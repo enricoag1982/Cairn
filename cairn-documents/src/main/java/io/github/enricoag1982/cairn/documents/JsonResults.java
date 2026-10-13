@@ -12,9 +12,14 @@ import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Mapping;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Plain;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Sequence;
+import io.github.enricoag1982.cairn.documents.WrittenNode.Text;
+import io.github.enricoag1982.cairn.query.Cell;
+import io.github.enricoag1982.cairn.query.QueryResult;
+import io.github.enricoag1982.cairn.query.Row;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.Value;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -103,6 +108,42 @@ final class JsonResults {
         problem.location().ifPresent(location -> mapping.put("location", location(location)));
         problem.ruleCode().ifPresent(ruleCode -> mapping.put("ruleCode", ruleCode));
         return mapping;
+    }
+
+    /**
+     * The result of a query: {@code {effectiveAt, basis, columns, rows}} for rows, each row a list of cells in the order
+     * of the columns; the list of problems for a query that does not fit the schema.
+     */
+    static WrittenNode queryResult(QueryResult result) {
+        return switch (result) {
+            case QueryResult.Rows rows -> {
+                Sequence columns = new Sequence(rows.columns().stream().<WrittenNode>map(Text::new).toList());
+                List<WrittenNode> lines = new ArrayList<>();
+                for (Row row : rows.rows()) {
+                    List<WrittenNode> cells = new ArrayList<>();
+                    for (String column : rows.columns()) {
+                        cells.add(cell(row.cell(column)));
+                    }
+                    lines.add(new Sequence(cells));
+                }
+                yield new Mapping()
+                        .put("effectiveAt", rows.effectiveAt().toString())
+                        .put("basis", plain(rows.basis().value()))
+                        .put("columns", columns)
+                        .put("rows", new Sequence(lines));
+            }
+            case QueryResult.Invalid invalid -> list(invalid.problems(), JsonResults::problem);
+        };
+    }
+
+    /** A cell: the state of an entity or a relationship, a value as literals are written, or {@code null}. */
+    private static WrittenNode cell(Cell cell) {
+        return switch (cell) {
+            case Cell.EntityCell entity -> entityState(entity.state());
+            case Cell.RelationshipCell relationship -> relationshipState(relationship.state());
+            case Cell.ValueCell value -> DocumentWriter.literal(value.value());
+            case Cell.Empty ignored -> new Plain("null");
+        };
     }
 
     /** The items as a sequence of mappings, in order. */

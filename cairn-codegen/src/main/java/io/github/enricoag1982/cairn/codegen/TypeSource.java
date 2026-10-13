@@ -188,6 +188,9 @@ final class TypeSource {
             writeType();
         }
         for (Attribute attribute : element.ownAttributes()) {
+            writeReference(attribute);
+        }
+        for (Attribute attribute : element.ownAttributes()) {
             writeAccessor(attribute);
         }
         if (element.kind() != Element.Kind.TRAIT) {
@@ -209,6 +212,47 @@ final class TypeSource {
         member();
         out.javadoc(List.of("The name of this " + element.kind().label() + " in its schema."));
         out.line(ref(Library.STRING) + " TYPE = " + Docs.literal(element.name()) + ";");
+    }
+
+    /**
+     * The typed reference of an attribute that this type declares, as a constant (design D6 of
+     * {@code add-queries-and-aggregation}): it builds the conditions, columns, group keys, orders and aggregates of the
+     * attribute for a binding of a query, with the Java type of the attribute's values.
+     */
+    private void writeReference(Attribute attribute) {
+        member();
+        String name = model.constant(element, attribute);
+        List<String> paragraphs = new ArrayList<>();
+        paragraphs.add("<p>Give it the name of a binding of a query with <code>of</code>: for example "
+                + "<code>" + name + ".of(\"x\")</code> is the attribute of the binding <code>x</code>.");
+        attribute.description().filter(text -> !text.isBlank())
+                .ifPresent(text -> paragraphs.add("<p>" + Docs.text(text)));
+        List<String> tags = new ArrayList<>();
+        if (attribute.deprecated()) {
+            tags.add("@deprecated The attribute " + Docs.code(attribute.name())
+                    + " is deprecated in its schema document.");
+        }
+        out.javadoc(doc("A typed reference to the attribute " + Docs.code(attribute.name()) + ", for building queries.",
+                paragraphs, tags));
+        if (attribute.deprecated()) {
+            out.line("@" + ref(Library.DEPRECATED));
+        }
+        String factory = switch (attribute.valueType()) {
+            case STRING -> "string";
+            case BOOLEAN -> "bool";
+            case INT -> "integer";
+            case LONG -> "longInteger";
+            case DECIMAL -> "decimal";
+            case DATE -> "date";
+            case INSTANT -> "instant";
+        };
+        String kind = switch (attribute.valueType()) {
+            case BOOLEAN -> Library.ATTRIBUTE_REF;
+            case INT, LONG, DECIMAL -> Library.NUMERIC_ATTRIBUTE_REF;
+            case STRING, DATE, INSTANT -> Library.ORDERED_ATTRIBUTE_REF;
+        };
+        out.line(ref(kind) + "<" + boxed(attribute.valueType()) + "> " + name + " = " + ref(Library.ATTRIBUTE_REF) + "."
+                + factory + "(" + Docs.literal(attribute.name()) + ");");
     }
 
     private void writeAccessor(Attribute attribute) {

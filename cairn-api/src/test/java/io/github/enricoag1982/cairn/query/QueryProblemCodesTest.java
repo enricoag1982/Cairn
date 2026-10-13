@@ -28,7 +28,8 @@ class QueryProblemCodesTest {
 
     @Test
     void theCodesThatQueriesReuseSayHowQueriesUseThem() {
-        List<String> reused = List.of("UNKNOWN_ENTITY_TYPE", "UNKNOWN_ATTRIBUTE", "UNKNOWN_RELATIONSHIP_TYPE");
+        List<String> reused = List.of("UNKNOWN_ENTITY_TYPE", "UNKNOWN_ATTRIBUTE", "UNKNOWN_RELATIONSHIP_TYPE",
+                "DOCUMENT_SYNTAX", "UNKNOWN_KEY", "MISSING_KEY", "INVALID_VALUE");
 
         assertThat(reused).allSatisfy(name -> assertThat(ProblemCode.valueOf(name).explanation())
                 .as(name).contains("A query reports it too").endsWith("."));

@@ -53,7 +53,7 @@ class AgentToolsTest {
 
     @Test
     void everyToolHasADescriptionAndAnInputSchemaThatIsValidJson() {
-        assertThat(AgentTools.toolDescriptions()).hasSize(14).allSatisfy(tool -> {
+        assertThat(AgentTools.toolDescriptions()).hasSize(15).allSatisfy(tool -> {
             assertThat(tool.name()).startsWith("cairn_");
             assertThat(tool.description()).isNotBlank();
             JsonNode schema = Json.parse(tool.inputSchema());
@@ -653,7 +653,7 @@ class AgentToolsTest {
         }
         for (String tool : List.of("cairn_json_schema", "cairn_explain_problem", "cairn_read_entity",
                 "cairn_read_relationship", "cairn_list_entities", "cairn_timeline", "cairn_navigate",
-                "cairn_traverse", "cairn_approval_status")) {
+                "cairn_traverse", "cairn_query", "cairn_approval_status")) {
             assertThat(shape(tool, "{}")).as(tool).containsExactly("problems");
         }
         assertThat(shape("cairn_describe", "{\"extra\": 1}")).containsExactly("problems");

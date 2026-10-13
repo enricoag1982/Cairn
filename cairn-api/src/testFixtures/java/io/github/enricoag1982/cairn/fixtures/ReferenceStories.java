@@ -18,8 +18,8 @@ import java.util.Objects;
 
 /**
  * The stories of the reference domain ({@code docs/reference/reference-domain.md}) as the transactions that tell them,
- * with the dates at which they are recorded. It builds every story except RD-6, RD-10 and RD-11: the query with
- * aggregation, the listing and the purge, which need features that do not exist yet.
+ * with the dates at which they are recorded. It builds every story that records data. RD-6 and RD-10 are queries, which
+ * {@link ReferenceQueries} builds; only RD-11, the purge, needs a feature that does not exist yet.
  *
  * <p>Stories are in 2026 unless they say otherwise. "Recorded" is the transaction time: a {@link Recording} is
  * replayed on a store with a {@link TestClock} moved to its recording date, at midnight UTC. Effective dates are at

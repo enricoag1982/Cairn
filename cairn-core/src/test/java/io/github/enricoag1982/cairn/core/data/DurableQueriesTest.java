@@ -10,8 +10,8 @@ import io.github.enricoag1982.cairn.core.Stores;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
+import io.github.enricoag1982.cairn.fixtures.ReferenceQueries;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
-import io.github.enricoag1982.cairn.query.Aggregate;
 import io.github.enricoag1982.cairn.query.Column;
 import io.github.enricoag1982.cairn.query.Condition;
 import io.github.enricoag1982.cairn.query.Operand;
@@ -57,14 +57,8 @@ class DurableQueriesTest {
 
     private static List<Query> queries() {
         return List.of(
-                Query.from("Account", "a")
-                        .follow("a", "HeldBy", "holder")
-                        .traverse("holder", "ownedBy", 0, 10, "party")
-                        .where(Condition.not(Condition.hasLink("party", "ownedBy")))
-                        .groupBy("party")
-                        .aggregate(Aggregate.sum(Operand.attribute("a", "balance"), "total"))
-                        .build(),
-                Query.from("Party", "p").build(),
+                ReferenceQueries.totalBalanceByUltimateParent(),
+                ReferenceQueries.parties(),
                 Query.from("Organization", "o").optionalFollow("o", "Employs", "employee", "employs").build(),
                 Query.from("Organization", "o")
                         .traverse("o", "ownedBy", 0, 5, "owner", Optional.of("via"), Optional.of("depth"))

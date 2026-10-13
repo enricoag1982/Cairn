@@ -26,6 +26,7 @@ final class ToolCatalog {
     static final String TIMELINE = "cairn_timeline";
     static final String NAVIGATE = "cairn_navigate";
     static final String TRAVERSE = "cairn_traverse";
+    static final String QUERY = "cairn_query";
     static final String APPROVAL_STATUS = "cairn_approval_status";
 
     private static final String READ_COORDINATES = " Reads through a view: effectiveAt says when the facts are true, "
@@ -49,10 +50,11 @@ final class ToolCatalog {
                 "Returns a JSON Schema to build input from. kind \"document\" is the published schema of schema "
                         + "documents; kind \"payload\" is the schema of transaction payloads for the current schema; "
                         + "kind \"values\" is the schema of the values of the entity type or relationship type named "
-                        + "in type, with its attributes, constraints and examples.",
+                        + "in type, with its attributes, constraints and examples; kind \"query\" is the published "
+                        + "schema of the queries that cairn_query runs.",
                 object(List.of("kind"),
                         "kind", string("Which JSON Schema to return.").set("enum",
-                                Json.strings(List.of("document", "payload", "values"))),
+                                Json.strings(List.of("document", "payload", "values", "query"))),
                         "type", string("For kind \"values\": the name or alias of an entity type or relationship "
                                 + "type."))));
         tools.add(tool(EXPLAIN_PROBLEM,
@@ -126,6 +128,19 @@ final class ToolCatalog {
                         "id", string("The ID of the entity to start from."),
                         "name", string("The name or inverse name of a relationship type."),
                         "maxDepth", integer("The largest number of relationships to follow; 0 follows none."))));
+        tools.add(tool(QUERY,
+                "Runs a query: filters entities, follows and traverses relationships, groups and aggregates, and "
+                        + "returns rows. The query starts from an entity type, binds each entity to a name, and applies "
+                        + "steps (where, follow, optionalFollow, traverse) to the rows so far; then groupBy and "
+                        + "aggregates, columns, order and limit. Build it from cairn_json_schema with kind \"query\"; "
+                        + "the names of types, attributes and relationships are those of the schema from "
+                        + "cairn_describe. The result is {columns, rows}, each row a list of cells in the order of the "
+                        + "columns: the state of an entity or a relationship, a value, or null. A query that does not fit "
+                        + "the schema returns problems located in the query text, with the path of the step or part "
+                        + "they concern and a hint, and nothing is read." + READ_COORDINATES,
+                coordinates(List.of("query", "effectiveAt"),
+                        "query", string("The text of the query, as JSON or YAML, in the form of the JSON Schema of "
+                                + "cairn_json_schema with kind \"query\"."))));
         tools.add(tool(APPROVAL_STATUS,
                 "Reports where an approval request stands: pending, approved or rejected. Once decided, it holds "
                         + "the outcome: for an approved request what registering or committing it did (a receipt, "

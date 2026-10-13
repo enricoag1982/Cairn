@@ -30,10 +30,11 @@ import java.util.Optional;
  *                 with a write of one, or {@code @write.<n>.<attribute>} for problems with one of its attributes;
  *                 {@code @arguments} for problems with the arguments of an agent tool call as a whole, such as
  *                 arguments that are not a JSON object, and {@code @arguments.<name>} for problems with one
- *                 argument of the call; {@code @query.from}, {@code @query.steps.<n>}, {@code @query.groupBy.<n>},
- *                 {@code @query.aggregates.<n>}, {@code @query.columns.<n>} and {@code @query.order.<n>}, with the
- *                 position {@code n} counted from 0, for problems with the start, a step, a group key, an aggregate, a
- *                 column or an order of a query
+ *                 argument of the call; {@code @query} for problems with a query as a whole, such as one that is not
+ *                 YAML, {@code @query.from}, {@code @query.steps.<n>}, {@code @query.groupBy.<n>},
+ *                 {@code @query.aggregates.<n>}, {@code @query.columns.<n>}, {@code @query.order.<n>} and
+ *                 {@code @query.limit}, with the position {@code n} counted from 0, for problems with the start, a step,
+ *                 a group key, an aggregate, a column, an order or the limit of a query
  * @param message  a readable explanation
  * @param expected what would have been accepted, for example the form a name must have
  * @param found    what the definition contains instead, for example the offending name

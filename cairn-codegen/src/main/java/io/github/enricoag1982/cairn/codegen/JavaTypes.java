@@ -15,8 +15,10 @@ import java.util.regex.Pattern;
  * and writes the Java source of the types they define, into one package:
  *
  * <ul>
- * <li>an interface per trait, entity type and relationship type, with an accessor per attribute it declares, that
- * extends the interfaces of its supertype and traits and {@code TypedEntity} or {@code TypedRelationship};
+ * <li>an interface per trait, entity type and relationship type, with an accessor per attribute it declares, and a
+ * constant per attribute it declares, in upper snake case, that holds the typed reference of the attribute for building
+ * queries, that extends the interfaces of its supertype and traits and {@code TypedEntity} or
+ * {@code TypedRelationship};
  * <li>in each interface of an entity type or a relationship type, {@code from} to read a state as the type, a
  * {@code Snapshot} record, and builders of the writes of the generic API;
  * <li>an abstract base class per rule that the documents name and per version, with a typed check.
