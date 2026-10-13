@@ -138,8 +138,10 @@ public final class LeiChecksum extends LeiChecksumRuleV1 {
 
     @Override
     protected void check(Organization organization, RuleContext context) {
-        organization.lei().filter(lei -> !validCheckDigits(lei))    // validCheckDigits is yours to write.ifPresent(lei ->
-                context.problem("invalid-check-digits", "lei", "The check digits of the LEI " + lei + " are wrong."));
+        organization.lei()
+                .filter(lei -> !validCheckDigits(lei))              // validCheckDigits is yours to write
+                .ifPresent(lei -> context.problem("invalid-check-digits", "lei",
+                        "The check digits of the LEI " + lei + " are wrong."));
     }
 }
 ```
@@ -147,6 +149,9 @@ public final class LeiChecksum extends LeiChecksumRuleV1 {
 The base class holds the rule's name, version and type, and turns each entity version into an `Organization`. The description and the codes stay in your class ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
 Give the rule to the store with `StoreSettings.builder().rules(new LeiChecksum())`, or list it for Java's service loader.
 A rule that several types name is generated for their closest common supertype.
+
+Name a rule only on the type it checks, and read everything else through its `RuleContext`: the store records what the rule reads there, and runs it again when a transaction changes that, such as a relationship that the rule navigated and that ends ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)). What a rule reads anywhere else, the store cannot see.
+Prefer navigating from what the rule checks: a rule that lists the entities of a type, runs a query, which starts by listing its start type, or reads a timeline, runs again whenever any of those entities changes at a time it read.
 
 ## Names
 

@@ -2,7 +2,7 @@
 
 ### Requirement: Recovery repeats what was committed
 
-Recovery SHALL apply what each recorded transaction did. It SHALL NOT validate, run rules, or use the store's clock or ID generator. After recovery, before the store is returned, THE SYSTEM SHALL run each rule it has code for over every version of every entity and relationship whose type names it, only to record its reads (see the `entity-rules` capability): what the rules report SHALL NOT be reported and SHALL NOT stop the store from opening. After recovery, transaction times SHALL keep increasing from the last recorded one, and a new entity or relationship SHALL NOT get an ID that the store already has. A store keeps the ID generator chosen when it was created: opening it with a generator that does not accept the IDs it holds SHALL fail with an exception.
+Recovery SHALL apply what each recorded transaction did. It SHALL NOT validate, run rules, or use the store's clock or ID generator. After recovery, before the store is returned, THE SYSTEM SHALL run each rule it has code for over every version of every entity and relationship whose type names it, only to record its reads (see the `entity-rules` capability): what the rules report or throw SHALL NOT be reported and SHALL NOT stop the store from opening, unless the virtual machine runs out of memory or fails. After recovery, transaction times SHALL keep increasing from the last recorded one, and a new entity or relationship SHALL NOT get an ID that the store already has. A store keeps the ID generator chosen when it was created: opening it with a generator that does not accept the IDs it holds SHALL fail with an exception.
 
 #### Scenario: Recovering without the code of a rule
 

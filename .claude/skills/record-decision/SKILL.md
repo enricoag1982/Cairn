@@ -39,6 +39,8 @@ If accepted, update what the decision affects: `docs/architecture/README.md` (co
 2. In the **old** ADR, change only the frontmatter to `status: superseded by ADR-NNNN` and add one line under "More Information" linking the new ADR. Do not edit its reasoning.
 3. `npm run docs:index`.
 
+To replace only part of an accepted decision, write the new ADR the same way, but leave the old one `accepted` and add one line under its "More Information" that names the new ADR and the part it replaces. Read accepted ADRs together with the ADRs their "More Information" points to.
+
 ## Finish
 
 `npm run docs:lint:fix && npm run docs:check`, both must pass.

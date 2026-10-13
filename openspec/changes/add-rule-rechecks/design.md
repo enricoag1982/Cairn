@@ -58,7 +58,8 @@ After `RuleStage` has run the rules of what the transaction writes, and only if 
 
 ### D5. Durable stores
 
-Recovery stays as ADR-0022 has it. Afterwards, before the store is returned, it runs every rule it has code for over every version of every entity and relationship whose type names it, against a provisional view with no transaction at the latest basis, and records the checks. What the rules report, throw or try to write is dropped. The index is not written to files, so the log and snapshot formats do not change.
+Recovery stays as ADR-0022 has it. Afterwards, before the store is returned, it runs every rule it has code for over every version of every entity and relationship whose type names it, against a provisional view with no transaction at the latest basis, and records the checks. What the rules report, throw or try to write is dropped, a stack overflow included; only an `OutOfMemoryError` or another failure of the virtual machine stops the store from opening.
+The store learns per version as its timeline holds it, so where a write split a version without changing its values, a reopened store has two checks where a store that never closed has one. For rules that keep the contract, whose verdict holds at each instant and does not depend on where the period starts, the verdicts are the same; tests compare dry runs of a reopened store and of one that never closed. The index is not written to files, so the log and snapshot formats do not change.
 
 ### D6. The HR example
 
@@ -67,6 +68,6 @@ The HR-5 test asserts that ending Cleo's `ManagedBy` of `PLT` from 10 March is r
 ## Risks / Trade-offs
 
 - **Memory:** the index holds every read of every version's last check. The HR and reference fixtures are small; the risk grows with stores, and a later change can keep reads in files (ADR-0025).
-- **Opening a durable store** runs every rule once. Tests measure it for HR-14; it is linear in the checked versions.
-- **Rules that list a type or read timelines** are hit by many changes. The guide and the javadoc tell rule authors to navigate from what they check.
+- **Opening a durable store** runs every rule once, which is linear in the checked versions.
+- **Rules that list a type, query, or read timelines** are hit by many changes, since a query starts by listing its start type. The guide to generated types and the javadoc of `RuleContext` tell rule authors to navigate from what they check; the HR domain page records the gap for queries.
 - **Data that broke a rule before** this change rejects writes that reach it. Stores of this branch were never released, so none exists outside tests.

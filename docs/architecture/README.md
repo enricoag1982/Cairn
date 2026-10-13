@@ -135,8 +135,8 @@ sequenceDiagram
     V->>V: reads timelines at or below its basis, never waits
 ```
 
-A dry run follows the same path and stops before appending: it records nothing, uses no basis and reserves no ID.
-Opening a durable store recovers before the store is returned: it reads the newest valid snapshot file, applies the log records after it, drops what a crash left at the end of the log, checks that the ID generator accepts the recovered IDs, and resumes the commit sequence after the last basis and transaction time.
+A dry run follows the same path and stops before appending: it records nothing, uses no basis, reserves no ID and leaves the reads of rules as they were. A commit replaces the reads of the versions its rules checked.
+Opening a durable store recovers before the store is returned: it reads the newest valid snapshot file, applies the log records after it, drops what a crash left at the end of the log, checks that the ID generator accepts the recovered IDs, and resumes the commit sequence after the last basis and transaction time. Then it runs each rule it has code for once over every version whose type names it, to learn what the rule reads, without judging the results ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)).
 
 ## 7. Deployment view
 
@@ -170,7 +170,7 @@ See the [decision log](../decisions/README.md). This page only links to ADRs; it
 | Every commit of a durable store is forced to disk | Commits are as fast as the disk syncs | Grouping commits later, behind the same API ([ADR-0022](../decisions/0022-make-stores-durable-with-a-commit-log-of-effects-and-snapshots.md)) |
 | Log and snapshot files hold whole timelines per basis | Their size grows with the square of an entity's number of versions | The key-value store of ADR-0011 stores versions once |
 | The reads of rules are kept in memory, not in files | Memory grows with what every version's last check read; a durable store runs every rule once when it opens, so opening slows as data grows | Keeping reads in files can follow without changing behavior ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)) |
-| Rules run inside the single writer | A slow rule, or one that reads much data, slows every commit, also when a change elsewhere runs it again ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)) | Keep rules small; measure commit times with rules on a durable store before production use |
+| Rules run inside the single writer | A slow rule, or one that reads much data, slows every commit, also when a change elsewhere runs it again ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md), [ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)) | Keep rules small; measure commit times with rules on a durable store before production use |
 | People approve agents' requests only through the Java API | The standalone agent server cannot have requests approved; approval needs an application that embeds the adapter | A way for people to decide requests comes with access control |
 | Generated code knows type names as of generation | `T.from(state)` reads a subtype registered later as the type the caller asks for; aliases of renamed types are not recognized | `T.from(state, schema)` reads it as its nearest known supertype ([ADR-0021](../decisions/0021-generate-java-types-as-interfaces-with-snapshot-records-builders-of-writes-and-rule-base-classes.md)); regenerate types after renames |
 | No access control | Any agent connected to a server can read everything the store holds | The guide limits the server to trusted, local use |

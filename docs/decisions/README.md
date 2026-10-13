@@ -4,6 +4,7 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 
 - **New decision:** `npm run adr:new -- "Short title of problem and solution"` creates the next number from [the template](../templates/decision.md) with status `proposed`.
 - **Change a decision:** write a new ADR, then set the old one to `superseded by ADR-NNNN`. Never rewrite an accepted decision.
+- **Replace part of a decision:** write a new ADR, and add a line under the old one's "More Information" that names the new ADR and the part it replaces; the old one stays accepted for the rest. Read an accepted ADR together with the ADRs its "More Information" points to.
 - **Open questions:** every `proposed` entry below is a decision still to be made.
 
 ## Decision log
