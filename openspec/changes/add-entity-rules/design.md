@@ -20,13 +20,14 @@ ADR-0018 decides that custom validation is Java code that schemas name by name a
 
 ### D1. The interface
 
-- `Rule` in `io.github.enricoag1982.cairn.data`: `RuleDescriptor descriptor()` and `void check(EntityState version, RuleContext context)`.
+- `Rule` in `io.github.enricoag1982.cairn.data` is the base interface, with `RuleDescriptor descriptor()`. `EntityRule extends Rule` adds `void check(EntityState version, RuleContext context)`. `add-relationships` adds `RelationshipRule` the same way, so each rule gets a typed subject.
 - `RuleContext`: `View view()`, a view of the state the transaction would produce, effective at the start of the version's period; `void problem(String code, String attribute, String message)` and `void problem(String code, String message)` for a problem about the whole entity.
 - Rules on generated Java types come with `add-java-type-generation`, as adapters over this interface.
 
 ### D2. Registration
 
 - `StoreSettings` gains `rules(Rule...)` and `discoverRules()`, which loads `Rule` implementations with `ServiceLoader`; `cairn-core`'s module declares `uses io.github.enricoag1982.cairn.data.Rule`.
+- A rule whose descriptor applies to an entity type must be an `EntityRule`; otherwise creating the store fails.
 - The store passes the rules' descriptors to its schema registry as its available rules. Two rules with the same name and version throw `IllegalArgumentException`.
 
 ### D3. Running rules
