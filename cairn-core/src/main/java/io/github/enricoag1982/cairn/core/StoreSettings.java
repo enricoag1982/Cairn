@@ -18,10 +18,10 @@ import java.util.ServiceLoader;
  * rules that it declares without code.
  *
  * <p>The descriptions of both kinds of rules are the rules available to the store's schema registry, which checks the
- * rules that types name against them. A store runs the rules that it has {@linkplain #rules() code} for, at commit. A
- * transaction that writes an entity or a relationship whose type, or one of whose supertypes, names a
- * {@linkplain #declaredRules() declared rule} is rejected with the problem {@code RULE_UNAVAILABLE}, whatever the
- * write changes.
+ * rules that types name against them. A store runs the rules that it has {@linkplain #rules() code} for, at commit, and
+ * again when a transaction changes what they read. A transaction that writes an entity or a relationship whose type, or
+ * one of whose supertypes, names a {@linkplain #declaredRules() declared rule} is rejected with the problem
+ * {@code RULE_UNAVAILABLE}, whatever the write changes.
  *
  * <p>The settings are plain data and can be used for several stores. A store takes a {@linkplain IdGenerator#copy()
  * copy} of the generator, so stores made from the same settings do not share its state: two stores with a
@@ -32,7 +32,8 @@ import java.util.ServiceLoader;
  * @param clock         the source of transaction times
  * @param idGenerator   the generator of entity and relationship IDs, which also says which supplied IDs the store
  *                      accepts
- * @param rules         the rules, with their code, that the store runs at commit
+ * @param rules         the rules, with their code, that the store runs at commit, and again when a transaction
+ *                      changes what they read
  * @param declaredRules the descriptions of rules that the store declares without having their code: types of the
  *                      store's schema may name them, but a transaction that writes an entity or a relationship whose
  *                      type names one is rejected

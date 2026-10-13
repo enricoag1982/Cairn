@@ -93,7 +93,8 @@ public interface Store {
      * removed entities and relationships had never been recorded. The purge is recorded as a transaction of its own,
      * which {@link #purges()} lists with numbers, not IDs; the IDs of what was removed are returned to the caller, once.
      * A durable store has removed the data from its files too before the call returns. Rules do not run, because a purge
-     * writes no versions.
+     * writes no versions, and they do not run again for what read the removed data either (ADR-0025): the store only
+     * forgets what rules read of the removed entities and relationships.
      *
      * <p>The IDs of what was removed are never given to a new entity or relationship, and a write that supplies one is
      * rejected; the store keeps digests of them for that, and {@link #wasPurged(Id)} answers from them. The idempotency

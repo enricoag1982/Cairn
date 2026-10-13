@@ -22,7 +22,9 @@ import java.time.Instant;
  *
  * <p>Prefer navigating from what the rule checks to listing the entities of a type or reading timelines. A rule that
  * lists a type, or reads a timeline, is reached by every change to any of those entities, at any time, and is run
- * again for all of them; a rule that navigates from what it checks is reached only by changes to what it reaches.
+ * again for all of them; a rule that navigates from what it checks is reached only by changes to what it reaches. A
+ * query starts by listing the entities of its start type, so a rule that runs a query is reached by any change to an
+ * entity of that type at the instants it read, whatever the query goes on to select.
  *
  * <p>A context belongs to one call of a rule and is not safe for use by several threads. Reporting after the call has
  * returned throws {@link IllegalStateException}, and reads through a view after the call has returned are not recorded.

@@ -485,8 +485,8 @@ public final class InMemoryStore implements Store {
      * Learns what the rules read, after the store has been recovered from its files (ADR-0025, design D5 of
      * {@code add-rule-rechecks}): runs every rule the store has code for over every version of every entity and
      * relationship whose type names it, against the latest state with no transaction laid over it, and records the
-     * checks. What the rules report, throw or try to write is dropped: the data is what was committed, and the rules
-     * only tell what they read. Call it once, after recovery and before the store is used by other threads.
+     * checks. What the rules report, throw or try to write is dropped, and so is a stack overflow: the data is what was
+     * committed, and the rules only tell what they read. A virtual machine that runs out of memory or fails stops it. Call it once, after recovery and before the store is used by other threads.
      */
     void learnReads() {
         sequence.<Object>underWriterLock(() -> {

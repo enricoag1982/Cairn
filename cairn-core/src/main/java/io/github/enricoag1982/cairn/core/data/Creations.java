@@ -101,9 +101,10 @@ final class Creations {
 
     /**
      * Applies a relate. The ends are resolved like the targets of other writes, but are only read: an entity that is
-     * only an end is not validated again and has no rules run, though the multiplicities of its relationships are
-     * checked. A relationship that cannot be created, because its type or an end is wrong, takes no part in those
-     * checks, and its ends are not reported for the relationships they miss in consequence.
+     * only an end is not validated again, and none of its own rules run for the write, though re-checks can run them
+     * (ADR-0025), and the multiplicities of its relationships are checked. A relationship that cannot be created,
+     * because its type or an end is wrong, takes no part in those checks, and its ends are not reported for the
+     * relationships they miss in consequence.
      */
     void relate(Write.Relate write, int position) {
         Optional<TemporaryId> temporaryId = write.temporaryId();

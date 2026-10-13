@@ -10,21 +10,20 @@ package io.github.enricoag1982.cairn.data;
  * has, not one that splits a version, and not one that only ends the entity. Parts of the entity that the transaction
  * leaves as they are are not checked again, unless the transaction changes what the rule read when it last checked
  * them: then the store runs the rule again for those versions (a re-check), against the state the transaction would
- * produce.
- * It does so whether or not the transaction writes the entity, and a write that only ends something, such as a
- * relationship that the rule navigated, can cause one. A problem from a re-check is about the entity that is checked
+ * produce. It does so whether or not the transaction writes the entity, and a write that only ends something, such as
+ * a relationship that the rule navigated, can cause one. A problem from a re-check is about the entity that is checked
  * again, by its ID if the transaction does not name it, and its hint says that the transaction changed what the rule
  * read. A rule that is for an entity type must be an {@code EntityRule}; a rule for a relationship type is a
  * {@link RelationshipRule}.
  *
- * <p>A rule is named only by the entity type it checks. It need not be named by the types whose writes can break it:
- * the store finds those writes from what the rule read through its {@link RuleContext}.
+ * <p>As for every {@link Rule}, the types whose writes can break an entity rule need not name it: the store finds those
+ * writes from what the rule read through its {@link RuleContext}.
  *
- * <p>Because of that, a rule's verdict must hold at each instant of the version's effective period, and must not depend
- * on where that period starts or ends: the store may check a part of an entity's timeline that begins or ends where a
- * write happened to begin or end, and it will not check the rest unless what the rule read there changes. A rule that
- * needs "now" uses the version's {@linkplain EntityState#recordedAt() transaction time}, which is the time of the
- * transaction that records it (in a dry run, the time a commit would get), and never a clock.
+ * <p>Because the store checks only what changed, a rule's verdict must hold at each instant of the version's effective
+ * period, and must not depend on where that period starts or ends: the store may check a part of an entity's timeline
+ * that begins or ends where a write happened to begin or end, and it will not check the rest unless what the rule read
+ * there changes. A rule that needs "now" uses the version's {@linkplain EntityState#recordedAt() transaction time},
+ * which is the time of the transaction that records it (in a dry run, the time a commit would get), and never a clock.
  *
  * <p>A rule only reads. While rules run, the store refuses to commit, run dry or register a schema, and throws an
  * {@link IllegalStateException} to a rule that tries, for example through a reference to its store. A rule that catches

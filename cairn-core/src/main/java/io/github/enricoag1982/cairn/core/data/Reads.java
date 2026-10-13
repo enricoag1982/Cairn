@@ -13,7 +13,8 @@ import java.util.TreeSet;
  * effective times it read it, or across effective time. The views of a rule's context record into it while the rule
  * runs; once the run is over the recorder is closed, and a view that the rule kept records nothing more.
  *
- * <p>Used in the thread that holds the store's writer lock, by one run of one rule.
+ * <p>Once the recorder is closed nothing in it changes, so the index copies the map of keys and shares the {@link Times}.
+ * Used in the thread that holds the store's writer lock, by one run of one rule.
  */
 final class Reads {
 
@@ -92,7 +93,7 @@ final class Reads {
         return times.isEmpty();
     }
 
-    /** What was read, and when; the map is the recorder's own, and must not be changed. */
+    /** What was read, and when; the map is the recorder's own, and the caller must not change it. */
     Map<ReadKey, Times> times() {
         return times;
     }

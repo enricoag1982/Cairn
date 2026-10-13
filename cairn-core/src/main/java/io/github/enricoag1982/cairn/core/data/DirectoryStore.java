@@ -65,7 +65,8 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * <p>Recovery only applies what was committed. The store's rules are run once afterwards, over every version their types
  * name them for, only to learn what they read, so that a transaction can run them again when it changes that (ADR-0025,
- * design D5 of {@code add-rule-rechecks}); what they report is dropped, and the files do not change.
+ * design D5 of {@code add-rule-rechecks}); what they report, throw or try to write is dropped, and the files do not
+ * change. Only a virtual machine that runs out of memory or fails stops the store from opening.
  *
  * <p>After {@code close}, every call but {@code close} throws an {@code IllegalStateException}, on the store and on its
  * schema registry. After a failed write, commits and registrations throw one, while reads and dry runs go on.

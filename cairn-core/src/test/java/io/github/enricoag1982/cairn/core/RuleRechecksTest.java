@@ -695,6 +695,33 @@ class RuleRechecksTest {
     }
 
     @Test
+    void aRuleThatReportedAProblemAboutAVersionThatTheTransactionWritesIsNotRunAgainForTheOtherVersionsOfThatEntity() {
+        reading = (version, context) -> {
+            boolean renamed = context.viewAt(JUNE_1).entity(acme).orElseThrow().values().get("name")
+                    .equals(Value.of("Renamed"));
+            if (renamed || version.values().get("label").equals(Value.of("wrong"))) {
+                context.problem("bad", "Wrong for the version from " + version.period().from());
+            }
+        };
+        EntityId probe = probe();
+        reference.commit(by().patch(probe, from(4, 1), values("label", "b")).build());
+        assertThat(reference.reject(rename(acme, from(6, 1), "Renamed"))).as("both versions are run again alone")
+                .extracting(Problem::message).containsExactly("Wrong for the version from " + from(1, 1).from(),
+                        "Wrong for the version from " + on(4, 1));
+
+        List<Problem> problems = reference.reject(by()
+                .patch(probe, from(4, 1), values("label", "wrong"))
+                .patch(acme, from(6, 1), values("name", "Renamed")).build());
+
+        assertThat(problems).as("the written version only: the version before 1 April is not run again")
+                .singleElement().satisfies(problem -> {
+                    assertThat(problem.path()).isEqualTo(probe.value());
+                    assertThat(problem.message()).isEqualTo("Wrong for the version from " + on(4, 1));
+                    assertThat(problem.hint()).as("it ran for what the transaction writes").isEmpty();
+                });
+    }
+
+    @Test
     void aRuleThatReportedForARecheckIsStillRunAgainForOtherEntitiesAndVersions() {
         reading = badWhenAcmeIsNamed("Bad", acme);
         EntityId first = probe();

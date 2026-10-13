@@ -99,6 +99,8 @@ final class RuleRunner {
     private final ReadIndex.Stage stage;
     private final Set<Ran> ran = new HashSet<>();
     private final Set<RuleReference> reporting = new LinkedHashSet<>();
+    /** Whether the runner only learns what rules read, so that a stack overflow in a rule is not fatal. */
+    private boolean learning;
 
     /**
      * Creates a runner for one transaction.
@@ -145,13 +147,20 @@ final class RuleRunner {
      * Runs the rules of the subjects only to learn what they read, as a store does after recovery (design D5 of
      * {@code add-rule-rechecks}): what the rules report, throw or try to write is dropped, and what they read is staged.
      * The same as {@link #run}, called with the writer lock held, for subjects whose {@code changed} are all their
-     * versions.
+     * versions. A rule that overflows its stack is dropped like one that throws an exception, and what it read before is
+     * kept, so that it does not stop the store from opening; unlike a commit, which leaves the store as it was.
      *
      * @param subjects the entities and relationships whose rules run
-     * @throws VirtualMachineError if a rule causes one; it is not turned into a problem
+     * @throws VirtualMachineError if a rule causes one other than a {@link StackOverflowError}, such as an
+     *                             {@code OutOfMemoryError}; it is not turned into a problem
      */
     void learn(List<Subject> subjects) {
-        run(subjects);
+        learning = true;
+        try {
+            run(subjects);
+        } finally {
+            learning = false;
+        }
     }
 
     /**
@@ -250,9 +259,13 @@ final class RuleRunner {
         long refusedBefore = sequence.refusedWrites();
         try {
             call.accept(context);
-        } catch (VirtualMachineError e) {
-            throw e;
         } catch (Throwable e) {
+            // The virtual machine is out of resources or failing: nothing can be said about the rule, so the error goes
+            // on. Only a stack that a rule overflowed says something about the rule, and a store that learns what its
+            // rules read does not let one stop it from opening.
+            if (e instanceof VirtualMachineError error && !(learning && e instanceof StackOverflowError)) {
+                throw error;
+            }
             problems.add(withHint(threw(subject, registered.descriptor(), e), hint));
             return false;
         } finally {

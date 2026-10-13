@@ -35,7 +35,8 @@ final class ReadIndex {
 
     /**
      * One run of a rule for one version: the period the version had, which writes can cut down to parts, and what the
-     * rule read. A check that reads nothing is not kept, because no change can reach it.
+     * rule read, in a map of its own, because a purge removes keys from it. A check that reads nothing is not kept,
+     * because no change can reach it.
      */
     static final class Check {
 
@@ -48,7 +49,7 @@ final class ReadIndex {
             this.subject = subject;
             this.rule = rule;
             this.periods = List.of(period);
-            this.reads = reads;
+            this.reads = new HashMap<>(reads);
         }
 
         /** The entity or relationship the rule checked. */

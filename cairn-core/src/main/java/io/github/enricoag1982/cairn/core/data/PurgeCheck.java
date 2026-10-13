@@ -36,7 +36,8 @@ import java.util.TreeSet;
  * relationship removed, {@link Integrity} checks, in the state that the purge would leave, the multiplicities at every
  * point in effective time in which the entity exists; a minimum that no longer holds is {@code TOO_FEW_RELATIONSHIPS},
  * with the entity's ID as its path, so that the caller can add it to the purge, and the hint to purge it too. Every
- * problem is reported. Rules do not run: a purge writes no versions.
+ * problem is reported. Rules do not run: a purge writes no versions, and no rule runs again for what read the data
+ * that it removes (ADR-0025).
  *
  * <p>Used with the writer lock held.
  */

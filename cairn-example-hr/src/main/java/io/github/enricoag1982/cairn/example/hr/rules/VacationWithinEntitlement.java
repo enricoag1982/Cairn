@@ -32,8 +32,11 @@ import java.util.TreeSet;
  * first days in the same calendar year, add up to at most 25.
  *
  * <p>The rule is named by {@code LeaveRequest}, the type it checks, and checks an approved vacation only: any other
- * request adds no days. It reads the employment's other requests, so a write to one of them checks it again
- * (ADR-0025).
+ * request adds no days. It reads the employment's leave requests, so a write to one of them checks it again
+ * (ADR-0025). But its query starts from {@code Employment}, so at each instant it reads it lists every employment, not
+ * only the requester's, and any change to an employment at those instants checks the rule again, for every approved
+ * vacation that read it. The rule stays as the example of a rule that queries; a rule that navigates from what it
+ * checks, as {@link DecidedByManager} does, is reached by far fewer changes.
  *
  * <p>The sum is a {@link Query} that a view at one instant runs: the employment's leave requests that are vacations,
  * approved, with a first day in the year of the checked one, summing their days. The other requests of the employment

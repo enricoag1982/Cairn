@@ -349,6 +349,20 @@ class ReadIndexTest {
     }
 
     @Test
+    void aPurgeChangesTheKeysOfTheCheckAndNotTheRecorderItCameFrom() {
+        Reads recorded = reads(reads -> {
+            reads.at(ACME_KEY, JUN);
+            reads.at(BETA_KEY, JUN);
+        });
+        ran(PROBE, RULE, JAN, Segment.OPEN, recorded);
+
+        index.purge(List.of(ACME));
+
+        assertThat(index.checks(PROBE, RULE).getFirst().reads().keySet()).containsExactly(BETA_KEY);
+        assertThat(recorded.times()).containsOnlyKeys(ACME_KEY, BETA_KEY);
+    }
+
+    @Test
     void aPurgeOfSomethingNobodyReadsChangesNothing() {
         ran(PROBE, RULE, JAN, Segment.OPEN, reading(ACME_KEY, JUN));
         Set<String> before = index.describe();

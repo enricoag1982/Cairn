@@ -21,4 +21,4 @@
 - [x] 3.1 Add `Re-check` and `Rule read` to `docs/glossary.md`
 - [x] 3.2 Update the reference domain (test-only rules), the HR domain page (HR-5, gaps), the architecture page and the guide for durable stores
 - [x] 3.3 Update `AGENTS.md`, `README.md` and `openspec/config.yaml` (ADR-0025), and bump `last-reviewed`
-- [ ] 3.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 3.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
