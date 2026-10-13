@@ -48,9 +48,9 @@ The view's implementation checks the query, then evaluates the steps in order ov
 ### D4. JSON form in `cairn-documents`
 
 - `Queries.read(text)` reads JSON or YAML 1.2 strictly, as payloads are read, into a `Query` with the locations of its parts, or into located problems (`UNKNOWN_KEY` with the closest key, `MISSING_KEY`, `INVALID_VALUE`, `DOCUMENT_SYNTAX`). A located query can locate the problems that running it returns, by their `@query…` paths.
-- The form mirrors D1: `from: { type, as, exact? }`; `steps`, each an object with one key: `where`, `follow`, `optionalFollow` or `traverse`; conditions with one key: `compare: { left, op, right }`, `in`, `hasValue`, `hasLink`, `isA`, `and`, `or`, `not`; operands `{ attribute, of }`, `{ id: of }`, `{ type: of }` or `{ value }`; then `groupBy`, `aggregates`, `columns`, `order` and `limit`.
+- The form mirrors D1: optional `cairn: 1` and `$schema`; `from: { type, as, exact? }`; `steps`, each an object with one key: `where`, `follow`, `optionalFollow` or `traverse` (`minDepth` 0 by default, `maxDepth` required, `depth` naming the depth column); conditions with one key: `compare: { left, op, right }` with `op` one of `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in: { operand, values }`, `hasValue`, `hasLink`, `isA`, `and`, `or`, `not`; operands `{ attribute, of }`, `{ id: of }`, `{ type: of }` or `{ value }`; then `groupBy` (items `{ of, attribute?, as? }`), `aggregates` (items `{ function, attribute?, of?, as }`, `function` one of `count`, `sum`, `min`, `max`, `avg`), `columns`, `order` and `limit`. Names that the builder gives by default apply where `as` is left out. Conditions nest at most 100 deep.
 - A published JSON Schema of the form, `query-1.schema.json`, kept in step with the reader by a test as the schema document's is.
-- `JsonResults` writes a `QueryResult`: `{ effectiveAt, basis, columns, rows }`, each row a list of cells in the forms of `json-payloads` (entity and relationship states, values), or `null` for an empty cell.
+- `Queries.toJson` writes a `QueryResult`: `{ effectiveAt, basis, columns, rows }`, each row a list of cells in the forms of `json-payloads` (entity and relationship states, values), or `null` for an empty cell; an invalid query is written as its problems.
 
 ### D5. The tool
 

@@ -69,12 +69,13 @@ The same RD-6 query, as agents send it to `cairn_query` and as `Queries.read` in
     { "traverse": { "from": "holder", "name": "ownedBy", "minDepth": 0, "maxDepth": 10, "as": "party" } },
     { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy" } } } }
   ],
-  "groupBy": [ { "binding": "party" } ],
-  "aggregates": [ { "sum": { "attribute": "balance", "of": "a" }, "as": "total" } ]
+  "groupBy": [ { "of": "party" } ],
+  "aggregates": [ { "function": "sum", "attribute": "balance", "of": "a", "as": "total" } ]
 }
 ```
 
-The JSON Schema of the form is published with `cairn-documents`, and `cairn_json_schema` returns it for the kind `query`.
+Conditions compare operands, such as `{ "compare": { "left": { "attribute": "balance", "of": "a" }, "op": "gt", "right": { "value": 1200 } } }`, with `op` one of `eq`, `ne`, `lt`, `le`, `gt` and `ge`.
+The JSON Schema of the form is published with `cairn-documents` (`Queries.jsonSchema()`), and `cairn_json_schema` returns it for the kind `query`.
 Results come back as `{ effectiveAt, basis, columns, rows }`, each row a list of cells: entity and relationship states and values in the forms of transaction payloads, or `null`.
 
 ## What to expect

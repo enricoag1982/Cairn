@@ -17,6 +17,7 @@ For the [reference domain's schema document](../reference/reference-model.cairn.
 ```java
 public interface Person extends Party {
     String TYPE = "Person";
+    OrderedAttributeRef<LocalDate> BIRTH_DATE = AttributeRef.date("birthDate");    // for queries
     Optional<LocalDate> birthDate();          // optional attributes are Optional; required ones are plain
 
     static Person from(EntityState state) { ... }
@@ -107,6 +108,18 @@ store.commit(transaction);
 `relate` also takes the generated types of the two ends, such as `Owns.relate(acme, beta)` for an `Organization` and a `Party` read before.
 `patch(ref)` sets attributes and clears optional ones (`clearLei()`), and `replace(ref)` sets all of them; both take a conflict check with `check(...)`.
 
+## Query
+
+Each generated interface has a typed reference per attribute it declares, named in upper snake case, such as `Account.BALANCE`. It builds query conditions, columns, group keys, orders and aggregates with values of the attribute's Java type, so the compiler checks them:
+
+```java
+Query query = Query.from(Account.TYPE, "a")
+        .where(Account.BALANCE.of("a").gt(new BigDecimal("1200")))
+        .build();
+```
+
+Read the rows' bindings as generated types with `from`, such as `Account.from(row.entity("a").orElseThrow())`. The guide [Query a store](query-a-store.md) explains queries.
+
 ## Write a rule
 
 Extend the rule's base class, describe it, and check the typed value:
@@ -142,6 +155,6 @@ A name that would not compile or would clash with what the generated code adds g
 
 ## Limits
 
-- Typed queries and typed navigation come with `add-queries-and-aggregation`. Until then, read through views and convert with `from`.
+- Typed navigation is not generated; follow relationships with queries or views, and convert with `from`.
 - `from` knows only the canonical type names, not aliases of renamed types.
 - Renaming a type or attribute in a document renames the generated Java names, so code that uses them must change too.
