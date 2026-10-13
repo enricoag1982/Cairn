@@ -31,7 +31,8 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 ### D2. Storage
 
 - Relationships are kept like entities: a type identifier, the two end IDs, and a map from basis to timeline. A relationship's lifetime is the union of its segments.
-- Navigation scans the relationships of the named type and its subtypes whose end matches, at the view's basis and effective time. For a symmetric type, both ends match the type's name.
+- Navigation scans the relationships of the named type and its subtypes whose end matches, at the view's basis and effective time. For a symmetric type, both ends match the type's name. ADR-0010's reverse index comes with the key-value store of ADR-0011; until then, scans cost the same in both directions.
+- `ENTITY_EXISTS`, `INVALID_ENTITY_ID` and `ENTITY_NOT_EFFECTIVE` keep their names for relationships too: problem codes are a stable contract (ADR-0017), and their explanations say "entity or relationship".
 
 ### D3. Integrity checks, after the writes are applied
 
@@ -45,7 +46,7 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 
 ### D4. Composition cascades
 
-- After all writes are applied and before the integrity checks, for each entity that a write ends, the engine ends from the same instant every composition relationship whose source is that entity and that continues past the instant, and their targets, recursively. Compositions created in the same transaction are covered too. `Receipt` gains `ended`, the IDs of the relationships and entities that cascades ended, so callers see them.
+- After all writes are applied and before the integrity checks, for each entity that a write ends, the engine ends from the same instant every composition relationship whose source is that entity and that continues past the instant, and their targets, recursively. Compositions created in the same transaction are covered too. `Receipt` gains `ended`, the IDs of the relationships and entities that cascades ended, so callers see them: for each entity the writes ended, in write order, each composition relationship by ID, then its target, then that target's compositions, depth first; each ID once.
 - A target that a cascade ends must not have relationships of its own that continue; the lifetime check reports them.
 
 ### D5. Rules on relationships
@@ -58,7 +59,7 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 
 ### D6. Reference domain
 
-- Story RD-13 is added to the reference domain page: recorded 1 April, Gamma is created and related to Beta with Owns, share 50, from 1 April; it is rejected, because with ACME's 55% the owners would hold 105%.
+- Story RD-13 is added to the reference domain page, which states its arithmetic.
 - `ReferenceStories` gains the relationship stories RD-2 to RD-4, RD-8 and RD-13, and RD-5 relates accounts to their holders, as the multiplicity of `HeldBy` requires (its builder then takes the holders' references).
 - With `HeldBy` exactly one, an account can no longer be created alone. The tests of `add-entity-versions` that create accounts alone (through `ReferenceStore.createAccounts()`, the value, replace and conflict scenarios) are updated to create the holder too, keeping what each test checks.
 

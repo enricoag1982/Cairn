@@ -25,3 +25,9 @@
 - [x] 4.1 Add `Link` and `Traversal` to `docs/glossary.md`, and update `Relationship`
 - [x] 4.2 Update `docs/architecture/README.md`, `AGENTS.md` and `README.md` status, and bump `last-reviewed`
 - [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+
+## 5. Drift-review fixes
+
+- [ ] 5.1 A test named after the scenario "Every owner of Beta over time"; RD-13 with ACME's 60% (110%) in its fixture, Javadoc and scenario test
+- [ ] 5.2 Problem explanations: `END_NOT_EFFECTIVE` (the found value is the relationship's lifetime), `UNKNOWN_ENTITY` (also unknown relationship ends), `RELATIONSHIP_OUTLIVES_END` (ending them at or before the instant also works); `ReferenceStories` and `Receipt` Javadoc; verify `./gradlew build` passes
+

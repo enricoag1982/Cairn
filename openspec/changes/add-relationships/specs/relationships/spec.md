@@ -8,7 +8,7 @@ Defines relationships between entities: relating, integrity at both ends at ever
 
 ### Requirement: Relating entities
 
-A write SHALL relate a source entity to a target entity with a relationship type, for an effective period, with attribute values. A relationship SHALL have its own ID from the store's generator, MAY be named with a temporary ID, and its type and ends SHALL never change. The source MUST be an entity of the relationship type's source type or one of its subtypes, and the target an entity of its target type or one of its subtypes. The ends MAY be given by entity IDs or by temporary IDs of entities created in the same transaction.
+A write SHALL relate a source entity to a target entity with a relationship type, for an effective period, with attribute values. A relationship SHALL have its own ID, from the store's generator or supplied by the caller (see the `transactions` capability), MAY be named with a temporary ID, and its type and ends SHALL never change. A problem about a relationship SHALL name it by its temporary ID, its ID or the position of the write that relates it (`@write.` and the position), as problems about entities do. The source MUST be an entity of the relationship type's source type or one of its subtypes, and the target an entity of its target type or one of its subtypes. The ends MAY be given by entity IDs or by temporary IDs of entities created in the same transaction.
 Relationship attributes SHALL be validated as entity attributes are (see the `entity-versions` capability), and relationships SHALL be patched, replaced, end-dated and corrected with the same writes as entities.
 
 #### Scenario: An organization owns another
@@ -52,7 +52,7 @@ At every point of a relationship's effective period, both of its ends SHALL exis
 
 ### Requirement: Multiplicities hold at every point in effective time
 
-At every point in effective time, an entity of a relationship type's source type SHALL have at least the minimum and at most the maximum number of targets per source, and an entity of its target type at least the minimum and at most the maximum number of sources per target, counting relationships of the type and its subtypes. A minimum of 1 SHALL apply to every point of the entity's lifetime.
+At every point in effective time, an entity of a relationship type's source type SHALL have at least the minimum and at most the maximum number of targets per source, and an entity of its target type at least the minimum and at most the maximum number of sources per target, counting relationships of the type and its subtypes. A minimum of 1 SHALL apply to every point of the entity's lifetime. A problem about a multiplicity SHALL name the entity followed, in brackets, by the relationship type's name for the source end or its inverse name for the target end, such as `$a3[HeldBy]`. Entities that a transaction touches only as ends of relationships SHALL be checked for their multiplicities and lifetimes, but not validated again.
 
 #### Scenario: Account without a holder
 
@@ -80,7 +80,7 @@ THE SYSTEM SHALL reject a transaction that would give two relationships of the s
 
 ### Requirement: Compositions end with their source
 
-WHEN an entity that is the source of a composition ends, THE SYSTEM SHALL end, from the same instant and in the same transaction, the composition's relationships from that entity and their targets, and so on for compositions of those targets.
+WHEN an entity that is the source of a composition ends, THE SYSTEM SHALL end, from the same instant and in the same transaction, the composition's relationships from that entity that started before that instant and continue past it, and their targets, and so on for compositions of those targets. The receipt SHALL list what the cascade ended (see the `transactions` capability).
 
 #### Scenario: Addresses end with their party
 
@@ -99,7 +99,7 @@ For a symmetric relationship type, THE SYSTEM SHALL treat a relationship between
 
 ### Requirement: Navigating relationships
 
-A view SHALL navigate from an entity by a relationship type's name to the targets of the relationships it is the source of, and by the type's inverse name to the sources of the relationships it is the target of, including relationships of subtypes. Each result SHALL hold the relationship's state and the state of the entity at the other end, at the view's coordinates. A view SHALL also read a relationship by its ID, and its timeline. A view SHALL also return, for an entity and a name, every version at any effective time of the relationships that navigation by that name would find at some effective time, as known at its basis, ordered by relationship and then by the start of the version's period, so that history across effective time can be read without knowing relationship IDs.
+A view SHALL navigate from an entity by a relationship type's name to the targets of the relationships it is the source of, and by the type's inverse name to the sources of the relationships it is the target of, including relationships of subtypes. Names and aliases SHALL be compared without regard to case; for a symmetric type, its name and its inverse name lead from both ends. Navigating by a name that the view's schema does not have SHALL fail. Each result SHALL hold the relationship's state and the state of the entity at the other end, at the view's coordinates, ordered by relationship ID. A view SHALL also read a relationship by its ID, and its timeline. A view SHALL also return, for an entity and a name, every version at any effective time of the relationships that navigation by that name would find at some effective time, as known at its basis, ordered by relationship and then by the start of the version's period, so that history across effective time can be read without knowing relationship IDs.
 
 #### Scenario: Who owns Beta
 
@@ -123,7 +123,7 @@ A view SHALL navigate from an entity by a relationship type's name to the target
 
 ### Requirement: Traversing relationships
 
-A view SHALL traverse relationships recursively from an entity by a relationship type's name or inverse name, following only relationships that satisfy a condition, up to a maximum depth. Each entity SHALL be visited at most once, so cycles end the traversal. The result SHALL list each reached entity with its depth and the relationship it was reached through.
+A view SHALL traverse relationships recursively from an entity by a relationship type's name or inverse name, following only relationships that satisfy a condition, up to a maximum depth. The traversal SHALL be breadth first. Each entity SHALL be visited at most once, through the first relationship that reaches it, and the start entity is never part of the result, so cycles end the traversal. A maximum depth of 0 SHALL give nothing, and a negative one SHALL fail. The result SHALL list each reached entity with its depth and the relationship it was reached through.
 
 #### Scenario: Ultimate parent
 

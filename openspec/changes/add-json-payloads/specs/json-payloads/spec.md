@@ -52,7 +52,7 @@ THE SYSTEM SHALL write receipts, entity states, relationship states, timelines, 
 ### Requirement: Generated JSON Schemas
 
 THE SYSTEM SHALL generate, from a schema, a JSON Schema (draft 2020-12) for the values of each entity type and relationship type, and one for transaction payloads. The schema of a type's values SHALL list its attributes, including inherited ones, with their value types, the required ones, ranges, allowed values, patterns, lengths, descriptions and examples, and SHALL allow no other properties. The schema for transaction payloads SHALL check the values of `create` and `relate` writes against the schema of the type they name.
-Every payload that the system reads and commits without value problems SHALL be valid against the generated schema for transactions.
+Every payload that the system reads and commits without value problems, and that writes type and attribute names as the schema does, SHALL be valid against the generated schema for transactions.
 
 #### Scenario: Values of Organization
 

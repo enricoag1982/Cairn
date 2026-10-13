@@ -35,6 +35,7 @@ This change adds relationships as first-class data, with their own history, and 
 ### Modified Capabilities
 
 - `entity-rules`: rules on relationship types
+- `transactions`: receipts list relationships and what composition cascades ended, problems are ordered by entity and relationship, and IDs and temporary IDs are shared by entities and relationships
 
 ## Impact
 

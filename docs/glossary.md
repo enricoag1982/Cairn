@@ -21,7 +21,6 @@ These come with the template. Add domain terms in their own section below.
 | Capability | A cohesive area of behavior with its own spec in `openspec/specs/<capability>/spec.md`. |
 | Change | A proposed modification in `openspec/changes/<change-id>/`: proposal, delta specs, optional design, tasks. Archived when done. |
 | Delta spec | The part of a change that says which requirements are ADDED, MODIFIED, REMOVED or RENAMED. Merged into the main specs on archive. |
-| Link | One result of navigating from an entity: the relationship followed and the entity at its other end. See the `relationships` spec. |
 | Living document | A document describing the current state. It is edited in place and carries `last-reviewed`. |
 | Requirement | A normative statement (SHALL/MUST) inside a spec, with at least one scenario. |
 | Research note | Non-normative exploration in `docs/research/`. Its conclusions move into an ADR or a spec. |
@@ -47,6 +46,7 @@ Each definition links to the ADR or spec that defines the concept. Some describe
 | Commit log | The append-only, ordered record of committed transactions, used for durability and recovery. See [ADR-0011](decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md). |
 | Compatible change | A schema change that existing data and users can follow, such as adding an optional attribute. See the `schema-evolution` spec. |
 | Composition | A relationship type whose target cannot exist without its source and ends together with it. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
+| Composition cascade | Ending, from the same instant and in the same transaction, the composition relationships of an entity that ends and their targets, recursively. The receipt lists what it ended. See the `relationships` spec. |
 | Conflict check | A check a write can ask for, against the basis at which its caller read the entity: per entity, or per attribute the write sets or clears. Without one, the last commit wins. See the `entity-versions` spec and [ADR-0009](decisions/0009-version-whole-entities-rather-than-single-attributes.md). |
 | Conformance suite | The tests that every storage implementation must pass, built from the spec scenarios. See [ADR-0011](decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md). |
 | Constraint | A limit that a schema definition declares, such as required, unique, a range, allowed values, a pattern, a length or a multiplicity, and that the engine checks on every write. Logic that a constraint cannot express is a *rule*. See [ADR-0018](decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md). |
@@ -59,6 +59,7 @@ Each definition links to the ADR or spec that defines the concept. Some describe
 | Dry run | Validating a transaction against the state it would produce, reporting what committing would report, without recording anything, using a basis or reserving an ID. See the `transactions` spec. |
 | Effective period | A half-open interval of effective time, `[from, until)`, with microsecond precision; an open end means until further notice. Every write applies to one. See the `entity-versions` spec. |
 | Effective time | When a fact is true in the real world. The writer sets it, in the past or in the future. See [ADR-0008](decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md). |
+| End | One of the two entities a relationship links: its source or its target. Not to be confused with *end-date*. See the `relationships` spec. |
 | End-date | To end an entity or relationship from a point in effective time. Nothing is deleted. See the `entity-versions` spec. |
 | Entity | A thing with a stable identity, one entity type fixed when it is created, attributes and its own effective timeline. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Entity ID | The opaque ID an entity keeps for its whole life, given by the store's *ID generator* or supplied by the caller in the store's format. Not to be confused with schema identifiers. See [ADR-0019](decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md). |
@@ -68,9 +69,11 @@ Each definition links to the ADR or spec that defines the concept. Some describe
 | Format version | The version of the schema document format, given by the key `cairn`. Only version 1 exists. See the `schema-documents` spec. |
 | Generated type | A Java type generated from a schema document at build time, giving typed access to the entities of one entity type. The engine never depends on it. See [ADR-0012](decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md). |
 | Generic API | The API that reads and writes entities of any type without generated types, for example as JSON payloads. Types registered at runtime without generated types use it. See [ADR-0012](decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md). |
-| ID generator | What gives new entities their IDs. A store has exactly one, chosen when it is created: UUIDv7 by default. See [ADR-0019](decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md). |
+| ID generator | What gives new entities and relationships their IDs. A store has exactly one, chosen when it is created: UUIDv7 by default. See [ADR-0019](decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md). |
 | Idempotency key | A key a caller gives a transaction so that retrying it is safe: the same transaction again returns the first receipt, and the key with other content is rejected. See the `transactions` spec. |
 | Inverse name | The name for navigating a relationship type from its target to its source, such as `ownedBy` for Owns. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
+| Lifetime | The effective time in which an entity or relationship exists: the union of its versions' periods. A relationship must lie within the lifetimes of its ends. See the `relationships` spec. |
+| Link | One result of navigating from an entity: the relationship followed and the entity at its other end. See the `relationships` spec. |
 | Multiplicity | How many relationships of one type an entity can have at one end: a minimum of 0 or 1 and a maximum of 1 or unbounded. A relationship type has two, targets per source and sources per target. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Origin | What registers a set of types, identified by a name and a version, such as an application's schema documents and its release. Each type records its origin, with the version of the origin's latest applied registration. See [ADR-0012](decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md). |
 | Patch | A write that sets some attributes for an effective period and leaves the others unchanged. The default write. See the `entity-versions` spec. |
@@ -82,7 +85,9 @@ Each definition links to the ADR or spec that defines the concept. Some describe
 | Receipt | The result of a committed transaction: its basis and transaction time, the IDs of the entities and relationships it created and of those that composition cascades ended, and who and why. See the `transactions` spec. |
 | Reference domain | The made-up enterprise model used in scenarios, tests and examples. See [reference domain](reference/reference-domain.md). |
 | Registration | Submitting the complete set of one origin's types to a schema registry. It is applied as a schema transaction, reported as unchanged, or rejected with every problem. See the `schema-evolution` spec. |
+| Relate | The write that creates a relationship between a source and a target entity for an effective period. See the `relationships` spec. |
 | Relationship | A first-class, directed link between two entities, with its own identity, attributes and effective timeline. Stored once and navigable in both directions. It must lie within the lifetimes of both entities it links. See the `relationships` spec and [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
+| Relationship ID | The opaque ID a relationship keeps for its whole life, from the store's ID generator, in the same namespace as entity IDs. See [ADR-0019](decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md). |
 | Relationship type | The definition of a kind of relationship: source and target entity types, two multiplicities, inverse name, and composition or association. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Replace | A write that sets the complete state for an effective period. Attributes not mentioned are removed. See the `entity-versions` spec. |
 | Role | An entity that models something another entity is only for a while, such as being a customer. It is linked by a relationship with its own effective period. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
@@ -101,12 +106,12 @@ Each definition links to the ADR or spec that defines the concept. Some describe
 | Supertype | The type an entity type or relationship type extends, and whose attributes it inherits. Each type has at most one direct supertype; its supertypes are that type and, transitively, the supertypes of that type. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Supplied ID | An entity ID that the caller gives when creating an entity, for example to repeat an import safely. Creating an entity whose ID exists is a problem. See the `transactions` spec. |
 | Symmetric relationship type | A relationship type whose two ends are interchangeable, such as "related party". See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
-| Temporary ID | A name a transaction gives an entity it creates, so that its other writes can refer to it. The receipt maps it to the entity's ID. See the `transactions` spec. |
-| Timeline | The versions of one entity across effective time, as known at one basis. See the `views` spec. |
+| Temporary ID | A name a transaction gives an entity or relationship it creates, so that its other writes can refer to it. The receipt maps it to the ID. See the `transactions` spec. |
+| Timeline | The versions of one entity or relationship across effective time, as known at one basis. See the `views` spec. |
 | Trait | A named set of attribute declarations that entity types can include. It has no entities and no storage of its own. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Transaction | An atomic set of writes, committed by the single writer. It gets a transaction time and a basis. See the `transactions` spec and [ADR-0007](decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md). |
 | Transaction time | When Cairn recorded a fact. The engine sets it at commit, and it only increases. See [ADR-0008](decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md). |
 | Traversal | Navigating relationships recursively from an entity, by one name, following only relationships that meet a condition, up to a maximum depth and visiting each entity once. See the `relationships` spec. |
 | Value type | The kind of value an attribute holds: string, boolean, int, long, decimal, date or instant. See the `type-model` spec. |
 | View | An immutable read handle created from a context. Its effective time, basis and meaning of "now" are fixed when it is created, so every read through it is repeatable. See the `views` spec and [ADR-0013](decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md). |
-| Write | One change in a transaction: create, patch, replace or end-date, each for an effective period. See the `entity-versions` spec. |
+| Write | One change in a transaction: create, relate, patch, replace or end-date, each for an effective period. See the `entity-versions` spec. |
