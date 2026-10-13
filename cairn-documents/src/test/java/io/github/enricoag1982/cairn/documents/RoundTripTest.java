@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.documents.GeneratedDefinitions.Generated;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RelationshipKind;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.util.List;
@@ -125,7 +125,7 @@ class RoundTripTest {
     /** Tells whether an attribute has an example or a bound that is a number of a narrower type than the attribute. */
     private static boolean hasNarrowerNumber(AttributeDefinition attribute) {
         return Stream.concat(attribute.examples().stream(), bounds(attribute).map(Bound::value))
-                .anyMatch(literal -> literal.valueType() != attribute.valueType());
+                .anyMatch(value -> value.valueType() != attribute.valueType());
     }
 
     @Test
@@ -245,6 +245,6 @@ class RoundTripTest {
 
     private static Stream<BigDecimal> decimals(AttributeDefinition attribute) {
         return Stream.concat(attribute.examples().stream(), bounds(attribute).map(Bound::value))
-                .filter(Literal.DecimalLiteral.class::isInstance).map(literal -> ((Literal.DecimalLiteral) literal).value());
+                .filter(Value.DecimalValue.class::isInstance).map(value -> ((Value.DecimalValue) value).value());
     }
 }

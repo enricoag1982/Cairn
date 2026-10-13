@@ -279,7 +279,7 @@ final class PropertyRules {
         Optional<Range> oldRange = (Optional<Range>) context.oldValue();
         @SuppressWarnings("unchecked")
         Optional<Range> newRange = (Optional<Range>) context.newValue();
-        if (Literals.contains(newRange, oldRange)) {
+        if (Values.contains(newRange, oldRange)) {
             return List.of(Changes.compatible(context.path(), "widened the range"));
         }
         return List.of(Changes.breaking(context.path(), "narrowed the range", Changes.KEEP_UNCONSTRAINED));

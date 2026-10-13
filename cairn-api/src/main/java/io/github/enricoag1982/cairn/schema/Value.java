@@ -6,86 +6,86 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 /**
- * A typed constant used as a range bound or as an example of an attribute's values (capability {@code type-model}).
+ * A typed value used as a range bound or as an example of an attribute's values (capability {@code type-model}).
  * Strings and booleans are never valid range bounds, because their attributes cannot have a range; they exist for examples.
  */
-public sealed interface Literal {
+public sealed interface Value {
 
     /**
-     * The value type this literal belongs to.
+     * The value type this value belongs to.
      *
      * @return the value type
      */
     ValueType valueType();
 
     /**
-     * Creates an int literal.
+     * Creates an int value.
      *
      * @param value the value
-     * @return the literal
+     * @return the value
      */
-    static Literal of(int value) {
-        return new IntLiteral(value);
+    static Value of(int value) {
+        return new IntValue(value);
     }
 
     /**
-     * Creates a long literal.
+     * Creates a long value.
      *
      * @param value the value
-     * @return the literal
+     * @return the value
      */
-    static Literal of(long value) {
-        return new LongLiteral(value);
+    static Value of(long value) {
+        return new LongValue(value);
     }
 
     /**
-     * Creates a decimal literal.
+     * Creates a decimal value.
      *
      * @param value the value
-     * @return the literal
+     * @return the value
      */
-    static Literal of(BigDecimal value) {
-        return new DecimalLiteral(value);
+    static Value of(BigDecimal value) {
+        return new DecimalValue(value);
     }
 
     /**
-     * Creates a string literal.
+     * Creates a string value.
      *
      * @param value the value
-     * @return the literal
+     * @return the value
      */
-    static Literal of(String value) {
-        return new StringLiteral(value);
+    static Value of(String value) {
+        return new StringValue(value);
     }
 
     /**
-     * Creates a boolean literal.
+     * Creates a boolean value.
      *
      * @param value the value
-     * @return the literal
+     * @return the value
      */
-    static Literal of(boolean value) {
-        return new BooleanLiteral(value);
+    static Value of(boolean value) {
+        return new BooleanValue(value);
     }
 
     /**
-     * Creates a date literal.
+     * Creates a date value.
      *
      * @param value the value
-     * @return the literal
+     * @return the value
      */
-    static Literal of(LocalDate value) {
-        return new DateLiteral(value);
+    static Value of(LocalDate value) {
+        return new DateValue(value);
     }
 
     /**
-     * Creates an instant literal.
+     * Creates an instant value.
      *
      * @param value the value
-     * @return the literal
+     * @return the value
      */
-    static Literal of(Instant value) {
-        return new InstantLiteral(value);
+    static Value of(Instant value) {
+        return new InstantValue(value);
     }
 
     /**
@@ -93,11 +93,11 @@ public sealed interface Literal {
      *
      * @param value the value
      */
-    record StringLiteral(String value) implements Literal {
+    record StringValue(String value) implements Value {
         /**
          * Rejects a null value.
          */
-        public StringLiteral {
+        public StringValue {
             Objects.requireNonNull(value, "value");
         }
 
@@ -112,7 +112,7 @@ public sealed interface Literal {
      *
      * @param value the value
      */
-    record BooleanLiteral(boolean value) implements Literal {
+    record BooleanValue(boolean value) implements Value {
         @Override
         public ValueType valueType() {
             return ValueType.BOOLEAN;
@@ -124,7 +124,7 @@ public sealed interface Literal {
      *
      * @param value the value
      */
-    record IntLiteral(int value) implements Literal {
+    record IntValue(int value) implements Value {
         @Override
         public ValueType valueType() {
             return ValueType.INT;
@@ -136,7 +136,7 @@ public sealed interface Literal {
      *
      * @param value the value
      */
-    record LongLiteral(long value) implements Literal {
+    record LongValue(long value) implements Value {
         @Override
         public ValueType valueType() {
             return ValueType.LONG;
@@ -148,11 +148,11 @@ public sealed interface Literal {
      *
      * @param value the value
      */
-    record DecimalLiteral(BigDecimal value) implements Literal {
+    record DecimalValue(BigDecimal value) implements Value {
         /**
          * Rejects a null value.
          */
-        public DecimalLiteral {
+        public DecimalValue {
             Objects.requireNonNull(value, "value");
         }
 
@@ -167,11 +167,11 @@ public sealed interface Literal {
      *
      * @param value the value
      */
-    record DateLiteral(LocalDate value) implements Literal {
+    record DateValue(LocalDate value) implements Value {
         /**
          * Rejects a null value.
          */
-        public DateLiteral {
+        public DateValue {
             Objects.requireNonNull(value, "value");
         }
 
@@ -186,11 +186,11 @@ public sealed interface Literal {
      *
      * @param value the value
      */
-    record InstantLiteral(Instant value) implements Literal {
+    record InstantValue(Instant value) implements Value {
         /**
          * Rejects a null value.
          */
-        public InstantLiteral {
+        public InstantValue {
             Objects.requireNonNull(value, "value");
         }
 

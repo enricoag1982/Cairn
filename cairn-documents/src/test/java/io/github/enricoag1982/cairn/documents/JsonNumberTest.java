@@ -8,9 +8,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.Range;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -79,9 +79,9 @@ class JsonNumberTest {
         AttributeDefinition decimal = read("decimal",
                 "examples: [" + number + "], range: { atLeast: " + number + ", lessThan: " + number + " }");
 
-        assertThat(decimal.examples()).containsExactly(Literal.of(new BigDecimal(number)));
+        assertThat(decimal.examples()).containsExactly(Value.of(new BigDecimal(number)));
         assertThat(decimal.range()).contains(Range.between(
-                Bound.inclusive(Literal.of(new BigDecimal(number))), Bound.exclusive(Literal.of(new BigDecimal(number)))));
+                Bound.inclusive(Value.of(new BigDecimal(number))), Bound.exclusive(Value.of(new BigDecimal(number)))));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -92,13 +92,13 @@ class JsonNumberTest {
 
         assertThat(string.minLength()).hasValue(Integer.parseInt(number));
         assertThat(string.maxLength()).hasValue(Integer.parseInt(number));
-        assertThat(integer.examples()).containsExactly(Literal.of(Integer.parseInt(number)));
+        assertThat(integer.examples()).containsExactly(Value.of(Integer.parseInt(number)));
     }
 
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"0", "-0", "7", "-3", "3000000000", "-9223372036854775808", "9223372036854775807"})
     void anIntegerInTheFormOfJsonIsReadAsALong(String number) {
-        assertThat(read("long", "examples: [" + number + "]").examples()).containsExactly(Literal.of(Long.parseLong(number)));
+        assertThat(read("long", "examples: [" + number + "]").examples()).containsExactly(Value.of(Long.parseLong(number)));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -190,8 +190,8 @@ class JsonNumberTest {
     @MethodSource("yamlOnlyNumbers")
     void aYamlOnlyNumberInQuotesIsJustAString(String number, String json) {
         assertThat(read("string", "examples: [\"" + number + "\"], allowedValues: ['" + number + "']").examples())
-                .containsExactly(Literal.of(number));
-        assertThat(read("date", "examples: ['" + number + "']").examples()).containsExactly(Literal.of(number));
+                .containsExactly(Value.of(number));
+        assertThat(read("date", "examples: ['" + number + "']").examples()).containsExactly(Value.of(number));
         assertThat(valid(document("entityTypes:", "  Thing: { description: \"" + number + "\" }")).definition()
                 .entityTypes().getFirst().description()).isEqualTo(Optional.of(number));
     }
@@ -200,6 +200,6 @@ class JsonNumberTest {
     @ValueSource(strings = {"1_000", "0b11", "1,000", "1 000", "0x", "e5", "1e", "0xG", "1.2.3", "1-2"})
     void textThatIsNoYamlNumberIsAString(String text) {
         assertThat(read("string", "examples: [" + (text.contains(",") ? "\"" + text + "\"" : text) + "]").examples())
-                .containsExactly(Literal.of(text));
+                .containsExactly(Value.of(text));
     }
 }

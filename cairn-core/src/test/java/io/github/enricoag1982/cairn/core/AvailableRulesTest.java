@@ -10,7 +10,6 @@ import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.EffectiveRule;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
@@ -20,6 +19,7 @@ import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.ArrayList;
 import java.util.List;
@@ -221,7 +221,7 @@ class AvailableRulesTest {
                         .description("A company or another legal entity")
                         .attribute("lei", ValueType.STRING, a -> a.description("Legal Entity Identifier")
                                 .pattern("[A-Z0-9]{18}[0-9]{2}").minLength(20).maxLength(20)
-                                .examples(Literal.of("5493001KJTIIGC8Y1R12")))
+                                .examples(Value.of("5493001KJTIIGC8Y1R12")))
                         .attribute("segment", ValueType.STRING, a -> a.allowedValues("Corporate", "Retail")))
                 .relationshipType("Owns", r -> r.from("Organization").to("Party").inverse("ownedBy")
                         .description("Ownership of one party by an organization")
@@ -240,7 +240,7 @@ class AvailableRulesTest {
         assertThat(lei.pattern()).contains("[A-Z0-9]{18}[0-9]{2}");
         assertThat(lei.minLength()).hasValue(20);
         assertThat(lei.maxLength()).hasValue(20);
-        assertThat(lei.examples()).containsExactly(Literal.of("5493001KJTIIGC8Y1R12"));
+        assertThat(lei.examples()).containsExactly(Value.of("5493001KJTIIGC8Y1R12"));
         assertThat(organization.attribute("segment").orElseThrow().allowedValues()).containsExactly("Corporate", "Retail");
         assertThat(organization.attribute("name").orElseThrow().description()).isEmpty();
         assertThat(schema.relationshipType("Owns").orElseThrow().description())

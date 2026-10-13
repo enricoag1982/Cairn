@@ -4,7 +4,6 @@ import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -15,6 +14,7 @@ import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -348,10 +348,10 @@ final class DocumentReader {
             return Optional.empty();
         }
         return literal(entry.value(), entry.pointer(), valueType, path, "value of '" + entry.key() + "'")
-                .map(literal -> new Bound(literal, inclusive != null));
+                .map(value -> new Bound(value, inclusive != null));
     }
 
-    private List<Literal> examples(Entry entry, ValueType valueType, String path) {
+    private List<Value> examples(Entry entry, ValueType valueType, String path) {
         if (entry == null) {
             return List.of();
         }
@@ -359,7 +359,7 @@ final class DocumentReader {
             invalidKind(entry.value(), entry.pointer(), path, "value of 'examples'", "a list of values");
             return List.of();
         }
-        List<Literal> result = new ArrayList<>();
+        List<Value> result = new ArrayList<>();
         for (int i = 0; i < sequence.getValue().size(); i++) {
             Node item = sequence.getValue().get(i);
             literal(item, Pointers.child(entry.pointer(), i), valueType, path, "item " + (i + 1) + " of 'examples'")
@@ -369,11 +369,11 @@ final class DocumentReader {
     }
 
     /** Reads a literal, or reports a node that is none. */
-    private Optional<Literal> literal(Node node, String pointer, ValueType valueType, String path, String what) {
+    private Optional<Value> literal(Node node, String pointer, ValueType valueType, String path, String what) {
         if (node instanceof ScalarNode scalar) {
-            Optional<Literal> literal = Scalars.literal(scalar, valueType);
-            if (literal.isPresent()) {
-                return literal;
+            Optional<Value> value = Scalars.literal(scalar, valueType);
+            if (value.isPresent()) {
+                return value;
             }
         }
         invalidKind(node, pointer, path, what, "a number written as in JSON, true or false, or a string");

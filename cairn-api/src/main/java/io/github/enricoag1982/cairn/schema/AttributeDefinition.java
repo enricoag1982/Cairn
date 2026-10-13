@@ -35,7 +35,7 @@ public record AttributeDefinition(
         List<String> aliases,
         boolean deprecated,
         Optional<String> description,
-        List<Literal> examples,
+        List<Value> examples,
         List<String> allowedValues,
         Optional<String> pattern,
         OptionalInt minLength,

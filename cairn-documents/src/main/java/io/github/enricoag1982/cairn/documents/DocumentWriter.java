@@ -7,7 +7,6 @@ import io.github.enricoag1982.cairn.documents.WrittenNode.Sequence;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Text;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RelationshipKind;
@@ -15,6 +14,7 @@ import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
@@ -158,15 +158,15 @@ final class DocumentWriter {
      * {@code false}, and strings, dates and instants as strings. A literal is written as its own type, whatever the
      * attribute's value type is; the reader gives a literal the value type of its attribute if its text fits.
      */
-    private static WrittenNode literal(Literal literal) {
-        return switch (literal) {
-            case Literal.StringLiteral string -> new Text(string.value());
-            case Literal.BooleanLiteral bool -> new Plain(Boolean.toString(bool.value()));
-            case Literal.IntLiteral integer -> new Plain(Integer.toString(integer.value()));
-            case Literal.LongLiteral number -> new Plain(Long.toString(number.value()));
-            case Literal.DecimalLiteral decimal -> new Plain(decimal(decimal.value()));
-            case Literal.DateLiteral date -> new Text(date.value().toString());
-            case Literal.InstantLiteral instant -> new Text(instant.value().toString());
+    private static WrittenNode literal(Value value) {
+        return switch (value) {
+            case Value.StringValue string -> new Text(string.value());
+            case Value.BooleanValue bool -> new Plain(Boolean.toString(bool.value()));
+            case Value.IntValue integer -> new Plain(Integer.toString(integer.value()));
+            case Value.LongValue number -> new Plain(Long.toString(number.value()));
+            case Value.DecimalValue decimal -> new Plain(decimal(decimal.value()));
+            case Value.DateValue date -> new Text(date.value().toString());
+            case Value.InstantValue instant -> new Text(instant.value().toString());
         };
     }
 

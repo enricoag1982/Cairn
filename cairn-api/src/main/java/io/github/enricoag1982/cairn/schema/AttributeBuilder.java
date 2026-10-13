@@ -20,7 +20,7 @@ public final class AttributeBuilder {
     private final List<String> aliases = new ArrayList<>();
     private boolean deprecated;
     private String description;
-    private final List<Literal> examples = new ArrayList<>();
+    private final List<Value> examples = new ArrayList<>();
     private final List<String> allowedValues = new ArrayList<>();
     private String pattern;
     private OptionalInt minLength = OptionalInt.empty();
@@ -100,7 +100,7 @@ public final class AttributeBuilder {
      * @param values the examples
      * @return this builder
      */
-    public AttributeBuilder examples(Literal... values) {
+    public AttributeBuilder examples(Value... values) {
         examples.addAll(List.of(values));
         return this;
     }

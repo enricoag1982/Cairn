@@ -12,7 +12,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -22,6 +21,7 @@ import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -145,16 +145,16 @@ class DocumentReaderTest {
                         Optional.of("Anybody."), List.of()),
                 new EntityTypeDefinition("Person", false, Optional.of("Party"), List.of(), List.of(
                         new AttributeDefinition("email", STRING, true, true, Optional.empty(), List.of("mail"), true,
-                                Optional.of("The address."), List.of(Literal.of("a@example.org")),
+                                Optional.of("The address."), List.of(Value.of("a@example.org")),
                                 List.of("a@example.org", "b@example.org"), Optional.of("[a-z@.]+"), OptionalInt.of(3),
                                 OptionalInt.of(40)),
                         AttributeDefinition.builder("age", INT).range(Range.between(
-                                Bound.inclusive(Literal.of(0)), Bound.exclusive(Literal.of(150))))
-                                .examples(Literal.of(42)).build(),
-                        AttributeDefinition.builder("born", DATE).examples(Literal.of(LocalDate.of(1990, 4, 1))).build(),
+                                Bound.inclusive(Value.of(0)), Bound.exclusive(Value.of(150))))
+                                .examples(Value.of(42)).build(),
+                        AttributeDefinition.builder("born", DATE).examples(Value.of(LocalDate.of(1990, 4, 1))).build(),
                         AttributeDefinition.builder("weight", DECIMAL).range(Range.between(
-                                Bound.exclusive(Literal.of(new BigDecimal("0"))),
-                                Bound.inclusive(Literal.of(new BigDecimal("700.5"))))).build()),
+                                Bound.exclusive(Value.of(new BigDecimal("0"))),
+                                Bound.inclusive(Value.of(new BigDecimal("700.5"))))).build()),
                         List.of("Human", "Individual"), true, Optional.empty(),
                         List.of(new RuleReference("person-rule", 2))));
         assertThat(definition.relationshipTypes()).containsExactly(
@@ -228,7 +228,7 @@ class DocumentReaderTest {
         assertThat(fromJson.origin()).isEqualTo(fromYaml.origin());
         assertThat(fromJson.definition()).isEqualTo(fromYaml.definition());
         assertThat(fromJson.definition().entityTypes().getFirst().attributes().getFirst().range()).contains(Range.between(
-                Bound.inclusive(Literal.of(new BigDecimal("0"))), Bound.inclusive(Literal.of(new BigDecimal("1000000.50")))));
+                Bound.inclusive(Value.of(new BigDecimal("0"))), Bound.inclusive(Value.of(new BigDecimal("1000000.50")))));
     }
 
     @Test
@@ -283,9 +283,9 @@ class DocumentReaderTest {
 
         AttributeDefinition balance = definition.entityTypes().getFirst().attributes().getFirst();
         assertThat(balance.range()).contains(Range.between(
-                Bound.inclusive(Literal.of(new BigDecimal("0.10"))), Bound.inclusive(Literal.of(new BigDecimal("100")))));
-        assertThat(balance.examples()).containsExactly(Literal.of(new BigDecimal("1.50")),
-                Literal.of(new BigDecimal("2")), Literal.of(new BigDecimal("0.1234567890123456789012345")));
+                Bound.inclusive(Value.of(new BigDecimal("0.10"))), Bound.inclusive(Value.of(new BigDecimal("100")))));
+        assertThat(balance.examples()).containsExactly(Value.of(new BigDecimal("1.50")),
+                Value.of(new BigDecimal("2")), Value.of(new BigDecimal("0.1234567890123456789012345")));
         assertThat(DECIMAL).isEqualTo(balance.valueType());
     }
 }

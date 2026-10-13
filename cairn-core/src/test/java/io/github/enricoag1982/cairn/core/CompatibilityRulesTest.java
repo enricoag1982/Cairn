@@ -15,7 +15,6 @@ import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -25,6 +24,7 @@ import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.ArrayList;
 import java.util.List;
@@ -196,7 +196,7 @@ class CompatibilityRulesTest {
         @Test
         void wideningARange() {
             SchemaDefinition widened = relationship(BASE, "Owns", type -> relationshipAttribute(type, "share", a ->
-                    withRange(a, Optional.of(Range.between(Bound.inclusive(Literal.of(0)), Bound.inclusive(Literal.of(100)))))));
+                    withRange(a, Optional.of(Range.between(Bound.inclusive(Value.of(0)), Bound.inclusive(Value.of(100)))))));
             accepted(widened);
         }
 
@@ -276,7 +276,7 @@ class CompatibilityRulesTest {
         @Test
         void narrowingARange() {
             breaking(relationship(BASE, "Owns", type -> relationshipAttribute(type, "share", a -> withRange(a,
-                    Optional.of(Range.between(Bound.exclusive(Literal.of(0)), Bound.inclusive(Literal.of(50))))))),
+                    Optional.of(Range.between(Bound.exclusive(Value.of(0)), Bound.inclusive(Value.of(50))))))),
                     "Owns.share");
         }
 

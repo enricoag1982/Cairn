@@ -56,8 +56,8 @@ class SchemaDefinitionBuilderTest {
                                 .description("Legal Entity Identifier")
                                 .pattern("[A-Z0-9]{18}[0-9]{2}")
                                 .minLength(20).maxLength(20)
-                                .examples(Literal.of("5493001KJTIIGC8Y1R12"))
-                                .examples(Literal.of("529900T8BM49AURSDO55")))
+                                .examples(Value.of("5493001KJTIIGC8Y1R12"))
+                                .examples(Value.of("529900T8BM49AURSDO55")))
                         .attribute("segment", ValueType.STRING, a -> a.allowedValues("Corporate", "Retail")
                                 .allowedValues("Private")))
                 .relationshipType("Owns", r -> r.description("Ownership").rule("total-ownership-at-most-100", 1))
@@ -73,7 +73,7 @@ class SchemaDefinitionBuilderTest {
         assertThat(lei.pattern()).contains("[A-Z0-9]{18}[0-9]{2}");
         assertThat(lei.minLength()).hasValue(20);
         assertThat(lei.maxLength()).hasValue(20);
-        assertThat(lei.examples()).containsExactly(Literal.of("5493001KJTIIGC8Y1R12"), Literal.of("529900T8BM49AURSDO55"));
+        assertThat(lei.examples()).containsExactly(Value.of("5493001KJTIIGC8Y1R12"), Value.of("529900T8BM49AURSDO55"));
         assertThat(organization.attributes().get(1).allowedValues()).containsExactly("Corporate", "Retail", "Private");
         RelationshipTypeDefinition owns = definition.relationshipTypes().getFirst();
         assertThat(owns.description()).contains("Ownership");

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RelationshipKind;
@@ -15,6 +14,7 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -247,8 +247,8 @@ class ReferenceModelTest {
 
     /** A bound has the value type of its attribute, so that a schema document gives the same bounds. */
     private static Bound bound(String number, String inclusivity, ValueType valueType) {
-        Literal value = valueType == ValueType.DECIMAL ? Literal.of(new BigDecimal(number))
-                : Literal.of(Integer.parseInt(number));
+        Value value = valueType == ValueType.DECIMAL ? Value.of(new BigDecimal(number))
+                : Value.of(Integer.parseInt(number));
         return new Bound(value, inclusivity.equals("inclusive"));
     }
 

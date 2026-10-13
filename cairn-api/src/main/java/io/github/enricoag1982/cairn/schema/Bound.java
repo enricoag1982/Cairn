@@ -8,7 +8,7 @@ import java.util.Objects;
  * @param value     the bounding value
  * @param inclusive {@code true} if the value itself is inside the range
  */
-public record Bound(Literal value, boolean inclusive) {
+public record Bound(Value value, boolean inclusive) {
 
     /**
      * Rejects a null value.
@@ -23,7 +23,7 @@ public record Bound(Literal value, boolean inclusive) {
      * @param value the bounding value
      * @return the bound
      */
-    public static Bound inclusive(Literal value) {
+    public static Bound inclusive(Value value) {
         return new Bound(value, true);
     }
 
@@ -33,7 +33,7 @@ public record Bound(Literal value, boolean inclusive) {
      * @param value the bounding value
      * @return the bound
      */
-    public static Bound exclusive(Literal value) {
+    public static Bound exclusive(Value value) {
         return new Bound(value, false);
     }
 }

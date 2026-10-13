@@ -313,9 +313,9 @@ class SchemaEvolutionScenariosTest {
                         type.supertype(), List.of(AttributeDefinition.builder("share", ValueType.DECIMAL).required()
                                 .range(io.github.enricoag1982.cairn.schema.Range.between(
                                         io.github.enricoag1982.cairn.schema.Bound.exclusive(
-                                                io.github.enricoag1982.cairn.schema.Literal.of(java.math.BigDecimal.ZERO)),
+                                                io.github.enricoag1982.cairn.schema.Value.of(java.math.BigDecimal.ZERO)),
                                         io.github.enricoag1982.cairn.schema.Bound.inclusive(
-                                                io.github.enricoag1982.cairn.schema.Literal.of(new java.math.BigDecimal("100.00")))))
+                                                io.github.enricoag1982.cairn.schema.Value.of(new java.math.BigDecimal("100.00")))))
                                 .build()),
                         type.aliases(), type.deprecated(), type.description(), type.rules()));
 

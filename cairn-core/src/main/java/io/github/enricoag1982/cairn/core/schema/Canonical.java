@@ -3,12 +3,12 @@ package io.github.enricoag1982.cairn.core.schema;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.util.Comparator;
@@ -62,10 +62,10 @@ final class Canonical {
                 .toList();
     }
 
-    private static List<Literal> examples(List<Literal> examples) {
+    private static List<Value> examples(List<Value> examples) {
         return examples.stream()
                 .distinct()
-                .sorted(Comparator.comparing(Literal::toString))
+                .sorted(Comparator.comparing(Value::toString))
                 .toList();
     }
 
@@ -90,15 +90,15 @@ final class Canonical {
     }
 
     private static Bound of(Bound bound, ValueType type) {
-        Literal value = bound.value();
-        Literal normalized = switch (type) {
+        Value value = bound.value();
+        Value normalized = switch (type) {
             case DECIMAL -> switch (value) {
-                case Literal.IntLiteral(int number) -> Literal.of(BigDecimal.valueOf(number).stripTrailingZeros());
-                case Literal.LongLiteral(long number) -> Literal.of(BigDecimal.valueOf(number).stripTrailingZeros());
-                case Literal.DecimalLiteral(BigDecimal number) -> Literal.of(number.stripTrailingZeros());
+                case Value.IntValue(int number) -> Value.of(BigDecimal.valueOf(number).stripTrailingZeros());
+                case Value.LongValue(long number) -> Value.of(BigDecimal.valueOf(number).stripTrailingZeros());
+                case Value.DecimalValue(BigDecimal number) -> Value.of(number.stripTrailingZeros());
                 default -> value;
             };
-            case LONG -> value instanceof Literal.IntLiteral(int number) ? Literal.of((long) number) : value;
+            case LONG -> value instanceof Value.IntValue(int number) ? Value.of((long) number) : value;
             default -> value;
         };
         return new Bound(normalized, bound.inclusive());

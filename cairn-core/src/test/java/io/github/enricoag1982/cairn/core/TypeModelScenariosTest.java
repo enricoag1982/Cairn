@@ -17,7 +17,6 @@ import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EffectiveRule;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -30,6 +29,7 @@ import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -213,7 +213,7 @@ class TypeModelScenariosTest {
     void rangeOnAnUnorderedValueType() {
         SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Account", type ->
                 withAttribute(type, AttributeDefinition.builder("active", ValueType.BOOLEAN)
-                        .range(Range.atLeast(Bound.inclusive(Literal.of(0)))).build()));
+                        .range(Range.atLeast(Bound.inclusive(Value.of(0)))).build()));
 
         List<Problem> problems = validate(definition);
         assertSingleProblem(problems, ProblemCode.RANGE_NOT_ALLOWED, "Account");
@@ -230,7 +230,7 @@ class TypeModelScenariosTest {
         assertThat(share.valueType()).isEqualTo(ValueType.DECIMAL);
         assertThat(share.required()).isTrue();
         assertThat(share.range()).contains(Range.between(
-                Bound.exclusive(Literal.of(new BigDecimal("0"))), Bound.inclusive(Literal.of(new BigDecimal("100")))));
+                Bound.exclusive(Value.of(new BigDecimal("0"))), Bound.inclusive(Value.of(new BigDecimal("100")))));
     }
 
     @Test
@@ -313,7 +313,7 @@ class TypeModelScenariosTest {
     void rangeBoundOfTheWrongValueType() {
         SchemaDefinition definition = SchemaDefinition.builder()
                 .entityType("Account", e -> e.attribute("opened", ValueType.DATE,
-                        a -> a.range(Range.atLeast(Bound.inclusive(Literal.of(1))))))
+                        a -> a.range(Range.atLeast(Bound.inclusive(Value.of(1))))))
                 .build();
 
         assertSingleProblem(validate(definition), ProblemCode.RANGE_LITERAL_MISMATCH, "Account");
@@ -324,7 +324,7 @@ class TypeModelScenariosTest {
     void emptyRange() {
         SchemaDefinition definition = SchemaDefinition.builder()
                 .entityType("Account", e -> e.attribute("limit", ValueType.INT, a -> a.range(
-                        Range.between(Bound.inclusive(Literal.of(10)), Bound.exclusive(Literal.of(10))))))
+                        Range.between(Bound.inclusive(Value.of(10)), Bound.exclusive(Value.of(10))))))
                 .build();
 
         assertSingleProblem(validate(definition), ProblemCode.RANGE_EMPTY, "Account");
@@ -334,8 +334,8 @@ class TypeModelScenariosTest {
     void narrowerNumbersFitWiderAttributes() {
         SchemaDefinition definition = SchemaDefinition.builder()
                 .entityType("Account", e -> e
-                        .attribute("balance", ValueType.DECIMAL, a -> a.range(Range.atLeast(Bound.inclusive(Literal.of(0L)))))
-                        .attribute("count", ValueType.LONG, a -> a.range(Range.atMost(Bound.inclusive(Literal.of(10))))))
+                        .attribute("balance", ValueType.DECIMAL, a -> a.range(Range.atLeast(Bound.inclusive(Value.of(0L)))))
+                        .attribute("count", ValueType.LONG, a -> a.range(Range.atMost(Bound.inclusive(Value.of(10))))))
                 .build();
 
         assertThat(validate(definition)).isEmpty();
@@ -477,7 +477,7 @@ class TypeModelScenariosTest {
                 .entityType("Party")
                 .entityType("Party", e -> e.abstractType())
                 .entityType("Account", e -> e.attribute("active", ValueType.BOOLEAN,
-                        a -> a.range(Range.atMost(Bound.inclusive(Literal.of(1))))))
+                        a -> a.range(Range.atMost(Bound.inclusive(Value.of(1))))))
                 .build();
 
         List<Problem> problems = rejected(registry.register(ORIGIN, definition));
@@ -534,7 +534,7 @@ class TypeModelScenariosTest {
     void exampleThatBreaksAPattern() {
         SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Organization", type ->
                 changeAttribute(type, "lei", attribute -> AttributeDefinition.builder("lei", ValueType.STRING)
-                        .unique().pattern("[A-Z0-9]{18}[0-9]{2}").examples(Literal.of("ABC")).build()));
+                        .unique().pattern("[A-Z0-9]{18}[0-9]{2}").examples(Value.of("ABC")).build()));
 
         List<Problem> problems = validate(definition);
         assertSingleProblem(problems, ProblemCode.INVALID_EXAMPLE, "Organization");
@@ -546,7 +546,7 @@ class TypeModelScenariosTest {
     void exampleOfTheWrongValueType() {
         SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Person", type ->
                 changeAttribute(type, "birthDate", attribute -> AttributeDefinition.builder("birthDate", ValueType.DATE)
-                        .examples(Literal.of("tomorrow")).build()));
+                        .examples(Value.of("tomorrow")).build()));
 
         List<Problem> problems = validate(definition);
         assertSingleProblem(problems, ProblemCode.INVALID_EXAMPLE, "Person");

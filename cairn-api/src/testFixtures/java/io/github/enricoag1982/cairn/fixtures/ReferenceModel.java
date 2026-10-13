@@ -7,12 +7,12 @@ import static io.github.enricoag1982.cairn.schema.ValueType.DECIMAL;
 import static io.github.enricoag1982.cairn.schema.ValueType.STRING;
 
 import io.github.enricoag1982.cairn.schema.Bound;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RuleCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -69,8 +69,8 @@ public final class ReferenceModel {
                         .targetsPerSource(ZERO_OR_MORE).sourcesPerTarget(ZERO_OR_MORE)
                         .inverse("ownedBy")
                         .attribute("share", DECIMAL, a -> a.required().range(Range.between(
-                                Bound.exclusive(Literal.of(new BigDecimal("0"))),
-                                Bound.inclusive(Literal.of(new BigDecimal("100"))))))
+                                Bound.exclusive(Value.of(new BigDecimal("0"))),
+                                Bound.inclusive(Value.of(new BigDecimal("100"))))))
                         .rule("total-ownership-at-most-100", 1))
                 .relationshipType("Employs", r -> r
                         .from("Organization").to("Person")

@@ -9,7 +9,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.schema.AttributeBuilder;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -18,6 +17,7 @@ import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -118,9 +118,9 @@ class SchemaValidatorTest {
         void aDollarSignInAPatternIsAnOrdinaryCharacter() {
             assertThat(validate(withAttribute("Account", "currency", STRING, a -> a.pattern("^[A-Z]{3}$")))).isEmpty();
             assertThat(validate(withAttribute("Account", "currency", STRING, a -> a
-                    .pattern("[A-Z]{3}$").examples(Literal.of("EUR$"))))).isEmpty();
+                    .pattern("[A-Z]{3}$").examples(Value.of("EUR$"))))).isEmpty();
             assertOnly(validate(withAttribute("Account", "currency", STRING, a -> a
-                    .pattern("[A-Z]{3}$").examples(Literal.of("EUR")))), ProblemCode.INVALID_EXAMPLE, "Account.currency");
+                    .pattern("[A-Z]{3}$").examples(Value.of("EUR")))), ProblemCode.INVALID_EXAMPLE, "Account.currency");
         }
 
         @Test
@@ -176,7 +176,7 @@ class SchemaValidatorTest {
         @Test
         void aRangeOnAStringStillGetsItsOwnProblem() {
             assertOnly(validate(withAttribute("Account", "currency", STRING, a -> a.range(
-                    Range.atLeast(Bound.inclusive(Literal.of("A")))))), ProblemCode.RANGE_NOT_ALLOWED, "Account.currency");
+                    Range.atLeast(Bound.inclusive(Value.of("A")))))), ProblemCode.RANGE_NOT_ALLOWED, "Account.currency");
         }
     }
 
@@ -187,13 +187,13 @@ class SchemaValidatorTest {
         void examplesThatSatisfyEveryConstraintPass() {
             assertThat(validate(withAttribute("Organization", "lei", STRING, a -> a
                     .pattern("[A-Z0-9]{18}[0-9]{2}").minLength(20).maxLength(20)
-                    .examples(Literal.of("5493001KJTIIGC8Y1R12"))))).isEmpty();
+                    .examples(Value.of("5493001KJTIIGC8Y1R12"))))).isEmpty();
         }
 
         @Test
         void anExampleThatBreaksThePatternIsReportedWithExpectedAndFound() {
             List<Problem> problems = validate(withAttribute("Organization", "lei", STRING, a -> a
-                    .pattern("[A-Z0-9]{18}[0-9]{2}").examples(Literal.of("ABC"))));
+                    .pattern("[A-Z0-9]{18}[0-9]{2}").examples(Value.of("ABC"))));
 
             assertOnly(problems, ProblemCode.INVALID_EXAMPLE, "Organization.lei");
             assertThat(problems.getFirst().found()).contains("ABC");
@@ -203,13 +203,13 @@ class SchemaValidatorTest {
         @Test
         void aPatternMustMatchTheWholeExample() {
             assertOnly(validate(withAttribute("Account", "currency", STRING, a -> a
-                    .pattern("[A-Z]{3}").examples(Literal.of("EURO")))), ProblemCode.INVALID_EXAMPLE, "Account.currency");
+                    .pattern("[A-Z]{3}").examples(Value.of("EURO")))), ProblemCode.INVALID_EXAMPLE, "Account.currency");
         }
 
         @Test
         void anExampleOfTheWrongValueTypeIsReported() {
             List<Problem> problems = validate(withAttribute("Person", "birthDate", DATE, a -> a
-                    .examples(Literal.of("tomorrow"))));
+                    .examples(Value.of("tomorrow"))));
 
             assertOnly(problems, ProblemCode.INVALID_EXAMPLE, "Person.birthDate");
             assertThat(problems.getFirst().expected()).contains("a date value");
@@ -219,21 +219,21 @@ class SchemaValidatorTest {
         @Test
         void aWholeNumberFitsADecimalAttribute() {
             assertThat(validate(withAttribute("Account", "balance", DECIMAL, a -> a
-                    .examples(Literal.of(100), Literal.of(100L), Literal.of(new BigDecimal("12.50")))))).isEmpty();
+                    .examples(Value.of(100), Value.of(100L), Value.of(new BigDecimal("12.50")))))).isEmpty();
         }
 
         @Test
         void aBooleanExampleFitsABooleanAttribute() {
-            assertThat(validate(withAttribute("Account", "active", BOOLEAN, a -> a.examples(Literal.of(true))))).isEmpty();
-            assertOnly(validate(withAttribute("Account", "active", BOOLEAN, a -> a.examples(Literal.of("yes")))),
+            assertThat(validate(withAttribute("Account", "active", BOOLEAN, a -> a.examples(Value.of(true))))).isEmpty();
+            assertOnly(validate(withAttribute("Account", "active", BOOLEAN, a -> a.examples(Value.of("yes")))),
                     ProblemCode.INVALID_EXAMPLE, "Account.active");
         }
 
         @Test
         void anExampleOutsideTheRangeIsReported() {
-            Range range = Range.between(Bound.exclusive(Literal.of(0)), Bound.inclusive(Literal.of(100)));
+            Range range = Range.between(Bound.exclusive(Value.of(0)), Bound.inclusive(Value.of(100)));
             List<Problem> problems = validate(withAttribute("Owns", "share", DECIMAL, a -> a.range(range)
-                    .examples(Literal.of(50), Literal.of(0), Literal.of(101))));
+                    .examples(Value.of(50), Value.of(0), Value.of(101))));
 
             assertThat(problems).hasSize(2).allSatisfy(problem -> {
                 assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_EXAMPLE);
@@ -246,7 +246,7 @@ class SchemaValidatorTest {
         @Test
         void anExampleOutsideTheAllowedValuesIsReported() {
             assertOnly(validate(withAttribute("CustomerRole", "segment", STRING, a -> a
-                    .allowedValues("Corporate", "Retail").examples(Literal.of("Corporate"), Literal.of("Private")))),
+                    .allowedValues("Corporate", "Retail").examples(Value.of("Corporate"), Value.of("Private")))),
                     ProblemCode.INVALID_EXAMPLE, "CustomerRole.segment");
         }
 
@@ -254,43 +254,43 @@ class SchemaValidatorTest {
         void lengthsCountUnicodeCodePoints() {
             String clef = "𝄞";
             assertThat(validate(withAttribute("Account", "code", STRING, a -> a.minLength(2).maxLength(2)
-                    .examples(Literal.of(clef + clef))))).isEmpty();
+                    .examples(Value.of(clef + clef))))).isEmpty();
             assertThat(validate(withAttribute("Account", "code", STRING, a -> a.minLength(3)
-                    .examples(Literal.of(clef + clef))))).hasSize(1);
+                    .examples(Value.of(clef + clef))))).hasSize(1);
             assertThat(validate(withAttribute("Account", "code", STRING, a -> a.maxLength(1)
-                    .examples(Literal.of(clef + clef))))).hasSize(1);
+                    .examples(Value.of(clef + clef))))).hasSize(1);
         }
 
         @Test
         void anExampleShorterThanTheMinimumOrLongerThanTheMaximumIsReported() {
-            assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.minLength(3).examples(Literal.of("ab")))),
+            assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.minLength(3).examples(Value.of("ab")))),
                     ProblemCode.INVALID_EXAMPLE, "Account.code");
-            assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.maxLength(3).examples(Literal.of("abcd")))),
+            assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.maxLength(3).examples(Value.of("abcd")))),
                     ProblemCode.INVALID_EXAMPLE, "Account.code");
         }
 
         @Test
         void everyConstraintAnExampleBreaksIsReported() {
             assertThat(validate(withAttribute("Account", "code", STRING, a -> a.pattern("[0-9]+").minLength(5)
-                    .examples(Literal.of("ab"))))).hasSize(2)
+                    .examples(Value.of("ab"))))).hasSize(2)
                     .allSatisfy(problem -> assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_EXAMPLE));
         }
 
         @Test
         void aConstraintThatIsInvalidItselfCausesNoFollowUpProblemForExamples() {
             assertOnly(validate(withAttribute("Account", "currency", STRING, a -> a.pattern("[A-Z")
-                    .examples(Literal.of("EUR")))), ProblemCode.INVALID_PATTERN, "Account.currency");
+                    .examples(Value.of("EUR")))), ProblemCode.INVALID_PATTERN, "Account.currency");
             assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.minLength(5).maxLength(3)
-                    .examples(Literal.of("abcd")))), ProblemCode.INVALID_LENGTH, "Account.code");
+                    .examples(Value.of("abcd")))), ProblemCode.INVALID_LENGTH, "Account.code");
             assertOnly(validate(withAttribute("Account", "balance", DECIMAL, a -> a.range(
-                    Range.between(Bound.inclusive(Literal.of(10)), Bound.exclusive(Literal.of(10))))
-                    .examples(Literal.of(5)))), ProblemCode.RANGE_EMPTY, "Account.balance");
+                    Range.between(Bound.inclusive(Value.of(10)), Bound.exclusive(Value.of(10))))
+                    .examples(Value.of(5)))), ProblemCode.RANGE_EMPTY, "Account.balance");
         }
 
         @Test
         void aRangeBoundOfTheWrongTypeIsReportedWithExpectedAndFound() {
             List<Problem> problems = validate(withAttribute("Person", "birthDate", DATE, a -> a.range(
-                    Range.atLeast(Bound.inclusive(Literal.of(1))))));
+                    Range.atLeast(Bound.inclusive(Value.of(1))))));
 
             assertOnly(problems, ProblemCode.RANGE_LITERAL_MISMATCH, "Person.birthDate");
             assertThat(problems.getFirst().expected()).contains("a date value");
@@ -300,7 +300,7 @@ class SchemaValidatorTest {
         @Test
         void examplesOfTraitAttributesAreCheckedToo() {
             List<Problem> problems = validate(SchemaDefinition.builder()
-                    .trait("Coded", t -> t.attribute("code", STRING, a -> a.maxLength(2).examples(Literal.of("abc"))))
+                    .trait("Coded", t -> t.attribute("code", STRING, a -> a.maxLength(2).examples(Value.of("abc"))))
                     .build());
 
             assertOnly(problems, ProblemCode.INVALID_EXAMPLE, "Coded.code");

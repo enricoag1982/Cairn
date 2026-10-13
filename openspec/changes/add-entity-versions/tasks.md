@@ -2,7 +2,7 @@
 
 ## 1. Refactor
 
-- [ ] 1.1 Rename `Literal` to `Value` and its records to `StringValue`, `BooleanValue`, `IntValue`, `LongValue`, `DecimalValue`, `DateValue` and `InstantValue` in every module; verify `./gradlew build` passes, and commit it on its own (D1)
+- [x] 1.1 Rename `Literal` to `Value` and its records to `StringValue`, `BooleanValue`, `IntValue`, `LongValue`, `DecimalValue`, `DateValue` and `InstantValue` in every module; verify `./gradlew build` passes, and commit it on its own (D1)
 
 ## 2. API (`cairn-api`, package `io.github.enricoag1982.cairn.data`)
 

@@ -3,7 +3,6 @@ package io.github.enricoag1982.cairn.documents;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Range;
@@ -12,6 +11,7 @@ import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -187,7 +187,7 @@ final class GeneratedDefinitions {
     private AttributeDefinition attribute(String name) {
         ValueType type = pick(List.of(ValueType.values()));
         boolean string = type == ValueType.STRING;
-        List<Literal> examples = new ArrayList<>();
+        List<Value> examples = new ArrayList<>();
         for (int i = between(0, 3); i > 0; i--) {
             examples.add(written(type));
         }
@@ -224,25 +224,25 @@ final class GeneratedDefinitions {
      * A literal as it is written for an attribute: of the attribute's value type, or, for a long or a decimal attribute,
      * now and then a number of a narrower type.
      */
-    private Literal written(ValueType type) {
+    private Value written(ValueType type) {
         if (type == ValueType.LONG && chance(NARROWER)) {
-            return Literal.of(intValue());
+            return Value.of(intValue());
         }
         if (type == ValueType.DECIMAL && chance(NARROWER)) {
-            return chance(0.5) ? Literal.of(intValue()) : Literal.of(longValue());
+            return chance(0.5) ? Value.of(intValue()) : Value.of(longValue());
         }
         return literal(type);
     }
 
-    private Literal literal(ValueType type) {
+    private Value literal(ValueType type) {
         return switch (type) {
-            case STRING -> Literal.of(text());
-            case BOOLEAN -> Literal.of(random.nextBoolean());
-            case INT -> Literal.of(intValue());
-            case LONG -> Literal.of(longValue());
-            case DECIMAL -> Literal.of(decimal());
-            case DATE -> Literal.of(LocalDate.ofEpochDay(between(-1_000_000, 3_000_000)));
-            case INSTANT -> Literal.of(instant());
+            case STRING -> Value.of(text());
+            case BOOLEAN -> Value.of(random.nextBoolean());
+            case INT -> Value.of(intValue());
+            case LONG -> Value.of(longValue());
+            case DECIMAL -> Value.of(decimal());
+            case DATE -> Value.of(LocalDate.ofEpochDay(between(-1_000_000, 3_000_000)));
+            case INSTANT -> Value.of(instant());
         };
     }
 
@@ -383,13 +383,13 @@ final class GeneratedDefinitions {
     }
 
     /** A number in the value type of its attribute: an int becomes a long or a decimal, and a long a decimal. */
-    private static Literal widened(Literal literal, ValueType type) {
-        return switch (literal) {
-            case Literal.IntLiteral integer when type == ValueType.LONG -> Literal.of((long) integer.value());
-            case Literal.IntLiteral integer when type == ValueType.DECIMAL ->
-                    Literal.of(BigDecimal.valueOf(integer.value()));
-            case Literal.LongLiteral number when type == ValueType.DECIMAL -> Literal.of(BigDecimal.valueOf(number.value()));
-            default -> literal;
+    private static Value widened(Value value, ValueType type) {
+        return switch (value) {
+            case Value.IntValue integer when type == ValueType.LONG -> Value.of((long) integer.value());
+            case Value.IntValue integer when type == ValueType.DECIMAL ->
+                    Value.of(BigDecimal.valueOf(integer.value()));
+            case Value.LongValue number when type == ValueType.DECIMAL -> Value.of(BigDecimal.valueOf(number.value()));
+            default -> value;
         };
     }
 }

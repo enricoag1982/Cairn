@@ -8,7 +8,6 @@ import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -19,6 +18,7 @@ import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -79,8 +79,8 @@ class DocumentWriterTest {
     @Test
     void everyPropertyIsWrittenInTheOrderOfKeys() {
         AttributeDefinition attribute = new AttributeDefinition("code", ValueType.STRING, true, true,
-                Optional.of(Range.between(Bound.inclusive(Literal.of("a")), Bound.exclusive(Literal.of("z")))),
-                List.of("old"), true, Optional.of("A code."), List.of(Literal.of("x")), List.of("x", "y"),
+                Optional.of(Range.between(Bound.inclusive(Value.of("a")), Bound.exclusive(Value.of("z")))),
+                List.of("old"), true, Optional.of("A code."), List.of(Value.of("x")), List.of("x", "y"),
                 Optional.of("[a-z]+"), OptionalInt.of(1), OptionalInt.of(9));
         SchemaDefinition definition = new SchemaDefinition(
                 List.of(new EntityTypeDefinition("Full", true, Optional.of("Base"), List.of("Named"), List.of(attribute),
@@ -120,7 +120,7 @@ class DocumentWriterTest {
     @Test
     void aRangeIsWrittenWithTheLowerBoundFirst() {
         AttributeDefinition ranged = AttributeDefinition.builder("n", ValueType.INT)
-                .range(Range.between(Bound.exclusive(Literal.of(1)), Bound.inclusive(Literal.of(9)))).build();
+                .range(Range.between(Bound.exclusive(Value.of(1)), Bound.inclusive(Value.of(9)))).build();
 
         Object tree = DocumentTrees.load(SchemaDocuments.writeYaml(ORIGIN, definition(ranged)));
 
@@ -386,7 +386,7 @@ class DocumentWriterTest {
         for (String word : List.of("y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "true", "True", "TRUE",
                 "false", "False", "FALSE", "on", "On", "ON", "off", "Off", "OFF")) {
             AttributeDefinition note = AttributeDefinition.builder("note", ValueType.STRING).description(word)
-                    .examples(Literal.of(word)).allowedValues(word).aliases(word).build();
+                    .examples(Value.of(word)).allowedValues(word).aliases(word).build();
             SchemaDefinition definition = definition(note);
 
             assertThat(SchemaDocuments.writeYaml(ORIGIN, definition))
@@ -401,22 +401,22 @@ class DocumentWriterTest {
     @Test
     void literalsAreWrittenByTheirValueType() {
         AttributeDefinition numbers = AttributeDefinition.builder("n", ValueType.DECIMAL).examples(
-                Literal.of(new BigDecimal("1.50")), Literal.of(new BigDecimal("0.00")), Literal.of(new BigDecimal("-0.5")),
-                Literal.of(new BigDecimal("100")), Literal.of(new BigDecimal("12345678901234567890.123456789")),
-                Literal.of(new BigDecimal("1E+3")), Literal.of(new BigDecimal("0E+2")), Literal.of(new BigDecimal("1E-9")),
-                Literal.of(new BigDecimal("0.0000001"))).build();
+                Value.of(new BigDecimal("1.50")), Value.of(new BigDecimal("0.00")), Value.of(new BigDecimal("-0.5")),
+                Value.of(new BigDecimal("100")), Value.of(new BigDecimal("12345678901234567890.123456789")),
+                Value.of(new BigDecimal("1E+3")), Value.of(new BigDecimal("0E+2")), Value.of(new BigDecimal("1E-9")),
+                Value.of(new BigDecimal("0.0000001"))).build();
         AttributeDefinition integers = AttributeDefinition.builder("i", ValueType.INT)
-                .examples(Literal.of(0), Literal.of(-7), Literal.of(Integer.MAX_VALUE)).build();
+                .examples(Value.of(0), Value.of(-7), Value.of(Integer.MAX_VALUE)).build();
         AttributeDefinition longs = AttributeDefinition.builder("l", ValueType.LONG)
-                .examples(Literal.of(3_000_000_000L), Literal.of(Long.MIN_VALUE)).build();
+                .examples(Value.of(3_000_000_000L), Value.of(Long.MIN_VALUE)).build();
         AttributeDefinition booleans = AttributeDefinition.builder("b", ValueType.BOOLEAN)
-                .examples(Literal.of(true), Literal.of(false)).build();
+                .examples(Value.of(true), Value.of(false)).build();
         AttributeDefinition dates = AttributeDefinition.builder("d", ValueType.DATE)
-                .examples(Literal.of(LocalDate.of(2026, 1, 5)), Literal.of(LocalDate.of(-5, 1, 1)),
-                        Literal.of(LocalDate.of(10000, 1, 1))).build();
+                .examples(Value.of(LocalDate.of(2026, 1, 5)), Value.of(LocalDate.of(-5, 1, 1)),
+                        Value.of(LocalDate.of(10000, 1, 1))).build();
         AttributeDefinition instants = AttributeDefinition.builder("t", ValueType.INSTANT)
-                .examples(Literal.of(Instant.parse("2026-01-05T09:00:00Z")),
-                        Literal.of(Instant.parse("2026-01-05T09:00:00.123456Z"))).build();
+                .examples(Value.of(Instant.parse("2026-01-05T09:00:00Z")),
+                        Value.of(Instant.parse("2026-01-05T09:00:00.123456Z"))).build();
         SchemaDefinition definition = definition(numbers, integers, longs, booleans, dates, instants);
 
         String yaml = SchemaDocuments.writeYaml(ORIGIN, definition);
@@ -437,12 +437,12 @@ class DocumentWriterTest {
     @Test
     void rangeBoundsAreWrittenByTheValueTypeOfTheirAttribute() {
         AttributeDefinition share = AttributeDefinition.builder("share", ValueType.DECIMAL).range(Range.between(
-                Bound.exclusive(Literal.of(new BigDecimal("0"))), Bound.inclusive(Literal.of(new BigDecimal("100.0")))))
+                Bound.exclusive(Value.of(new BigDecimal("0"))), Bound.inclusive(Value.of(new BigDecimal("100.0")))))
                 .build();
         AttributeDefinition born = AttributeDefinition.builder("born", ValueType.DATE).range(Range.atLeast(
-                Bound.inclusive(Literal.of(LocalDate.of(1900, 1, 1))))).build();
+                Bound.inclusive(Value.of(LocalDate.of(1900, 1, 1))))).build();
         AttributeDefinition seen = AttributeDefinition.builder("seen", ValueType.INSTANT).range(Range.atMost(
-                Bound.exclusive(Literal.of(Instant.parse("2030-01-01T00:00:00Z"))))).build();
+                Bound.exclusive(Value.of(Instant.parse("2030-01-01T00:00:00Z"))))).build();
         SchemaDefinition definition = definition(share, born, seen);
 
         String yaml = SchemaDocuments.writeYaml(ORIGIN, definition);
@@ -453,9 +453,9 @@ class DocumentWriterTest {
     }
 
     @Test
-    void aStringLiteralThatLooksLikeAnotherTypeStaysAString() {
+    void aStringValueThatLooksLikeAnotherTypeStaysAString() {
         AttributeDefinition strings = AttributeDefinition.builder("s", ValueType.STRING)
-                .examples(Literal.of("true"), Literal.of("5"), Literal.of("1.5"), Literal.of("null"), Literal.of(" x"))
+                .examples(Value.of("true"), Value.of("5"), Value.of("1.5"), Value.of("null"), Value.of(" x"))
                 .build();
 
         assertThat(SchemaDocuments.writeYaml(ORIGIN, definition(strings)))

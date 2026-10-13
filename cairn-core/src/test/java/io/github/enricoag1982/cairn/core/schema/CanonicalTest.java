@@ -2,8 +2,8 @@ package io.github.enricoag1982.cairn.core.schema;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import org.junit.jupiter.api.Test;
 
@@ -43,31 +43,31 @@ class CanonicalTest {
                 .isFalse();
     }
 
-    private static SchemaDefinition currencyExamples(Literal... examples) {
+    private static SchemaDefinition currencyExamples(Value... examples) {
         return SchemaDefinition.builder().entityType("Account", e -> e.attribute("currency", ValueType.STRING,
                 a -> a.examples(examples))).build();
     }
 
     @Test
     void examplesAreComparedAsASet() {
-        SchemaDefinition ab = currencyExamples(Literal.of("EUR"), Literal.of("USD"));
-        SchemaDefinition ba = currencyExamples(Literal.of("USD"), Literal.of("EUR"));
+        SchemaDefinition ab = currencyExamples(Value.of("EUR"), Value.of("USD"));
+        SchemaDefinition ba = currencyExamples(Value.of("USD"), Value.of("EUR"));
 
         assertThat(Canonical.equal(ab, ab)).isTrue();
         assertThat(Canonical.equal(ab, ba)).isTrue();
-        assertThat(Canonical.equal(ab, currencyExamples(Literal.of("EUR")))).isFalse();
-        assertThat(Canonical.equal(ab, currencyExamples(Literal.of("EUR"), Literal.of("CHF")))).isFalse();
+        assertThat(Canonical.equal(ab, currencyExamples(Value.of("EUR")))).isFalse();
+        assertThat(Canonical.equal(ab, currencyExamples(Value.of("EUR"), Value.of("CHF")))).isFalse();
         assertThat(Canonical.equal(ab, currencyExamples())).isFalse();
     }
 
     @Test
     void examplesOfDifferentKindsAreDifferentExamples() {
         SchemaDefinition number = SchemaDefinition.builder().entityType("Account", e -> e.attribute("balance",
-                ValueType.DECIMAL, a -> a.examples(Literal.of(1), Literal.of(2L)))).build();
+                ValueType.DECIMAL, a -> a.examples(Value.of(1), Value.of(2L)))).build();
         SchemaDefinition reordered = SchemaDefinition.builder().entityType("Account", e -> e.attribute("balance",
-                ValueType.DECIMAL, a -> a.examples(Literal.of(2L), Literal.of(1)))).build();
+                ValueType.DECIMAL, a -> a.examples(Value.of(2L), Value.of(1)))).build();
         SchemaDefinition differentKinds = SchemaDefinition.builder().entityType("Account", e -> e.attribute("balance",
-                ValueType.DECIMAL, a -> a.examples(Literal.of(1L), Literal.of(2)))).build();
+                ValueType.DECIMAL, a -> a.examples(Value.of(1L), Value.of(2)))).build();
 
         assertThat(Canonical.equal(number, reordered)).isTrue();
         assertThat(Canonical.equal(number, differentKinds)).isFalse();
@@ -75,8 +75,8 @@ class CanonicalTest {
 
     @Test
     void anExampleListedTwiceIsOneExample() {
-        assertThat(Canonical.equal(currencyExamples(Literal.of("EUR"), Literal.of("EUR")),
-                currencyExamples(Literal.of("EUR")))).isTrue();
+        assertThat(Canonical.equal(currencyExamples(Value.of("EUR"), Value.of("EUR")),
+                currencyExamples(Value.of("EUR")))).isTrue();
     }
 
     @Test

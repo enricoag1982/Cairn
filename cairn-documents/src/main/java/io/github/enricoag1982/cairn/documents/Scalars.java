@@ -1,6 +1,6 @@
 package io.github.enricoag1982.cairn.documents;
 
-import io.github.enricoag1982.cairn.schema.Literal;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -145,43 +145,43 @@ final class Scalars {
      * @param type   the value type of the attribute, or {@code null} if it is unknown
      * @return the literal, or empty if the scalar can be no literal: null, or a number that is not written as in JSON
      */
-    static Optional<Literal> literal(ScalarNode scalar, ValueType type) {
-        Optional<Literal> fitting = type == null ? Optional.empty() : fitting(scalar, type);
+    static Optional<Value> literal(ScalarNode scalar, ValueType type) {
+        Optional<Value> fitting = type == null ? Optional.empty() : fitting(scalar, type);
         return fitting.isPresent() ? fitting : own(scalar);
     }
 
-    private static Optional<Literal> fitting(ScalarNode scalar, ValueType type) {
+    private static Optional<Value> fitting(ScalarNode scalar, ValueType type) {
         return switch (type) {
-            case STRING -> isString(scalar) ? Optional.of(Literal.of(scalar.getValue())) : Optional.empty();
-            case BOOLEAN -> isBoolean(scalar) ? Optional.of(Literal.of(booleanValue(scalar))) : Optional.empty();
-            case INT -> intValue(scalar).map(Literal::of);
-            case LONG -> isJsonInteger(scalar) ? toLong(integerValue(scalar)).map(Literal::of) : Optional.empty();
-            case DECIMAL -> decimal(scalar).map(Literal::of);
-            case DATE -> isString(scalar) ? date(scalar.getValue()).map(Literal::of) : Optional.empty();
-            case INSTANT -> isString(scalar) ? instant(scalar.getValue()).map(Literal::of) : Optional.empty();
+            case STRING -> isString(scalar) ? Optional.of(Value.of(scalar.getValue())) : Optional.empty();
+            case BOOLEAN -> isBoolean(scalar) ? Optional.of(Value.of(booleanValue(scalar))) : Optional.empty();
+            case INT -> intValue(scalar).map(Value::of);
+            case LONG -> isJsonInteger(scalar) ? toLong(integerValue(scalar)).map(Value::of) : Optional.empty();
+            case DECIMAL -> decimal(scalar).map(Value::of);
+            case DATE -> isString(scalar) ? date(scalar.getValue()).map(Value::of) : Optional.empty();
+            case INSTANT -> isString(scalar) ? instant(scalar.getValue()).map(Value::of) : Optional.empty();
         };
     }
 
-    private static Optional<Literal> own(ScalarNode scalar) {
+    private static Optional<Value> own(ScalarNode scalar) {
         if (isNull(scalar) || isYamlOnlyNumber(scalar)) {
             return Optional.empty();
         }
         if (isBoolean(scalar)) {
-            return Optional.of(Literal.of(booleanValue(scalar)));
+            return Optional.of(Value.of(booleanValue(scalar)));
         }
         if (isJsonInteger(scalar)) {
             BigInteger value = integerValue(scalar);
             Optional<Integer> asInt = toInt(value);
             if (asInt.isPresent()) {
-                return Optional.of(Literal.of(asInt.get()));
+                return Optional.of(Value.of(asInt.get()));
             }
             Optional<Long> asLong = toLong(value);
-            return asLong.isPresent() ? Optional.of(Literal.of(asLong.get())) : Optional.of(Literal.of(new BigDecimal(value)));
+            return asLong.isPresent() ? Optional.of(Value.of(asLong.get())) : Optional.of(Value.of(new BigDecimal(value)));
         }
         if (isJsonNumber(scalar)) {
-            return decimal(scalar).map(Literal::of);
+            return decimal(scalar).map(Value::of);
         }
-        return Optional.of(Literal.of(scalar.getValue()));
+        return Optional.of(Value.of(scalar.getValue()));
     }
 
     /** The value of a number written as in JSON as a decimal, read from its text; empty for any other scalar. */

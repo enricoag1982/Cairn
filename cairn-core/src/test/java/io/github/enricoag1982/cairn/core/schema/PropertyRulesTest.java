@@ -6,13 +6,13 @@ import io.github.enricoag1982.cairn.schema.AttributeBuilder;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.EntityTypeBuilder;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaChange;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
@@ -96,11 +96,11 @@ class PropertyRulesTest {
 
         @Test
         void examplesAreAlwaysCompatible() {
-            assertThat(compare(attribute(a -> a.examples(Literal.of("a"))), attribute(a -> a.examples(Literal.of("b")))))
+            assertThat(compare(attribute(a -> a.examples(Value.of("a"))), attribute(a -> a.examples(Value.of("b")))))
                     .singleElement().satisfies(change -> assertThat(change.compatible()).isTrue());
-            assertThat(compare(attribute(a -> a), attribute(a -> a.examples(Literal.of("b")))))
+            assertThat(compare(attribute(a -> a), attribute(a -> a.examples(Value.of("b")))))
                     .singleElement().satisfies(change -> assertThat(change.compatible()).isTrue());
-            assertThat(compare(attribute(a -> a.examples(Literal.of("b"))), attribute(a -> a)))
+            assertThat(compare(attribute(a -> a.examples(Value.of("b"))), attribute(a -> a)))
                     .singleElement().satisfies(change -> assertThat(change.compatible()).isTrue());
         }
     }

@@ -3,7 +3,6 @@ package io.github.enricoag1982.cairn.core.schema;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -14,6 +13,7 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -461,22 +461,22 @@ final class SchemaValidator {
         if (!attribute.valueType().isOrdered()) {
             problems.add(Problems.of(ProblemCode.RANGE_NOT_ALLOWED, path, "The " + attribute.valueType()
                     + " attribute " + path + " cannot have a range; only numbers, dates and instants are ordered.",
-                    "an int, long, decimal, date or instant attribute", "a " + Literals.typeName(attribute.valueType())
+                    "an int, long, decimal, date or instant attribute", "a " + Values.typeName(attribute.valueType())
                     + " attribute", null));
             return Optional.empty();
         }
         boolean fits = true;
         for (Bound bound : List.of(range.lower(), range.upper()).stream().flatMap(Optional::stream).toList()) {
-            if (!Literals.fits(bound.value(), attribute.valueType())) {
+            if (!Values.fits(bound.value(), attribute.valueType())) {
                 fits = false;
                 problems.add(Problems.of(ProblemCode.RANGE_LITERAL_MISMATCH, path, "The range bound "
-                        + Literals.describe(bound.value()) + " (" + Literals.typeName(bound.value().valueType())
+                        + Values.describe(bound.value()) + " (" + Values.typeName(bound.value().valueType())
                         + ") does not fit the " + attribute.valueType() + " attribute " + path + ".",
-                        "a " + Literals.typeName(attribute.valueType()) + " value", Literals.describe(bound.value()),
+                        "a " + Values.typeName(attribute.valueType()) + " value", Values.describe(bound.value()),
                         null));
             }
         }
-        if (fits && Literals.isEmpty(range)) {
+        if (fits && Values.isEmpty(range)) {
             problems.add(new Problem(ProblemCode.RANGE_EMPTY, path,
                     "The range of " + path + " is empty: its lower bound is not below its upper bound."));
             return Optional.empty();
@@ -506,7 +506,7 @@ final class SchemaValidator {
             problems.add(Problems.of(ProblemCode.TEXT_CONSTRAINT_NOT_ALLOWED, path, "The "
                     + attribute.valueType() + " attribute " + path + " cannot have " + String.join(", ", constraints)
                     + "; only string attributes can.", "a string attribute",
-                    "a " + Literals.typeName(attribute.valueType()) + " attribute", null));
+                    "a " + Values.typeName(attribute.valueType()) + " attribute", null));
             return TextConstraints.NONE;
         }
         return new TextConstraints(distinctAllowedValues(path, attribute), pattern(path, attribute),
@@ -572,18 +572,18 @@ final class SchemaValidator {
     /** Checks that each example has the attribute's value type and satisfies the constraints that are valid. */
     private void checkExamples(String owner, AttributeDefinition attribute, Optional<Range> range, TextConstraints text) {
         String path = Names.path(owner, attribute.name());
-        for (Literal example : attribute.examples()) {
-            String shown = Literals.describe(example);
-            if (!Literals.fits(example, attribute.valueType())) {
+        for (Value example : attribute.examples()) {
+            String shown = Values.describe(example);
+            if (!Values.fits(example, attribute.valueType())) {
                 problems.add(Problems.of(ProblemCode.INVALID_EXAMPLE, path, "The example '" + shown + "' ("
-                        + Literals.typeName(example.valueType()) + ") of " + path + " does not fit the "
-                        + attribute.valueType() + " attribute.", "a " + Literals.typeName(attribute.valueType())
+                        + Values.typeName(example.valueType()) + ") of " + path + " does not fit the "
+                        + attribute.valueType() + " attribute.", "a " + Values.typeName(attribute.valueType())
                         + " value", shown, null));
                 continue;
             }
-            if (range.isPresent() && !Literals.within(example, range.get())) {
+            if (range.isPresent() && !Values.within(example, range.get())) {
                 invalidExample(path, shown, "is outside the range of the attribute",
-                        "a value " + Literals.describe(range.get()));
+                        "a value " + Values.describe(range.get()));
             }
             if (!text.allowedValues().isEmpty() && !text.allowedValues().contains(shown)) {
                 invalidExample(path, shown, "is not one of the allowed values",
@@ -593,7 +593,7 @@ final class SchemaValidator {
                 invalidExample(path, shown, "does not match the pattern " + text.pattern().get().source(),
                         "a value matching " + text.pattern().get().source());
             }
-            if (example instanceof Literal.StringLiteral(String value)) {
+            if (example instanceof Value.StringValue(String value)) {
                 checkLengths(path, value, text);
             }
         }

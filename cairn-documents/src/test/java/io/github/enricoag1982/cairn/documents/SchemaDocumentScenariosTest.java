@@ -11,7 +11,6 @@ import io.github.enricoag1982.cairn.core.SchemaRegistries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
-import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -19,6 +18,7 @@ import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -88,8 +88,8 @@ class SchemaDocumentScenariosTest {
                 assertThat(owns.attributes()).singleElement().satisfies(share -> {
                     assertThat(share.name()).isEqualTo("share");
                     assertThat(share.range()).contains(Range.between(
-                            Bound.exclusive(Literal.of(new BigDecimal("0"))),
-                            Bound.inclusive(Literal.of(new BigDecimal("100")))));
+                            Bound.exclusive(Value.of(new BigDecimal("0"))),
+                            Bound.inclusive(Value.of(new BigDecimal("100")))));
                 }));
     }
 
@@ -220,22 +220,22 @@ class SchemaDocumentScenariosTest {
     @DisplayName("Scenario: Widened numbers come back in the attribute's type")
     void widenedNumbersComeBackInTheAttributesType() {
         Origin origin = new Origin("test-model", "1.0.0");
-        SchemaDefinition written = account(Literal.of(0));
-        SchemaDefinition expected = account(Literal.of(new BigDecimal("0")));
+        SchemaDefinition written = account(Value.of(0));
+        SchemaDefinition expected = account(Value.of(new BigDecimal("0")));
 
         for (String text : List.of(SchemaDocuments.writeYaml(origin, written), SchemaDocuments.writeJson(origin, written))) {
             SchemaDocument document = valid(text);
 
             assertThat(document.definition().entityTypes()).singleElement().satisfies(account ->
                     assertThat(account.attributes().getLast().range())
-                            .contains(Range.atLeast(Bound.inclusive(Literal.of(new BigDecimal("0"))))));
+                            .contains(Range.atLeast(Bound.inclusive(Value.of(new BigDecimal("0"))))));
             assertThat(document.definition()).isEqualTo(expected);
             assertThat(document.definition()).isNotEqualTo(written);
         }
     }
 
     /** An entity type Account whose decimal attribute balance has a range from a bound, included. */
-    private static SchemaDefinition account(Literal lowerBound) {
+    private static SchemaDefinition account(Value lowerBound) {
         return SchemaDefinition.builder()
                 .entityType("Account", e -> e
                         .description("Holds a balance.")

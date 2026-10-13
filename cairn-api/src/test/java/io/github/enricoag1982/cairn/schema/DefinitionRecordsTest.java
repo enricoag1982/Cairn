@@ -43,10 +43,10 @@ class DefinitionRecordsTest {
         assertThatThrownBy(() -> new SchemaPlan(null, List.of(), List.of())).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Problem(ProblemCode.INVALID_NAME, "Party", "bad", null, Optional.empty(),
                 Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> Literal.of((String) null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Value.of((String) null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Bound(null, true)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Range(null, Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> Literal.of((BigDecimal) null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Value.of((BigDecimal) null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Origin("reference-model", null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> SchemaDefinition.builder()
                 .relationshipType("Owns", r -> r.supertype(null))).isInstanceOf(NullPointerException.class);
@@ -70,15 +70,15 @@ class DefinitionRecordsTest {
     @Test
     void constraintAndExampleListsAreCopiedAndUnmodifiable() {
         List<String> allowed = new ArrayList<>(List.of("Corporate"));
-        List<Literal> examples = new ArrayList<>(List.of(Literal.of("Corporate")));
+        List<Value> examples = new ArrayList<>(List.of(Value.of("Corporate")));
         AttributeDefinition segment = new AttributeDefinition("segment", ValueType.STRING, false, false,
                 Optional.empty(), List.of(), false, Optional.empty(), examples, allowed, Optional.empty(),
                 OptionalInt.empty(), OptionalInt.empty());
         allowed.add("Retail");
-        examples.add(Literal.of("Retail"));
+        examples.add(Value.of("Retail"));
 
         assertThat(segment.allowedValues()).containsExactly("Corporate");
-        assertThat(segment.examples()).containsExactly(Literal.of("Corporate"));
+        assertThat(segment.examples()).containsExactly(Value.of("Corporate"));
         assertThatThrownBy(() -> segment.allowedValues().add("x")).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> segment.examples().clear()).isInstanceOf(UnsupportedOperationException.class);
     }
@@ -133,14 +133,14 @@ class DefinitionRecordsTest {
     }
 
     @Test
-    void literalsKnowTheirValueType() {
-        assertThat(Literal.of(1).valueType()).isEqualTo(ValueType.INT);
-        assertThat(Literal.of(1L).valueType()).isEqualTo(ValueType.LONG);
-        assertThat(Literal.of("Corporate").valueType()).isEqualTo(ValueType.STRING);
-        assertThat(Literal.of(true).valueType()).isEqualTo(ValueType.BOOLEAN);
-        assertThat(Literal.of(BigDecimal.ONE).valueType()).isEqualTo(ValueType.DECIMAL);
-        assertThat(Literal.of(LocalDate.of(2026, 1, 1)).valueType()).isEqualTo(ValueType.DATE);
-        assertThat(Literal.of(Instant.EPOCH).valueType()).isEqualTo(ValueType.INSTANT);
+    void valuesKnowTheirValueType() {
+        assertThat(Value.of(1).valueType()).isEqualTo(ValueType.INT);
+        assertThat(Value.of(1L).valueType()).isEqualTo(ValueType.LONG);
+        assertThat(Value.of("Corporate").valueType()).isEqualTo(ValueType.STRING);
+        assertThat(Value.of(true).valueType()).isEqualTo(ValueType.BOOLEAN);
+        assertThat(Value.of(BigDecimal.ONE).valueType()).isEqualTo(ValueType.DECIMAL);
+        assertThat(Value.of(LocalDate.of(2026, 1, 1)).valueType()).isEqualTo(ValueType.DATE);
+        assertThat(Value.of(Instant.EPOCH).valueType()).isEqualTo(ValueType.INSTANT);
     }
 
     @Test
@@ -153,8 +153,8 @@ class DefinitionRecordsTest {
 
     @Test
     void rangeFactoriesSetTheRightBounds() {
-        Bound zero = Bound.exclusive(Literal.of(0));
-        Bound hundred = Bound.inclusive(Literal.of(100));
+        Bound zero = Bound.exclusive(Value.of(0));
+        Bound hundred = Bound.inclusive(Value.of(100));
 
         assertThat(Range.between(zero, hundred)).isEqualTo(new Range(Optional.of(zero), Optional.of(hundred)));
         assertThat(Range.atLeast(zero).upper()).isEmpty();
