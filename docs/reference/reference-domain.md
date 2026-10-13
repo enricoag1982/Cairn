@@ -39,10 +39,10 @@ Entity types and traits:
 | `Named` | trait | `name: string`, required |
 | `Party` | abstract entity type, includes `Named` | none of its own |
 | `Person` | entity type, extends `Party` | `birthDate: date`, optional |
-| `Organization` | entity type, extends `Party` | `lei: string`, optional, unique (Legal Entity Identifier) |
+| `Organization` | entity type, extends `Party` | `lei: string`, optional, unique, pattern `[A-Z0-9]{18}[0-9]{2}` (Legal Entity Identifier) |
 | `Address` | entity type | `street: string`, required; `city: string`, required; `country: string`, required |
-| `Account` | entity type | `number: string`, required, unique; `currency: string`, required; `balance: decimal`, required |
-| `CustomerRole` | entity type | `segment: string`, required |
+| `Account` | entity type | `number: string`, required, unique; `currency: string`, required, pattern `[A-Z]{3}`; `balance: decimal`, required |
+| `CustomerRole` | entity type | `segment: string`, required, one of `Corporate`, `Retail` |
 
 `Account` is kept small, so frequent balance changes stay cheap ([ADR-0009](../decisions/0009-version-whole-entities-rather-than-single-attributes.md)).
 
@@ -55,6 +55,13 @@ Relationship types. Multiplicities are written as minimum..maximum, with `*` for
 | `HeldBy` | `Account` | `Party` | 1..1 | 0..* | association | none | `holds` |
 | `HasAddress` | `Party` | `Address` | 0..* | 1..1 | composition | none | `party` |
 | `PlayedBy` | `CustomerRole` | `Party` | 1..1 | 0..* | association | none | `roles` |
+
+Rules ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)), each with the problem codes it reports:
+
+| Rule | Version | Type | Description | Problem codes |
+| --- | --- | --- | --- | --- |
+| `lei-checksum` | 1 | `Organization` | The LEI's check digits are valid (ISO 17442, ISO 7064 MOD 97-10). | `invalid-check-digits` |
+| `total-ownership-at-most-100` | 1 | `Owns` | The owners of a party hold at most 100% of it together, at every point in effective time. | `over-100-percent` |
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 
