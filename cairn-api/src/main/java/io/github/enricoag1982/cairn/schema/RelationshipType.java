@@ -18,9 +18,13 @@ import java.util.Optional;
  * @param kind             composition or association
  * @param symmetric        {@code true} if the two ends are interchangeable
  * @param deprecated       {@code true} if the type should no longer be used
+ * @param description      what the type means, if described
  * @param supertypes       the names of all supertypes, nearest first
  * @param subtypes         the names of all subtypes, transitively, in alphabetical order
  * @param attributes       all attributes, including those from supertypes, each with its declaring element
+ * @param rules            the rules the type names itself
+ * @param effectiveRules   the rules that apply to the type: those it names itself, then those of its supertypes,
+ *                         nearest supertype first, each with the type that names it
  * @param origin           the origin that registered the type
  */
 public record RelationshipType(
@@ -36,9 +40,12 @@ public record RelationshipType(
         RelationshipKind kind,
         boolean symmetric,
         boolean deprecated,
+        Optional<String> description,
         List<String> supertypes,
         List<String> subtypes,
         List<Attribute> attributes,
+        List<RuleReference> rules,
+        List<EffectiveRule> effectiveRules,
         Origin origin) {
 
     /**
@@ -50,6 +57,8 @@ public record RelationshipType(
         supertypes = List.copyOf(supertypes);
         subtypes = List.copyOf(subtypes);
         attributes = List.copyOf(attributes);
+        rules = List.copyOf(rules);
+        effectiveRules = List.copyOf(effectiveRules);
     }
 
     /**

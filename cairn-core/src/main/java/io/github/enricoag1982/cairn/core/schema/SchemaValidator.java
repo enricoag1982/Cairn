@@ -3,14 +3,18 @@ package io.github.enricoag1982.cairn.core.schema;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
+import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RelationshipKind;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
+import io.github.enricoag1982.cairn.schema.RuleDescriptor;
+import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,14 +22,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 /**
  * Validates a complete schema definition and reports every problem (capability {@code type-model}, design D3).
  *
- * <p>Phases: names and syntax, references, hierarchies, attributes, relationship rules. A later phase skips only
- * the elements an earlier phase found broken, so one mistake does not cause a cascade of follow-up problems.
+ * <p>Phases: names and syntax, references, hierarchies, attributes, relationship rules, rule references. A later
+ * phase skips only the elements an earlier phase found broken, so one mistake does not cause a cascade of follow-up
+ * problems.
  */
 final class SchemaValidator {
 
@@ -38,7 +46,15 @@ final class SchemaValidator {
     private record Declared(String declarer, String declarerLabel, AttributeDefinition attribute) {
     }
 
+    /** The string constraints of an attribute that can be checked; a constraint that is itself invalid is left out. */
+    private record TextConstraints(
+            List<String> allowedValues, Optional<Pattern> pattern, OptionalInt minLength, OptionalInt maxLength) {
+        static final TextConstraints NONE =
+                new TextConstraints(List.of(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty());
+    }
+
     private final SchemaDefinition definition;
+    private final List<RuleDescriptor> availableRules;
     private final List<Problem> problems = new ArrayList<>();
     private final Map<String, TypeRef> types = new HashMap<>();
     private final Map<String, String> entitySupertype = new HashMap<>();
@@ -49,12 +65,20 @@ final class SchemaValidator {
     private final Map<String, Map<String, Declared>> effective = new HashMap<>();
     private final Set<String> reportedConflicts = new HashSet<>();
 
-    private SchemaValidator(SchemaDefinition definition) {
+    private SchemaValidator(SchemaDefinition definition, List<RuleDescriptor> availableRules) {
         this.definition = definition;
+        this.availableRules = availableRules;
     }
 
-    static List<Problem> validate(SchemaDefinition definition) {
-        return new SchemaValidator(definition).run();
+    /**
+     * Validates a definition.
+     *
+     * @param definition     the types of every origin
+     * @param availableRules the rules that types may name
+     * @return every problem found
+     */
+    static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules) {
+        return new SchemaValidator(definition, availableRules).run();
     }
 
     private List<Problem> run() {
@@ -64,6 +88,7 @@ final class SchemaValidator {
         checkCycles(relationshipSupertype, Kind.RELATIONSHIP_TYPE);
         checkAttributes();
         checkRelationships();
+        checkRules();
         return List.copyOf(problems);
     }
 
@@ -133,8 +158,9 @@ final class SchemaValidator {
     }
 
     private void invalidName(String path, String what, String name) {
-        problems.add(new Problem(ProblemCode.INVALID_NAME, path, "The " + what + " '" + name
-                + "' must start with a letter and contain only letters, digits and underscores (at most 128)."));
+        problems.add(Problems.of(ProblemCode.INVALID_NAME, path, "The " + what + " '" + name
+                + "' must start with a letter and contain only letters, digits and underscores (at most 128).",
+                Names.NAME_FORM, name, null));
     }
 
     private void reportDuplicates(List<Entry> entries, boolean onlyWithInverse) {
@@ -184,11 +210,11 @@ final class SchemaValidator {
         for (EntityTypeDefinition type : definition.entityTypes()) {
             String key = Names.key(type.name());
             type.supertype().ifPresent(reference -> resolveKind(reference, type.name(), "supertype",
-                    Kind.ENTITY_TYPE, ProblemCode.SUPERTYPE_NOT_ENTITY_TYPE)
+                    Kind.ENTITY_TYPE, ProblemCode.SUPERTYPE_NOT_ENTITY_TYPE, false)
                     .ifPresent(name -> entitySupertype.put(key, Names.key(name))));
             List<String> traits = new ArrayList<>();
             for (String reference : type.traits()) {
-                resolveKind(reference, type.name(), "included trait", Kind.TRAIT, ProblemCode.NOT_A_TRAIT)
+                resolveKind(reference, type.name(), "included trait", Kind.TRAIT, ProblemCode.NOT_A_TRAIT, true)
                         .ifPresent(name -> traits.add(Names.key(name)));
             }
             entityTraits.put(key, traits);
@@ -196,21 +222,27 @@ final class SchemaValidator {
         for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
             String key = Names.key(type.name());
             Optional<String> source = resolveKind(type.source(), type.name(), "source", Kind.ENTITY_TYPE,
-                    ProblemCode.RELATIONSHIP_END_NOT_ENTITY_TYPE);
+                    ProblemCode.RELATIONSHIP_END_NOT_ENTITY_TYPE, true);
             Optional<String> target = resolveKind(type.target(), type.name(), "target", Kind.ENTITY_TYPE,
-                    ProblemCode.RELATIONSHIP_END_NOT_ENTITY_TYPE);
+                    ProblemCode.RELATIONSHIP_END_NOT_ENTITY_TYPE, true);
             if (source.isPresent() && target.isPresent()) {
                 relationshipEnds.put(key, new String[] {Names.key(source.get()), Names.key(target.get())});
             } else {
                 broken.add(key);
             }
             type.supertype().ifPresent(reference -> resolveKind(reference, type.name(), "supertype",
-                    Kind.RELATIONSHIP_TYPE, ProblemCode.SUPERTYPE_NOT_RELATIONSHIP_TYPE)
+                    Kind.RELATIONSHIP_TYPE, ProblemCode.SUPERTYPE_NOT_RELATIONSHIP_TYPE, false)
                     .ifPresent(name -> relationshipSupertype.put(key, Names.key(name))));
         }
     }
 
-    private Optional<String> resolveKind(String reference, String owner, String role, Kind expected, ProblemCode wrongKind) {
+    /**
+     * Resolves a reference that must name a type of a kind.
+     *
+     * @param selfAllowed {@code false} if the owner itself cannot be meant, as for a supertype; it is then not suggested
+     */
+    private Optional<String> resolveKind(String reference, String owner, String role, Kind expected,
+            ProblemCode wrongKind, boolean selfAllowed) {
         if (reference.isEmpty()) {
             problems.add(new Problem(ProblemCode.UNKNOWN_REFERENCE, owner, "The " + role + " of " + owner + " is missing."));
             broken.add(Names.key(owner));
@@ -218,8 +250,10 @@ final class SchemaValidator {
         }
         Optional<TypeRef> named = resolve(reference);
         if (named.isEmpty()) {
-            problems.add(new Problem(ProblemCode.UNKNOWN_REFERENCE, owner,
-                    "The " + role + " '" + reference + "' of " + owner + " does not exist."));
+            String hint = closestType(reference, expected, selfAllowed ? null : owner)
+                    .map(closest -> "Did you mean '" + closest + "'?").orElse(null);
+            problems.add(Problems.of(ProblemCode.UNKNOWN_REFERENCE, owner,
+                    "The " + role + " '" + reference + "' of " + owner + " does not exist.", null, reference, hint));
             broken.add(Names.key(owner));
             return Optional.empty();
         }
@@ -230,6 +264,23 @@ final class SchemaValidator {
             return Optional.empty();
         }
         return Optional.of(named.get().name());
+    }
+
+    /** The existing type of a kind whose name or alias is closest to a reference, shown by its name. */
+    private Optional<String> closestType(String reference, Kind kind, String excluded) {
+        List<ClosestName.Candidate> candidates = new ArrayList<>();
+        switch (kind) {
+            case ENTITY_TYPE -> definition.entityTypes()
+                    .forEach(type -> candidates.addAll(ClosestName.candidates(type.name(), type.aliases())));
+            case TRAIT -> definition.traits()
+                    .forEach(trait -> candidates.addAll(ClosestName.candidates(trait.name(), trait.aliases())));
+            case RELATIONSHIP_TYPE -> definition.relationshipTypes()
+                    .forEach(type -> candidates.addAll(ClosestName.candidates(type.name(), type.aliases())));
+        }
+        if (excluded != null) {
+            candidates.removeIf(candidate -> Names.same(candidate.suggestion(), excluded));
+        }
+        return ClosestName.ofCandidates(reference, candidates);
     }
 
     // ------------------------------------------------------------------ phase 3: hierarchies
@@ -343,7 +394,7 @@ final class SchemaValidator {
         return result;
     }
 
-    /** Reports attributes that one element declares twice, by name or alias, and checks their ranges. */
+    /** Reports attributes that one element declares twice, by name or alias, and checks their ranges and constraints. */
     private void checkOwnAttributes(String owner, String label, List<AttributeDefinition> attributes) {
         Map<String, Integer> seen = new HashMap<>();
         for (int index = 0; index < attributes.size(); index++) {
@@ -358,7 +409,7 @@ final class SchemaValidator {
                             "The attribute name '" + name + "' is declared twice by " + label + "."));
                 }
             }
-            checkRange(owner, attribute);
+            checkValues(owner, attribute);
         }
     }
 
@@ -395,29 +446,174 @@ final class SchemaValidator {
         return declared.declarer() + "." + declared.attribute().name();
     }
 
-    private void checkRange(String owner, AttributeDefinition attribute) {
+    /** Checks what an attribute allows as a value: its range, string constraints and examples. */
+    private void checkValues(String owner, AttributeDefinition attribute) {
+        Optional<Range> range = checkRange(owner, attribute);
+        TextConstraints text = checkText(owner, attribute);
+        checkExamples(owner, attribute, range, text);
+    }
+
+    /** Checks the range of an attribute and returns it if it can be used to check examples. */
+    private Optional<Range> checkRange(String owner, AttributeDefinition attribute) {
         if (attribute.range().isEmpty()) {
-            return;
+            return Optional.empty();
         }
         String path = Names.path(owner, attribute.name());
         Range range = attribute.range().get();
         if (!attribute.valueType().isOrdered()) {
-            problems.add(new Problem(ProblemCode.RANGE_NOT_ALLOWED, path, "The " + attribute.valueType()
-                    + " attribute " + path + " cannot have a range; only numbers, dates and instants are ordered."));
-            return;
+            problems.add(Problems.of(ProblemCode.RANGE_NOT_ALLOWED, path, "The " + attribute.valueType()
+                    + " attribute " + path + " cannot have a range; only numbers, dates and instants are ordered.",
+                    "an int, long, decimal, date or instant attribute", "a " + Literals.typeName(attribute.valueType())
+                    + " attribute", null));
+            return Optional.empty();
         }
         boolean fits = true;
         for (Bound bound : List.of(range.lower(), range.upper()).stream().flatMap(Optional::stream).toList()) {
             if (!Literals.fits(bound.value(), attribute.valueType())) {
                 fits = false;
-                problems.add(new Problem(ProblemCode.RANGE_LITERAL_MISMATCH, path, "The range bound "
-                        + bound.value() + " does not fit the " + attribute.valueType() + " attribute " + path + "."));
+                problems.add(Problems.of(ProblemCode.RANGE_LITERAL_MISMATCH, path, "The range bound "
+                        + Literals.describe(bound.value()) + " (" + Literals.typeName(bound.value().valueType())
+                        + ") does not fit the " + attribute.valueType() + " attribute " + path + ".",
+                        "a " + Literals.typeName(attribute.valueType()) + " value", Literals.describe(bound.value()),
+                        null));
             }
         }
         if (fits && Literals.isEmpty(range)) {
             problems.add(new Problem(ProblemCode.RANGE_EMPTY, path,
                     "The range of " + path + " is empty: its lower bound is not below its upper bound."));
+            return Optional.empty();
         }
+        return fits ? Optional.of(range) : Optional.empty();
+    }
+
+    /** Checks allowed values, pattern and lengths, and returns those that can be used to check examples. */
+    private TextConstraints checkText(String owner, AttributeDefinition attribute) {
+        boolean declared = !attribute.allowedValues().isEmpty() || attribute.pattern().isPresent()
+                || attribute.minLength().isPresent() || attribute.maxLength().isPresent();
+        if (!declared) {
+            return TextConstraints.NONE;
+        }
+        String path = Names.path(owner, attribute.name());
+        if (attribute.valueType() != ValueType.STRING) {
+            List<String> constraints = new ArrayList<>();
+            if (!attribute.allowedValues().isEmpty()) {
+                constraints.add("allowed values");
+            }
+            if (attribute.pattern().isPresent()) {
+                constraints.add("a pattern");
+            }
+            if (attribute.minLength().isPresent() || attribute.maxLength().isPresent()) {
+                constraints.add("a length");
+            }
+            problems.add(Problems.of(ProblemCode.TEXT_CONSTRAINT_NOT_ALLOWED, path, "The "
+                    + attribute.valueType() + " attribute " + path + " cannot have " + String.join(", ", constraints)
+                    + "; only string attributes can.", "a string attribute",
+                    "a " + Literals.typeName(attribute.valueType()) + " attribute", null));
+            return TextConstraints.NONE;
+        }
+        return new TextConstraints(distinctAllowedValues(path, attribute), pattern(path, attribute),
+                lengths(path, attribute, true), lengths(path, attribute, false));
+    }
+
+    private List<String> distinctAllowedValues(String path, AttributeDefinition attribute) {
+        Set<String> seen = new HashSet<>();
+        Set<String> reported = new HashSet<>();
+        for (String value : attribute.allowedValues()) {
+            if (!seen.add(value) && reported.add(value)) {
+                problems.add(Problems.of(ProblemCode.DUPLICATE_ALLOWED_VALUE, path, "The allowed value '" + value
+                        + "' of " + path + " is listed more than once.", "distinct allowed values", value, null));
+            }
+        }
+        return List.copyOf(seen);
+    }
+
+    private Optional<Pattern> pattern(String path, AttributeDefinition attribute) {
+        if (attribute.pattern().isEmpty()) {
+            return Optional.empty();
+        }
+        String regularExpression = attribute.pattern().get();
+        try {
+            return Optional.of(Pattern.compile(regularExpression));
+        } catch (PatternSyntaxException e) {
+            problems.add(Problems.of(ProblemCode.INVALID_PATTERN, path, "The pattern '" + regularExpression + "' of "
+                    + path + " is not a valid regular expression: " + e.getDescription()
+                    + (e.getIndex() >= 0 ? " (at index " + e.getIndex() + ")" : "") + ".",
+                    "a regular expression in the syntax of java.util.regex.Pattern", regularExpression, null));
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Checks one length and returns it if it can be used. A minimum above the maximum is reported once, by the
+     * minimum, and makes both unusable.
+     */
+    private OptionalInt lengths(String path, AttributeDefinition attribute, boolean minimum) {
+        OptionalInt length = minimum ? attribute.minLength() : attribute.maxLength();
+        if (length.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        String what = minimum ? "minimum" : "maximum";
+        if (length.getAsInt() < 0) {
+            problems.add(Problems.of(ProblemCode.INVALID_LENGTH, path, "The " + what + " length of " + path
+                    + " is negative.", "a length of 0 or more", String.valueOf(length.getAsInt()), null));
+            return OptionalInt.empty();
+        }
+        OptionalInt other = minimum ? attribute.maxLength() : attribute.minLength();
+        boolean crossed = other.isPresent() && other.getAsInt() >= 0
+                && attribute.minLength().getAsInt() > attribute.maxLength().getAsInt();
+        if (crossed && minimum) {
+            problems.add(Problems.of(ProblemCode.INVALID_LENGTH, path, "The minimum length " + length.getAsInt()
+                    + " of " + path + " is above its maximum length " + other.getAsInt() + ".",
+                    "a minimum length of at most " + other.getAsInt(), String.valueOf(length.getAsInt()), null));
+        }
+        return crossed ? OptionalInt.empty() : length;
+    }
+
+    /** Checks that each example has the attribute's value type and satisfies the constraints that are valid. */
+    private void checkExamples(String owner, AttributeDefinition attribute, Optional<Range> range, TextConstraints text) {
+        String path = Names.path(owner, attribute.name());
+        for (Literal example : attribute.examples()) {
+            String shown = Literals.describe(example);
+            if (!Literals.fits(example, attribute.valueType())) {
+                problems.add(Problems.of(ProblemCode.INVALID_EXAMPLE, path, "The example '" + shown + "' ("
+                        + Literals.typeName(example.valueType()) + ") of " + path + " does not fit the "
+                        + attribute.valueType() + " attribute.", "a " + Literals.typeName(attribute.valueType())
+                        + " value", shown, null));
+                continue;
+            }
+            if (range.isPresent() && !Literals.within(example, range.get())) {
+                invalidExample(path, shown, "is outside the range of the attribute",
+                        "a value " + Literals.describe(range.get()));
+            }
+            if (!text.allowedValues().isEmpty() && !text.allowedValues().contains(shown)) {
+                invalidExample(path, shown, "is not one of the allowed values",
+                        "one of " + text.allowedValues().stream().sorted().collect(Collectors.joining(", ")));
+            }
+            if (text.pattern().isPresent() && !text.pattern().get().matcher(shown).matches()) {
+                invalidExample(path, shown, "does not match the pattern " + text.pattern().get().pattern(),
+                        "a value matching " + text.pattern().get().pattern());
+            }
+            if (example instanceof Literal.StringLiteral(String value)) {
+                checkLengths(path, value, text);
+            }
+        }
+    }
+
+    private void checkLengths(String path, String value, TextConstraints text) {
+        int length = value.codePointCount(0, value.length());
+        if (text.minLength().isPresent() && length < text.minLength().getAsInt()) {
+            invalidExample(path, value, "is shorter than the minimum length " + text.minLength().getAsInt(),
+                    "at least " + text.minLength().getAsInt() + " characters");
+        }
+        if (text.maxLength().isPresent() && length > text.maxLength().getAsInt()) {
+            invalidExample(path, value, "is longer than the maximum length " + text.maxLength().getAsInt(),
+                    "at most " + text.maxLength().getAsInt() + " characters");
+        }
+    }
+
+    private void invalidExample(String path, String example, String reason, String expected) {
+        problems.add(Problems.of(ProblemCode.INVALID_EXAMPLE, path,
+                "The example '" + example + "' of " + path + " " + reason + ".", expected, example, null));
     }
 
     // ------------------------------------------------------------------ phase 5: relationship rules
@@ -451,6 +647,118 @@ final class SchemaValidator {
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------------------ phase 6: rule references
+
+    private void checkRules() {
+        for (EntityTypeDefinition type : definition.entityTypes()) {
+            checkRules(type.name(), Kind.ENTITY_TYPE, type.rules(), entitySupertype);
+        }
+        for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
+            checkRules(type.name(), Kind.RELATIONSHIP_TYPE, type.rules(), relationshipSupertype);
+        }
+    }
+
+    /**
+     * Checks the rules a type names: their form, that they are available, that they are for this type or a
+     * supertype, and that neither the type nor a supertype names them already. Rules whose reference is malformed are
+     * not checked further. The checks that need the supertypes are skipped if the hierarchy is broken.
+     */
+    private void checkRules(String typeName, Kind kind, List<RuleReference> references, Map<String, String> supertypes) {
+        String key = Names.key(typeName);
+        boolean hierarchyUsable = !isBroken(key, supertypes);
+        Set<String> named = new HashSet<>();
+        for (RuleReference reference : references) {
+            String path = Names.path(typeName, reference.name());
+            boolean wellFormed = true;
+            if (!Names.isValidRuleName(reference.name())) {
+                wellFormed = false;
+                problems.add(Problems.of(ProblemCode.INVALID_RULE_NAME, path, "The rule name '" + reference.name()
+                        + "' named by " + typeName + " must be lowercase letters, digits and hyphens, starting with a "
+                        + "letter (at most 128).", Names.RULE_NAME_FORM, reference.name(), null));
+            }
+            if (reference.version() < 1) {
+                wellFormed = false;
+                problems.add(Problems.of(ProblemCode.INVALID_RULE_NAME, path, "The version " + reference.version()
+                        + " of the rule " + reference.name() + " named by " + typeName + " must be at least 1.",
+                        "a whole number of at least 1", String.valueOf(reference.version()), null));
+            }
+            if (!wellFormed) {
+                continue;
+            }
+            Optional<RuleDescriptor> available = availableRules.stream()
+                    .filter(rule -> rule.name().equals(reference.name()) && rule.version() == reference.version())
+                    .findFirst();
+            if (available.isEmpty()) {
+                problems.add(Problems.of(ProblemCode.UNKNOWN_RULE, path, "The rule " + reference.name() + " in version "
+                        + reference.version() + " named by " + typeName + " is not available.", null,
+                        reference.name() + " " + reference.version(), unknownRuleHint(reference)));
+            } else if (hierarchyUsable && !isForTypeOrSupertype(available.get(), key, kind, supertypes)) {
+                problems.add(Problems.of(ProblemCode.RULE_TYPE_MISMATCH, path, "The rule " + reference.name()
+                        + " applies to " + available.get().appliesTo() + ", so " + typeName + " cannot name it "
+                        + "because it is neither that type nor one of its subtypes.",
+                        available.get().appliesTo() + " or one of its subtypes", typeName, null));
+            }
+            if (!named.add(reference.name())) {
+                problems.add(Problems.of(ProblemCode.DUPLICATE_RULE, path, "The rule " + reference.name()
+                        + " is named more than once by " + typeName + ".", null, reference.name(), null));
+            } else if (hierarchyUsable) {
+                nearestSupertypeNaming(reference.name(), kind, key, supertypes).ifPresent(supertype ->
+                        problems.add(Problems.of(ProblemCode.DUPLICATE_RULE, path, "The rule " + reference.name()
+                                + " named by " + typeName + " already applies through its supertype "
+                                + supertype + ", which names it.", null, reference.name(),
+                                "Remove the rule from " + typeName + " or from " + supertype + ".")));
+            }
+        }
+    }
+
+    /** The available versions of the rule, or else the closest rule name, as a hint for an unknown rule. */
+    private String unknownRuleHint(RuleReference reference) {
+        List<Integer> versions = availableRules.stream()
+                .filter(rule -> rule.name().equals(reference.name()))
+                .map(RuleDescriptor::version)
+                .sorted()
+                .toList();
+        if (!versions.isEmpty()) {
+            return "Available " + (versions.size() == 1 ? "version" : "versions") + " of " + reference.name() + ": "
+                    + versions.stream().map(String::valueOf).collect(Collectors.joining(", ")) + ".";
+        }
+        return ClosestName.of(reference.name(), availableRules.stream().map(RuleDescriptor::name).distinct().toList())
+                .map(closest -> "Did you mean the rule '" + closest + "'?").orElse(null);
+    }
+
+    /** Tells whether a rule is for a type or for one of its supertypes. */
+    private boolean isForTypeOrSupertype(RuleDescriptor rule, String key, Kind kind, Map<String, String> supertypes) {
+        Optional<TypeRef> appliesTo = resolve(rule.appliesTo()).filter(type -> type.kind() == kind);
+        if (appliesTo.isEmpty()) {
+            return false;
+        }
+        String target = Names.key(appliesTo.get().name());
+        Set<String> seen = new HashSet<>();
+        String current = key;
+        while (current != null && seen.add(current)) {
+            if (current.equals(target)) {
+                return true;
+            }
+            current = supertypes.get(current);
+        }
+        return false;
+    }
+
+    /** The name of the nearest supertype of a type that names a rule, if any. */
+    private Optional<String> nearestSupertypeNaming(String rule, Kind kind, String key, Map<String, String> supertypes) {
+        Set<String> seen = new HashSet<>(Set.of(key));
+        String current = supertypes.get(key);
+        while (current != null && seen.add(current)) {
+            String name = kind == Kind.ENTITY_TYPE ? entityType(current).name() : relationshipType(current).name();
+            List<RuleReference> named = kind == Kind.ENTITY_TYPE ? entityType(current).rules() : relationshipType(current).rules();
+            if (named.stream().anyMatch(reference -> reference.name().equals(rule))) {
+                return Optional.of(name);
+            }
+            current = supertypes.get(current);
+        }
+        return Optional.empty();
     }
 
     // ------------------------------------------------------------------ lookups

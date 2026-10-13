@@ -105,7 +105,7 @@ class CompatibilityRulesTest {
 
             Schema after = accepted(entity(withTrait, "Account", type -> new EntityTypeDefinition(type.name(),
                     type.isAbstract(), type.supertype(), List.of("Audited"), type.attributes(), type.aliases(),
-                    type.deprecated())));
+                    type.deprecated(), type.description(), type.rules())));
 
             assertThat(after.entityType("Account").orElseThrow().attribute("createdBy")).isPresent();
         }
@@ -158,7 +158,8 @@ class CompatibilityRulesTest {
         @Test
         void renamingATypeWithAnAlias() {
             Schema after = accepted(entity(BASE, "Branch", type -> new EntityTypeDefinition("Office", type.isAbstract(),
-                    type.supertype(), type.traits(), type.attributes(), List.of("Branch"), type.deprecated())));
+                    type.supertype(), type.traits(), type.attributes(), List.of("Branch"), type.deprecated(), type.description(),
+                    type.rules())));
 
             assertThat(after.entityType("Branch").orElseThrow().id()).isEqualTo(before.entityType("Branch").orElseThrow().id());
         }
@@ -168,7 +169,7 @@ class CompatibilityRulesTest {
             Schema after = accepted(relationship(BASE, "Owns", type -> new RelationshipTypeDefinition(type.name(),
                     type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(), "owners",
                     List.of("ownedBy"), type.kind(), type.symmetric(), type.supertype(), type.attributes(),
-                    type.aliases(), type.deprecated())));
+                    type.aliases(), type.deprecated(), type.description(), type.rules())));
 
             assertThat(after.relationshipTypeByInverseName("ownedBy").orElseThrow().name()).isEqualTo("Owns");
         }
@@ -218,9 +219,11 @@ class CompatibilityRulesTest {
         @Test
         void markingATypeOrAttributeAsDeprecated() {
             SchemaDefinition deprecated = entity(entity(BASE, "Branch", type -> new EntityTypeDefinition(type.name(),
-                    type.isAbstract(), type.supertype(), type.traits(), type.attributes(), type.aliases(), true)),
+                    type.isAbstract(), type.supertype(), type.traits(), type.attributes(), type.aliases(), true,
+                    type.description(), type.rules())),
                     "Person", type -> attribute(type, "birthDate", a -> new AttributeDefinition(a.name(), a.valueType(),
-                            a.required(), a.unique(), a.range(), a.aliases(), true)));
+                            a.required(), a.unique(), a.range(), a.aliases(), true, a.description(),
+                            a.examples(), a.allowedValues(), a.pattern(), a.minLength(), a.maxLength())));
 
             accepted(deprecated);
         }
@@ -253,13 +256,15 @@ class CompatibilityRulesTest {
         @Test
         void removingATraitFromATypesIncludedTraits() {
             breaking(entity(BASE, "Party", type -> new EntityTypeDefinition(type.name(), type.isAbstract(),
-                    type.supertype(), List.of(), type.attributes(), type.aliases(), type.deprecated())), "Party");
+                    type.supertype(), List.of(), type.attributes(), type.aliases(), type.deprecated(), type.description(),
+                    type.rules())), "Party");
         }
 
         @Test
         void renamingWithoutAnAlias() {
             breaking(entity(BASE, "Branch", type -> new EntityTypeDefinition("Office", type.isAbstract(),
-                    type.supertype(), type.traits(), type.attributes(), List.of(), type.deprecated())), "Branch");
+                    type.supertype(), type.traits(), type.attributes(), List.of(), type.deprecated(), type.description(),
+                    type.rules())), "Branch");
         }
 
         @Test
@@ -353,7 +358,7 @@ class CompatibilityRulesTest {
             breaking(plus(relationship(BASE, "Employs", type -> new RelationshipTypeDefinition(type.name(), type.source(),
                     type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
                     type.inverseAliases(), type.kind(), type.symmetric(), Optional.of("Affiliated"), type.attributes(),
-                    type.aliases(), type.deprecated())), SchemaDefinition.builder()
+                    type.aliases(), type.deprecated(), type.description(), type.rules())), SchemaDefinition.builder()
                     .relationshipType("Affiliated", r -> r.from("Organization").to("Party").inverse("affiliatedWith"))
                     .build()), "Employs");
         }
@@ -378,7 +383,8 @@ class CompatibilityRulesTest {
         void removingAnAliasIsAnotherPropertyChange() {
             SchemaRegistry withAlias = SchemaRegistries.inMemory(new TestClock());
             SchemaDefinition aliased = entity(BASE, "Branch", type -> new EntityTypeDefinition(type.name(),
-                    type.isAbstract(), type.supertype(), type.traits(), type.attributes(), List.of("Office"), false));
+                    type.isAbstract(), type.supertype(), type.traits(), type.attributes(), List.of("Office"), false,
+                    type.description(), type.rules()));
             applied(withAlias.register(ReferenceModel.origin("1.0.0"), aliased));
 
             List<Problem> problems = rejected(withAlias.register(ReferenceModel.origin("1.1.0"), BASE));
@@ -390,7 +396,8 @@ class CompatibilityRulesTest {
         void undeprecatingIsAnotherPropertyChange() {
             SchemaRegistry withDeprecation = SchemaRegistries.inMemory(new TestClock());
             SchemaDefinition deprecated = entity(BASE, "Branch", type -> new EntityTypeDefinition(type.name(),
-                    type.isAbstract(), type.supertype(), type.traits(), type.attributes(), type.aliases(), true));
+                    type.isAbstract(), type.supertype(), type.traits(), type.attributes(), type.aliases(), true,
+                    type.description(), type.rules()));
             applied(withDeprecation.register(ReferenceModel.origin("1.0.0"), deprecated));
 
             List<Problem> problems = rejected(withDeprecation.register(ReferenceModel.origin("1.1.0"), BASE));
@@ -422,27 +429,31 @@ class CompatibilityRulesTest {
 
     private static EntityTypeDefinition withAbstract(EntityTypeDefinition type, boolean isAbstract) {
         return new EntityTypeDefinition(type.name(), isAbstract, type.supertype(), type.traits(), type.attributes(),
-                type.aliases(), type.deprecated());
+                type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     private static EntityTypeDefinition withSupertype(EntityTypeDefinition type, Optional<String> supertype) {
         return new EntityTypeDefinition(type.name(), type.isAbstract(), supertype, type.traits(), type.attributes(),
-                type.aliases(), type.deprecated());
+                type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     private static AttributeDefinition withValueType(AttributeDefinition attribute, ValueType valueType) {
         return new AttributeDefinition(attribute.name(), valueType, attribute.required(), attribute.unique(),
-                attribute.range(), attribute.aliases(), attribute.deprecated());
+                attribute.range(), attribute.aliases(), attribute.deprecated(), attribute.description(),
+                attribute.examples(), attribute.allowedValues(), attribute.pattern(), attribute.minLength(),
+                attribute.maxLength());
     }
 
     private static AttributeDefinition withFlags(AttributeDefinition attribute, boolean required, boolean unique) {
         return new AttributeDefinition(attribute.name(), attribute.valueType(), required, unique, attribute.range(),
-                attribute.aliases(), attribute.deprecated());
+                attribute.aliases(), attribute.deprecated(), attribute.description(), attribute.examples(),
+                attribute.allowedValues(), attribute.pattern(), attribute.minLength(), attribute.maxLength());
     }
 
     private static AttributeDefinition withRange(AttributeDefinition attribute, Optional<Range> range) {
         return new AttributeDefinition(attribute.name(), attribute.valueType(), attribute.required(), attribute.unique(),
-                range, attribute.aliases(), attribute.deprecated());
+                range, attribute.aliases(), attribute.deprecated(), attribute.description(), attribute.examples(),
+                attribute.allowedValues(), attribute.pattern(), attribute.minLength(), attribute.maxLength());
     }
 
     private static RelationshipTypeDefinition relationshipAttribute(RelationshipTypeDefinition type, String name,
@@ -451,25 +462,25 @@ class CompatibilityRulesTest {
                 .map(attribute -> attribute.name().equals(name) ? change.apply(attribute) : attribute).toList();
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
                 type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
-                type.supertype(), attributes, type.aliases(), type.deprecated());
+                type.supertype(), attributes, type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     private static RelationshipTypeDefinition withEnds(RelationshipTypeDefinition type, String source, String target) {
         return new RelationshipTypeDefinition(type.name(), source, target, type.targetsPerSource(), type.sourcesPerTarget(),
                 type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(),
-                type.attributes(), type.aliases(), type.deprecated());
+                type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     private static RelationshipTypeDefinition withMultiplicities(RelationshipTypeDefinition type, Multiplicity targetsPerSource,
             Multiplicity sourcesPerTarget) {
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), targetsPerSource, sourcesPerTarget,
                 type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(),
-                type.attributes(), type.aliases(), type.deprecated());
+                type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     private static RelationshipTypeDefinition withKind(RelationshipTypeDefinition type, RelationshipKind kind, boolean symmetric) {
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
                 type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), kind, symmetric, type.supertype(),
-                type.attributes(), type.aliases(), type.deprecated());
+                type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 }

@@ -20,6 +20,8 @@ import java.util.Optional;
  * @param attributes       the attributes the type declares itself
  * @param aliases          previous names of the type
  * @param deprecated       {@code true} if the type should no longer be used
+ * @param description      what the type means, if described
+ * @param rules            the rules that apply to the type and its subtypes
  */
 public record RelationshipTypeDefinition(
         String name,
@@ -34,7 +36,9 @@ public record RelationshipTypeDefinition(
         Optional<String> supertype,
         List<AttributeDefinition> attributes,
         List<String> aliases,
-        boolean deprecated) {
+        boolean deprecated,
+        Optional<String> description,
+        List<RuleReference> rules) {
 
     /**
      * Rejects null components and copies the lists.
@@ -48,8 +52,10 @@ public record RelationshipTypeDefinition(
         Objects.requireNonNull(inverseName, "inverseName");
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(supertype, "supertype");
+        Objects.requireNonNull(description, "description");
         inverseAliases = List.copyOf(inverseAliases);
         attributes = List.copyOf(attributes);
         aliases = List.copyOf(aliases);
+        rules = List.copyOf(rules);
     }
 }

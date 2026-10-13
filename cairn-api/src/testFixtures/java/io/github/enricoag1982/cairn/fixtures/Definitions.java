@@ -102,7 +102,7 @@ public final class Definitions {
      */
     public static EntityTypeDefinition withAttributes(EntityTypeDefinition type, List<AttributeDefinition> attributes) {
         return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), type.traits(), attributes,
-                type.aliases(), type.deprecated());
+                type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     /**
@@ -128,7 +128,9 @@ public final class Definitions {
      */
     public static AttributeDefinition renamed(AttributeDefinition attribute, String name, String... aliases) {
         return new AttributeDefinition(name, attribute.valueType(), attribute.required(), attribute.unique(),
-                attribute.range(), List.of(aliases), attribute.deprecated());
+                attribute.range(), List.of(aliases), attribute.deprecated(), attribute.description(),
+                attribute.examples(), attribute.allowedValues(), attribute.pattern(), attribute.minLength(),
+                attribute.maxLength());
     }
 
     private static <T> List<T> replace(

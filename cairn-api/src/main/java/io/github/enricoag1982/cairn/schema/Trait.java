@@ -6,18 +6,20 @@ import java.util.Optional;
 /**
  * A trait in a registered schema (capability {@code type-model}).
  *
- * @param id         the schema identifier
- * @param name       the name
- * @param aliases    previous names
- * @param deprecated {@code true} if the trait should no longer be used
- * @param attributes the attributes the trait declares
- * @param origin     the origin that registered the trait
+ * @param id          the schema identifier
+ * @param name        the name
+ * @param aliases     previous names
+ * @param deprecated  {@code true} if the trait should no longer be used
+ * @param description what the trait means, if described
+ * @param attributes  the attributes the trait declares
+ * @param origin      the origin that registered the trait
  */
 public record Trait(
         TypeId id,
         String name,
         List<String> aliases,
         boolean deprecated,
+        Optional<String> description,
         List<Attribute> attributes,
         Origin origin) {
 

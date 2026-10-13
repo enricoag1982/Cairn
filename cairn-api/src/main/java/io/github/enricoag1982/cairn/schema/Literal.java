@@ -6,7 +6,8 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 /**
- * A typed constant used as a range bound (capability {@code type-model}).
+ * A typed constant used as a range bound or as an example of an attribute's values (capability {@code type-model}).
+ * Strings and booleans are never valid range bounds, because their attributes cannot have a range; they exist for examples.
  */
 public sealed interface Literal {
 
@@ -48,6 +49,26 @@ public sealed interface Literal {
     }
 
     /**
+     * Creates a string literal.
+     *
+     * @param value the value
+     * @return the literal
+     */
+    static Literal of(String value) {
+        return new StringLiteral(value);
+    }
+
+    /**
+     * Creates a boolean literal.
+     *
+     * @param value the value
+     * @return the literal
+     */
+    static Literal of(boolean value) {
+        return new BooleanLiteral(value);
+    }
+
+    /**
      * Creates a date literal.
      *
      * @param value the value
@@ -65,6 +86,37 @@ public sealed interface Literal {
      */
     static Literal of(Instant value) {
         return new InstantLiteral(value);
+    }
+
+    /**
+     * A string constant.
+     *
+     * @param value the value
+     */
+    record StringLiteral(String value) implements Literal {
+        /**
+         * Rejects a null value.
+         */
+        public StringLiteral {
+            Objects.requireNonNull(value, "value");
+        }
+
+        @Override
+        public ValueType valueType() {
+            return ValueType.STRING;
+        }
+    }
+
+    /**
+     * A boolean constant.
+     *
+     * @param value the value
+     */
+    record BooleanLiteral(boolean value) implements Literal {
+        @Override
+        public ValueType valueType() {
+            return ValueType.BOOLEAN;
+        }
     }
 
     /**

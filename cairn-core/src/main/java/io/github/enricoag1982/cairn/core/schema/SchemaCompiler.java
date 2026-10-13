@@ -3,11 +3,13 @@ package io.github.enricoag1982.cairn.core.schema;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.AttributeId;
+import io.github.enricoag1982.cairn.schema.EffectiveRule;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
+import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.Trait;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
@@ -92,25 +94,32 @@ final class SchemaCompiler {
             List<Attribute> attributes = trait.attributes().stream()
                     .map(attribute -> attribute(new Declared(trait.name(), attribute))).toList();
             compiledTraits.add(new Trait(typeId(trait.name()), trait.name(), trait.aliases(), trait.deprecated(),
-                    attributes, originOf.apply(trait.name())));
+                    trait.description(), attributes, originOf.apply(trait.name())));
             entries.add(new CompiledSchema.TypeEntry(typeId(trait.name()), Kind.TRAIT, trait.name(), trait,
                     originOf.apply(trait.name())));
             trait.attributes().forEach(attribute -> declarations.add(declaration(new Declared(trait.name(), attribute))));
         }
         for (EntityTypeDefinition type : entityTypes.values()) {
+            List<String> supertypes = entitySupertypes(type.name());
             compiledEntities.add(new EntityType(typeId(type.name()), type.name(), type.aliases(), type.isAbstract(),
-                    type.deprecated(), entitySupertypes(type.name()), entitySubtypes(type.name()), type.traits().stream().map(this::canonical).toList(),
-                    entityAttributes(type.name()).stream().map(this::attribute).toList(), originOf.apply(type.name())));
+                    type.deprecated(), type.description(), supertypes, entitySubtypes(type.name()),
+                    type.traits().stream().map(this::canonical).toList(),
+                    entityAttributes(type.name()).stream().map(this::attribute).toList(), type.rules(),
+                    effectiveRules(type.name(), type.rules(), supertypes, name -> entityTypes.get(Names.key(name)).rules()),
+                    originOf.apply(type.name())));
             entries.add(new CompiledSchema.TypeEntry(typeId(type.name()), Kind.ENTITY_TYPE, type.name(), type,
                     originOf.apply(type.name())));
             type.attributes().forEach(attribute -> declarations.add(declaration(new Declared(type.name(), attribute))));
         }
         for (RelationshipTypeDefinition type : relationshipTypes.values()) {
+            List<String> supertypes = relationshipSupertypes(type.name());
             compiledRelationships.add(new RelationshipType(typeId(type.name()), type.name(), type.aliases(),
                     canonical(type.source()), canonical(type.target()), type.targetsPerSource(), type.sourcesPerTarget(),
                     type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.deprecated(),
-                    relationshipSupertypes(type.name()), relationshipSubtypes(type.name()),
-                    relationshipAttributes(type.name()).stream().map(this::attribute).toList(),
+                    type.description(), supertypes, relationshipSubtypes(type.name()),
+                    relationshipAttributes(type.name()).stream().map(this::attribute).toList(), type.rules(),
+                    effectiveRules(type.name(), type.rules(), supertypes,
+                            name -> relationshipTypes.get(Names.key(name)).rules()),
                     originOf.apply(type.name())));
             entries.add(new CompiledSchema.TypeEntry(typeId(type.name()), Kind.RELATIONSHIP_TYPE, type.name(), type,
                     originOf.apply(type.name())));
@@ -201,7 +210,8 @@ final class SchemaCompiler {
         AttributeDefinition definition = declared.attribute();
         return new Attribute(attributeIds.get(declared.key()), definition.name(), definition.aliases(),
                 definition.valueType(), definition.required(), definition.unique(), definition.range(),
-                definition.deprecated(), declared.declarer());
+                definition.deprecated(), definition.description(), definition.examples(), definition.allowedValues(),
+                definition.pattern(), definition.minLength(), definition.maxLength(), declared.declarer());
     }
 
     private CompiledSchema.Declaration declaration(Declared declared) {
@@ -238,6 +248,17 @@ final class SchemaCompiler {
             }
         }
         throw new IllegalStateException("unresolved reference in a validated definition: " + reference);
+    }
+
+    /** The rules a type names itself, then those of its supertypes, nearest first. */
+    private static List<EffectiveRule> effectiveRules(String name, List<RuleReference> own, List<String> supertypes,
+            Function<String, List<RuleReference>> rulesOf) {
+        List<EffectiveRule> result = new ArrayList<>();
+        own.forEach(rule -> result.add(new EffectiveRule(rule, name)));
+        for (String supertype : supertypes) {
+            rulesOf.apply(supertype).forEach(rule -> result.add(new EffectiveRule(rule, supertype)));
+        }
+        return result;
     }
 
     private List<String> entitySupertypes(String name) {

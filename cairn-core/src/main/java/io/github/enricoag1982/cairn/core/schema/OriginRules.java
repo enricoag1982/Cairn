@@ -22,12 +22,14 @@ final class OriginRules {
     static List<Problem> validate(Origin origin) {
         List<Problem> problems = new ArrayList<>();
         if (!NAME.matcher(origin.name()).matches()) {
-            problems.add(new Problem(ProblemCode.INVALID_ORIGIN, PATH, "The origin name '" + origin.name()
-                    + "' must be non-empty and contain only letters, digits, dots, hyphens and underscores."));
+            problems.add(Problems.of(ProblemCode.INVALID_ORIGIN, PATH, "The origin name '" + origin.name()
+                    + "' must be non-empty and contain only letters, digits, dots, hyphens and underscores.",
+                    "a non-empty name of letters, digits, dots, hyphens and underscores", origin.name(), null));
         }
         if (!VERSION.matcher(origin.version()).matches()) {
-            problems.add(new Problem(ProblemCode.INVALID_ORIGIN, PATH, "The version '" + origin.version()
-                    + "' of origin " + origin.name() + " must be numbers separated by dots, such as 1.4.0."));
+            problems.add(Problems.of(ProblemCode.INVALID_ORIGIN, PATH, "The version '" + origin.version()
+                    + "' of origin " + origin.name() + " must be numbers separated by dots, such as 1.4.0.",
+                    "numbers separated by dots, such as 1.4.0", origin.version(), null));
         }
         return problems;
     }

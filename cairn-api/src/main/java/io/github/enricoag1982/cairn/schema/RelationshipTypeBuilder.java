@@ -25,6 +25,8 @@ public final class RelationshipTypeBuilder {
     private final List<AttributeDefinition> attributes = new ArrayList<>();
     private final List<String> aliases = new ArrayList<>();
     private boolean deprecated;
+    private String description;
+    private final List<RuleReference> rules = new ArrayList<>();
 
     RelationshipTypeBuilder(String name) {
         this.name = Objects.requireNonNull(name, "name");
@@ -175,12 +177,36 @@ public final class RelationshipTypeBuilder {
     }
 
     /**
+     * Describes the type.
+     *
+     * @param text what the type means
+     * @return this builder
+     */
+    public RelationshipTypeBuilder description(String text) {
+        this.description = Objects.requireNonNull(text, "text");
+        return this;
+    }
+
+    /**
+     * Names a rule that applies to the type and its subtypes.
+     *
+     * @param name    the rule's name
+     * @param version the rule's version, at least 1
+     * @return this builder
+     */
+    public RelationshipTypeBuilder rule(String name, int version) {
+        rules.add(new RuleReference(name, version));
+        return this;
+    }
+
+    /**
      * Builds the definition.
      *
      * @return the relationship type definition
      */
     public RelationshipTypeDefinition build() {
         return new RelationshipTypeDefinition(name, source, target, targetsPerSource, sourcesPerTarget, inverseName,
-                inverseAliases, kind, symmetric, Optional.ofNullable(supertype), attributes, aliases, deprecated);
+                inverseAliases, kind, symmetric, Optional.ofNullable(supertype), attributes, aliases, deprecated,
+                Optional.ofNullable(description), rules);
     }
 }

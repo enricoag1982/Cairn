@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -146,7 +147,13 @@ class ReferenceModelTest {
                     words.contains("unique"),
                     range.find() ? Optional.of(range(range)) : Optional.empty(),
                     List.of(),
-                    false));
+                    false,
+                    Optional.empty(),
+                    List.of(),
+                    List.of(),
+                    Optional.empty(),
+                    OptionalInt.empty(),
+                    OptionalInt.empty()));
         }
         return result;
     }

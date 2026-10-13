@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.schema;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -14,6 +15,7 @@ public final class TraitBuilder {
     private final List<AttributeDefinition> attributes = new ArrayList<>();
     private final List<String> aliases = new ArrayList<>();
     private boolean deprecated;
+    private String description;
 
     TraitBuilder(String name) {
         this.name = Objects.requireNonNull(name, "name");
@@ -67,11 +69,22 @@ public final class TraitBuilder {
     }
 
     /**
+     * Describes the trait.
+     *
+     * @param text what the trait means
+     * @return this builder
+     */
+    public TraitBuilder description(String text) {
+        this.description = Objects.requireNonNull(text, "text");
+        return this;
+    }
+
+    /**
      * Builds the definition.
      *
      * @return the trait definition
      */
     public TraitDefinition build() {
-        return new TraitDefinition(name, attributes, aliases, deprecated);
+        return new TraitDefinition(name, attributes, aliases, deprecated, Optional.ofNullable(description));
     }
 }

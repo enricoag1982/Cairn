@@ -6,6 +6,9 @@ import java.util.List;
 /**
  * Registers schema definitions and keeps the history of the stored schema in transaction time
  * (capability {@code schema-evolution}). Registrations are applied one at a time; reads never wait.
+ *
+ * <p>A registry is created with the rules that are available to it (capability {@code type-model}); types may name
+ * only those.
  */
 public interface SchemaRegistry {
 
@@ -24,6 +27,22 @@ public interface SchemaRegistry {
     RegistrationResult register(Origin origin, SchemaDefinition definition);
 
     /**
+     * Finds out what {@link #register(Origin, SchemaDefinition)} would do with the same arguments, without doing it.
+     *
+     * <p>The plan lists every difference from the stored definition of the origin, each classified as compatible or
+     * breaking, and every problem that registering would report. It shares its code with registration, so both agree.
+     * Planning records no schema transaction and does not change the stored schema.
+     *
+     * <p>For an older version of an origin, the differences are those of the reversed comparison: what the stored
+     * version adds to the submitted one.
+     *
+     * @param origin     the origin, with its version
+     * @param definition all types of the origin
+     * @return the plan
+     */
+    SchemaPlan plan(Origin origin, SchemaDefinition definition);
+
+    /**
      * Validates a definition as {@link #register(Origin, SchemaDefinition)} would, without checking compatibility
      * and without changing anything.
      *
@@ -32,6 +51,13 @@ public interface SchemaRegistry {
      * @return every problem found; empty if the definition is valid
      */
     List<Problem> validate(Origin origin, SchemaDefinition definition);
+
+    /**
+     * Lists the rules that are available to this registry. Types may name these rules, and only these.
+     *
+     * @return the rules, sorted by name and then by version
+     */
+    List<RuleDescriptor> availableRules();
 
     /**
      * Returns the latest schema.

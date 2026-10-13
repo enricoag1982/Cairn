@@ -62,7 +62,8 @@ class IdentifierMatchingTest {
         Schema before = applied(registry.register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition())).schema();
         SchemaDefinition renamedAccount = changeEntityType(ReferenceModel.definition(), "Account", type ->
                 new io.github.enricoag1982.cairn.schema.EntityTypeDefinition("Ledger", type.isAbstract(),
-                        type.supertype(), type.traits(), type.attributes(), List.of("Account"), type.deprecated()));
+                        type.supertype(), type.traits(), type.attributes(), List.of("Account"), type.deprecated(),
+                        type.description(), type.rules()));
 
         Schema after = applied(registry.register(ReferenceModel.origin("1.1.0"), renamedAccount)).schema();
 

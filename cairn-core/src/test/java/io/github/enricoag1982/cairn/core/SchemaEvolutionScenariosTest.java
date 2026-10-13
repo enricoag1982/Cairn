@@ -296,7 +296,7 @@ class SchemaEvolutionScenariosTest {
                                         io.github.enricoag1982.cairn.schema.Bound.inclusive(
                                                 io.github.enricoag1982.cairn.schema.Literal.of(new java.math.BigDecimal("100.00")))))
                                 .build()),
-                        type.aliases(), type.deprecated()));
+                        type.aliases(), type.deprecated(), type.description(), type.rules()));
 
         assertThat(registry.register(ReferenceModel.origin("1.0.0"), sameShare))
                 .isInstanceOf(RegistrationResult.Unchanged.class);
@@ -408,7 +408,7 @@ class SchemaEvolutionScenariosTest {
         SchemaDefinition widened = changeRelationshipType(withManages, "Manages", type ->
                 new RelationshipTypeDefinition(type.name(), "Party", type.target(), type.targetsPerSource(),
                         type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
-                        type.supertype(), type.attributes(), type.aliases(), type.deprecated()));
+                        type.supertype(), type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules()));
 
         List<Problem> problems = rejected(register("1.1.0", widened));
 
@@ -423,7 +423,7 @@ class SchemaEvolutionScenariosTest {
         SchemaDefinition changed = changeEntityType(
                 changeEntityType(ReferenceModel.definition(), "Person", type -> withAttributes(type, List.of())),
                 "Organization", type -> new EntityTypeDefinition(type.name(), true, type.supertype(), type.traits(),
-                        type.attributes(), type.aliases(), type.deprecated()));
+                        type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules()));
 
         List<Problem> problems = rejected(register("1.1.0", changed));
 
@@ -475,12 +475,12 @@ class SchemaEvolutionScenariosTest {
         List<String> traits = new ArrayList<>(type.traits());
         traits.add(trait);
         return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), traits, type.attributes(),
-                type.aliases(), type.deprecated());
+                type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     static RelationshipTypeDefinition withTargetsPerSource(RelationshipTypeDefinition type, Multiplicity value) {
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), value, type.sourcesPerTarget(),
                 type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(),
-                type.attributes(), type.aliases(), type.deprecated());
+                type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 }

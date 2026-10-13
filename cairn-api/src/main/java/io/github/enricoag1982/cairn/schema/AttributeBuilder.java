@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
- * Builds an {@link AttributeDefinition} (capability {@code type-model}). Attributes start optional, not unique and without a range.
+ * Builds an {@link AttributeDefinition} (capability {@code type-model}). Attributes start optional, not unique and without a
+ * range, description, examples or string constraints.
  */
 public final class AttributeBuilder {
 
@@ -17,6 +19,12 @@ public final class AttributeBuilder {
     private Range range;
     private final List<String> aliases = new ArrayList<>();
     private boolean deprecated;
+    private String description;
+    private final List<Literal> examples = new ArrayList<>();
+    private final List<String> allowedValues = new ArrayList<>();
+    private String pattern;
+    private OptionalInt minLength = OptionalInt.empty();
+    private OptionalInt maxLength = OptionalInt.empty();
 
     AttributeBuilder(String name, ValueType valueType) {
         this.name = Objects.requireNonNull(name, "name");
@@ -76,11 +84,79 @@ public final class AttributeBuilder {
     }
 
     /**
+     * Describes the attribute.
+     *
+     * @param text what the attribute means
+     * @return this builder
+     */
+    public AttributeBuilder description(String text) {
+        this.description = Objects.requireNonNull(text, "text");
+        return this;
+    }
+
+    /**
+     * Adds examples of the attribute's values.
+     *
+     * @param values the examples
+     * @return this builder
+     */
+    public AttributeBuilder examples(Literal... values) {
+        examples.addAll(List.of(values));
+        return this;
+    }
+
+    /**
+     * Adds allowed values; a string attribute may then have only these values.
+     *
+     * @param values the allowed values
+     * @return this builder
+     */
+    public AttributeBuilder allowedValues(String... values) {
+        allowedValues.addAll(List.of(values));
+        return this;
+    }
+
+    /**
+     * Requires string values to match a regular expression as a whole.
+     *
+     * @param regularExpression the pattern, in the syntax of {@link java.util.regex.Pattern}
+     * @return this builder
+     */
+    public AttributeBuilder pattern(String regularExpression) {
+        this.pattern = Objects.requireNonNull(regularExpression, "regularExpression");
+        return this;
+    }
+
+    /**
+     * Sets the smallest length of string values, counted in Unicode code points.
+     *
+     * @param length the minimum length
+     * @return this builder
+     */
+    public AttributeBuilder minLength(int length) {
+        this.minLength = OptionalInt.of(length);
+        return this;
+    }
+
+    /**
+     * Sets the largest length of string values, counted in Unicode code points.
+     *
+     * @param length the maximum length
+     * @return this builder
+     */
+    public AttributeBuilder maxLength(int length) {
+        this.maxLength = OptionalInt.of(length);
+        return this;
+    }
+
+    /**
      * Builds the definition.
      *
      * @return the attribute definition
      */
     public AttributeDefinition build() {
-        return new AttributeDefinition(name, valueType, required, unique, Optional.ofNullable(range), aliases, deprecated);
+        return new AttributeDefinition(name, valueType, required, unique, Optional.ofNullable(range), aliases, deprecated,
+                Optional.ofNullable(description), examples, allowedValues, Optional.ofNullable(pattern),
+                minLength, maxLength);
     }
 }

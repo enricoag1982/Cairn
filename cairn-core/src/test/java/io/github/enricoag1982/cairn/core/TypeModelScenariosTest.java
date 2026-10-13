@@ -27,6 +27,7 @@ import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -113,7 +114,7 @@ class TypeModelScenariosTest {
     void traitReachedTwice() {
         SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Person", type ->
                 new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), List.of("Named"),
-                        type.attributes(), type.aliases(), type.deprecated()));
+                        type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules()));
 
         assertThat(validate(definition)).isEmpty();
         assertThat(register(definition).entityType("Person").orElseThrow().attributes())
@@ -341,7 +342,8 @@ class TypeModelScenariosTest {
     void invalidCharacters() {
         SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Person", type ->
                 changeAttribute(type, "birthDate", attribute -> new AttributeDefinition("birth-date",
-                        attribute.valueType(), false, false, Optional.empty(), List.of(), false)));
+                        attribute.valueType(), false, false, Optional.empty(), List.of(), false, Optional.empty(),
+                        List.of(), List.of(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty())));
 
         List<Problem> problems = validate(definition);
         assertSingleProblem(problems, ProblemCode.INVALID_NAME, "Person");
@@ -400,7 +402,8 @@ class TypeModelScenariosTest {
         SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Person", type ->
                 changeAttribute(type, "birthDate", attribute -> new AttributeDefinition(attribute.name(),
                         attribute.valueType(), attribute.required(), attribute.unique(), attribute.range(),
-                        attribute.aliases(), true)));
+                        attribute.aliases(), true, attribute.description(), attribute.examples(),
+                        attribute.allowedValues(), attribute.pattern(), attribute.minLength(), attribute.maxLength())));
 
         Attribute birthDate = register(definition).entityType("Person").orElseThrow().attribute("birthDate").orElseThrow();
         assertThat(birthDate.deprecated()).isTrue();
@@ -417,12 +420,12 @@ class TypeModelScenariosTest {
     private static RelationshipTypeDefinition withSourcesPerTarget(RelationshipTypeDefinition type, Multiplicity value) {
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(), value,
                 type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(),
-                type.attributes(), type.aliases(), type.deprecated());
+                type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 
     private static RelationshipTypeDefinition withInverseName(RelationshipTypeDefinition type, String inverseName) {
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
                 type.sourcesPerTarget(), inverseName, type.inverseAliases(), type.kind(), type.symmetric(),
-                type.supertype(), type.attributes(), type.aliases(), type.deprecated());
+                type.supertype(), type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules());
     }
 }
