@@ -25,10 +25,13 @@ import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.Value;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * The total balance by ultimate parent (RD-6) over ownership chains that are longer, wider and cyclic, and what the
- * maximum depth of a traversal does to them (the risks of design {@code add-queries-and-aggregation}).
+ * The total balance by ultimate parent (RD-6), which follows {@code ownedBy} while the share is above 50%, over ownership
+ * chains that are longer, wider and cyclic, and what the maximum depth of a traversal does to them (the risks of design
+ * {@code add-queries-and-aggregation}).
  */
 class UltimateParentQueriesTest {
 
@@ -55,7 +58,22 @@ class UltimateParentQueriesTest {
                 .build());
     }
 
+    /** RD-6 with another maximum depth: follows {@code ownedBy} only while the share is above 50. */
     private static Query totalByUltimateParent(int maxDepth) {
+        return Query.from("Account", "a")
+                .follow("a", "HeldBy", "holder")
+                .traverse("holder", "ownedBy", 0, maxDepth, "party", "ownership",
+                        Condition.gt(Operand.attribute("ownership", "share"), Operand.literal(50)))
+                .where(Condition.not(Condition.hasLink("party", "ownedBy", "owns",
+                        Condition.gt(Operand.attribute("owns", "share"), Operand.literal(50)))))
+                .groupBy("party")
+                .aggregate(Aggregate.sum(Operand.attribute("a", "balance"), "total"), Aggregate.count("accounts"))
+                .orderBy(Order.ascending(Column.key("party")))
+                .build();
+    }
+
+    /** The query without a share filter: it follows every {@code ownedBy}, whatever the share. */
+    private static Query totalByTopOwner(int maxDepth) {
         return Query.from("Account", "a")
                 .follow("a", "HeldBy", "holder")
                 .traverse("holder", "ownedBy", 0, maxDepth, "party")
@@ -86,11 +104,41 @@ class UltimateParentQueriesTest {
     }
 
     @Test
-    void anAccountOfAPartyWithTwoUltimateParentsCountsInBothGroups() {
+    void anOwnerOfThirtyPercentIsNotFollowedSoItIsNoUltimateParent() {
         EntityId delta = newOrganization("Delta");
         owns(delta, beta, 30);
 
         QueryResult.Rows result = run(totalByUltimateParent(10));
+
+        assertThat(result.rows()).as("Beta's ultimate parent is ACME alone: Delta holds less than 50%")
+                .extracting(row -> name(row, "party"), row -> decimal(row, "total").intValueExact())
+                .containsExactly(tuple("ACME", 3000));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {30, 50})
+    void aPartyWhoseOnlyOwnerHoldsFiftyPercentOrLessIsItsOwnUltimateParent(int share) {
+        EntityId gamma = newOrganization("Gamma");
+        owns(gamma, acme, share);
+
+        QueryResult.Rows result = run(totalByUltimateParent(10));
+
+        assertThat(result.rows()).as("ACME has an owner, but not one above 50%, so it is not followed")
+                .singleElement().satisfies(row -> {
+                    assertThat(name(row, "party")).isEqualTo("ACME");
+                    assertThat(row.entity("party").orElseThrow().id()).isEqualTo(acme);
+                    assertThat(decimal(row, "total")).as("A-2 held by ACME, and A-1 through Beta")
+                            .isEqualByComparingTo("3000");
+                    assertThat(row.value("accounts")).contains(Value.of(2L));
+                });
+    }
+
+    @Test
+    void withoutAShareFilterAnAccountOfAPartyWithTwoTopOwnersCountsInBothGroups() {
+        EntityId delta = newOrganization("Delta");
+        owns(delta, beta, 30);
+
+        QueryResult.Rows result = run(totalByTopOwner(10));
 
         assertThat(result.rows()).extracting(row -> name(row, "party"), row -> decimal(row, "total").intValueExact())
                 .containsExactlyInAnyOrder(tuple("ACME", 3000), tuple("Delta", 1000));

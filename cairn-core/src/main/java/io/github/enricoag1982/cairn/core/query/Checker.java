@@ -84,6 +84,13 @@ final class Checker {
     private final List<Problem> problems = new ArrayList<>();
     /** The bindings by name, as bound so far. */
     private final Map<String, Binding> names = new LinkedHashMap<>();
+    /**
+     * The only bindings that names can refer to while the {@code along} condition of a traversal or of a link test is
+     * checked: its own relationship, if it names one. Null otherwise.
+     */
+    private Map<String, Binding> alongScope;
+    /** What the condition that is checked belongs to, for messages: {@code traversal} or {@code hasLink test}. */
+    private String alongOwner;
     /** Every binding, named or not, by the position of its cell in a row. */
     private final List<Binding> slots = new ArrayList<>();
     /** The keys and aggregates of a grouped query by name; null for a query without grouping. */
@@ -139,12 +146,18 @@ final class Checker {
     }
 
     private Binding bind(String path, String name, Binding.Kind kind, String typeName, List<Attribute> attributes) {
+        return bind(path, name, kind, typeName, attributes, List.of());
+    }
+
+    private Binding bind(String path, String name, Binding.Kind kind, String typeName, List<Attribute> attributes,
+            List<String> unrelated) {
         boolean taken = name != null && names.containsKey(name);
         if (taken) {
             problem(ProblemCode.DUPLICATE_BINDING, path, "The query binds the name '" + name + "' more than once.",
                     "a name that no other binding of the query has", name, null);
         }
-        Binding binding = new Binding(name == null || taken ? null : name, kind, slots.size(), typeName, attributes);
+        Binding binding = new Binding(name == null || taken ? null : name, kind, slots.size(), typeName, attributes,
+                unrelated);
         slots.add(binding);
         if (binding.name() != null) {
             names.put(name, binding);
@@ -155,7 +168,8 @@ final class Checker {
     /** Finds a binding that the query has bound by now, of one of the kinds; reports it if there is none. */
     private Binding lookup(String path, String name, Binding.Kind... kinds) {
         EnumSet<Binding.Kind> allowed = EnumSet.copyOf(List.of(kinds));
-        Binding found = names.get(name);
+        Map<String, Binding> visible = alongScope != null ? alongScope : names;
+        Binding found = visible.get(name);
         if (found != null && allowed.contains(found.kind())) {
             return found;
         }
@@ -166,12 +180,33 @@ final class Checker {
                     null);
             return null;
         }
+        if (alongScope != null) {
+            alongProblem(path, name);
+            return null;
+        }
         List<String> candidates = names.values().stream().filter(binding -> allowed.contains(binding.kind()))
                 .map(Binding::name).toList();
         problem(ProblemCode.UNKNOWN_BINDING, path, "The query has no binding '" + name + "' at this point.",
                 candidates.isEmpty() ? "a binding that holds " + wanted + ", bound by an earlier step"
                         : "one of " + String.join(", ", candidates), name, closest(name, candidates));
         return null;
+    }
+
+    /** Reports a name in an {@code along} condition that is not the relationship of the traversal or link test. */
+    private void alongProblem(String path, String name) {
+        String owner = alongOwner;
+        if (alongScope.isEmpty()) {
+            problem(ProblemCode.UNKNOWN_BINDING, path, "The 'along' condition of a " + owner + " can refer only to the "
+                    + "relationship of the " + owner + ", but the " + owner + " does not name it, and the condition "
+                    + "refers to '" + name + "'.", "the name of the relationship of the " + owner + ", given with "
+                    + "'relationship'", name, "Name the relationship of the " + owner + ", and refer to that name.");
+            return;
+        }
+        String own = alongScope.keySet().iterator().next();
+        problem(ProblemCode.UNKNOWN_BINDING, path, "The 'along' condition of a " + owner + " can refer only to the "
+                + "relationship of the " + owner + ", '" + own + "', and to values, but it refers to '" + name + "'.",
+                "the relationship '" + own + "' of the " + owner, name, Optional.ofNullable(closest(name, List.of(own)))
+                        .orElse("Refer to the relationship '" + own + "' of the " + owner + ", or to a value."));
     }
 
     // ------------------------------------------------------------------ names in the schema
@@ -212,6 +247,14 @@ final class Checker {
 
     /** Finds an attribute of a binding's type; reports a name that is none. Empty silently if the type is unknown. */
     private Attribute attribute(String path, Binding binding, String name) {
+        if (!binding.unrelated().isEmpty()) {
+            problem(ProblemCode.UNKNOWN_ATTRIBUTE, path, "The binding '" + binding.name() + "' can hold entities of the "
+                    + "types " + String.join(" and ", binding.unrelated()) + ", which have no common supertype, so it "
+                    + "has no attribute '" + name + "' to read.", "an attribute of a binding whose entities have a "
+                    + "common supertype", name, "Start the traversal at depth 1 to bind only the entities it reaches, "
+                    + "or test the binding with isA.");
+            return null;
+        }
         if (binding.attributes() == null) {
             return null;
         }
@@ -248,11 +291,15 @@ final class Checker {
             case QueryStep.Traverse traverse -> {
                 Binding from = lookup(path, traverse.from(), Binding.Kind.ENTITY);
                 Navigation navigation = navigation(path, traverse.name());
-                Binding entity = bindEnd(path, traverse.binding(), navigation);
+                Binding entity = bindReached(path, traverse, from, navigation);
                 Binding relationship = bindRelationship(path, traverse.relationship(), navigation);
                 Binding depth = bind(path, traverse.depth().orElse(null), Binding.Kind.DEPTH, null, null);
-                yield from == null || navigation == null ? null : new Stage.Traverse(from.slot(), traverse.name(),
-                        entity.slot(), relationship.slot(), depth.slot(), traverse.minDepth(), traverse.maxDepth());
+                Plan.Test test = traverse.along().map(condition -> along(path, condition, "traversal", traverse.relationship(),
+                        relationship))
+                        .orElse(null);
+                yield from == null || navigation == null || traverse.along().isPresent() && test == null ? null
+                        : new Stage.Traverse(from.slot(), traverse.name(), entity.slot(), relationship.slot(),
+                                depth.slot(), test, traverse.minDepth(), traverse.maxDepth());
             }
         };
     }
@@ -261,10 +308,97 @@ final class Checker {
         return bind(path, name, Binding.Kind.ENTITY, navigation == null ? null : navigation.end());
     }
 
+    /**
+     * Binds the entity that a traversal reaches. With a minimum depth of 0 it can also be the entity the traversal starts
+     * from, so its type is the closest common supertype of the type at the other end and the type of the binding that
+     * the traversal starts from; if there is none, the binding has no type to read attributes of.
+     */
+    private Binding bindReached(String path, QueryStep.Traverse traverse, Binding from, Navigation navigation) {
+        EntityType end = navigation == null ? null : navigation.end();
+        if (end == null) {
+            return bind(path, traverse.binding(), Binding.Kind.ENTITY, (EntityType) null);
+        }
+        if (traverse.minDepth() > 0 || from == null) {
+            return bind(path, traverse.binding(), Binding.Kind.ENTITY, end);
+        }
+        List<String> types = new ArrayList<>();
+        if (!from.unrelated().isEmpty()) {
+            types.addAll(from.unrelated());
+        } else if (from.typeName() == null) {
+            return bind(path, traverse.binding(), Binding.Kind.ENTITY, (EntityType) null);
+        } else {
+            EntityType start = schema.entityType(from.typeName()).orElse(null);
+            if (start == null) {
+                return bind(path, traverse.binding(), Binding.Kind.ENTITY, (EntityType) null);
+            }
+            EntityType common = closestCommonSupertype(start, end);
+            if (common != null) {
+                return bind(path, traverse.binding(), Binding.Kind.ENTITY, common);
+            }
+            types.add(start.name());
+        }
+        if (!types.contains(end.name())) {
+            types.add(end.name());
+        }
+        return bind(path, traverse.binding(), Binding.Kind.ENTITY, null, null, types);
+    }
+
+    /** The nearest entity type that two types are or extend; null if they have none. */
+    private EntityType closestCommonSupertype(EntityType first, EntityType second) {
+        Set<String> ofSecond = new HashSet<>();
+        ofSecond.add(second.name());
+        ofSecond.addAll(second.supertypes());
+        List<String> ofFirst = new ArrayList<>();
+        ofFirst.add(first.name());
+        ofFirst.addAll(first.supertypes());
+        for (String name : ofFirst) {
+            if (ofSecond.contains(name)) {
+                return schema.entityType(name).orElse(null);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks the {@code along} condition of a traversal or of a link test. It can refer to the relationship that its
+     * owner names, if it names one, and to literals; any other name is an unknown binding.
+     *
+     * @param path         the path of the problems
+     * @param condition    the condition
+     * @param owner        what the condition belongs to, for messages
+     * @param name         the name the owner gives the relationship, if it does
+     * @param relationship the binding that the name refers to
+     */
+    private Plan.Test along(String path, Condition condition, String owner, Optional<String> name,
+            Binding relationship) {
+        Map<String, Binding> scope = new LinkedHashMap<>();
+        name.ifPresent(own -> scope.put(own, relationship));
+        Map<String, Binding> outerScope = alongScope;
+        String outerOwner = alongOwner;
+        alongScope = scope;
+        alongOwner = owner;
+        try {
+            return condition(path, condition);
+        } finally {
+            alongScope = outerScope;
+            alongOwner = outerOwner;
+        }
+    }
+
     private Binding bindRelationship(String path, Optional<String> name, Navigation navigation) {
         RelationshipType type = navigation == null ? null : navigation.type();
         return bind(path, name.orElse(null), Binding.Kind.RELATIONSHIP, type == null ? null : type.name(),
                 type == null ? null : type.attributes());
+    }
+
+    /**
+     * The relationship of a link test's links, for its {@code along} condition: it belongs to the condition alone, so it
+     * has no place in a row of the query; the condition is run on a row of one cell.
+     */
+    private static Binding localRelationship(Navigation navigation) {
+        RelationshipType type = navigation == null ? null : navigation.type();
+        return new Binding(null, Binding.Kind.RELATIONSHIP, 0, type == null ? null : type.name(),
+                type == null ? null : type.attributes(), List.of());
     }
 
     // ------------------------------------------------------------------ conditions
@@ -286,13 +420,22 @@ final class Checker {
             case Condition.HasLink hasLink -> {
                 Binding binding = lookup(path, hasLink.binding(), Binding.Kind.ENTITY);
                 Navigation navigation = navigation(path, hasLink.name());
-                if (binding == null || navigation == null) {
+                Plan.Test along = hasLink.along().map(inner -> along(path, inner, "hasLink test",
+                        hasLink.relationship(), localRelationship(navigation))).orElse(null);
+                if (binding == null || navigation == null || hasLink.along().isPresent() && along == null) {
                     yield null;
                 }
                 int slot = binding.slot();
                 String name = hasLink.name();
+                if (along == null) {
+                    yield (row, context) -> row[slot] instanceof Cell.EntityCell bound
+                            && !context.navigate(bound.state().id(), name).isEmpty();
+                }
                 yield (row, context) -> row[slot] instanceof Cell.EntityCell bound
-                        && !context.navigate(bound.state().id(), name).isEmpty();
+                        && context.navigate(bound.state().id(), name).stream().anyMatch(link -> {
+                            Cell[] probe = {new Cell.RelationshipCell(link.relationship())};
+                            return along.holds(probe, context);
+                        });
             }
             case Condition.IsA isA -> {
                 Binding binding = lookup(path, isA.binding(), Binding.Kind.ENTITY);
@@ -443,7 +586,7 @@ final class Checker {
             Aggregate aggregate = grouping.aggregates().get(n);
             Groups.Computed one = aggregate(path, aggregate);
             claim(found, path, aggregate.name(), keys.size() + computed.size(), false);
-            computed.add(one == null ? new Groups.Computed(aggregate.function(), null) : one);
+            computed.add(one == null ? new Groups.Computed(aggregate.function(), null, null) : one);
         }
         outputs = found;
         return new Groups(List.copyOf(keys), List.copyOf(computed));
@@ -479,7 +622,7 @@ final class Checker {
         Aggregate.Function function = aggregate.function();
         if (aggregate.of().isEmpty()) {
             if (function == Aggregate.Function.COUNT) {
-                return new Groups.Computed(function, null);
+                return new Groups.Computed(function, null, null);
             }
             problem(ProblemCode.INVALID_AGGREGATE, path, "A " + word(function) + " needs an attribute to work on, but "
                     + "the aggregate '" + aggregate.name() + "' has none.", "an attribute of a binding", "no attribute",
@@ -509,7 +652,7 @@ final class Checker {
         }
         int slot = binding.slot();
         String name = attribute.name();
-        return new Groups.Computed(function, row -> Cells.attribute(row[slot], name));
+        return new Groups.Computed(function, row -> Cells.attribute(row[slot], name), category);
     }
 
     // ------------------------------------------------------------------ columns and order

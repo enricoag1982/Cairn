@@ -1,10 +1,13 @@
 package io.github.enricoag1982.cairn.data;
 
+import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -20,10 +23,49 @@ import java.util.Optional;
  * method reads: such a state does not fit the generated type, which is a programming error, so the failure is an
  * {@link IllegalArgumentException} whose message names the attribute. There is a pair of methods for each value type:
  * string, boolean, int, long, decimal, date and instant.
+ *
+ * <p>It also lists the types from which a state's type extends, nearest first, in a schema: the generated {@code from}
+ * methods that take a schema use the list to find the nearest type that the generator knew, so that a state of a type
+ * that was registered after generation is read as the supertype it extends.
  */
 public final class TypedValues {
 
     private TypedValues() {
+    }
+
+    /**
+     * Lists an entity type and then its supertypes, the nearest first, as the schema has them. A type that the schema
+     * does not have has no supertypes.
+     *
+     * @param schema     the schema to look the type up in, such as the {@linkplain View#schema() schema of a view}
+     * @param entityType the name of the entity type, as an {@link EntityState#entityType()} spells it
+     * @return the entity type, then its supertypes; never empty
+     */
+    public static List<String> entityTypeAndSupertypes(Schema schema, String entityType) {
+        Objects.requireNonNull(schema, "schema");
+        Objects.requireNonNull(entityType, "entityType");
+        List<String> line = new ArrayList<>();
+        line.add(entityType);
+        schema.entityType(entityType).ifPresent(type -> line.addAll(type.supertypes()));
+        return List.copyOf(line);
+    }
+
+    /**
+     * Lists a relationship type and then its supertypes, the nearest first, as the schema has them. A type that the
+     * schema does not have has no supertypes.
+     *
+     * @param schema           the schema to look the type up in, such as the {@linkplain View#schema() schema of a view}
+     * @param relationshipType the name of the relationship type, as a {@link RelationshipState#relationshipType()}
+     *                         spells it
+     * @return the relationship type, then its supertypes; never empty
+     */
+    public static List<String> relationshipTypeAndSupertypes(Schema schema, String relationshipType) {
+        Objects.requireNonNull(schema, "schema");
+        Objects.requireNonNull(relationshipType, "relationshipType");
+        List<String> line = new ArrayList<>();
+        line.add(relationshipType);
+        schema.relationshipType(relationshipType).ifPresent(type -> line.addAll(type.supertypes()));
+        return List.copyOf(line);
     }
 
     /**

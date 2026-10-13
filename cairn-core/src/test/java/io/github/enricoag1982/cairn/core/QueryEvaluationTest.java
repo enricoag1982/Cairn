@@ -226,6 +226,79 @@ class QueryEvaluationTest {
         assertThat(labelsWhere(Condition.not(Condition.hasLink("i", "Next")))).containsExactly(FULL_WIDTH_A, EMOJI);
     }
 
+    private static Condition weightAbove(String relationship, int weight) {
+        return Condition.gt(Operand.attribute(relationship, "weight"), Operand.literal(weight));
+    }
+
+    @Test
+    void hasLinkWithAConditionCountsOnlyTheLinksWhoseRelationshipMeetsIt() {
+        // Next: alpha to Beta (1), Beta to gamma (2), gamma to delta (3), alpha to gamma (4), delta to alpha (5)
+        assertThat(labelsWhere(Condition.hasLink("i", "Next", "n", weightAbove("n", 3))))
+                .as("an item with a link that leaves it by a weight above 3").containsExactly("alpha", "delta");
+        assertThat(labelsWhere(Condition.hasLink("i", "previous", "n", weightAbove("n", 3))))
+                .as("by the inverse name, the links that lead to it").containsExactly("alpha", "gamma");
+        assertThat(labelsWhere(Condition.hasLink("i", "Before", "n", weightAbove("n", 4))))
+                .as("by an alias of the inverse name").containsExactly("alpha");
+        assertThat(labelsWhere(Condition.not(Condition.hasLink("i", "Next", "n", weightAbove("n", 3)))))
+                .as("an item that has no such link").containsExactly("Beta", "gamma", FULL_WIDTH_A, EMOJI);
+        assertThat(labelsWhere(Condition.hasLink("i", "Next", "n", weightAbove("n", 5)))).isEmpty();
+    }
+
+    @Test
+    void aLinkIsCountedIfOneOfSeveralMeetsTheConditionNotIfTheyAllMust() {
+        // alpha leaves by weights 1 and 4, and Beta by 2: some link of alpha is above 3, and no link of Beta is
+        assertThat(labelsWhere(Condition.hasLink("i", "Next", "n", Condition.and(weightAbove("n", 3),
+                Condition.not(weightAbove("n", 4)))))).containsExactly("alpha");
+        assertThat(labelsWhere(Condition.hasLink("i", "Next", "n", weightAbove("n", 1))))
+                .containsExactly("alpha", "Beta", "gamma", "delta");
+    }
+
+    @Test
+    void theConditionOfALinkTestCanBeLiteralsOnlyAndThenDependsOnHavingALink() {
+        Condition always = Condition.eq(Operand.literal(1), Operand.literal(1));
+        Condition never = Condition.eq(Operand.literal(1), Operand.literal(2));
+
+        assertThat(labelsWhere(Condition.hasLink("i", "Next", "n", always)))
+                .containsExactly("alpha", "Beta", "gamma", "delta");
+        assertThat(labelsWhere(Condition.hasLink("i", "Next", "n", never))).isEmpty();
+    }
+
+    @Test
+    void theRelationshipNameOfALinkTestBelongsToTheTestAndHidesNothingOutsideIt() {
+        // r is an entity of the follow step, and a relationship inside the condition of the link test; so is i
+        Query query = Query.from("Item", "i")
+                .follow("i", "Next", "r")
+                .where(Condition.and(Condition.hasLink("i", "Next", "r", weightAbove("r", 3)),
+                        Condition.hasValue("r", "label")))
+                .build();
+        Query sameAsStart = Query.from("Item", "i")
+                .where(Condition.hasLink("i", "Next", "i", weightAbove("i", 3)))
+                .where(Condition.hasValue("i", "label"))
+                .build();
+
+        QueryResult.Rows result = run(query);
+
+        assertThat(result.rows()).extracting(row -> QueryRows.text(row, "i", "label"),
+                row -> QueryRows.text(row, "r", "label"))
+                .containsExactly(tuple("alpha", "Beta"), tuple("alpha", "gamma"), tuple("delta", "alpha"));
+        assertThat(texts(run(sameAsStart), "i", "label")).containsExactly("alpha", "delta");
+    }
+
+    @Test
+    void aLinkTestOnlyCountsTheLinksEffectiveAtTheViewsTime() {
+        ReferenceStore store = ReferenceStore.with(ItemStore.definition());
+        store.commit(Transaction.by("test")
+                .create(I1, "Item", from(1, 1), values("label", "one"))
+                .create(I2, "Item", from(1, 1), values("label", "two"))
+                .relate("Next", I1, I2, from(4, 1), values("weight", 9))
+                .build());
+        Condition heavy = Condition.hasLink("i", "Next", "n", weightAbove("n", 3));
+        Query query = Query.from("Item", "i").where(heavy).build();
+
+        assertThat(rows(store.view(on(3, 1)).query(query)).rows()).as("the link starts in April").isEmpty();
+        assertThat(texts(rows(store.view(on(5, 1)).query(query)), "i", "label")).containsExactly("one");
+    }
+
     // ------------------------------------------------------------------ follow
 
     @Test

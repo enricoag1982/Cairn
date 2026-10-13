@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.query;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * What a filter step tests of each row (ADR-0023, capability {@code queries}): a comparison, a test for a value, a test
@@ -69,12 +70,20 @@ public sealed interface Condition {
 
     /**
      * Holds if a bound entity has a link by a relationship name or inverse name, as navigation finds it at the view's
-     * effective time.
+     * effective time, and with {@code along}, if it has at least one such link whose relationship meets a condition.
      *
-     * @param binding the name of the binding of an entity
-     * @param name    the name of a relationship type or the inverse name of one
+     * <p>The condition reads the relationship under the name {@code relationship}, which belongs to this condition
+     * alone: it is not a binding of the query, so it may be a name that the query binds already, which it hides inside
+     * {@code along} only. {@code along} can refer to that name and to literals, and to nothing else; it needs the
+     * relationship to be named if it refers to the relationship.
+     *
+     * @param binding      the name of the binding of an entity
+     * @param name         the name of a relationship type or the inverse name of one
+     * @param relationship the name that {@code along} gives the relationship of a link, if there is a condition
+     * @param along        the condition that the relationship of a link must meet, if the link counts only then
      */
-    record HasLink(String binding, String name) implements Condition {
+    record HasLink(String binding, String name, Optional<String> relationship, Optional<Condition> along)
+            implements Condition {
 
         /**
          * Rejects null components.
@@ -82,6 +91,18 @@ public sealed interface Condition {
         public HasLink {
             Objects.requireNonNull(binding, "binding");
             Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(relationship, "relationship");
+            Objects.requireNonNull(along, "along");
+        }
+
+        /**
+         * A test for any link by the name.
+         *
+         * @param binding the name of the binding of an entity
+         * @param name    the name of a relationship type or the inverse name of one
+         */
+        public HasLink(String binding, String name) {
+            this(binding, name, Optional.empty(), Optional.empty());
         }
     }
 
@@ -267,6 +288,22 @@ public sealed interface Condition {
      */
     static Condition hasLink(String binding, String name) {
         return new HasLink(binding, name);
+    }
+
+    /**
+     * Holds if a bound entity has a link by a relationship name or inverse name whose relationship meets a condition.
+     *
+     * @param binding      the name of the binding of an entity
+     * @param name         the name of a relationship type or the inverse name of one
+     * @param relationship the name that {@code along} refers to the relationship of a link by; a name of this condition
+     *                     alone, which may be a name that the query binds too
+     * @param along        the condition that the relationship of a link must meet; it can refer to the binding named by
+     *                     {@code relationship} and to literals, and to nothing else
+     * @return the condition
+     */
+    static Condition hasLink(String binding, String name, String relationship, Condition along) {
+        return new HasLink(binding, name, Optional.of(Objects.requireNonNull(relationship, "relationship")),
+                Optional.of(Objects.requireNonNull(along, "along")));
     }
 
     /**

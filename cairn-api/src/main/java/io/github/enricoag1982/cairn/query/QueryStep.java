@@ -55,17 +55,28 @@ public sealed interface QueryStep {
      * from a minimum to a maximum. Depth 0 is the bound entity itself, reached by no relationship. Each reached entity
      * is bound once per row, at the smallest depth at which it is reached.
      *
+     * <p>A traversal can follow only some of the relationships: those for which a condition holds. The condition is
+     * evaluated on each relationship before it is followed, so an entity that can be reached only through other
+     * relationships is not reached. It can refer to the traversal's own relationship, which the traversal must then
+     * name with {@code relationship}, and to literals, and to no other binding.
+     *
+     * <p>The entity type of the binding is the closest common supertype of the type at the other end of the
+     * relationship and, with a minimum depth of 0, the type of the binding the traversal starts from, since that entity
+     * is bound too. If there is none, the binding has no entity type, and its attributes cannot be used.
+     *
      * @param from         the name of the binding of the entity to start from
      * @param name         the name of a relationship type or the inverse name of one
      * @param binding      the name that the reached entity is bound to
      * @param relationship the name that the relationship it was reached through is bound to, if it is bound; it is empty
      *                     at depth 0
      * @param depth        the name that its depth is bound to, if it is bound
+     * @param along        the condition that a relationship must satisfy to be followed, if there is one; it can refer
+     *                     only to the binding named by {@code relationship}, and to literals
      * @param minDepth     the smallest depth to bind, at least 0
      * @param maxDepth     the largest depth to bind, at least {@code minDepth}
      */
     record Traverse(String from, String name, String binding, Optional<String> relationship, Optional<String> depth,
-            int minDepth, int maxDepth) implements QueryStep {
+            Optional<Condition> along, int minDepth, int maxDepth) implements QueryStep {
 
         /**
          * Rejects null components, a minimum depth below 0 and a maximum depth below the minimum.
@@ -76,6 +87,7 @@ public sealed interface QueryStep {
             Objects.requireNonNull(binding, "binding");
             Objects.requireNonNull(relationship, "relationship");
             Objects.requireNonNull(depth, "depth");
+            Objects.requireNonNull(along, "along");
             if (minDepth < 0) {
                 throw new IllegalArgumentException("The minimum depth of a traversal is 0 or more, but it is "
                         + minDepth + ".");

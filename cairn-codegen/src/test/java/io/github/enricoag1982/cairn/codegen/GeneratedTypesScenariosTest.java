@@ -15,6 +15,7 @@ import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RuleContext;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TotalOwnershipRule;
@@ -95,6 +96,35 @@ class GeneratedTypesScenariosTest {
             assertThat(account.number()).isEqualTo("A-2");
             assertThat(account.balance()).isEqualByComparingTo("2000");
         });
+    }
+
+    @Test
+    @DisplayName("Scenario: A subtype registered after generation in a query")
+    void aSubtypeRegisteredAfterGenerationInAQuery() {
+        ReferenceDomain domain = new ReferenceDomain();
+        domain.replay(ReferenceStories.rd1Parties());
+        SchemaDefinition banking = SchemaDefinition.builder().entityType("Bank", bank -> bank.supertype("Organization"))
+                .build();
+        assertThat(domain.store.schema().register(new Origin("banking", "1.0.0"), banking))
+                .isInstanceOf(RegistrationResult.Applied.class);
+        domain.commit(on(6, 1), Transaction.by(PRINCIPAL).create(new TemporaryId("bank"), "Bank",
+                ReferenceStories.from(1, 1), ReferenceStories.values("name", "First Bank")).build());
+        View view = domain.view(on(6, 2));
+
+        QueryResult result = view.query(Query.from(Party.TYPE, "p").build());
+
+        assertThat(result).isInstanceOf(QueryResult.Rows.class);
+        List<Party> parties = ((QueryResult.Rows) result).rows().stream()
+                .map(row -> Party.from(row.entity("p").orElseThrow(), view.schema())).toList();
+        assertThat(parties).extracting(Party::name).containsExactlyInAnyOrder("ACME", "Beta", "Alice", "First Bank");
+        Party bank = parties.stream().filter(party -> party.name().equals("First Bank")).findFirst().orElseThrow();
+        assertThat(bank).as("a Bank is an Organization").isInstanceOf(Organization.class);
+        assertThat(bank.entityState().entityType()).isEqualTo("Bank");
+        assertThat(((Organization) bank).lei()).isEmpty();
+        assertThat(Party.from(view.entity(bank.id()).orElseThrow())).as("without the schema, it is only a Party")
+                .isNotInstanceOf(Organization.class);
+        assertThat(parties).filteredOn(party -> party.name().equals("Alice")).singleElement()
+                .isInstanceOf(Person.class);
     }
 
     // ------------------------------------------------------------------ reading states

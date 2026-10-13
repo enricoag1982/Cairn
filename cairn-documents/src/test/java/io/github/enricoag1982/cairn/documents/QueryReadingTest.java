@@ -99,8 +99,134 @@ class QueryReadingTest {
                 new QueryStep.Follow("o", "Owns", "other", Optional.of("owns"), false),
                 new QueryStep.Follow("o", "Employs", "employee", Optional.empty(), true),
                 new QueryStep.Follow("o", "Employs", "worker", Optional.of("job"), true),
-                new QueryStep.Traverse("o", "ownedBy", "party", Optional.empty(), Optional.empty(), 0, 3),
-                new QueryStep.Traverse("o", "ownedBy", "owner", Optional.of("via"), Optional.of("depth"), 1, 2));
+                new QueryStep.Traverse("o", "ownedBy", "party", Optional.empty(), Optional.empty(), Optional.empty(), 0,
+                        3),
+                new QueryStep.Traverse("o", "ownedBy", "owner", Optional.of("via"), Optional.of("depth"),
+                        Optional.empty(), 1, 2));
+    }
+
+    @Test
+    void aTraversalCanFollowOnlyTheRelationshipsThatMeetACondition() {
+        QueryStep step = onlyStep(step("{ \"traverse\": { \"from\": \"a\", \"name\": \"ownedBy\", \"as\": \"party\", "
+                + "\"maxDepth\": 4, \"relationship\": \"ownership\", \"along\": { \"and\": [ "
+                + "{ \"compare\": { \"left\": { \"attribute\": \"share\", \"of\": \"ownership\" }, \"op\": \"gt\", "
+                + "\"right\": { \"value\": 50 } } }, { \"not\": { \"hasValue\": { \"attribute\": \"x\", "
+                + "\"of\": \"ownership\" } } } ] } } }"));
+
+        assertThat(step).isEqualTo(new QueryStep.Traverse("a", "ownedBy", "party", Optional.of("ownership"),
+                Optional.empty(), Optional.of(Condition.and(
+                        Condition.gt(Operand.attribute("ownership", "share"), Operand.literal(50)),
+                        Condition.not(Condition.hasValue("ownership", "x")))), 0, 4));
+    }
+
+    @Test
+    void theConditionOfATraversalIsLocatedAtTheStepAndItsProblemsAtTheirPlace() {
+        String text = step("{ \"traverse\": { \"from\": \"a\", \"name\": \"ownedBy\", \"as\": \"party\", "
+                + "\"maxDepth\": 4, \"along\": { \"cmpare\": { } } } }");
+
+        Problem problem = problem(text);
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.UNKNOWN_KEY);
+        assertThat(problem.path()).isEqualTo("@query.steps.0");
+        assertThat(problem.location()).contains(locationOf(text, "\"cmpare\"", "/steps/0/traverse/along/cmpare"));
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("'compare'"));
+    }
+
+    @Test
+    void theConditionOfATraversalMustBeAConditionAndNotEmpty() {
+        for (String along : List.of("\"large\"", "[]", "7", "null", "{ }", "{ \"hasLink\": { \"of\": \"a\" } }")) {
+            List<Problem> problems = problems(step("{ \"traverse\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"b\", "
+                    + "\"maxDepth\": 1, \"relationship\": \"r\", \"along\": " + along + " } }"));
+
+            assertThat(problems).as(along).isNotEmpty().allSatisfy(problem -> {
+                assertThat(problem.path()).isEqualTo("@query.steps.0");
+                assertThat(problem.code()).isIn(ProblemCode.INVALID_VALUE, ProblemCode.MISSING_KEY);
+            });
+        }
+    }
+
+    @Test
+    void theConditionOfATraversalNestsAtMostAsDeepAsAnyCondition() {
+        String nested = "{ \"hasValue\": { \"attribute\": \"x\", \"of\": \"r\" } }";
+        for (int i = 0; i < 300; i++) {
+            nested = "{ \"not\": " + nested + " }";
+        }
+
+        Problem problem = problem(step("{ \"traverse\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"b\", "
+                + "\"maxDepth\": 1, \"relationship\": \"r\", \"along\": " + nested + " } }"));
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_VALUE);
+        assertThat(problem.message()).contains("nest at most");
+    }
+
+    @Test
+    void aLinkTestCanNameTheRelationshipAndHaveAConditionOnIt() {
+        Condition condition = condition("{ \"hasLink\": { \"of\": \"a\", \"name\": \"ownedBy\", "
+                + "\"relationship\": \"owns\", \"along\": { \"compare\": { \"left\": { \"attribute\": \"share\", "
+                + "\"of\": \"owns\" }, \"op\": \"gt\", \"right\": { \"value\": 50 } } } } }");
+
+        assertThat(condition).isEqualTo(Condition.hasLink("a", "ownedBy", "owns",
+                Condition.gt(Operand.attribute("owns", "share"), Operand.literal(50))));
+        assertThat(condition("{ \"hasLink\": { \"of\": \"a\", \"name\": \"ownedBy\", \"relationship\": \"owns\" } }"))
+                .as("a name without a condition").isEqualTo(new Condition.HasLink("a", "ownedBy",
+                        Optional.of("owns"), Optional.empty()));
+    }
+
+    @Test
+    void theConditionOfALinkTestNeedsTheNameOfTheRelationship() {
+        String text = step("{ \"where\": { \"hasLink\": { \"of\": \"a\", \"name\": \"ownedBy\", \"along\": "
+                + "{ \"hasValue\": { \"attribute\": \"x\", \"of\": \"r\" } } } } }");
+
+        Problem problem = problem(text);
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.MISSING_KEY);
+        assertThat(problem.path()).isEqualTo("@query.steps.0");
+        assertThat(problem.location()).contains(locationOf(text, "\"along\"", "/steps/0/where/hasLink/along"));
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("'relationship'"));
+    }
+
+    @Test
+    void theProblemsOfTheConditionOfALinkTestAreLocatedInIt() {
+        String text = step("{ \"where\": { \"hasLink\": { \"of\": \"a\", \"name\": \"ownedBy\", \"relationship\": "
+                + "\"r\", \"along\": { \"hasValu\": { } } } } }");
+
+        Problem problem = problem(text);
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.UNKNOWN_KEY);
+        assertThat(problem.path()).isEqualTo("@query.steps.0");
+        assertThat(problem.location()).contains(locationOf(text, "\"hasValu\"",
+                "/steps/0/where/hasLink/along/hasValu"));
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("'hasValue'"));
+    }
+
+    @Test
+    void aLinkTestKnowsOnlyItsKeysAndStringNamesAndACondition() {
+        for (String hasLink : List.of("{ \"of\": \"a\", \"name\": \"n\", \"relationship\": 7 }",
+                "{ \"of\": \"a\", \"name\": \"n\", \"relationship\": \"r\", \"along\": \"large\" }",
+                "{ \"of\": \"a\", \"name\": \"n\", \"relationship\": \"r\", \"along\": { } }",
+                "{ \"of\": \"a\", \"name\": \"n\", \"alongg\": { } }", "{ \"of\": \"a\" }",
+                "{ \"name\": \"n\" }")) {
+            List<Problem> problems = problems(step("{ \"where\": { \"hasLink\": " + hasLink + " } }"));
+
+            assertThat(problems).as(hasLink).isNotEmpty().allSatisfy(problem -> {
+                assertThat(problem.path()).isEqualTo("@query.steps.0");
+                assertThat(problem.code()).isIn(ProblemCode.INVALID_VALUE, ProblemCode.MISSING_KEY,
+                        ProblemCode.UNKNOWN_KEY);
+            });
+        }
+    }
+
+    @Test
+    void theConditionOfALinkTestCountsTowardsTheNestingLimit() {
+        String nested = "{ \"hasValue\": { \"attribute\": \"x\", \"of\": \"r\" } }";
+        for (int i = 0; i < 120; i++) {
+            nested = "{ \"hasLink\": { \"of\": \"a\", \"name\": \"n\", \"relationship\": \"r\", \"along\": " + nested + " } }";
+        }
+
+        Problem problem = problem(step("{ \"where\": " + nested + " }"));
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_VALUE);
+        assertThat(problem.message()).contains("nest at most");
     }
 
     @Test
@@ -265,9 +391,23 @@ class QueryReadingTest {
                       name: ownedBy
                       as: party
                       maxDepth: 10
+                      relationship: ownership
+                      along:
+                        compare:
+                          left: {attribute: share, of: ownership}
+                          op: gt
+                          right: {value: 50}
                   - where:
                       not:
-                        hasLink: {of: party, name: ownedBy}
+                        hasLink:
+                          of: party
+                          name: ownedBy
+                          relationship: owns
+                          along:
+                            compare:
+                              left: {attribute: share, of: owns}
+                              op: gt
+                              right: {value: 50}
                 groupBy:
                   - of: party
                 aggregates:

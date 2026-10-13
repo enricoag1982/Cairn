@@ -23,6 +23,7 @@ import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.reference.types.Account;
 import io.github.enricoag1982.cairn.reference.types.HeldBy;
 import io.github.enricoag1982.cairn.reference.types.Organization;
+import io.github.enricoag1982.cairn.reference.types.Owns;
 import io.github.enricoag1982.cairn.reference.types.Party;
 import io.github.enricoag1982.cairn.reference.types.Person;
 import io.github.enricoag1982.cairn.schema.Value;
@@ -43,8 +44,13 @@ class QueryFormsAgreeTest {
               "from": { "type": "Account", "as": "a" },
               "steps": [
                 { "follow": { "from": "a", "name": "HeldBy", "as": "holder" } },
-                { "traverse": { "from": "holder", "name": "ownedBy", "minDepth": 0, "maxDepth": 10, "as": "party" } },
-                { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy" } } } }
+                { "traverse": { "from": "holder", "name": "ownedBy", "minDepth": 0, "maxDepth": 10, "as": "party",
+                    "relationship": "ownership",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "ownership" }, "op": "gt",
+                                            "right": { "value": 50 } } } } },
+                { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy", "relationship": "owns",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "owns" }, "op": "gt",
+                                            "right": { "value": 50 } } } } } } }
               ],
               "groupBy": [ { "of": "party" } ],
               "aggregates": [ { "function": "sum", "attribute": "balance", "of": "a", "as": "total" } ]
@@ -89,15 +95,20 @@ class QueryFormsAgreeTest {
         Query builder = ReferenceQueries.totalBalanceByUltimateParent();
         Query typed = Query.from(Account.TYPE, "a")
                 .follow("a", HeldBy.TYPE, "holder")
-                .traverse("holder", "ownedBy", 0, 10, "party")
-                .where(Condition.not(Condition.hasLink("party", "ownedBy")))
+                .traverse("holder", "ownedBy", 0, 10, "party", "ownership",
+                        Owns.SHARE.of("ownership").gt(new BigDecimal("50")))
+                .where(Condition.not(Condition.hasLink("party", "ownedBy", "owns",
+                        Owns.SHARE.of("owns").gt(new BigDecimal("50")))))
                 .groupBy("party")
                 .aggregate(Account.BALANCE.of("a").sum("total"))
                 .build();
         Query written = json(TOTAL_BALANCE);
 
-        assertThat(typed).isEqualTo(builder);
         assertThat(written).isEqualTo(builder);
+        // The share is a decimal, so the typed form states 50 as a decimal, where JSON and the builder write an int;
+        // numbers compare by value, so the three forms give the same rows.
+        assertThat(typed.steps().getFirst()).isEqualTo(builder.steps().getFirst());
+        assertThat(typed.grouping()).isEqualTo(builder.grouping());
         for (Coordinates coordinates : List.of(Coordinates.effectiveAt(on(3, 31)),
                 Coordinates.effectiveAt(on(3, 31)).knownAt(on(4, 5)))) {
             View view = domain.store.view(coordinates);

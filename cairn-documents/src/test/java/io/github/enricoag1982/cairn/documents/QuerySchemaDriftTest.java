@@ -81,7 +81,8 @@ class QuerySchemaDriftTest {
         assertLevel("in", schemaAt(condition, "properties", "in"), QueryKeys.IN, QueryKeys.IN);
         assertLevel("hasValue", schemaAt(condition, "properties", "hasValue"), QueryKeys.HAS_VALUE,
                 QueryKeys.HAS_VALUE);
-        assertLevel("hasLink", schemaAt(condition, "properties", "hasLink"), QueryKeys.HAS_LINK, QueryKeys.HAS_LINK);
+        assertLevel("hasLink", schemaAt(condition, "properties", "hasLink"), QueryKeys.HAS_LINK,
+                QueryKeys.HAS_LINK_REQUIRED);
         assertLevel("isA", schemaAt(condition, "properties", "isA"), QueryKeys.IS_A, QueryKeys.IS_A);
         assertLevel("operand", operand, QueryKeys.OPERAND, List.of());
         assertLevel("group key", schemaAt(SCHEMA, "properties", "groupBy", "items"), QueryKeys.GROUP_KEY,
@@ -112,10 +113,31 @@ class QuerySchemaDriftTest {
             assertThat(DocumentTrees.at(schema, "dependentRequired")).isEqualTo(Map.of("attribute", List.of("of"),
                     "of", List.of("attribute")));
         }
+        assertThat(DocumentTrees.at(schemaAt(condition, "properties", "hasLink"), "dependentRequired"))
+                .isEqualTo(Map.of("along", List.of("relationship")));
         assertThat(DocumentTrees.at(schemaAt(SCHEMA, "properties", "steps", "items"), "minProperties")).isEqualTo(1);
         assertThat(DocumentTrees.at(schemaAt(SCHEMA, "properties", "steps", "items"), "maxProperties")).isEqualTo(1);
         assertThat(DocumentTrees.at(condition, "minProperties")).isEqualTo(1);
         assertThat(DocumentTrees.at(condition, "maxProperties")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("The JSON Schema states the limit of the nesting of conditions that the reader enforces")
+    void theJsonSchemaStatesTheLimitOfTheNestingOfConditionsThatTheReaderEnforces() {
+        Object condition = schemaAt(SCHEMA, "properties", "steps", "items", "properties", "where");
+
+        assertThat(DocumentTrees.at(condition, "description").toString()).contains("at most 100 deep");
+    }
+
+    @Test
+    @DisplayName("The condition of a traversal is a condition of the JSON Schema")
+    void theConditionOfATraversalIsAConditionOfTheJsonSchema() {
+        Object traverse = schemaAt(SCHEMA, "properties", "steps", "items", "properties", "traverse");
+
+        assertThat(schemaAt(traverse, "properties", "along"))
+                .isEqualTo(schemaAt(SCHEMA, "properties", "steps", "items", "properties", "where"));
+        assertThat(DocumentTrees.at(DocumentTrees.at(traverse, "properties", "along"), "description").toString())
+                .contains("relationship");
     }
 
     @Test
@@ -172,10 +194,15 @@ class QuerySchemaDriftTest {
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ "
                     + "{ \"optionalFollow\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"b\", \"relationship\": \"r\" } }, "
                     + "{ \"traverse\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"c\", \"minDepth\": 0, "
-                    + "\"maxDepth\": 0, \"relationship\": \"v\", \"depth\": \"d\" } } ] }",
+                    + "\"maxDepth\": 0, \"relationship\": \"v\", \"depth\": \"d\", \"along\": { \"not\": "
+                    + "{ \"compare\": { \"left\": { \"attribute\": \"x\", \"of\": \"v\" }, \"op\": \"le\", "
+                    + "\"right\": { \"value\": 50 } } } } } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"and\": [ "
                     + "{ \"or\": [] }, { \"not\": { \"isA\": { \"of\": \"a\", \"type\": \"T\" } } }, "
                     + "{ \"hasLink\": { \"of\": \"a\", \"name\": \"n\" } }, "
+                    + "{ \"hasLink\": { \"of\": \"a\", \"name\": \"n\", \"relationship\": \"r\" } }, "
+                    + "{ \"hasLink\": { \"of\": \"a\", \"name\": \"n\", \"relationship\": \"r\", \"along\": "
+                    + "{ \"not\": { \"hasValue\": { \"attribute\": \"x\", \"of\": \"r\" } } } } }, "
                     + "{ \"in\": { \"operand\": { \"id\": \"a\" }, \"values\": [ 1, 2.5, \"x\", true ] } }, "
                     + "{ \"compare\": { \"left\": { \"type\": \"a\" }, \"op\": \"ne\", \"right\": { \"value\": \"T\" } } } "
                     + "] } } ] }",
@@ -207,6 +234,21 @@ class QuerySchemaDriftTest {
                     + "\"as\": \"b\" } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\", "
                     + "\"as\": \"b\", \"minDepth\": -1, \"maxDepth\": 1 } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\", "
+                    + "\"as\": \"b\", \"maxDepth\": 1, \"along\": \"large\" } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\", "
+                    + "\"as\": \"b\", \"maxDepth\": 1, \"along\": { } } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\", "
+                    + "\"as\": \"b\", \"maxDepth\": 1, \"along\": { \"compare\": { \"left\": { \"id\": \"a\" }, \"op\": "
+                    + "\"eq\" } } } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"hasLink\": { \"of\": \"a\", "
+                    + "\"name\": \"n\", \"along\": { \"hasValue\": { \"attribute\": \"x\", \"of\": \"r\" } } } } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"hasLink\": { \"of\": \"a\", "
+                    + "\"name\": \"n\", \"relationship\": \"r\", \"along\": \"large\" } } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"hasLink\": { \"of\": \"a\", "
+                    + "\"name\": \"n\", \"relationship\": 7 } } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"hasLink\": { \"of\": \"a\", "
+                    + "\"name\": \"n\", \"extra\": 1 } } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"and\": { } } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"compare\": { \"left\": "

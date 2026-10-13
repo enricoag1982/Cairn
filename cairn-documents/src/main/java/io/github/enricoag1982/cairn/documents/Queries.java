@@ -20,8 +20,9 @@ import java.util.Objects;
  * <li>{@code steps}: a list of steps, each a mapping with one key: {@code where} (a condition), {@code follow} or
  *     {@code optionalFollow} ({@code {from, name, as, relationship?}}, the binding to lead away from, the relationship
  *     name or inverse name, the name for the entity at the other end, and the name for the relationship), or
- *     {@code traverse} ({@code {from, name, as, minDepth?, maxDepth, relationship?, depth?}}, the minimum depth being
- *     0 if it is left out);
+ *     {@code traverse} ({@code {from, name, as, minDepth?, maxDepth, relationship?, depth?, along?}}, the minimum
+ *     depth being 0 if it is left out, and {@code along} a condition on the relationship, which must then be named
+ *     with {@code relationship}, that decides which relationships the traversal follows);
  * <li>{@code groupBy}: group keys, {@code {of, attribute?, as?}}, a binding or an attribute of it, and the name of the
  *     column;
  * <li>{@code aggregates}: {@code {function, attribute?, of?, as}}, with {@code function} one of {@code count},
@@ -34,8 +35,10 @@ import java.util.Objects;
  *
  * <p>A condition is a mapping with one key: {@code compare} ({@code {left, op, right}}, {@code op} being one of
  * {@code eq}, {@code ne}, {@code lt}, {@code le}, {@code gt} and {@code ge}), {@code in} ({@code {operand, values}}),
- * {@code hasValue} ({@code {attribute, of}}), {@code hasLink} ({@code {of, name}}), {@code isA} ({@code {of, type}}),
- * {@code and} and {@code or} (lists of conditions) and {@code not} (a condition). An operand is
+ * {@code hasValue} ({@code {attribute, of}}), {@code hasLink} ({@code {of, name, relationship?, along?}}, where
+ * {@code along}, which needs {@code relationship}, the name it refers to the relationship by, is a condition that the
+ * relationship of a link must meet), {@code isA} ({@code {of, type}}), {@code and} and {@code or} (lists of
+ * conditions) and {@code not} (a condition). An operand is
  * {@code {attribute, of}}, {@code {id: <binding>}}, {@code {type: <binding>}} or {@code {value: <literal>}}.
  *
  * <p>The keys {@code cairn}, the format version, which must be 1 if it is there, and {@code $schema}, which names the

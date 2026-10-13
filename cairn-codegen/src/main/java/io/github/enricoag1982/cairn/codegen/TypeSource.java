@@ -195,6 +195,7 @@ final class TypeSource {
         }
         if (element.kind() != Element.Kind.TRAIT) {
             writeFrom();
+            writeFromInSchema();
             writeFactories();
             writeSnapshot();
             if (relationship) {
@@ -309,6 +310,66 @@ final class TypeSource {
         }
         out.line("default -> " + nested(element, "Snapshot") + ".of(state);");
         out.close("};");
+        out.close("}");
+    }
+
+    /**
+     * Writes {@code from(state, schema)}, which finds the nearest type that the generated code knows among the state's
+     * type and its supertypes in the schema, and reads the state as that type, as {@code from(state)} does for a type
+     * that it knows.
+     */
+    private void writeFromInSchema() {
+        member();
+        String self = type(element);
+        String name = Docs.code(element.name());
+        out.javadoc(doc("Reads a state as " + name + ", with the schema that it was read in: as the snapshot record of "
+                        + "the nearest of the state's type and its supertypes in the schema that the generated code "
+                        + "knows, if that is " + name + " or a generated subtype of it. A state of a type that was "
+                        + "registered after generation, such as a subtype of a generated type, so reads as its nearest "
+                        + "generated supertype. If no type of that line is one that the generated code knows, the state "
+                        + "reads as the snapshot record of " + name + ".",
+                "@param state the state of " + (relationship ? "a relationship" : "an entity"),
+                "@param schema the schema to look the state's type and its supertypes up in, such as the schema of the "
+                        + "view that the state was read from",
+                "@return the " + thing() + " as " + a(element.name()),
+                "@throws " + ref(Library.ILLEGAL_ARGUMENT_EXCEPTION) + " if the nearest generated type of the state is "
+                        + "neither " + name + " nor one of its subtypes, or the state lacks a required value"));
+        out.open("static " + self + " from(" + state() + " state, " + ref(Library.SCHEMA_TYPE) + " schema) {");
+        String line = relationship ? "relationshipTypeAndSupertypes" : "entityTypeAndSupertypes";
+        String typeOf = relationship ? "state.relationshipType()" : "state.entityType()";
+        out.open("for (" + ref(Library.STRING) + " candidate : " + ref(Library.TYPED_VALUES) + "." + line + "(schema, " + typeOf + ")) {");
+        out.open("switch (candidate) {");
+        writeCase(element.name(), nested(element, "Snapshot"));
+        List<String> subtypes = element.subtypes().stream().sorted().toList();
+        for (String subtype : subtypes) {
+            Element sub = model.element(subtype);
+            writeCase(subtype, type(sub) + "." + nested(sub, "Snapshot"));
+        }
+        List<String> others = model.elements().stream().filter(other -> other.kind() == element.kind())
+                .map(Element::name).filter(candidate -> !candidate.equals(element.name())
+                        && !subtypes.contains(candidate))
+                .sorted().toList();
+        if (!others.isEmpty()) {
+            writeLabels(others);
+            out.indent().indent();
+            out.line("throw new " + ref(Library.ILLEGAL_ARGUMENT_EXCEPTION) + "(\"The " + thing() + " \" + state.id()"
+                    + " + \" has the type \"");
+            out.line("        + " + typeOf + " + \", whose nearest generated type is \" + candidate");
+            out.line("        + " + Docs.literal(", which is neither " + element.name() + " nor one of its subtypes.")
+                    + ");");
+            out.outdent().outdent();
+        }
+        out.line("default -> { }");
+        out.close("}");
+        out.close("}");
+        out.line("return " + nested(element, "Snapshot") + ".of(state);");
+        out.close("}");
+    }
+
+    /** Writes a case of the switch of {@code from(state, schema)} that returns the snapshot of a state of a type. */
+    private void writeCase(String typeName, String snapshot) {
+        out.open("case " + Docs.literal(typeName) + " -> {");
+        out.line("return " + snapshot + ".of(state);");
         out.close("}");
     }
 

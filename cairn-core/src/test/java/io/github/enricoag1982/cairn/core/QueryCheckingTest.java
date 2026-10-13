@@ -184,6 +184,120 @@ class QueryCheckingTest {
         assertProblem(only(run(leiOfAPerson)), ProblemCode.UNKNOWN_ATTRIBUTE, "@query.steps.1");
     }
 
+    // ------------------------------------------------------------------ the condition of a link test
+
+    private static Query linkTest(Condition along) {
+        return Query.from("Organization", "o")
+                .where(Condition.hasLink("o", "ownedBy", "owns", along))
+                .build();
+    }
+
+    @Test
+    void theConditionOfALinkTestReadsTheAttributesOfTheRelationshipTypeByNameOrInverseName() {
+        Condition large = Condition.gt(attribute("owns", "share"), Operand.literal(50));
+
+        assertThat(run(linkTest(large))).isInstanceOf(QueryResult.Rows.class);
+        assertThat(run(Query.from("Party", "p").where(Condition.hasLink("p", "ownedBy", "r", Condition.gt(
+                attribute("r", "share"), Operand.literal(50)))).build())).isInstanceOf(QueryResult.Rows.class);
+        assertThat(run(Query.from("Organization", "o").where(Condition.hasLink("o", "Owns", "r", Condition.gt(
+                attribute("r", "share"), Operand.literal(50)))).build())).isInstanceOf(QueryResult.Rows.class);
+        assertThat(run(Query.from("Organization", "o").where(Condition.hasLink("o", "Employs", "job", Condition.hasValue(
+                "job", "title"))).build())).isInstanceOf(QueryResult.Rows.class);
+    }
+
+    @Test
+    void anAttributeThatTheRelationshipTypeOfALinkTestLacksIsUnknownWithTheClosestOne() {
+        Problem problem = only(run(linkTest(Condition.gt(attribute("owns", "shares"), Operand.literal(50)))));
+
+        assertProblem(problem, ProblemCode.UNKNOWN_ATTRIBUTE, "@query.steps.0");
+        assertHint(problem, "share");
+        assertThat(problem.message()).contains("relationship type Owns");
+        assertProblem(only(run(Query.from("Organization", "o").where(Condition.hasLink("o", "Employs", "job",
+                Condition.hasValue("job", "share"))).build())), ProblemCode.UNKNOWN_ATTRIBUTE, "@query.steps.0");
+    }
+
+    @Test
+    void theConditionOfALinkTestCannotReferToAnythingButItsRelationship() {
+        List<Problem> problems = problems(run(linkTest(Condition.and(
+                Condition.gt(attribute("o", "name"), Operand.literal("A")),
+                Condition.hasValue("elsewhere", "name"),
+                Condition.hasLink("o", "ownedBy")))));
+
+        assertThat(problems).hasSize(3).allSatisfy(problem -> {
+            assertProblem(problem, ProblemCode.UNKNOWN_BINDING, "@query.steps.0");
+            assertThat(problem.message()).contains("'along' condition of a hasLink test", "'owns'");
+        });
+    }
+
+    @Test
+    void aLinkTestThatDoesNotNameItsRelationshipHasNoBindingForItsConditionToReferTo() {
+        Condition along = Condition.gt(attribute("owns", "share"), Operand.literal(50));
+        Query query = Query.from("Organization", "o")
+                .where(new Condition.HasLink("o", "ownedBy", Optional.empty(), Optional.of(along))).build();
+
+        Problem problem = only(run(query));
+
+        assertProblem(problem, ProblemCode.UNKNOWN_BINDING, "@query.steps.0");
+        assertThat(problem.message()).contains("does not name it", "hasLink test");
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("Name the relationship"));
+    }
+
+    @Test
+    void aNameForTheRelationshipWithoutAConditionIsHarmless() {
+        Query query = Query.from("Organization", "o")
+                .where(new Condition.HasLink("o", "ownedBy", Optional.of("owns"), Optional.empty())).build();
+
+        assertThat(run(query)).isInstanceOf(QueryResult.Rows.class);
+    }
+
+    @Test
+    void theRelationshipOfALinkTestIsNoEntityAndValuesMustBeComparable() {
+        List<Problem> problems = problems(run(linkTest(Condition.and(Condition.hasLink("owns", "ownedBy"),
+                Condition.gt(attribute("owns", "share"), Operand.literal("many"))))));
+
+        assertThat(problems).extracting(Problem::code).containsExactly(ProblemCode.UNKNOWN_BINDING,
+                ProblemCode.INCOMPARABLE_VALUES);
+        assertThat(problems).extracting(Problem::path).containsOnly("@query.steps.0");
+    }
+
+    @Test
+    void anUnknownRelationshipNameOfALinkTestIsOneProblemWhateverItsConditionSays() {
+        Query query = Query.from("Organization", "o").where(Condition.hasLink("o", "ownedBi", "owns",
+                Condition.gt(attribute("owns", "share"), Operand.literal(50)))).build();
+
+        Problem problem = only(run(query));
+
+        assertProblem(problem, ProblemCode.UNKNOWN_RELATIONSHIP_TYPE, "@query.steps.0");
+        assertHint(problem, "ownedBy");
+    }
+
+    @Test
+    void aLinkTestInTheConditionOfATraversalOrOfAnotherLinkTestHasNoEntityToStartFrom() {
+        Condition inner = Condition.hasLink("o", "ownedBy", "x", Condition.eq(Operand.literal(1), Operand.literal(1)));
+        Query inTraversal = Query.from("Organization", "o")
+                .traverse("o", "ownedBy", 1, 2, "owner", Optional.of("owns"), Optional.empty(), Optional.of(inner))
+                .build();
+        Query inLinkTest = linkTest(inner);
+
+        assertProblem(only(run(inTraversal)), ProblemCode.UNKNOWN_BINDING, "@query.steps.0");
+        assertProblem(only(run(inLinkTest)), ProblemCode.UNKNOWN_BINDING, "@query.steps.0");
+    }
+
+    @Test
+    void theProblemsOfALinkTestAndOfTheRestOfTheQueryAreReportedTogetherInTheirSteps() {
+        Query query = Query.from("Organization", "o")
+                .where(Condition.hasLink("o", "ownedBy", "owns", Condition.gt(attribute("o", "name"),
+                        Operand.literal("A"))))
+                .where(Condition.hasValue("o", "leii"))
+                .build();
+
+        List<Problem> problems = problems(run(query));
+
+        assertThat(problems).extracting(Problem::code, Problem::path).containsExactly(
+                tuple(ProblemCode.UNKNOWN_BINDING, "@query.steps.0"),
+                tuple(ProblemCode.UNKNOWN_ATTRIBUTE, "@query.steps.1"));
+    }
+
     // ------------------------------------------------------------------ bindings
 
     @Test

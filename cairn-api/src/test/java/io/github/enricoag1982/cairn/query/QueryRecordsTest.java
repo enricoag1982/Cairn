@@ -78,9 +78,40 @@ class QueryRecordsTest {
                 new QueryStep.Follow("a", "HeldBy", "other", Optional.of("held"), false),
                 new QueryStep.Follow("a", "HeldBy", "maybe", Optional.empty(), true),
                 new QueryStep.Follow("a", "HeldBy", "perhaps", Optional.of("link"), true),
-                new QueryStep.Traverse("holder", "ownedBy", "party", Optional.empty(), Optional.empty(), 0, 5),
-                new QueryStep.Traverse("holder", "ownedBy", "owner", Optional.of("via"), Optional.of("depth"), 1, 2),
+                new QueryStep.Traverse("holder", "ownedBy", "party", Optional.empty(), Optional.empty(),
+                        Optional.empty(), 0, 5),
+                new QueryStep.Traverse("holder", "ownedBy", "owner", Optional.of("via"), Optional.of("depth"),
+                        Optional.empty(), 1, 2),
                 new QueryStep.Filter(condition));
+    }
+
+    @Test
+    void aTraversalCanFollowOnlyRelationshipsThatMeetAConditionAndTheBuilderTakesIt() {
+        Condition large = Condition.gt(Operand.attribute("ownership", "share"), Operand.literal(50));
+
+        Query named = Query.from("Account", "a")
+                .traverse("a", "ownedBy", 0, 5, "party", "ownership", large)
+                .build();
+        Query general = Query.from("Account", "a")
+                .traverse("a", "ownedBy", 1, 2, "party", Optional.of("ownership"), Optional.of("depth"),
+                        Optional.of(large))
+                .traverse("a", "ownedBy", 1, 2, "other", Optional.empty(), Optional.empty(), Optional.empty())
+                .build();
+
+        assertThat(named.steps()).containsExactly(new QueryStep.Traverse("a", "ownedBy", "party",
+                Optional.of("ownership"), Optional.empty(), Optional.of(large), 0, 5));
+        assertThat(general.steps()).containsExactly(
+                new QueryStep.Traverse("a", "ownedBy", "party", Optional.of("ownership"), Optional.of("depth"),
+                        Optional.of(large), 1, 2),
+                new QueryStep.Traverse("a", "ownedBy", "other", Optional.empty(), Optional.empty(), Optional.empty(),
+                        1, 2));
+        assertThat(Query.from("Account", "a").traverse("a", "ownedBy", 0, 5, "party").build().steps())
+                .singleElement().isInstanceOfSatisfying(QueryStep.Traverse.class,
+                        traverse -> assertThat(traverse.along()).isEmpty());
+        assertThatThrownBy(() -> Query.from("Account", "a").traverse("a", "n", 0, 1, "b", null, large))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Query.from("Account", "a").traverse("a", "n", 0, 1, "b", "r", null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -206,9 +237,11 @@ class QueryRecordsTest {
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new QueryStep.Follow("a", "n", "b", null, false))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new QueryStep.Traverse("a", "n", "b", Optional.empty(), null, 0, 1))
+        assertThatThrownBy(() -> new QueryStep.Traverse("a", "n", "b", Optional.empty(), null, Optional.empty(), 0, 1))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new QueryStep.Traverse("a", "n", "b", null, Optional.empty(), 0, 1))
+        assertThatThrownBy(() -> new QueryStep.Traverse("a", "n", "b", null, Optional.empty(), Optional.empty(), 0, 1))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new QueryStep.Traverse("a", "n", "b", Optional.empty(), Optional.empty(), null, 0, 1))
                 .isInstanceOf(NullPointerException.class);
     }
 
@@ -226,6 +259,13 @@ class QueryRecordsTest {
         assertThatThrownBy(() -> new Condition.HasValue("a", null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Condition.HasLink(null, "x")).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Condition.HasLink("a", null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Condition.HasLink("a", "x", null, Optional.empty()))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Condition.HasLink("a", "x", Optional.empty(), null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Condition.hasLink("a", "x", null, Condition.hasValue("r", "y")))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Condition.hasLink("a", "x", "r", null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Condition.IsA(null, "x")).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Condition.IsA("a", null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Condition.And(null)).isInstanceOf(NullPointerException.class);
@@ -298,6 +338,11 @@ class QueryRecordsTest {
         assertThat(Condition.in(left, List.of(Value.of(1)))).isEqualTo(new Condition.In(left, List.of(Value.of(1))));
         assertThat(Condition.hasValue("a", "x")).isEqualTo(new Condition.HasValue("a", "x"));
         assertThat(Condition.hasLink("a", "x")).isEqualTo(new Condition.HasLink("a", "x"));
+        assertThat(Condition.hasLink("a", "x")).isEqualTo(new Condition.HasLink("a", "x", Optional.empty(),
+                Optional.empty()));
+        Condition along = Condition.hasValue("r", "y");
+        assertThat(Condition.hasLink("a", "x", "r", along)).isEqualTo(new Condition.HasLink("a", "x", Optional.of("r"),
+                Optional.of(along)));
         assertThat(Condition.isA("a", "x")).isEqualTo(new Condition.IsA("a", "x"));
         Condition one = Condition.hasValue("a", "x");
         assertThat(Condition.and(one, one)).isEqualTo(new Condition.And(List.of(one, one)));

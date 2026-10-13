@@ -68,14 +68,19 @@ class TypedQueriesTest {
         recordRd1Rd2Rd5();
         Query typed = Query.from("Account", "a")
                 .follow("a", "HeldBy", "holder")
-                .traverse("holder", "ownedBy", 0, 10, "party")
-                .where(Condition.not(Condition.hasLink("party", "ownedBy")))
+                .traverse("holder", "ownedBy", 0, 10, "party", "ownership",
+                        SHARE.of("ownership").gt(new BigDecimal("50")))
+                .where(Condition.not(Condition.hasLink("party", "ownedBy", "owns",
+                        SHARE.of("owns").gt(new BigDecimal("50")))))
                 .groupBy("party")
                 .aggregate(BALANCE.of("a").sum("total"))
                 .build();
         Query untyped = ReferenceQueries.totalBalanceByUltimateParent();
 
-        assertThat(typed).isEqualTo(untyped);
+        assertThat(typed).as("it differs in the literal, a decimal 50 for the share, which is a decimal attribute")
+                .isNotEqualTo(untyped);
+        assertThat(typed.steps().getFirst()).isEqualTo(untyped.steps().getFirst());
+        assertThat(typed.grouping()).isEqualTo(untyped.grouping());
         for (Coordinates coordinates : new Coordinates[] {Coordinates.effectiveAt(on(3, 31)),
                 Coordinates.effectiveAt(on(3, 31)).knownAt(on(4, 5))}) {
             assertThat(view(coordinates).query(typed)).isEqualTo(view(coordinates).query(untyped));

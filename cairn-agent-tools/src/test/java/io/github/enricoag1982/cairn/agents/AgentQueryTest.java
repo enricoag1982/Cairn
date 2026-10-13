@@ -29,8 +29,13 @@ class AgentQueryTest {
               "from": { "type": "Account", "as": "a" },
               "steps": [
                 { "follow": { "from": "a", "name": "HeldBy", "as": "holder" } },
-                { "traverse": { "from": "holder", "name": "ownedBy", "maxDepth": 10, "as": "party" } },
-                { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy" } } } }
+                { "traverse": { "from": "holder", "name": "ownedBy", "maxDepth": 10, "as": "party",
+                    "relationship": "ownership",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "ownership" }, "op": "gt",
+                                            "right": { "value": 50 } } } } },
+                { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy", "relationship": "owns",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "owns" }, "op": "gt",
+                                            "right": { "value": 50 } } } } } } }
               ],
               "groupBy": [ { "of": "party" } ],
               "aggregates": [ { "function": "sum", "attribute": "balance", "of": "a", "as": "total" } ]
@@ -207,6 +212,50 @@ class AgentQueryTest {
         assertThat(problem.get("hint").stringValue()).contains("balance");
         assertThat(problem.get("location").get("pointer").stringValue()).isEqualTo("/steps/1");
         assertThat(problem.get("location").get("line").intValue()).isEqualTo(5);
+    }
+
+    @Test
+    void aConditionOnTheRelationshipsOfATraversalThatReferToAnotherBindingIsLocatedAtTheStep() {
+        String text = """
+                {
+                  "from": { "type": "Organization", "as": "o" },
+                  "steps": [
+                    { "traverse": { "from": "o", "name": "ownedBy", "as": "owner", "maxDepth": 3,
+                                    "relationship": "owns",
+                                    "along": { "compare": { "left": { "attribute": "share", "of": "o" }, "op": "gt",
+                                                            "right": { "value": 50 } } } } }
+                  ]
+                }
+                """;
+
+        JsonNode answer = query(text);
+
+        assertThat(codes(answer)).containsExactly("UNKNOWN_BINDING");
+        JsonNode problem = answer.get("problems").get(0);
+        assertThat(problem.get("path").stringValue()).isEqualTo("@query.steps.0");
+        assertThat(problem.get("message").stringValue()).contains("along", "'owns'");
+        assertThat(problem.get("location").get("pointer").stringValue()).isEqualTo("/steps/0");
+    }
+
+    @Test
+    void aConditionOnTheLinksOfALinkTestIsCheckedAndLocatedAtItsStep() {
+        fixture.createParties();
+        String valid = """
+                {"from": {"type": "Organization", "as": "o"},
+                 "steps": [ {"where": {"not": {"hasLink": {"of": "o", "name": "ownedBy", "relationship": "r",
+                   "along": {"compare": {"left": {"attribute": "share", "of": "r"}, "op": "gt",
+                             "right": {"value": 60}}}}}}} ]}
+                """;
+        String invalid = valid.replace("\"of\": \"r\"", "\"of\": \"o\"");
+
+        JsonNode answer = query(valid);
+        JsonNode problems = query(invalid);
+
+        assertThat(answer.get("result").get("rows")).as("neither organization has an owner").hasSize(2);
+        assertThat(codes(problems)).containsExactly("UNKNOWN_BINDING");
+        JsonNode problem = problems.get("problems").get(0);
+        assertThat(problem.get("path").stringValue()).isEqualTo("@query.steps.0");
+        assertThat(problem.get("location").get("pointer").stringValue()).isEqualTo("/steps/0");
     }
 
     @Test

@@ -12,7 +12,10 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME_OWNS_BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
@@ -20,6 +23,8 @@ import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipState;
+import io.github.enricoag1982.cairn.data.TemporaryId;
+import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.ReferenceQueries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
@@ -42,6 +47,8 @@ import org.junit.jupiter.api.Test;
  * JSON form are shown with the reader of queries.
  */
 class QueriesScenariosTest {
+
+    private static final TemporaryId A3 = new TemporaryId("a3");
 
     private final ReferenceStore reference = new ReferenceStore();
 
@@ -108,6 +115,30 @@ class QueriesScenariosTest {
                 .containsExactly("A-1", "A-2");
         assertThat(knownNow.rows()).extracting(row -> QueryRows.text(row.entity("a").orElseThrow(), "number"))
                 .containsExactly("A-2");
+    }
+
+    @Test
+    @DisplayName("Scenario: Organizations without a large owner")
+    void organizationsWithoutALargeOwner() {
+        Receipt parties = reference.createParties();
+        Receipt ownership = reference.replay(
+                ReferenceStories.rd2Ownership(entity(parties, ACME), entity(parties, BETA)));
+        reference.replay(ReferenceStories.rd2ShareCorrection(relationship(ownership, ACME_OWNS_BETA)));
+        Query noOwnerAbove60 = withoutAnOwnerAbove(60);
+        Query noOwnerAbove50 = withoutAnOwnerAbove(50);
+
+        QueryResult.Rows above60 = rows(reference.view(on(3, 1)).query(noOwnerAbove60));
+        QueryResult.Rows above50 = rows(reference.view(on(3, 1)).query(noOwnerAbove50));
+
+        assertThat(names(above60, "o")).as("ACME's share of Beta is 55").containsExactly("ACME", "Beta");
+        assertThat(names(above50, "o")).as("Beta has an owner above 50").containsExactly("ACME");
+    }
+
+    private static Query withoutAnOwnerAbove(int share) {
+        return Query.from("Organization", "o")
+                .where(Condition.not(Condition.hasLink("o", "ownedBy", "owns",
+                        Condition.gt(Operand.attribute("owns", "share"), Operand.literal(share)))))
+                .build();
     }
 
     @Test
@@ -179,6 +210,62 @@ class QueriesScenariosTest {
         assertThat(result.columns()).containsExactly("o", "owner", "depth");
         assertThat(result.rows()).extracting(row -> name(row, "owner"), row -> row.value("depth").orElseThrow())
                 .containsExactly(tuple("Beta", Value.of(0)), tuple("ACME", Value.of(1)));
+    }
+
+    @Test
+    @DisplayName("Scenario: Following only large ownerships")
+    void followingOnlyLargeOwnerships() {
+        Receipt parties = reference.createParties();
+        Receipt ownership = reference.replay(
+                ReferenceStories.rd2Ownership(entity(parties, ACME), entity(parties, BETA)));
+        reference.replay(ReferenceStories.rd2ShareCorrection(relationship(ownership, ACME_OWNS_BETA)));
+        Query above60 = ownersOfBetaAlong(Condition.gt(Operand.attribute("owns", "share"), Operand.literal(60)));
+        Query above50 = ownersOfBetaAlong(Condition.gt(Operand.attribute("owns", "share"), Operand.literal(50)));
+
+        QueryResult.Rows large = rows(reference.view(on(3, 1)).query(above60));
+        QueryResult.Rows contrast = rows(reference.view(on(3, 1)).query(above50));
+
+        assertThat(large.rows()).as("ACME's share of Beta is 55, so the ownership is not followed").isEmpty();
+        assertThat(names(contrast, "owner")).as("a share above 50 is followed").containsExactly("ACME");
+    }
+
+    private static Query ownersOfBetaAlong(Condition along) {
+        return Query.from("Organization", "o")
+                .where(nameIs("o", "Beta"))
+                .traverse("o", "ownedBy", 1, 5, "owner", "owns", along)
+                .build();
+    }
+
+    @Test
+    @DisplayName("Scenario: A traversal that starts at depth 0 from a person")
+    void aTraversalThatStartsAtDepth0FromAPerson() {
+        reference.createAccounts();
+        EntityId alice = entity(reference.parties, ALICE);
+        reference.commit(Transaction.by("importer")
+                .create(A3, "Account", from(1, 1), values("number", "A-3", "currency", "EUR", "balance", money("300")))
+                .relate(new TemporaryId("a3-held-by"), "HeldBy", A3, alice, from(1, 1), values()).build());
+        Query query = Query.from("Account", "a")
+                .follow("a", "HeldBy", "holder")
+                .traverse("holder", "ownedBy", 0, 5, "party")
+                .where(Condition.not(nameIs("party", "Beta")))
+                .orderBy(Order.ascending(Column.attribute("a", "number")))
+                .build();
+        Query leiOfAParty = Query.from("Account", "a")
+                .follow("a", "HeldBy", "holder")
+                .traverse("holder", "ownedBy", 0, 5, "party")
+                .where(Condition.hasValue("party", "lei"))
+                .build();
+
+        QueryResult valid = reference.view(on(3, 31)).query(query);
+        QueryResult invalid = reference.view(on(3, 31)).query(leiOfAParty);
+
+        assertThat(valid).as("the reached binding is a Party, whose attributes the query reads").isInstanceOf(
+                QueryResult.Rows.class);
+        assertThat(names(rows(valid), "party")).as("Alice, a person, is bound at depth 0").containsExactly("ACME",
+                "Alice");
+        Problem problem = onlyProblem(invalid);
+        assertThat(problem.code()).as("a Person has no lei").isEqualTo(ProblemCode.UNKNOWN_ATTRIBUTE);
+        assertThat(problem.path()).isEqualTo("@query.steps.2");
     }
 
     // ------------------------------------------------------------------ grouping

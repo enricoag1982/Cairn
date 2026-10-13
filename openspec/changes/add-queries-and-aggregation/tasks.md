@@ -27,4 +27,4 @@
 - [x] 5.1 Add `Query`, `Binding` and `Query step` to `docs/glossary.md`
 - [x] 5.2 Write a guide in `docs/guides/` for writing queries, and update the agent guide
 - [x] 5.3 Update `docs/architecture/README.md`, `AGENTS.md`, `README.md` and `openspec/config.yaml` (ADR-0023), and bump `last-reviewed`
-- [ ] 5.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 5.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

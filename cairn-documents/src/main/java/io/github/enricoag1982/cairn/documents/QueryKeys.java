@@ -39,7 +39,8 @@ final class QueryKeys {
     static final List<String> FOLLOW_REQUIRED = List.of("from", "name", "as");
 
     /** The keys of a {@code traverse}. */
-    static final List<String> TRAVERSE = List.of("from", "name", "as", "minDepth", "maxDepth", "relationship", "depth");
+    static final List<String> TRAVERSE = List.of("from", "name", "as", "minDepth", "maxDepth", "relationship", "depth",
+            "along");
     /** The keys a {@code traverse} must have. */
     static final List<String> TRAVERSE_REQUIRED = List.of("from", "name", "as", "maxDepth");
 
@@ -58,8 +59,13 @@ final class QueryKeys {
     /** The keys of a {@code hasValue}; both are required. */
     static final List<String> HAS_VALUE = List.of("attribute", "of");
 
-    /** The keys of a {@code hasLink}; both are required. */
-    static final List<String> HAS_LINK = List.of("of", "name");
+    /**
+     * The keys of a {@code hasLink}. {@code along}, a condition on the relationship of a link, needs
+     * {@code relationship}, the name it refers to the relationship by.
+     */
+    static final List<String> HAS_LINK = List.of("of", "name", "relationship", "along");
+    /** The keys a {@code hasLink} must have. */
+    static final List<String> HAS_LINK_REQUIRED = List.of("of", "name");
 
     /** The keys of an {@code isA}; both are required. */
     static final List<String> IS_A = List.of("of", "type");

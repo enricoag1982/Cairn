@@ -93,7 +93,7 @@
           "$ref": "#/$defs/follow"
         },
         "traverse": {
-          "description": "For each row, binds each entity reached from a bound entity by a relationship name or an inverse name, at depths from a minimum to a maximum. Depth 0 is the entity itself, reached by no relationship. Each reached entity is bound once per row, at the smallest depth at which it is reached.",
+          "description": "For each row, binds each entity reached from a bound entity by a relationship name or an inverse name, at depths from a minimum to a maximum. Depth 0 is the entity itself, reached by no relationship. Each reached entity is bound once per row, at the smallest depth at which it is reached. With along, only the relationships that meet a condition are followed. With a minimum depth of 0 the bound entity can be the one the traversal starts from, so its type is the closest common supertype of that entity's type and the type at the other end of the relationship, and without such a type only its ID, type and links can be used.",
           "$ref": "#/$defs/traverse"
         }
       }
@@ -158,11 +158,15 @@
         "depth": {
           "description": "The name that the depth is bound to, as an int value.",
           "type": "string"
+        },
+        "along": {
+          "description": "A condition on a relationship that decides whether the traversal follows it: only the relationships for which it holds are followed, and an entity that can be reached only through other relationships is not reached. It can refer only to the relationship of this traversal, which must then be named with relationship, and to constants.",
+          "$ref": "#/$defs/condition"
         }
       }
     },
     "condition": {
-      "description": "A condition: an object with exactly one key that says what kind of condition it is. A comparison with a value that is missing, or of an empty binding, is false; only hasValue tells missing values apart.",
+      "description": "A condition: an object with exactly one key that says what kind of condition it is. A comparison with a value that is missing, or of an empty binding, is false; only hasValue tells missing values apart. Conditions nest at most 100 deep, through and, or and not.",
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
@@ -181,7 +185,7 @@
           "$ref": "#/$defs/hasValue"
         },
         "hasLink": {
-          "description": "Holds if a bound entity has a link by a relationship name or an inverse name at the effective time.",
+          "description": "Holds if a bound entity has a link by a relationship name or an inverse name at the effective time, and with along, a link whose relationship meets a condition.",
           "$ref": "#/$defs/hasLink"
         },
         "isA": {
@@ -258,7 +262,7 @@
       }
     },
     "hasLink": {
-      "description": "A test for the links of a bound entity.",
+      "description": "A test for the links of a bound entity: it has a link by the name, and with along, a link whose relationship meets a condition.",
       "type": "object",
       "additionalProperties": false,
       "required": ["of", "name"],
@@ -270,7 +274,18 @@
         "name": {
           "description": "The name or an alias of a relationship type, or its inverse name or an alias of it.",
           "type": "string"
+        },
+        "relationship": {
+          "description": "The name that along refers to the relationship of a link by. It belongs to this test alone, so it may be a name that the query binds already; inside along it is the relationship.",
+          "type": "string"
+        },
+        "along": {
+          "description": "A condition on the relationship of a link: the test holds if the entity has at least one link by the name whose relationship meets it. It can refer only to the relationship, by the name given with relationship, and to constants.",
+          "$ref": "#/$defs/condition"
         }
+      },
+      "dependentRequired": {
+        "along": ["relationship"]
       }
     },
     "isA": {

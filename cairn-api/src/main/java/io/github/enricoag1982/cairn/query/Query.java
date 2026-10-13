@@ -17,13 +17,16 @@ import java.util.OptionalInt;
  * grouping with aggregates, the columns to return, an order and a limit.
  *
  * <p>A query is an immutable value that can be logged, compared, sent, and run again at other coordinates. Build one
- * with {@link #from(String, String)}. For example, the total balance of accounts by ultimate parent:
+ * with {@link #from(String, String)}. For example, the total balance of accounts by ultimate parent, which follows
+ * {@code ownedBy} only while the share is above 50%:
  *
  * <pre>{@code
  * Query query = Query.from("Account", "a")
  *         .follow("a", "HeldBy", "holder")
- *         .traverse("holder", "ownedBy", 0, 10, "party")
- *         .where(Condition.not(Condition.hasLink("party", "ownedBy")))
+ *         .traverse("holder", "ownedBy", 0, 10, "party", "ownership",
+ *                 Condition.gt(Operand.attribute("ownership", "share"), Operand.literal(50)))
+ *         .where(Condition.not(Condition.hasLink("party", "ownedBy", "owns",
+ *                 Condition.gt(Operand.attribute("owns", "share"), Operand.literal(50)))))
  *         .groupBy("party")
  *         .aggregate(Aggregate.sum(Operand.attribute("a", "balance"), "total"))
  *         .build();
@@ -211,7 +214,51 @@ public record Query(
          */
         public Builder traverse(String from, String name, int minDepth, int maxDepth, String binding,
                 Optional<String> relationship, Optional<String> depth) {
-            return step(new QueryStep.Traverse(from, name, binding, relationship, depth, minDepth, maxDepth));
+            return traverse(from, name, minDepth, maxDepth, binding, relationship, depth, Optional.empty());
+        }
+
+        /**
+         * Adds a traversal step that follows only the relationships that meet a condition, and binds the relationship
+         * that reached each entity, so that the condition can refer to it.
+         *
+         * @param from         the name of the binding of the entity to start from
+         * @param name         the name of a relationship type or the inverse name of one
+         * @param minDepth     the smallest depth to bind; 0 binds the entity itself
+         * @param maxDepth     the largest depth to bind
+         * @param binding      the name that each reached entity is bound to
+         * @param relationship the name that the relationship is bound to; {@code along} can refer to it
+         * @param along        the condition that a relationship must satisfy to be followed; it can refer to the
+         *                     binding named by {@code relationship} and to literals, and to nothing else
+         * @return this builder
+         * @throws IllegalArgumentException if {@code minDepth} is negative or {@code maxDepth} is below it
+         */
+        public Builder traverse(String from, String name, int minDepth, int maxDepth, String binding,
+                String relationship, Condition along) {
+            return traverse(from, name, minDepth, maxDepth, binding,
+                    Optional.of(Objects.requireNonNull(relationship, "relationship")), Optional.empty(),
+                    Optional.of(Objects.requireNonNull(along, "along")));
+        }
+
+        /**
+         * Adds a traversal step that binds each entity reached from a bound entity, at its smallest depth, and
+         * optionally the relationship it was reached through, its depth, and a condition that decides which
+         * relationships it follows.
+         *
+         * @param from         the name of the binding of the entity to start from
+         * @param name         the name of a relationship type or the inverse name of one
+         * @param minDepth     the smallest depth to bind; 0 binds the entity itself
+         * @param maxDepth     the largest depth to bind
+         * @param binding      the name that each reached entity is bound to
+         * @param relationship the name that the relationship is bound to, if it is bound
+         * @param depth        the name that the depth is bound to, if it is bound
+         * @param along        the condition that a relationship must satisfy to be followed, if there is one; it can
+         *                     refer to the binding named by {@code relationship}, which it then needs, and to literals
+         * @return this builder
+         * @throws IllegalArgumentException if {@code minDepth} is negative or {@code maxDepth} is below it
+         */
+        public Builder traverse(String from, String name, int minDepth, int maxDepth, String binding,
+                Optional<String> relationship, Optional<String> depth, Optional<Condition> along) {
+            return step(new QueryStep.Traverse(from, name, binding, relationship, depth, along, minDepth, maxDepth));
         }
 
         /**

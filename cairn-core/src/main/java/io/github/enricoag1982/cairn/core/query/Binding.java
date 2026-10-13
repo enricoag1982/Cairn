@@ -15,8 +15,16 @@ import java.util.List;
  *                   wrong, which is a problem already
  * @param attributes the attributes of the type, with those of its supertypes and traits; null if the type is unknown or
  *                   the binding is a depth
+ * @param unrelated  the names of the entity types that the binding can hold, if they have no common supertype, so that
+ *                   the binding has no attributes to read: only its ID, its type and its links can be used. Empty for a
+ *                   binding that has a type, and for one whose type is unknown
  */
-record Binding(String name, Kind kind, int slot, String typeName, List<Attribute> attributes) {
+record Binding(String name, Kind kind, int slot, String typeName, List<Attribute> attributes, List<String> unrelated) {
+
+    /** Copies the names of unrelated types. */
+    Binding {
+        unrelated = List.copyOf(unrelated);
+    }
 
     /** What a binding holds. */
     enum Kind {

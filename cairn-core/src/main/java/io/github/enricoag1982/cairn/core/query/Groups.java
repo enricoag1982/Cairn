@@ -17,7 +17,8 @@ import java.util.Map;
  *
  * <p>A group becomes a row with a cell for every key, then for every aggregate. A key's cell is that of the first row of
  * the group. Sums are exact, averages are rounded to 34 significant digits, and minimums and maximums keep the value type
- * of the attribute.
+ * of the attribute. A value of another kind than the attribute's is left out of the aggregates, so that a query that
+ * passed the checks never fails on what the data holds.
  *
  * @param keys       the keys: what each reads out of a row is the cell that it gives to a group, and tells groups apart
  * @param aggregates the aggregates
@@ -29,8 +30,11 @@ record Groups(List<Plan.Pick> keys, List<Computed> aggregates) {
      *
      * @param function what it computes
      * @param fetch    the attribute to aggregate; null for a count of rows
+     * @param kind     the kind of values that the attribute has, which the checked query relies on; a value of another
+     *                 kind is left out, so that a query that passed the checks never fails on what the data holds. Null for
+     *                 a count of rows
      */
-    record Computed(Aggregate.Function function, Plan.Fetch fetch) {
+    record Computed(Aggregate.Function function, Plan.Fetch fetch, Comparing.Category kind) {
     }
 
     /** What stands for a key that has no value, or whose binding is empty. */
@@ -86,7 +90,7 @@ record Groups(List<Plan.Pick> keys, List<Computed> aggregates) {
         List<Value> values = new ArrayList<>();
         for (Cell[] row : rows) {
             Value value = aggregate.fetch().of(row);
-            if (value != null) {
+            if (value != null && Comparing.category(value.valueType()) == aggregate.kind()) {
                 values.add(value);
             }
         }

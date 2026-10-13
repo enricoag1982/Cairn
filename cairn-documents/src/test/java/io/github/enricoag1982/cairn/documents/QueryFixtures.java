@@ -16,8 +16,13 @@ final class QueryFixtures {
               "from": { "type": "Account", "as": "a" },
               "steps": [
                 { "follow": { "from": "a", "name": "HeldBy", "as": "holder" } },
-                { "traverse": { "from": "holder", "name": "ownedBy", "minDepth": 0, "maxDepth": 10, "as": "party" } },
-                { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy" } } } }
+                { "traverse": { "from": "holder", "name": "ownedBy", "minDepth": 0, "maxDepth": 10, "as": "party",
+                    "relationship": "ownership",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "ownership" }, "op": "gt",
+                                            "right": { "value": 50 } } } } },
+                { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy", "relationship": "owns",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "owns" }, "op": "gt",
+                                            "right": { "value": 50 } } } } } } }
               ],
               "groupBy": [ { "of": "party" } ],
               "aggregates": [ { "function": "sum", "attribute": "balance", "of": "a", "as": "total" } ]

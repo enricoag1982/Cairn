@@ -251,12 +251,15 @@ final class QueryReader {
                     NodeReader.location(entry.pointer(), entry.value()));
             max = OptionalInt.empty();
         }
+        Entry alongEntry = p.get("along");
+        Optional<Condition> along = alongEntry == null ? Optional.empty()
+                : condition(alongEntry.value(), alongEntry.pointer(), path, "the 'along' condition of the " + what, 0);
         return Optional.of(new QueryStep.Traverse(
                 nodes.string(p.get("from"), path, "value of 'from'").orElse(""),
                 nodes.string(p.get("name"), path, "value of 'name'").orElse(""),
                 nodes.string(p.get("as"), path, "value of 'as'").orElse(""),
                 nodes.string(p.get("relationship"), path, "value of 'relationship'"),
-                nodes.string(p.get("depth"), path, "value of 'depth'"), minimum, max.orElse(minimum)));
+                nodes.string(p.get("depth"), path, "value of 'depth'"), along, minimum, max.orElse(minimum)));
     }
 
     // ------------------------------------------------------------------ conditions
@@ -279,8 +282,7 @@ final class QueryReader {
             case "in" -> in(entry, path);
             case "hasValue" -> pair(entry, path, QueryKeys.HAS_VALUE, "attribute", "of")
                     .map(names -> Condition.hasValue(names.get(1), names.get(0)));
-            case "hasLink" -> pair(entry, path, QueryKeys.HAS_LINK, "of", "name")
-                    .map(names -> Condition.hasLink(names.get(0), names.get(1)));
+            case "hasLink" -> hasLink(entry, path, depth);
             case "isA" -> pair(entry, path, QueryKeys.IS_A, "of", "type")
                     .map(names -> Condition.isA(names.get(0), names.get(1)));
             case "and" -> conditions(entry, path, depth).map(Condition::and);
@@ -306,6 +308,34 @@ final class QueryReader {
         }
         return Optional.of(Condition.compare(left.get(), Comparison.valueOf(op.get().toUpperCase(Locale.ROOT)),
                 right.get()));
+    }
+
+    /** Reads {@code {of, name, relationship?, along?}}; {@code along} needs {@code relationship}. */
+    private Optional<Condition> hasLink(Entry entry, String path, int depth) {
+        Optional<Map<String, Entry>> properties = nodes.properties(entry.value(), entry.pointer(), path, "the hasLink",
+                QueryKeys.HAS_LINK, QueryKeys.HAS_LINK_REQUIRED);
+        if (properties.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, Entry> p = properties.get();
+        Optional<String> binding = nodes.string(p.get("of"), path, "value of 'of'");
+        Optional<String> name = nodes.string(p.get("name"), path, "value of 'name'");
+        Optional<String> relationship = nodes.string(p.get("relationship"), path, "value of 'relationship'");
+        Entry alongEntry = p.get("along");
+        Optional<Condition> along = alongEntry == null ? Optional.empty()
+                : condition(alongEntry.value(), alongEntry.pointer(), path, "the 'along' condition of the hasLink",
+                        depth + 1);
+        boolean missingRelationship = alongEntry != null && !p.containsKey("relationship");
+        if (missingRelationship) {
+            nodes.add(ProblemCode.MISSING_KEY, path, "The key 'relationship' is missing in the hasLink: an 'along' "
+                    + "condition refers to the relationship of a link by a name.", "the key 'relationship'", null,
+                    "Add the key 'relationship', with the name that 'along' refers to the relationship by.",
+                    NodeReader.location(alongEntry.pointer(), alongEntry.keyNode()));
+        }
+        boolean valid = binding.isPresent() && name.isPresent() && !missingRelationship
+                && (alongEntry == null || along.isPresent());
+        return valid ? Optional.of(new Condition.HasLink(binding.get(), name.get(), relationship, along))
+                : Optional.empty();
     }
 
     private Optional<Condition> in(Entry entry, String path) {

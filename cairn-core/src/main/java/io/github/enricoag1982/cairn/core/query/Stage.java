@@ -57,10 +57,11 @@ sealed interface Stage {
 
     /**
      * Binds each entity reached from a bound entity at depths from a minimum to a maximum, with the relationship it was
-     * reached through and its depth. Depth 0 is the bound entity itself.
+     * reached through and its depth. Depth 0 is the bound entity itself. It follows only the relationships for which
+     * {@code along} holds, if there is a test; the test reads the relationship in the cell {@code relationship}.
      */
-    record Traverse(int from, String name, int entity, int relationship, int depth, int minDepth, int maxDepth)
-            implements Stage {
+    record Traverse(int from, String name, int entity, int relationship, int depth, Plan.Test along, int minDepth,
+            int maxDepth) implements Stage {
         @Override
         public List<Cell[]> apply(List<Cell[]> rows, Context context) {
             List<Cell[]> result = new ArrayList<>();
@@ -73,7 +74,7 @@ sealed interface Stage {
                 }
                 if (maxDepth >= 1) {
                     EntityId start = bound.state().id();
-                    for (Step step : context.traverse(start, name, maxDepth)) {
+                    for (Step step : context.traverse(start, name, along, relationship, row.length, maxDepth)) {
                         if (step.depth() >= minDepth) {
                             result.add(extend(row, entity, new Cell.EntityCell(step.entity()), relationship,
                                     new Cell.RelationshipCell(step.via()), depth,
