@@ -11,6 +11,7 @@ import io.github.enricoag1982.cairn.schema.ProblemCode;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The entities and relationships that a transaction touches, with what it needs to find them (design D5 of
@@ -25,6 +26,7 @@ final class Workspace {
     private final SchemaIndex index;
     private final Map<EntityId, StoredEntity> storedEntities;
     private final Map<RelationshipId, StoredRelationship> storedRelationships;
+    private final Set<String> purgedIds;
     private final IdGenerator generator;
     private final ProblemLog problems;
     /** The entities and relationships the transaction touches, in the order of the first touch. */
@@ -38,14 +40,18 @@ final class Workspace {
      * @param index               the schema the transaction is validated against
      * @param storedEntities      the entities of the store, ordered by ID
      * @param storedRelationships the relationships of the store, ordered by ID
+     * @param purgedIds           the IDs of the entities and relationships that purges removed, which are never given
+     *                            to a new entity or relationship
      * @param generator           a copy of the store's ID generator, which the preparation advances
      * @param problems            where problems about references and IDs are reported
      */
     Workspace(SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
-            Map<RelationshipId, StoredRelationship> storedRelationships, IdGenerator generator, ProblemLog problems) {
+            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedIds, IdGenerator generator,
+            ProblemLog problems) {
         this.index = index;
         this.storedEntities = storedEntities;
         this.storedRelationships = storedRelationships;
+        this.purgedIds = purgedIds;
         this.generator = generator;
         this.problems = problems;
     }
@@ -186,12 +192,20 @@ final class Workspace {
         return storedEntities.containsKey(new EntityId(text)) || storedRelationships.containsKey(new RelationshipId(text));
     }
 
-    /** Draws an ID from the generator's copy that no entity or relationship has, also not one that a caller supplied. */
+    /** Tells whether a purge removed the entity or relationship that had an ID (capability {@code purge}). */
+    boolean purged(String text) {
+        return purgedIds.contains(text);
+    }
+
+    /**
+     * Draws an ID from the generator's copy that no entity or relationship has, also not one that a caller supplied, and
+     * that no purge removed.
+     */
     String drawId() {
         String id;
         do {
             id = generator.next();
-        } while (holder(id) != null);
+        } while (holder(id) != null || purged(id));
         return id;
     }
 }

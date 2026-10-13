@@ -4,6 +4,8 @@ import io.github.enricoag1982.cairn.core.storage.CommitLog;
 import io.github.enricoag1982.cairn.core.storage.DirectoryLock;
 import io.github.enricoag1982.cairn.core.storage.Journal;
 import io.github.enricoag1982.cairn.core.storage.LogRecord;
+import io.github.enricoag1982.cairn.core.storage.PurgeFiles;
+import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
 import io.github.enricoag1982.cairn.core.storage.Recovery;
 import io.github.enricoag1982.cairn.core.storage.Snapshots;
 import io.github.enricoag1982.cairn.data.CommitResult;
@@ -12,6 +14,9 @@ import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.DurableStore;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
+import io.github.enricoag1982.cairn.data.Purge;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
+import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Transaction;
@@ -51,6 +56,12 @@ import java.util.concurrent.locks.ReentrantLock;
  * From then on every commit and schema registration is written to the log and forced to disk before it is recorded and
  * published. {@link #close()} writes a snapshot file and releases the directory.
  *
+ * <p>A purge (ADR-0024, design D4 of {@code add-purge}) is written to the log and forced to disk before it is applied.
+ * Then, still holding the writer lock, the store writes a snapshot file at the purge's basis, deletes every older snapshot
+ * file and every log segment, and starts a new segment, so that no file holds the purged data when the purge returns.
+ * Opening a directory whose log holds a purge that no snapshot file holds completes the purge in the same way before the
+ * store opens, and also deletes the files that a purge left behind if it stopped after writing its snapshot file.
+ *
  * <p>After {@code close}, every call but {@code close} throws an {@code IllegalStateException}, on the store and on its
  * schema registry. After a failed write, commits and registrations throw one, while reads and dry runs go on.
  */
@@ -64,6 +75,8 @@ public final class DirectoryStore implements DurableStore {
     /** Serializes snapshot files, and closing; the writer lock is not needed to write a snapshot. */
     private final ReentrantLock snapshotLock = new ReentrantLock();
     private volatile boolean closed;
+    /** Set by a test: stop right after the next purge reached the log. */
+    private volatile boolean crashAfterPurgeIsLogged;
 
     private DirectoryStore(Path directory, InMemoryStore store, CommitLog log, DirectoryLock lock) {
         this.directory = directory;
@@ -117,6 +130,7 @@ public final class DirectoryStore implements DurableStore {
                 store.sequence().resume(recovered.latest(), recovered.lastTransactionTime());
                 return null;
             });
+            completePurge(directory, store, recovered);
             log = CommitLog.open(directory, recovered.latest().value() + 1, segmentLimit);
             DirectoryStore result = new DirectoryStore(directory, store, log, lock);
             store.attach(result.new Guard());
@@ -158,6 +172,29 @@ public final class DirectoryStore implements DurableStore {
         return new IllegalStateException("The ID generator that the store is opened with does not accept the ID " + id
                 + " of " + holder + " that the store holds. A store keeps the ID generator it was created with, so open "
                 + "it with that one.");
+    }
+
+    /**
+     * Completes a purge that was interrupted, before the store opens (design D4 of {@code add-purge}). A purge record in
+     * the log is newer than the newest valid snapshot file, so the store, which has applied the record, writes a snapshot
+     * file of its state, and every older snapshot file and every log segment goes. If the newest snapshot file already
+     * holds the purge, which is the case when the purge stopped after writing it, the older files that remain go.
+     */
+    private static void completePurge(Path directory, InMemoryStore store, Recovery.Result recovered) {
+        if (recovered.lastPurge().isEmpty()) {
+            return;
+        }
+        try {
+            long basis = recovered.lastPurge().get().value();
+            if (recovered.purgePending()) {
+                Snapshots.Content content = StoreImage.of(store);
+                Snapshots.write(directory, content);
+                basis = content.basis().value();
+            }
+            PurgeFiles.deleteOlder(directory, basis);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Completing the purge in " + directory + " failed.", e);
+        }
     }
 
     private void requireOpen() {
@@ -206,6 +243,46 @@ public final class DirectoryStore implements DurableStore {
     public List<TransactionRecord> transactions() {
         requireOpen();
         return store.transactions();
+    }
+
+    @Override
+    public PurgeResult purge(Purge purge) {
+        // The snapshot lock first, as close() takes it, so that no snapshot file is being written while the purge removes
+        // the data, and none is written after it that holds the data: the writer lock comes second.
+        snapshotLock.lock();
+        try {
+            requireOpen();
+            return store.purge(purge, this::makePurgeDurable);
+        } finally {
+            snapshotLock.unlock();
+        }
+    }
+
+    @Override
+    public List<PurgeRecord> purges() {
+        requireOpen();
+        return store.purges();
+    }
+
+    /**
+     * Makes a purge that was logged and applied durable: writes a snapshot file at its basis, deletes the older snapshot
+     * files and every log segment, and starts a new segment. The caller holds the snapshot lock and the writer lock. If it
+     * fails, the log refuses further commits, because the segments that remain hold the purged data, and opening the
+     * directory again completes the purge.
+     */
+    private void makePurgeDurable() {
+        try {
+            Snapshots.Content content = StoreImage.of(store);
+            Snapshots.write(directory, content);
+            PurgeFiles.deleteSnapshotsBefore(directory, content.basis().value());
+            log.discardAndRestart(content.basis().value() + 1);
+        } catch (IOException e) {
+            log.fail();
+            throw new UncheckedIOException("Removing the purged data from the files in " + directory + " failed.", e);
+        } catch (RuntimeException e) {
+            log.fail();
+            throw e;
+        }
     }
 
     @Override
@@ -298,6 +375,15 @@ public final class DirectoryStore implements DurableStore {
     }
 
     /**
+     * Makes the store stop as a crash does right after the next purge was written to the log and forced to disk, before
+     * the purge is applied and before the snapshot file is written: the store is abandoned, its directory is released,
+     * and the call that purges throws. For tests of a purge that was interrupted.
+     */
+    void crashAfterTheNextPurgeIsLogged() {
+        crashAfterPurgeIsLogged = true;
+    }
+
+    /**
      * The journal of the in-memory store: the commit log, which a closed store does not write to. The store and its
      * registry call it holding the writer lock, which {@link #close()} takes to close the store, so a commit is either
      * finished before the store is closed or refused.
@@ -314,6 +400,11 @@ public final class DirectoryStore implements DurableStore {
         public void append(LogRecord record) {
             requireWritable();
             log.append(record);
+            if (crashAfterPurgeIsLogged && record instanceof PurgeLogRecord) {
+                crashAfterPurgeIsLogged = false;
+                abandon();
+                throw new IllegalStateException("The store stopped after the purge reached the log, as a test asked.");
+            }
         }
     }
 

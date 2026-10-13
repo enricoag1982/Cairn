@@ -5,6 +5,7 @@ import io.github.enricoag1982.cairn.core.storage.KeyedTransaction;
 import io.github.enricoag1982.cairn.core.storage.SchemaRecord;
 import io.github.enricoag1982.cairn.core.storage.Snapshots;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.schema.Basis;
 import java.time.Instant;
@@ -22,6 +23,10 @@ import java.util.Optional;
  * {@code add-durable-commit-log}). What is published at or below a basis never changes, and a writer only adds under
  * higher bases, so the store can go on committing while the snapshot is written; whatever a commit in progress has added
  * above the basis is left out.
+ *
+ * <p>A purge is the exception: it removes what was published (ADR-0024). The durable store therefore writes no snapshot
+ * file while a purge runs, and a snapshot file holds the purge records and the purged idempotency keys besides the
+ * data that remains, so that the purged IDs and keys stay unusable.
  */
 final class StoreImage {
 
@@ -47,6 +52,10 @@ final class StoreImage {
                 .sorted(Comparator.comparing(entry -> entry.receipt().basis()))
                 .map(entry -> new KeyedTransaction(entry.transaction(), entry.receipt()))
                 .toList();
+        List<PurgeRecord> purges = store.purges().stream()
+                .filter(record -> record.basis().compareTo(basis) <= 0)
+                .toList();
+        List<String> purgedKeys = store.purgedKeys().stream().sorted().toList();
         Instant lastTime = null;
         for (SchemaRecord record : schema) {
             lastTime = later(lastTime, record.transactionTime());
@@ -54,8 +63,11 @@ final class StoreImage {
         for (TransactionRecord record : transactions) {
             lastTime = later(lastTime, record.transactionTime());
         }
-        return new Snapshots.Content(basis, Optional.ofNullable(lastTime), schema, transactions, keyed,
-                () -> histories(store, basis));
+        for (PurgeRecord record : purges) {
+            lastTime = later(lastTime, record.transactionTime());
+        }
+        return new Snapshots.Content(basis, Optional.ofNullable(lastTime), schema, transactions, keyed, purges,
+                purgedKeys, () -> histories(store, basis));
     }
 
     private static Instant later(Instant first, Instant second) {

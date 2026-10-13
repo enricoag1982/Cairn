@@ -5,18 +5,21 @@ import io.github.enricoag1982.cairn.core.storage.Effect;
 import io.github.enricoag1982.cairn.core.storage.History;
 import io.github.enricoag1982.cairn.core.storage.KeyedTransaction;
 import io.github.enricoag1982.cairn.core.storage.LogRecord;
+import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
 import io.github.enricoag1982.cairn.core.storage.Recovery;
 import io.github.enricoag1982.cairn.core.storage.SchemaRecord;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.schema.Basis;
 import java.util.Map;
 
 /**
- * Puts a store back the way a log and a snapshot file recorded it (design D4 of {@code add-durable-commit-log}): the
- * schema transactions, the timelines of entities and relationships, the transaction records, and the idempotency keys
- * with their receipts. It applies what it is given and checks nothing but that a change finds what it changes: it never
+ * Puts a store back the way a log and a snapshot file recorded it (design D4 of {@code add-durable-commit-log} and of
+ * {@code add-purge}): the schema transactions, the timelines of entities and relationships, the transaction records, the
+ * idempotency keys with their receipts, and the purges: a purge record of a snapshot file with the purged IDs and keys,
+ * and one of the log, which removes what it lists. It applies what it is given and checks nothing but that a change finds what it changes: it never
  * validates, runs rules, or asks the clock or the ID generator. Used once, on an empty store, by one thread, before the
  * store is used.
  */
@@ -46,6 +49,16 @@ final class Restorer implements Recovery.Replay {
     }
 
     @Override
+    public void purge(PurgeRecord record) {
+        store.restorePurge(record);
+    }
+
+    @Override
+    public void purgedKey(String key) {
+        store.purgedKeys().add(key);
+    }
+
+    @Override
     public void history(History history) {
         switch (history.id()) {
             case EntityId id -> {
@@ -71,6 +84,7 @@ final class Restorer implements Recovery.Replay {
         switch (record) {
             case SchemaRecord schema -> store.registry().restore(schema);
             case DataRecord data -> restore(data);
+            case PurgeLogRecord purge -> store.applyPurge(purge.purge());
         }
     }
 

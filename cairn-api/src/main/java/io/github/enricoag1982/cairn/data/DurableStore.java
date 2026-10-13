@@ -7,6 +7,14 @@ import io.github.enricoag1982.cairn.schema.Basis;
  * committed transaction, of data or of the schema, is on disk before its commit returns, and a store opened again on the
  * directory has the state of the committed transactions. In every other way it behaves as an in-memory store.
  *
+ * <p>A {@linkplain #purge(Purge) purge} is made durable before it returns (ADR-0024, capability {@code purge}): the store
+ * writes it to its commit log, writes a snapshot file without the purged data, and deletes every older snapshot file and
+ * log segment, so that no file of the store holds the purged data. Commits wait while a purge runs, which takes time
+ * in proportion to the size of the store. If the store stops after the purge reached its log, opening the directory
+ * again completes the purge before the store opens. If making the purge durable fails, the call throws an
+ * {@code UncheckedIOException}, the purge is applied in memory, and the store refuses commits like after a failed write,
+ * until it is opened again and completes the purge.
+ *
  * <p>One open store holds a directory at a time, in any process. {@link #close()} releases it. A closed store refuses
  * every call but {@code close}, which does nothing the second time: each call throws an {@code IllegalStateException},
  * and so does every call of the store's schema registry.

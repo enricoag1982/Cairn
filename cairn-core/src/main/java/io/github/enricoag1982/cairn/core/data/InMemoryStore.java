@@ -4,12 +4,17 @@ import io.github.enricoag1982.cairn.core.commit.CommitSequence;
 import io.github.enricoag1982.cairn.core.schema.InMemorySchemaRegistry;
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.core.storage.Journal;
+import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.KnownAt;
+import io.github.enricoag1982.cairn.data.Purge;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
+import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
@@ -17,6 +22,7 @@ import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -28,9 +34,11 @@ import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -49,6 +57,13 @@ import java.util.function.Supplier;
  *
  * <p>While the store runs rules, in a commit or a dry run, it refuses writes: a rule that commits, runs dry or
  * registers a schema in the store gets an {@code IllegalStateException}, and its transaction is rejected.
+ *
+ * <p>A {@linkplain #purge(Purge) purge} is the one thing that removes data (ADR-0024, design of {@code add-purge}). It
+ * takes the writer lock, checks what it would remove, and only then removes it: relationships first and entities after
+ * them, so that a reader never finds a relationship whose end is missing. Views read the store's maps and keep no
+ * reference to what they read, so once the purge has returned every view, also one that was opened before it, reads the
+ * purged state. The IDs of what was removed are kept, so that they are never given out or accepted again, and so are the
+ * idempotency keys of transactions that wrote removed data, without their transactions.
  *
  * <p>A store can have a {@linkplain Journal journal}, as a durable store does (ADR-0022, design D5 of
  * {@code add-durable-commit-log}): a commit then writes what it did to the journal after it has prepared the
@@ -76,6 +91,18 @@ public final class InMemoryStore implements Store {
      * file is written from them without the lock, so the map is a concurrent one.
      */
     private final Map<String, Keyed> keys = new ConcurrentHashMap<>();
+    /** The purges, oldest first; only the writer, holding the writer lock, adds to it. */
+    private final CopyOnWriteArrayList<PurgeRecord> purges = new CopyOnWriteArrayList<>();
+    /**
+     * The IDs of the entities and relationships that purges removed: no new entity or relationship gets one, and a write
+     * that supplies one is rejected. Only the writer changes it; a snapshot file reads the purges instead.
+     */
+    private final Set<String> purgedIds = ConcurrentHashMap.newKeySet();
+    /**
+     * The idempotency keys of transactions that wrote data which a purge removed. The store no longer holds those
+     * transactions, so a transaction that repeats one of these keys is rejected. A key is in this set or in {@link #keys}.
+     */
+    private final Set<String> purgedKeys = ConcurrentHashMap.newKeySet();
     /** The ID generator of the store, for entities and relationships alike; guarded by the writer lock. */
     private IdGenerator generator;
     /** Where commits are written before they are recorded; null for a store that is not durable. */
@@ -121,6 +148,9 @@ public final class InMemoryStore implements Store {
         Objects.requireNonNull(transaction, "transaction");
         return sequence.underWriterLock(() -> {
             requireWritable();
+            if (isPurged(transaction)) {
+                return new CommitResult.Rejected(List.of(purged(transaction)));
+            }
             Keyed known = known(transaction);
             if (known != null) {
                 return known.transaction().equals(transaction)
@@ -139,6 +169,9 @@ public final class InMemoryStore implements Store {
     public DryRunResult dryRun(Transaction transaction) {
         Objects.requireNonNull(transaction, "transaction");
         return sequence.underWriterLock(() -> {
+            if (isPurged(transaction)) {
+                return new DryRunResult.Rejected(List.of(purged(transaction)));
+            }
             Keyed known = known(transaction);
             if (known != null) {
                 return known.transaction().equals(transaction)
@@ -185,6 +218,20 @@ public final class InMemoryStore implements Store {
         }
     }
 
+    /** Tells whether the transaction's idempotency key belongs to a transaction that a purge removed. */
+    private boolean isPurged(Transaction transaction) {
+        return transaction.idempotencyKey().map(purgedKeys::contains).orElse(false);
+    }
+
+    private static Problem purged(Transaction transaction) {
+        String key = transaction.idempotencyKey().orElseThrow();
+        return Problems.of(ProblemCode.IDEMPOTENCY_KEY_PURGED, Preparation.TRANSACTION_PATH + ".idempotencyKey",
+                "The idempotency key '" + key + "' was used by a transaction that wrote data which a purge removed, so "
+                + "the store cannot tell whether this transaction is a retry, and recording it could bring the purged "
+                + "data back.", "an idempotency key that no committed transaction used, or none", key,
+                "Use a new idempotency key for a new transaction.");
+    }
+
     /** The committed transaction that used the transaction's idempotency key, if any. Called with the lock held. */
     private Keyed known(Transaction transaction) {
         return transaction.idempotencyKey().map(keys::get).orElse(null);
@@ -204,7 +251,7 @@ public final class InMemoryStore implements Store {
      * that drops the result leaves no trace. Called with the lock held.
      */
     private Preparation prepare(Transaction transaction) {
-        return new Preparation(transaction, new SchemaIndex(registry.current()), entities, relationships,
+        return new Preparation(transaction, new SchemaIndex(registry.current()), entities, relationships, purgedIds,
                 generator.copy(), sequence.next(), checks, rules, sequence).run();
     }
 
@@ -252,6 +299,122 @@ public final class InMemoryStore implements Store {
         return receipt;
     }
 
+    // ------------------------------------------------------------------ purges
+
+    @Override
+    public PurgeResult purge(Purge purge) {
+        return purge(purge, () -> { });
+    }
+
+    @Override
+    public List<PurgeRecord> purges() {
+        Basis latest = sequence.latestBasis();
+        return purges.stream().filter(record -> record.basis().compareTo(latest) <= 0).toList();
+    }
+
+    /**
+     * Purges entities as {@link #purge(Purge)} does, and then runs an action, still holding the writer lock, once the
+     * purge is applied and its basis published: a durable store makes the purge durable there, by writing a snapshot file
+     * and deleting the older files (design D4 of {@code add-purge}).
+     *
+     * <p>Under the writer lock the purge is checked first, and a purge with problems changes nothing and uses no basis.
+     * Otherwise it takes the next basis and transaction time of the sequence, as a commit does. A durable store writes
+     * the purge record to its journal before anything is removed, so that nothing is removed if that fails. Then the
+     * relationships and entities are removed, relationships first, the purged IDs and idempotency keys are kept, the
+     * purge record is added, and the basis is published last.
+     *
+     * @param purge     the purge
+     * @param published what to do after the purge was published, with the writer lock still held
+     * @return the record of the purge, or every problem found
+     */
+    PurgeResult purge(Purge purge, Runnable published) {
+        Objects.requireNonNull(purge, "purge");
+        return sequence.<PurgeResult>underWriterLock(() -> {
+            requireWritable();
+            PurgeCheck.Outcome outcome = PurgeCheck.run(purge, new SchemaIndex(registry.current()), entities,
+                    relationships, purgedIds);
+            if (!outcome.problems().isEmpty()) {
+                return new PurgeResult.Rejected(outcome.problems());
+            }
+            CommitSequence.Commit commit = sequence.next();
+            PurgeRecord record = new PurgeRecord(commit.basis(), commit.transactionTime(), purge.principal(),
+                    purge.onBehalfOf(), purge.reason(), outcome.entities(), outcome.relationships());
+            Journal written = journal;
+            if (written != null) {
+                written.append(new PurgeLogRecord(record));
+            }
+            applyPurge(record);
+            sequence.publish(commit);
+            published.run();
+            return new PurgeResult.Purged(record);
+        });
+    }
+
+    /**
+     * Removes what a purge record lists: the relationships first, then the entities, so that a reader never finds a
+     * relationship whose end is missing; keeps their IDs as purged; drops the stored transactions of the idempotency
+     * keys that wrote any of them and marks the keys purged; and adds the record. A commit does this after the check,
+     * and recovery does it for a record of the log. Called with the lock held, or before the store is used.
+     *
+     * @throws IllegalStateException if the record lists an entity or relationship that the store does not hold
+     */
+    void applyPurge(PurgeRecord record) {
+        for (RelationshipId id : record.relationships()) {
+            if (relationships.remove(id) == null) {
+                throw missing(record, id);
+            }
+        }
+        for (EntityId id : record.entities()) {
+            if (entities.remove(id) == null) {
+                throw missing(record, id);
+            }
+        }
+        Set<Id> removed = new HashSet<>(record.relationships());
+        removed.addAll(record.entities());
+        List<String> wrote = keys.entrySet().stream().filter(entry -> wrote(entry.getValue(), removed))
+                .map(Map.Entry::getKey).toList();
+        purgedKeys.addAll(wrote);
+        wrote.forEach(keys::remove);
+        restorePurge(record);
+    }
+
+    private static IllegalStateException missing(PurgeRecord record, Id id) {
+        return new IllegalStateException("The purge of basis " + record.basis().value() + " removes " + id
+                + ", which the store does not hold.");
+    }
+
+    /** Tells whether a committed transaction created, ended, patched, replaced or end-dated any of the removed IDs. */
+    private static boolean wrote(Keyed keyed, Set<Id> removed) {
+        Receipt receipt = keyed.receipt();
+        if (receipt.created().stream().anyMatch(removed::contains)
+                || receipt.ended().stream().anyMatch(removed::contains)) {
+            return true;
+        }
+        for (Write write : keyed.transaction().writes()) {
+            Object target = switch (write) {
+                case Write.Create create -> null;
+                case Write.Relate relate -> null;
+                case Write.Patch patch -> patch.target();
+                case Write.Replace replace -> replace.target();
+                case Write.EndDate endDate -> endDate.target();
+            };
+            if (target != null && removed.contains(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Keeps a purge record and its IDs as purged, without removing anything: what a snapshot file holds of a purge, whose
+     * data it does not hold.
+     */
+    void restorePurge(PurgeRecord record) {
+        purges.add(record);
+        record.entities().forEach(id -> purgedIds.add(id.value()));
+        record.relationships().forEach(id -> purgedIds.add(id.value()));
+    }
+
     // ------------------------------------------------------------------ durability
 
     /**
@@ -292,13 +455,23 @@ public final class InMemoryStore implements Store {
         return keys;
     }
 
+    /** The idempotency keys whose transactions a purge removed. */
+    Set<String> purgedKeys() {
+        return purgedKeys;
+    }
+
     /**
-     * The basis of the latest transaction, of data or of the schema, recorded at or before a transaction time and
-     * published by now; {@link Basis#NONE} if there is none.
+     * The basis of the latest transaction, of data, of the schema or a purge, recorded at or before a transaction time
+     * and published by now; {@link Basis#NONE} if there is none.
      */
     private Basis basisAt(Instant time, Basis latest) {
         long found = Basis.NONE.value();
         for (TransactionRecord record : records) {
+            if (record.basis().compareTo(latest) <= 0 && !record.transactionTime().isAfter(time)) {
+                found = Math.max(found, record.basis().value());
+            }
+        }
+        for (PurgeRecord record : purges) {
             if (record.basis().compareTo(latest) <= 0 && !record.transactionTime().isAfter(time)) {
                 found = Math.max(found, record.basis().value());
             }

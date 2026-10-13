@@ -6,6 +6,7 @@ import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
@@ -29,8 +30,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Compares two stores (design D8 of {@code add-durable-commit-log}): the schema history, the transaction records, the
- * receipts of idempotency keys, and, for every basis, the timelines of every entity and relationship and the views at
+ * Compares two stores (design D8 of {@code add-durable-commit-log} and D5 of {@code add-purge}): the schema history, the
+ * transaction records, the purge records, the receipts of idempotency keys, and, for every basis, the timelines of every entity and relationship and the views at
  * the given effective times. A durable store and an in-memory store that committed the same transactions must be
  * equivalent, before the durable store is reopened and after.
  *
@@ -50,13 +51,15 @@ final class StoreEquivalence {
      *
      * @param latest       the latest basis
      * @param transactions the data transactions
+     * @param purges       the purges
      * @param declaredRules the rules declared without code
      * @param schemaHistory the schema transactions with their schemas
      * @param keyed        what committing each transaction with an idempotency key again gives
      * @param views        every answer of the views, by what was asked
      */
-    record Observation(Basis latest, List<TransactionRecord> transactions, List<RuleDescriptor> declaredRules,
-            List<SchemaState> schemaHistory, List<CommitResult> keyed, Map<String, Object> views) {
+    record Observation(Basis latest, List<TransactionRecord> transactions, List<PurgeRecord> purges,
+            List<RuleDescriptor> declaredRules, List<SchemaState> schemaHistory, List<CommitResult> keyed,
+            Map<String, Object> views) {
     }
 
     private StoreEquivalence() {
@@ -106,6 +109,8 @@ final class StoreEquivalence {
         List<Instant> knownTimes = new ArrayList<>();
         store.transactions().stream().filter(record -> bases.contains(record.basis().value()))
                 .forEach(record -> knownTimes.add(record.transactionTime()));
+        store.purges().stream().filter(record -> bases.contains(record.basis().value()))
+                .forEach(record -> knownTimes.add(record.transactionTime()));
         store.schema().history().stream().filter(transaction -> bases.contains(transaction.basis().value()))
                 .forEach(transaction -> knownTimes.add(transaction.transactionTime()));
         Map<String, Object> views = new LinkedHashMap<>();
@@ -122,7 +127,8 @@ final class StoreEquivalence {
             }
         }
         observe(views, "latest", store.view(Coordinates.effectiveAt(effectiveTimes.getFirst())), ids);
-        return new Observation(latest, store.transactions(), store.declaredRules(), schemaHistory, keyedResults, views);
+        return new Observation(latest, store.transactions(), store.purges(), store.declaredRules(), schemaHistory,
+                keyedResults, views);
     }
 
     private static void observe(Map<String, Object> views, String where, View view, List<Id> ids) {
@@ -156,6 +162,7 @@ final class StoreEquivalence {
         assertThat(actual.latest()).as("latest basis").isEqualTo(expected.latest());
         assertThat(actual.schemaHistory()).as("schema history").isEqualTo(expected.schemaHistory());
         assertThat(actual.transactions()).as("transaction records").isEqualTo(expected.transactions());
+        assertThat(actual.purges()).as("purge records").isEqualTo(expected.purges());
         assertThat(actual.declaredRules()).as("declared rules").isEqualTo(expected.declaredRules());
         assertThat(actual.keyed()).as("idempotency keys").isEqualTo(expected.keyed());
         assertThat(actual.views()).as("views").isEqualTo(expected.views());

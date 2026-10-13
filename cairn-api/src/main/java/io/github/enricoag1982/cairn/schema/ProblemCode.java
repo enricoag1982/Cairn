@@ -6,9 +6,10 @@ import java.util.Objects;
  * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and
  * {@code schema-evolution}), for the reasons a schema document (capability {@code schema-documents}) or a transaction
  * payload (capability {@code json-payloads}) cannot be read, for the reasons a data transaction is rejected
- * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}), and for
- * the reasons a request of an AI agent is refused (capability {@code agent-tools}), and for the reasons a query does not
- * fit the schema of the view that runs it (capability {@code queries}).
+ * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}), for
+ * the reasons a purge is refused (capability {@code purge}), and for the reasons a request of an AI agent is refused
+ * (capability {@code agent-tools}), and for the reasons a query does not fit the schema of the view that runs it
+ * (capability {@code queries}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -188,7 +189,7 @@ public enum ProblemCode {
             + "relationship, by an ID that no entity of the store has; the ID of a relationship is not the ID of an "
             + "entity. Correct the ID, or create the entity first. An agent tool reports it too when it reads by an ID "
             + "that no entity has (for a timeline, that neither an entity nor a relationship has), or that is the ID "
-            + "of a relationship."),
+            + "of a relationship. A purge reports it at @purge.<n>, for an ID of its list that no entity has."),
     /**
      * A patch or replace covers a period in which the entity or relationship does not exist, or an end-date is at or
      * before its start.
@@ -198,8 +199,9 @@ public enum ProblemCode {
             + "lifetime. Change the period or the instant, or create it for the period first."),
     /** A write creates an entity or relationship with an ID that already exists. */
     ENTITY_EXISTS("An entity or relationship with the supplied ID exists already, in the store or earlier in the same "
-            + "transaction. IDs are never reused, and are unique across entities and relationships. To change it, "
-            + "patch or replace it; otherwise leave the ID out, or supply another."),
+            + "transaction, or an entity or relationship that had it was removed by a purge. IDs are never reused, "
+            + "and are unique across entities and relationships. To change it, patch or replace it; otherwise leave "
+            + "the ID out, or supply another."),
     /** A supplied ID is not in the format of the store's ID generator. */
     INVALID_ENTITY_ID("A store accepts only supplied IDs in the format of its ID generator, which is chosen when the "
             + "store is created; UUIDv7 by default, in lowercase hyphenated text. Supply an ID in that format, or "
@@ -227,6 +229,12 @@ public enum ProblemCode {
     IDEMPOTENCY_KEY_REUSED("An idempotency key identifies one transaction: a transaction with the same writes, "
             + "principal, party and reason is a retry and gets the first receipt, any other is rejected. Use a new key "
             + "for a new transaction."),
+    /** A transaction repeats the idempotency key of a transaction that wrote data which a purge removed. */
+    IDEMPOTENCY_KEY_PURGED("The idempotency key was used by a transaction that wrote an entity or a relationship which a "
+            + "purge removed later, so the store no longer has that transaction and cannot tell a retry from another "
+            + "transaction, and recording it again would bring the purged data back. The key stays used for good, and "
+            + "the path is the idempotency key of the transaction. Use a new idempotency key if the transaction is "
+            + "meant to be recorded again."),
     /** A rule found that a version of an entity or of a relationship breaks it. */
     RULE_VIOLATION("A rule that the type of an entity or relationship, or one of its supertypes, names found that a "
             + "version of the entity or relationship breaks it. The problem's rule code, qualified by the rule's name, "
@@ -269,7 +277,10 @@ public enum ProblemCode {
     TOO_FEW_RELATIONSHIPS("An entity must have at least the minimum number of relationships that a relationship type "
             + "declares for its end, counting the relationships of the type and of its subtypes, at every point in "
             + "effective time in which the entity exists. The path names the entity and the relationship type or "
-            + "inverse name. Relate the entity for the whole period, in the same transaction if it is new."),
+            + "inverse name. Relate the entity for the whole period, in the same transaction if it is new. A purge "
+            + "reports it too, at the ID of an entity that the purge would leave without a relationship that its type "
+            + "requires, because the purge removes the relationships the entity had with purged entities: purge that "
+            + "entity too, or leave out the entities it needs."),
     /** An entity has more relationships of a type than the maximum, at some point in effective time. */
     TOO_MANY_RELATIONSHIPS("An entity must have at most the maximum number of relationships that a relationship type "
             + "declares for its end, counting the relationships of the type and of its subtypes, at every point in "

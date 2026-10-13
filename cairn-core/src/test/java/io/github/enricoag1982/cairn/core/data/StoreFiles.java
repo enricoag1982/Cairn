@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -125,6 +126,34 @@ final class StoreFiles {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * The files of the directory, by their path relative to it, in whose bytes the UTF-8 bytes of a text occur: the way to
+     * show that personal data is, or is no longer, on disk.
+     */
+    static List<String> filesContaining(Path directory, String text) {
+        byte[] needle = text.getBytes(StandardCharsets.UTF_8);
+        List<String> found = new ArrayList<>();
+        contents(directory).forEach((name, bytes) -> {
+            if (indexOf(bytes, needle) >= 0) {
+                found.add(name);
+            }
+        });
+        return found;
+    }
+
+    private static int indexOf(byte[] bytes, byte[] needle) {
+        for (int start = 0; start + needle.length <= bytes.length; start++) {
+            int i = 0;
+            while (i < needle.length && bytes[start + i] == needle[i]) {
+                i++;
+            }
+            if (i == needle.length) {
+                return start;
+            }
+        }
+        return -1;
     }
 
     /** Every file of the directory, by its path relative to it, with its bytes. */

@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.core.storage;
 
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
@@ -27,8 +28,9 @@ import java.util.function.Function;
  * Snapshot files (design D2 and D6 of {@code add-durable-commit-log}): the whole state of a store at one basis, in a
  * file of the directory {@code snapshots} named after that basis. After the header, the file is a sequence of frames, as
  * in the log, each holding one item: the basis and the time of the latest transaction, then the schema transactions as
- * their log records, the transaction records, the transactions with an idempotency key and their receipts, and the
- * history of each entity and relationship; an end frame closes the file and counts the frames before it. A file is
+ * their log records, the transaction records, the transactions with an idempotency key and their receipts, the purge
+ * records, the idempotency keys whose transactions a purge removed, and the history of each entity and relationship; an
+ * end frame closes the file and counts the frames before it. A file is
  * <em>complete</em> only if every frame matches its checksum and the end frame is last.
  *
  * <p>A snapshot is written to a temporary file in the same directory, forced to disk and renamed, and the directory is
@@ -40,6 +42,8 @@ public final class Snapshots {
     private static final int TRANSACTION = 17;
     private static final int KEYED = 18;
     private static final int HISTORY = 19;
+    private static final int PURGE = 20;
+    private static final int PURGED_KEY = 21;
     private static final int END = 31;
 
     /** The number of valid snapshot files to keep. */
@@ -77,6 +81,22 @@ public final class Snapshots {
         void keyed(KeyedTransaction keyed);
 
         /**
+         * A purge that was applied before the snapshot. Its data is not in the snapshot; the record says what was
+         * removed, so that its IDs are never used again.
+         *
+         * @param record the record of the purge
+         */
+        void purge(PurgeRecord record);
+
+        /**
+         * An idempotency key whose transaction wrote data that a purge removed, so that the store no longer holds the
+         * transaction. Repeating the key is refused.
+         *
+         * @param key the idempotency key
+         */
+        void purgedKey(String key);
+
+        /**
          * An entity or a relationship with its timelines.
          *
          * @param history the entity or relationship
@@ -93,6 +113,8 @@ public final class Snapshots {
      * @param schema              the schema transactions at or below the basis, in order
      * @param transactions        the data transactions at or below the basis, in order
      * @param keyed               the transactions with an idempotency key at or below the basis
+     * @param purges              the purges at or below the basis, in order
+     * @param purgedKeys          the idempotency keys whose transactions wrote data that a purge removed
      * @param histories           the entities and relationships, each with the timelines recorded at or below the basis
      */
     public record Content(
@@ -101,6 +123,8 @@ public final class Snapshots {
             List<SchemaRecord> schema,
             List<TransactionRecord> transactions,
             List<KeyedTransaction> keyed,
+            List<PurgeRecord> purges,
+            List<String> purgedKeys,
             Iterable<History> histories) {
 
         /**
@@ -112,6 +136,8 @@ public final class Snapshots {
             schema = List.copyOf(schema);
             transactions = List.copyOf(transactions);
             keyed = List.copyOf(keyed);
+            purges = List.copyOf(purges);
+            purgedKeys = List.copyOf(purgedKeys);
             Objects.requireNonNull(histories, "histories");
         }
     }
@@ -189,6 +215,20 @@ public final class Snapshots {
             frame.writeLong(keyed.receipt().basis().value());
             frame.writeInstant(keyed.receipt().transactionTime());
             TransactionCodec.writeReceiptIds(frame, keyed.receipt());
+            out.write(frame.finishFrame());
+            frames++;
+        }
+        for (PurgeRecord purge : content.purges()) {
+            Encoder frame = Encoder.framed();
+            frame.writeByte(PURGE);
+            PurgeCodec.write(frame, purge);
+            out.write(frame.finishFrame());
+            frames++;
+        }
+        for (String key : content.purgedKeys()) {
+            Encoder frame = Encoder.framed();
+            frame.writeByte(PURGED_KEY);
+            frame.writeText(key);
             out.write(frame.finishFrame());
             frames++;
         }
@@ -398,6 +438,8 @@ public final class Snapshots {
                         case TRANSACTION -> receiver.transaction(decode(frame.payload(), TransactionCodec::readEntry));
                         case KEYED -> receiver.keyed(decode(frame.payload(), Snapshots::readKeyed));
                         case HISTORY -> receiver.history(decode(frame.payload(), EffectCodec::readHistory));
+                        case PURGE -> receiver.purge(decode(frame.payload(), PurgeCodec::read));
+                        case PURGED_KEY -> receiver.purgedKey(decode(frame.payload(), Decoder::readText));
                         case END -> {
                             return;
                         }

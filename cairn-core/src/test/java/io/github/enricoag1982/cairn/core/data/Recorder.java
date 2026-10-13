@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Prepares and records transactions the way {@link InMemoryStore} does, but keeps the stored entities and relationships
@@ -40,8 +41,8 @@ final class Recorder {
     /** Prepares a transaction, without recording it. */
     Preparation prepare(Transaction transaction) {
         return sequence.underWriterLock(() -> new Preparation(transaction, new SchemaIndex(registry.current()),
-                entities, relationships, generator.copy(), sequence.next(), new ValueChecks(), rules, sequence)
-                .run());
+                entities, relationships, Set.of(), generator.copy(), sequence.next(), new ValueChecks(), rules,
+                sequence).run());
     }
 
     /** Prepares a transaction that must be valid, and records it. */

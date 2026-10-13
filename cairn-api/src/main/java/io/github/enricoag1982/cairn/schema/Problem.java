@@ -7,8 +7,9 @@ import java.util.Optional;
  * One reason a schema definition or registration is rejected (capabilities {@code type-model} and {@code schema-evolution}),
  * a schema document (capability {@code schema-documents}) or a transaction payload (capability {@code json-payloads})
  * cannot be read, or a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions},
- * {@code entity-rules} and {@code relationships}), or a request of an AI agent is refused (capability
- * {@code agent-tools}), or a query does not fit the schema of the view that runs it (capability {@code queries}).
+ * {@code entity-rules} and {@code relationships}), or a purge is refused (capability {@code purge}), or a request of
+ * an AI agent is refused (capability {@code agent-tools}), or a query does not fit the schema of the view that runs it
+ * (capability {@code queries}).
  *
  * <p>The code, path and message are always present. A problem can also say what was expected, what was found and how
  * to fix it. These details are text for people and agents to read: anything a program needs to act on is in the
@@ -27,8 +28,9 @@ import java.util.Optional;
  *                 schema document as a whole; {@code @transaction} for problems with a transaction payload as a whole,
  *                 {@code @transaction.<key>}, such as {@code @transaction.principal}, for problems with one of its
  *                 top-level keys, and {@code @write.<n>}, with the position {@code n} counted from 0, for problems
- *                 with a write of one, or {@code @write.<n>.<attribute>} for problems with one of its attributes;
- *                 {@code @arguments} for problems with the arguments of an agent tool call as a whole, such as
+ *                 with a write of one, or {@code @write.<n>.<attribute>} for problems with one of its attributes, and
+ *                 {@code @purge.<n>} for problems with an entity that a purge names, with the position {@code n} counted
+ *                 from 0; {@code @arguments} for problems with the arguments of an agent tool call as a whole, such as
  *                 arguments that are not a JSON object, and {@code @arguments.<name>} for problems with one
  *                 argument of the call; {@code @query} for problems with a query as a whole, such as one that is not
  *                 YAML, {@code @query.from}, {@code @query.steps.<n>}, {@code @query.groupBy.<n>},

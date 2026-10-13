@@ -10,6 +10,8 @@ import io.github.enricoag1982.cairn.core.StoreSettings;
 import io.github.enricoag1982.cairn.core.Stores;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.Purge;
+import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
@@ -30,8 +32,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * A durable store and an in-memory store that get the same random operations stay equivalent, whatever happens to the
- * durable store in between: commits, writes to the schema, snapshot files, closing, and crashes, with small log segments
- * so that the log has many of them.
+ * durable store in between: commits, writes to the schema, purges, snapshot files, closing, and crashes, with small log
+ * segments so that the log has many of them. The commits that create people carry idempotency keys, which the stores are
+ * asked to commit again at every comparison, so that the keys that purges left unusable are compared too.
  */
 class DurableRandomizedTest {
 
@@ -65,19 +68,23 @@ class DurableRandomizedTest {
         Random random = new Random(seed);
         List<Id> people = new ArrayList<>();
         List<Id> ended = new ArrayList<>();
+        List<Id> purged = new ArrayList<>();
+        List<Transaction> keyed = new ArrayList<>();
         int extraAttributes = 0;
         for (int step = 0; step < 60; step++) {
             String where = "seed " + seed + ", step " + step;
-            switch (random.nextInt(10)) {
+            switch (random.nextInt(11)) {
                 case 0, 1, 2 -> {
-                    Transaction create = Transaction.by("importer").create("Person", from(1, 1),
-                            values("name", "Person " + step)).build();
+                    Transaction create = Transaction.by("importer").idempotencyKey("create-" + step)
+                            .create("Person", from(1, 1), values("name", "Person " + step)).build();
                     Receipt expected = DurableFixture.commit(memory, create);
                     assertThat(DurableFixture.commit(store, create)).as(where).isEqualTo(expected);
                     people.add(expected.created().getFirst());
+                    keyed.add(create);
                 }
                 case 3, 4 -> {
-                    List<Id> live = people.stream().filter(id -> !ended.contains(id)).toList();
+                    List<Id> live = people.stream().filter(id -> !ended.contains(id) && !purged.contains(id))
+                            .toList();
                     if (!live.isEmpty()) {
                         Id person = live.get(random.nextInt(live.size()));
                         Transaction patch = Transaction.by("importer").reason("rename " + step)
@@ -88,7 +95,8 @@ class DurableRandomizedTest {
                     }
                 }
                 case 5 -> {
-                    List<Id> live = people.stream().filter(id -> !ended.contains(id)).toList();
+                    List<Id> live = people.stream().filter(id -> !ended.contains(id) && !purged.contains(id))
+                            .toList();
                     if (!live.isEmpty()) {
                         Id person = live.get(random.nextInt(live.size()));
                         Transaction end = Transaction.by("importer").endDate(
@@ -110,24 +118,36 @@ class DurableRandomizedTest {
                 case 8 -> {
                     store.close();
                     store = fixture.open();
-                    assertEquivalent(memory, store, people, where + " after close");
+                    assertEquivalent(memory, store, people, keyed, where + " after close");
+                }
+                case 9 -> {
+                    List<Id> candidates = people.stream().filter(id -> !purged.contains(id)).toList();
+                    if (!candidates.isEmpty()) {
+                        Id person = candidates.get(random.nextInt(candidates.size()));
+                        Purge purge = Purge.by("dpo").reason("erasure " + step).entity((EntityId) person).build();
+                        PurgeResult expected = memory.purge(purge);
+                        assertThat(expected).as(where).isInstanceOf(PurgeResult.Purged.class);
+                        assertThat(store.purge(purge)).as(where).isEqualTo(expected);
+                        purged.add(person);
+                    }
                 }
                 default -> {
                     DurableFixture.crash(store);
                     store = fixture.open();
-                    assertEquivalent(memory, store, people, where + " after a crash");
+                    assertEquivalent(memory, store, people, keyed, where + " after a crash");
                 }
             }
         }
-        assertEquivalent(memory, store, people, "seed " + seed + ", at the end");
+        assertEquivalent(memory, store, people, keyed, "seed " + seed + ", at the end");
         store.close();
         fixture.closeAll();
     }
 
-    private static void assertEquivalent(Store memory, Store store, List<Id> people, String where) {
+    private static void assertEquivalent(Store memory, Store store, List<Id> people, List<Transaction> keyed,
+            String where) {
         StoreEquivalence.assertEquivalent(
-                StoreEquivalence.observeSampled(memory, people, EFFECTIVE_TIMES, List.of()),
-                StoreEquivalence.observeSampled(store, people, EFFECTIVE_TIMES, List.of()));
+                StoreEquivalence.observeSampled(memory, people, EFFECTIVE_TIMES, keyed),
+                StoreEquivalence.observeSampled(store, people, EFFECTIVE_TIMES, keyed));
         assertThat(store.latestBasis()).as(where).isEqualTo(memory.latestBasis());
     }
 }

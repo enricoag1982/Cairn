@@ -2,18 +2,18 @@
 
 ## 1. API
 
-- [ ] 1.1 `Purge`, `PurgeResult`, `PurgeRecord`, `Store.purge` and `Store.purges`, and the problem code `IDEMPOTENCY_KEY_PURGED` (D1, D3)
+- [x] 1.1 `Purge`, `PurgeResult`, `PurgeRecord`, `Store.purge` and `Store.purges`, and the problem code `IDEMPOTENCY_KEY_PURGED` (D1, D3)
 
 ## 2. Engine
 
-- [ ] 2.1 Checking a purge: unknown IDs, composition targets, minimums at the other end (D2)
-- [ ] 2.2 Removing from the in-memory store, purged IDs, purged idempotency keys, purge records (D3)
-- [ ] 2.3 Durable stores: logging purges, rewriting files, recovery that completes a purge (D4)
+- [x] 2.1 Checking a purge: unknown IDs, composition targets, minimums at the other end (D2)
+- [x] 2.2 Removing from the in-memory store, purged IDs, purged idempotency keys, purge records (D3)
+- [x] 2.3 Durable stores: logging purges, rewriting files, recovery that completes a purge (D4)
 
 ## 3. Tests
 
-- [ ] 3.1 One test per scenario of `purge`, named `Scenario: <name>`
-- [ ] 3.2 Equivalence of a durable store and an in-memory twin through purges; verify `./gradlew build` passes
+- [x] 3.1 One test per scenario of `purge`, named `Scenario: <name>`
+- [x] 3.2 Equivalence of a durable store and an in-memory twin through purges; verify `./gradlew build` passes
 
 ## 4. Documentation
 

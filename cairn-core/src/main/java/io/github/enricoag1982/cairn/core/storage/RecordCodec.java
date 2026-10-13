@@ -3,8 +3,8 @@ package io.github.enricoag1982.cairn.core.storage;
 /**
  * Encodes and decodes the records of the commit log (design D3 of {@code add-durable-commit-log}). A record in a frame
  * is a 4-byte length, a 4-byte CRC32C of those length bytes, a 4-byte CRC32C of the payload, and the payload, which
- * starts with a kind byte: a schema transaction or a data transaction. Each kind has a writer and a reader of its own for format version 1; a later
- * version adds readers beside these, selected by the version in the file's header.
+ * starts with a kind byte: a schema transaction, a data transaction or a purge. Each kind has a writer and a reader of
+ * its own for format version 1; a later version adds readers beside these, selected by the version in the file's header.
  */
 final class RecordCodec {
 
@@ -16,6 +16,9 @@ final class RecordCodec {
 
     /** The kind byte of a data transaction. */
     static final int DATA = 2;
+
+    /** The kind byte of a purge. */
+    static final int PURGE = 3;
 
     private RecordCodec() {
     }
@@ -35,6 +38,10 @@ final class RecordCodec {
             case DataRecord data -> {
                 out.writeByte(DATA);
                 DataRecordWriter.write(out, data);
+            }
+            case PurgeLogRecord purge -> {
+                out.writeByte(PURGE);
+                PurgeCodec.write(out, purge.purge());
             }
         }
         return out.finishFrame();
@@ -56,6 +63,7 @@ final class RecordCodec {
             LogRecord record = switch (kind) {
                 case SCHEMA -> SchemaRecordReader.read(in);
                 case DATA -> DataRecordReader.read(in);
+                case PURGE -> new PurgeLogRecord(PurgeCodec.read(in));
                 default -> throw new CorruptRecordException("The record kind " + kind + " is not known.");
             };
             in.requireEnd();

@@ -133,6 +133,38 @@ public final class CommitLog implements Journal, AutoCloseable {
     }
 
     /**
+     * Deletes every segment of the log, the current one included, and starts a new one named after the basis of the first
+     * record to come. A purge calls it after it wrote a snapshot file that holds the whole state, so that no segment
+     * keeps the purged data (ADR-0024, design D4 of {@code add-purge}). If it fails, the log refuses further records.
+     *
+     * @param firstBasis the basis of the first record that will be appended, one above the latest basis
+     * @throws UncheckedIOException  if deleting the segments or creating the new one fails
+     * @throws IllegalStateException if an earlier write failed, or the log is closed
+     */
+    public synchronized void discardAndRestart(long firstBasis) {
+        requireWritable();
+        try {
+            channel.close();
+            for (FileFormat.Numbered old : FileFormat.list(directory, FileFormat.LOG_SUFFIX)) {
+                Files.deleteIfExists(old.path());
+            }
+            FileFormat.forceDirectory(directory);
+            startSegment(firstBasis);
+        } catch (IOException e) {
+            failed = true;
+            throw new UncheckedIOException("Replacing the segments of the commit log in " + directory + " failed.", e);
+        }
+    }
+
+    /**
+     * Makes the log refuse further records, as a failed write does. A store calls it when something that has to follow a
+     * logged record failed, so that nothing is written to segments that it could not clean up.
+     */
+    public void fail() {
+        failed = true;
+    }
+
+    /**
      * Closes the channel under the log, so that the next write fails as a failing disk would make it fail. For tests of
      * the requirement "A commit that cannot be written".
      */

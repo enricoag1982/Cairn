@@ -7,6 +7,7 @@ import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
@@ -314,6 +315,44 @@ class RecordCodecTest {
                 "importer", Optional.empty(), Optional.empty(), Optional.empty()), List.of());
 
         assertThat(roundTrip(record)).isEqualTo(record);
+    }
+
+    // ------------------------------------------------------------------ purges
+
+    @Test
+    void aPurgeRecordWithEveryFieldSetReadsBackEqual() {
+        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(7), T1, "dpo", Optional.of("alice"),
+                "Erasure request, with ünïcode and 😀", List.of(new EntityId("e-1"), new EntityId("e-3")),
+                List.of(new RelationshipId("r-1"), new RelationshipId("r-2"))));
+
+        LogRecord read = roundTrip(record);
+
+        assertThat(read).isEqualTo(record);
+        assertThat(read.basis()).isEqualTo(new Basis(7));
+        assertThat(read.transactionTime()).isEqualTo(T1);
+        assertEveryComponentIsSetSomewhere(recordsIn(record));
+    }
+
+    @Test
+    void aPurgeRecordWithoutAPartyActedForOrRelationshipsReadsBackEqual() {
+        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(2), T2, "dpo", Optional.empty(), "Why",
+                List.of(new EntityId("e-1")), List.of()));
+
+        assertThat(roundTrip(record)).isEqualTo(record);
+    }
+
+    @Test
+    void aPurgeRecordThatIsCutShortOrHasBytesLeftOverIsCorrupt() {
+        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(2), T2, "dpo", Optional.of("alice"),
+                "Why", List.of(new EntityId("e-1")), List.of(new RelationshipId("r-1"))));
+        byte[] frame = RecordCodec.encode(record);
+        byte[] payload = Arrays.copyOfRange(frame, Encoder.FRAME_HEADER, frame.length);
+
+        assertThat(payload[0]).as("the kind byte of a purge").isEqualTo((byte) RecordCodec.PURGE);
+        assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, Arrays.copyOf(payload, payload.length - 1)))
+                .isInstanceOf(CorruptRecordException.class);
+        assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, Arrays.copyOf(payload, payload.length + 1)))
+                .isInstanceOf(CorruptRecordException.class);
     }
 
     // ------------------------------------------------------------------ primitives

@@ -1,5 +1,7 @@
 package io.github.enricoag1982.cairn.core.storage;
 
+import io.github.enricoag1982.cairn.data.PurgeRecord;
+import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.schema.Basis;
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -16,7 +18,9 @@ import java.util.Optional;
 /**
  * Reads a store's directory back (design D4 of {@code add-durable-commit-log}). It hands to a {@link Replay} what the
  * newest valid snapshot file holds, and then each record of the log after it, in the order of the bases. It checks the
- * files; it never validates what the records say.
+ * files; it never validates what the records say. It also tells whether a purge is left to complete (ADR-0024, design D4
+ * of {@code add-purge}): a purge record in the log is newer than every valid snapshot file, so the files that precede
+ * it still hold the purged data.
  *
  * <ul>
  *   <li>A snapshot file that is not valid is skipped, and the next older one is used; with none, recovery starts empty.
@@ -64,21 +68,78 @@ public final class Recovery {
      * @param latest              the basis of the latest transaction that was recovered; {@link Basis#NONE} if there is
      *                            none
      * @param lastTransactionTime the transaction time of that transaction; empty if there is none
+     * @param lastPurge           the basis of the latest purge that the snapshot file or the log holds; empty if the
+     *                            store never purged
+     * @param purgePending        whether a purge record was read from the log, which means that no snapshot file holds
+     *                            the purge yet, and the files that precede it still hold the purged data
      */
-    public record Result(Basis latest, Optional<Instant> lastTransactionTime) {
+    public record Result(Basis latest, Optional<Instant> lastTransactionTime, Optional<Basis> lastPurge,
+            boolean purgePending) {
+    }
+
+    /** Hands everything to a replay, and notes the purges that pass by. */
+    private static final class Watching implements Replay {
+        private final Replay replay;
+        private long lastPurge = -1;
+        private boolean pending;
+
+        Watching(Replay replay) {
+            this.replay = replay;
+        }
+
+        @Override
+        public void schema(SchemaRecord record) {
+            replay.schema(record);
+        }
+
+        @Override
+        public void transaction(TransactionRecord record) {
+            replay.transaction(record);
+        }
+
+        @Override
+        public void keyed(KeyedTransaction keyed) {
+            replay.keyed(keyed);
+        }
+
+        @Override
+        public void purge(PurgeRecord record) {
+            replay.purge(record);
+            lastPurge = Math.max(lastPurge, record.basis().value());
+        }
+
+        @Override
+        public void purgedKey(String key) {
+            replay.purgedKey(key);
+        }
+
+        @Override
+        public void history(History history) {
+            replay.history(history);
+        }
+
+        @Override
+        public void record(LogRecord record) {
+            replay.record(record);
+            if (record instanceof PurgeLogRecord purge) {
+                lastPurge = Math.max(lastPurge, purge.basis().value());
+                pending = true;
+            }
+        }
     }
 
     /**
      * Recovers the state in a directory.
      *
      * @param storeDirectory the directory of the store, whose lock the caller holds
-     * @param replay         receives the state
-     * @return the latest basis and transaction time recovered
+     * @param target         receives the state
+     * @return the latest basis and transaction time recovered, and the purges that it saw
      * @throws UncheckedIOException  if reading or truncating a file fails
      * @throws IllegalStateException        if a file is damaged anywhere but at the end of the last segment, was written
      *                                      in a format version that is not known, or the log has a gap
      */
-    public static Result recover(Path storeDirectory, Replay replay) {
+    public static Result recover(Path storeDirectory, Replay target) {
+        Watching replay = new Watching(target);
         try {
             Optional<Snapshots.Loaded> snapshot = Snapshots.loadNewest(storeDirectory, replay);
             long latest = snapshot.map(loaded -> loaded.basis().value()).orElse(0L);
@@ -95,7 +156,9 @@ public final class Recovery {
                 readSegment(segments.get(i), last, replay, cursor);
             }
             Snapshots.deleteTemporaryFiles(storeDirectory);
-            return new Result(new Basis(cursor.latest), cursor.lastTime);
+            return new Result(new Basis(cursor.latest), cursor.lastTime,
+                    replay.lastPurge < 0 ? Optional.empty() : Optional.of(new Basis(replay.lastPurge)),
+                    replay.pending);
         } catch (IOException e) {
             throw new UncheckedIOException("Reading the directory " + storeDirectory + " failed.", e);
         }

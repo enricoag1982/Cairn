@@ -186,8 +186,9 @@ final class Creations {
     }
 
     /**
-     * Checks an ID that the caller supplied: it is in the generator's format, and no entity or relationship has it.
-     * IDs are unique across entities and relationships.
+     * Checks an ID that the caller supplied: it is in the generator's format, no entity or relationship has it, and no
+     * purge removed an entity or relationship that had it (capability {@code purge}). IDs are unique across entities
+     * and relationships.
      */
     private IdCheck checkId(String path, String idText, boolean supplied) {
         if (!supplied) {
@@ -197,6 +198,13 @@ final class Creations {
             problems.add(Problems.of(ProblemCode.INVALID_ENTITY_ID, path, "The supplied ID '" + idText
                     + "' is not in the format of the store's ID generator.",
                     "an ID in the format of the store's ID generator", idText,
+                    "Leave the ID out to let the store generate one."));
+            return new IdCheck(false, false);
+        }
+        if (workspace.purged(idText)) {
+            problems.add(Problems.of(ProblemCode.ENTITY_EXISTS, path, "The ID " + idText + " was purged: an entity or "
+                    + "relationship that had it was removed, and a purged ID is never used again.",
+                    "an ID that no entity or relationship has or had", idText,
                     "Leave the ID out to let the store generate one."));
             return new IdCheck(false, false);
         }

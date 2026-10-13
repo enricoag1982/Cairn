@@ -4,10 +4,11 @@ import io.github.enricoag1982.cairn.schema.Basis;
 import java.time.Instant;
 
 /**
- * What one committed transaction did, as the commit log records it (ADR-0022): a schema transaction or a data
- * transaction. Recovery applies these effects; it does not validate, run rules or ask a clock or an ID generator.
+ * What one committed transaction did, as the commit log records it (ADR-0022): a schema transaction, a data
+ * transaction or a purge (ADR-0024). Recovery applies these effects; it does not validate, run rules or ask a clock or
+ * an ID generator.
  */
-public sealed interface LogRecord permits SchemaRecord, DataRecord {
+public sealed interface LogRecord permits SchemaRecord, DataRecord, PurgeLogRecord {
 
     /**
      * The basis the transaction produced.

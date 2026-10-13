@@ -1,8 +1,12 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import static io.github.enricoag1982.cairn.core.data.ReferenceTales.EFFECTIVE_TIMES;
+import static io.github.enricoag1982.cairn.core.data.ReferenceTales.entity;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.CUSTOMER_ROLE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
@@ -12,9 +16,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.enricoag1982.cairn.core.IdGenerators;
 import io.github.enricoag1982.cairn.core.StoreSettings;
 import io.github.enricoag1982.cairn.core.Stores;
+import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.Purge;
+import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
@@ -32,7 +39,9 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Design D8 of {@code add-durable-commit-log}: a durable store and an in-memory store, with the same clock and the same
  * deterministic ID generator, commit every story of the reference domain, and are compared before the durable store is
- * reopened, after it is closed and opened again, and after a store that was abandoned is opened again.
+ * reopened, after it is closed and opened again, and after a store that was abandoned is opened again. With purges
+ * (design D5 of {@code add-purge}) they are compared through the purges too: a purge that is refused, purges that are
+ * accepted, a purge that stops after it reached the log, and the IDs and keys that purges leave unusable.
  */
 class DurableEquivalenceTest {
 
@@ -129,6 +138,85 @@ class DurableEquivalenceTest {
 
         assertThat(StoreFiles.snapshots(directory)).isEmpty();
         StoreEquivalence.assertEquivalent(expected, observe(recovered, onDisk, List.of()));
+    }
+
+    private static Purge alicesPurge(ReferenceTales.Told told) {
+        return ReferenceStories.rd11PurgeAlice(entity(told.parties, ALICE));
+    }
+
+    /** Beta, with the account and the customer role that need it: nothing that remains is left without a relationship. */
+    private static Purge betaWithWhatNeedsIt(ReferenceTales.Told told) {
+        return Purge.by("dpo").onBehalfOf("beta").reason("Closure")
+                .entity(entity(told.parties, BETA)).entity(entity(told.accounts, A1))
+                .entity(entity(told.customer, CUSTOMER_ROLE)).build();
+    }
+
+    @Test
+    void purgesKeepADurableStoreEquivalentToAnInMemoryStoreBeforeAndAfterReopening() {
+        DirectoryStore store = durable.openWithReferenceModel();
+        ReferenceTales.Told inMemory = ReferenceTales.everyStory(memory, memoryClock);
+        ReferenceTales.Told onDisk = ReferenceTales.everyStory(store, durable.clock);
+        Transaction keyed = keyed(inMemory.parties);
+        List<Transaction> keys = List.of(keyed);
+        DurableFixture.commit(memory, keyed);
+        DurableFixture.commit(store, keyed);
+        Purge betaAlone = Purge.by("dpo").reason("Too early").entity(entity(inMemory.parties, BETA)).build();
+
+        PurgeResult refused = memory.purge(betaAlone);
+        assertThat(refused).isInstanceOf(PurgeResult.Rejected.class);
+        assertThat(store.purge(betaAlone)).as("the same problems").isEqualTo(refused);
+        PurgeResult alice = memory.purge(alicesPurge(inMemory));
+        assertThat(alice).isInstanceOf(PurgeResult.Purged.class);
+        assertThat(store.purge(alicesPurge(onDisk))).as("the same record").isEqualTo(alice);
+
+        StoreEquivalence.Observation afterAlice = observe(memory, inMemory, keys);
+        assertThat(afterAlice.purges()).hasSize(1);
+        assertThat(afterAlice.keyed()).as("the key of the purged transaction is refused").singleElement()
+                .isInstanceOf(CommitResult.Rejected.class);
+        StoreEquivalence.assertEquivalent(afterAlice, observe(store, onDisk, keys));
+        store.close();
+        DirectoryStore reopened = durable.open();
+        StoreEquivalence.assertEquivalent(afterAlice, observe(reopened, onDisk, keys));
+
+        // Both stores purge again, a purge of several entities and what they need, and then commit.
+        PurgeResult beta = memory.purge(betaWithWhatNeedsIt(inMemory));
+        assertThat(beta).isInstanceOf(PurgeResult.Purged.class);
+        assertThat(reopened.purge(betaWithWhatNeedsIt(onDisk))).isEqualTo(beta);
+        Transaction more = Transaction.by(ReferenceStories.PRINCIPAL)
+                .create("Person", from(1, 1), values("name", "Bob")).build();
+        Receipt inMemoryMore = DurableFixture.commit(memory, more);
+        Receipt reopenedMore = DurableFixture.commit(reopened, more);
+        assertThat(reopenedMore).as("the same IDs, whatever was purged").isEqualTo(inMemoryMore);
+        inMemory.receipts.add(inMemoryMore);
+        onDisk.receipts.add(reopenedMore);
+        StoreEquivalence.Observation afterBeta = observe(memory, inMemory, keys);
+        assertThat(afterBeta.purges()).hasSize(2);
+        StoreEquivalence.assertEquivalent(afterBeta, observe(reopened, onDisk, keys));
+
+        DurableFixture.crash(reopened);
+        DirectoryStore recovered = durable.open();
+        StoreEquivalence.assertEquivalent(afterBeta, observe(recovered, onDisk, keys));
+        assertThat(StoreFiles.filesContaining(directory, "Alice")).isEmpty();
+        assertThat(StoreFiles.filesContaining(directory, "Analyst")).as("her title, in the Employs relationship")
+                .isEmpty();
+    }
+
+    @Test
+    void aPurgeThatStoppedAfterItReachedTheLogIsCompletedAndEquivalentToAnInMemoryTwin() {
+        DirectoryStore store = durable.openWithReferenceModel();
+        ReferenceTales.Told inMemory = ReferenceTales.everyStory(memory, memoryClock);
+        ReferenceTales.Told onDisk = ReferenceTales.everyStory(store, durable.clock);
+        store.writeSnapshot();
+        PurgeResult alice = memory.purge(alicesPurge(inMemory));
+        StoreEquivalence.Observation expected = observe(memory, inMemory, List.of());
+        store.crashAfterTheNextPurgeIsLogged();
+
+        assertThatThrownBy(() -> store.purge(alicesPurge(onDisk))).isInstanceOf(IllegalStateException.class);
+        DirectoryStore recovered = durable.open();
+
+        assertThat(recovered.purges()).containsExactly(((PurgeResult.Purged) alice).record());
+        StoreEquivalence.assertEquivalent(expected, observe(recovered, onDisk, List.of()));
+        assertThat(StoreFiles.filesContaining(directory, "Alice")).isEmpty();
     }
 
     @Test

@@ -2,6 +2,8 @@ package io.github.enricoag1982.cairn.fixtures;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
+import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.Purge;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.Store;
@@ -19,7 +21,7 @@ import java.util.Objects;
 /**
  * The stories of the reference domain ({@code docs/reference/reference-domain.md}) as the transactions that tell them,
  * with the dates at which they are recorded. It builds every story that records data. RD-6 and RD-10 are queries, which
- * {@link ReferenceQueries} builds; only RD-11, the purge, needs a feature that does not exist yet.
+ * {@link ReferenceQueries} builds; RD-11 is a purge, which {@link #rd11PurgeAlice(EntityId)} builds.
  *
  * <p>Stories are in 2026 unless they say otherwise. "Recorded" is the transaction time: a {@link Recording} is
  * replayed on a store with a {@link TestClock} moved to its recording date, at midnight UTC. Effective dates are at
@@ -38,6 +40,12 @@ public final class ReferenceStories {
 
     /** The principal that records the stories. */
     public static final String PRINCIPAL = "importer";
+
+    /** The principal that purges Alice in the story RD-11. */
+    public static final String PURGE_PRINCIPAL = "dpo";
+
+    /** The reason for which Alice is purged in the story RD-11. */
+    public static final String PURGE_REASON = "Erasure request";
 
     /** The temporary ID of ACME, an organization. */
     public static final TemporaryId ACME = new TemporaryId("acme");
@@ -318,6 +326,18 @@ public final class ReferenceStories {
                 .create(GAMMA, "Organization", from(4, 1), values("name", "Gamma"))
                 .relate(GAMMA_OWNS_BETA, "Owns", GAMMA, beta, from(4, 1), values("share", 50))
                 .build());
+    }
+
+    /**
+     * RD-11. Purging Alice removes her facts from all of history and leaves a record that a purge happened. The story
+     * gives no date: a purge is recorded when it is committed, so move the clock before it if the date matters. The
+     * principal is {@link #PURGE_PRINCIPAL} and the reason {@link #PURGE_REASON}.
+     *
+     * @param alice Alice
+     * @return the purge
+     */
+    public static Purge rd11PurgeAlice(EntityId alice) {
+        return Purge.by(PURGE_PRINCIPAL).reason(PURGE_REASON).entity(alice).build();
     }
 
     // ------------------------------------------------------------------ replaying

@@ -7,8 +7,8 @@ import java.util.List;
 
 /**
  * A system of record: a schema, and the entities and relationships written under it, with history on two time axes
- * (ADR-0007, ADR-0008, capabilities {@code transactions}, {@code entity-versions}, {@code relationships} and
- * {@code views}).
+ * (ADR-0007, ADR-0008, capabilities {@code transactions}, {@code entity-versions}, {@code relationships},
+ * {@code views} and {@code purge}).
  *
  * <p>One writer orders all commits, schema transactions and data transactions alike; they share one sequence of bases
  * and transaction times. Reads never wait: they go through {@linkplain View views}.
@@ -28,7 +28,9 @@ public interface Store {
      * the state it would produce, and rejected with every problem found if any write is invalid.
      *
      * <p>A transaction with an idempotency key that a committed transaction already used, and that is equal to it, gets
-     * the earlier receipt and records nothing; with other content it is rejected.
+     * the earlier receipt and records nothing; with other content it is rejected. A transaction with the key of one
+     * that wrote data which a {@linkplain #purge(Purge) purge} removed is rejected with the problem
+     * {@code IDEMPOTENCY_KEY_PURGED}, whatever its content.
      *
      * @param transaction the transaction
      * @return the receipt, or every problem found
@@ -82,4 +84,41 @@ public interface Store {
      * @return the transactions, oldest first
      */
     List<TransactionRecord> transactions();
+
+    /**
+     * Purges entities: removes them from all of history (ADR-0024, capability {@code purge}). It removes every version
+     * of the named entities at every basis, every relationship from or to them with all its versions, and the targets of
+     * their compositions, as end-dating ends them, with their own relationships. Afterwards every view, at every basis
+     * and including views that were opened before the purge, and every timeline and query reads as if the removed
+     * entities and relationships had never been recorded. The purge is recorded as a transaction of its own, which
+     * {@link #purges()} lists; a durable store has removed the data from its files too before the call returns. Rules do
+     * not run, because a purge writes no versions.
+     *
+     * <p>The IDs of what was removed are never given to a new entity or relationship, and a write that supplies one is
+     * rejected. The idempotency keys of transactions that wrote removed data stay used, and a transaction that repeats
+     * one is rejected.
+     *
+     * <p>A purge is rejected, and nothing is changed and no basis is used, if it names an ID that no entity has
+     * ({@code UNKNOWN_ENTITY}, at {@code @purge.<n>}, with {@code n} the position in the purge counted from 0), or if
+     * an entity that remains would be left with fewer relationships of a type than the type's minimum at some point in
+     * effective time in which the entity exists ({@code TOO_FEW_RELATIONSHIPS}, at the entity's ID, with the hint to
+     * purge that entity too). Every problem is reported.
+     *
+     * <p>A view that reads while a purge runs may see part of it, but never a relationship whose end is missing; once
+     * the purge has returned, every view reads the purged state. Applications should not rely on views across a purge.
+     *
+     * @param purge the entities to purge, with who asks, for whom and why
+     * @return the record of the purge, or every problem found
+     * @throws IllegalStateException if a rule of this store calls it while the store runs rules: a rule must not write
+     */
+    PurgeResult purge(Purge purge);
+
+    /**
+     * Lists the purges, with their principal, party acted for, reason, basis and transaction time, and the IDs they
+     * removed. The records of the data transactions that came before them are still listed by {@link #transactions()},
+     * which lists data transactions only.
+     *
+     * @return the purges, oldest first
+     */
+    List<PurgeRecord> purges();
 }

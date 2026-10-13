@@ -3,7 +3,10 @@ package io.github.enricoag1982.cairn.core.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.schema.Basis;
@@ -49,6 +52,8 @@ class RecoveryTest {
         final List<TransactionRecord> transactions = new ArrayList<>();
         final List<KeyedTransaction> keyed = new ArrayList<>();
         final List<History> histories = new ArrayList<>();
+        final List<PurgeRecord> purges = new ArrayList<>();
+        final List<String> purgedKeys = new ArrayList<>();
 
         @Override
         public void schema(SchemaRecord record) {
@@ -63,6 +68,16 @@ class RecoveryTest {
         @Override
         public void keyed(KeyedTransaction keyedTransaction) {
             keyed.add(keyedTransaction);
+        }
+
+        @Override
+        public void purge(PurgeRecord record) {
+            purges.add(record);
+        }
+
+        @Override
+        public void purgedKey(String key) {
+            purgedKeys.add(key);
         }
 
         @Override
@@ -578,7 +593,7 @@ class RecoveryTest {
         TransactionRecord entry = new TransactionRecord(new Basis(basis), START.plusSeconds(basis), "tester",
                 Optional.empty(), Optional.empty());
         Snapshots.write(directory, new Snapshots.Content(new Basis(basis), Optional.of(START.plusSeconds(basis)),
-                List.of(schema(1)), List.of(entry), List.of(), List.of()));
+                List.of(schema(1)), List.of(entry), List.of(), List.of(), List.of(), List.of()));
     }
 
     @Test
@@ -586,7 +601,7 @@ class RecoveryTest {
         TransactionRecord entry = new TransactionRecord(new Basis(2), START.plusSeconds(2), "tester",
                 Optional.of("sales"), Optional.of("why"));
         Snapshots.write(directory, new Snapshots.Content(new Basis(2), Optional.of(START.plusSeconds(2)),
-                List.of(schema(1)), List.of(entry), List.of(), List.of()));
+                List.of(schema(1)), List.of(entry), List.of(), List.of(), List.of(), List.of()));
 
         Collected collected = new Collected();
         Optional<Snapshots.Loaded> loaded = Snapshots.loadNewest(directory, collected);
@@ -719,6 +734,133 @@ class RecoveryTest {
 
         assertThat(recover().bases()).containsExactly(1L, 2L);
         assertThat(temporary).doesNotExist();
+    }
+
+    // ------------------------------------------------------------------ purges
+
+    private static PurgeRecord purge(long basis) {
+        return new PurgeRecord(new Basis(basis), START.plusSeconds(basis), "dpo", Optional.of("alice"),
+                "Erasure request", List.of(new EntityId("e-1"), new EntityId("e-2")),
+                List.of(new RelationshipId("r-1")));
+    }
+
+    private void writeSnapshotWithPurge(long basis, PurgeRecord purge, List<String> purgedKeys) throws IOException {
+        TransactionRecord entry = new TransactionRecord(new Basis(basis), START.plusSeconds(basis), "tester",
+                Optional.empty(), Optional.empty());
+        Snapshots.write(directory, new Snapshots.Content(new Basis(basis), Optional.of(START.plusSeconds(basis)),
+                List.of(schema(1)), List.of(entry), List.of(), List.of(purge), purgedKeys, List.of()));
+    }
+
+    @Test
+    void aSnapshotFileHoldsThePurgesAndThePurgedKeysAndRecoveryTellsThatTheyAreInIt() throws IOException {
+        writeSnapshotWithPurge(5, purge(4), List.of("key-b", "key-a"));
+
+        Collected collected = new Collected();
+        Recovery.Result result = Recovery.recover(directory, collected);
+
+        assertThat(collected.purges).containsExactly(purge(4));
+        assertThat(collected.purgedKeys).containsExactly("key-b", "key-a");
+        assertThat(result.lastPurge()).contains(new Basis(4));
+        assertThat(result.purgePending()).as("the snapshot file holds the purge").isFalse();
+    }
+
+    @Test
+    void aPurgeRecordInTheLogIsHandedOverAndIsPendingUntilASnapshotFileHoldsIt() throws IOException {
+        CommitLog log = CommitLog.open(directory, 1, CommitLog.DEFAULT_SEGMENT_LIMIT);
+        log.append(data(1));
+        log.append(data(2));
+        log.append(new PurgeLogRecord(purge(3)));
+        log.close();
+
+        Collected collected = new Collected();
+        Recovery.Result result = Recovery.recover(directory, collected);
+
+        assertThat(collected.records).isEqualTo(List.of(data(1), data(2), new PurgeLogRecord(purge(3))));
+        assertThat(result.latest()).isEqualTo(new Basis(3));
+        assertThat(result.lastTransactionTime()).contains(START.plusSeconds(3));
+        assertThat(result.lastPurge()).contains(new Basis(3));
+        assertThat(result.purgePending()).isTrue();
+
+        writeSnapshotWithPurge(3, purge(3), List.of());
+        Collected afterwards = new Collected();
+        Recovery.Result later = Recovery.recover(directory, afterwards);
+
+        assertThat(afterwards.records).as("the record is in the snapshot file").isEmpty();
+        assertThat(later.lastPurge()).contains(new Basis(3));
+        assertThat(later.purgePending()).isFalse();
+    }
+
+    @Test
+    void aLogWithoutPurgesHasNoPurgeToComplete() throws IOException {
+        writeLog(3, CommitLog.DEFAULT_SEGMENT_LIMIT);
+        writeSnapshot(2);
+
+        Recovery.Result result = Recovery.recover(directory, new Collected());
+
+        assertThat(result.lastPurge()).isEmpty();
+        assertThat(result.purgePending()).isFalse();
+    }
+
+    @Test
+    void purgeFilesDeleteTheOlderSnapshotFilesAndTheSegmentsThatStartAtOrBelowTheBasis() throws IOException {
+        writeLog(12, 150);
+        writeSnapshot(3);
+        writeSnapshot(6);
+        writeSnapshot(9);
+        List<Path> before = segments();
+
+        PurgeFiles.deleteOlder(directory, 6);
+
+        assertThat(snapshots()).extracting(path -> path.getFileName().toString())
+                .containsExactly("00000000000000000006.snapshot", "00000000000000000009.snapshot");
+        assertThat(segments()).as("only the segments that start above 6 are left")
+                .allSatisfy(segment -> assertThat(Long.parseLong(segment.getFileName().toString()
+                        .replace(".log", ""))).isGreaterThan(6));
+        assertThat(segments()).isNotEmpty().isSubsetOf(before);
+        assertThat(before.size()).isGreaterThan(segments().size());
+
+        PurgeFiles.deleteOlder(directory, 6);
+
+        assertThat(snapshots()).as("repeating it changes nothing").hasSize(2);
+    }
+
+    @Test
+    void purgeFilesDoNothingToADirectoryWithoutFiles() throws IOException {
+        PurgeFiles.deleteOlder(directory, 5);
+
+        assertThat(contents()).isEmpty();
+    }
+
+    @Test
+    void theLogCanDiscardEverySegmentAndStartANewOneAfterAPurge() throws IOException {
+        CommitLog log = CommitLog.open(directory, 1, 150);
+        for (long basis = 1; basis <= 6; basis++) {
+            log.append(data(basis));
+        }
+        assertThat(segments()).hasSizeGreaterThan(1);
+
+        log.discardAndRestart(7);
+
+        assertThat(segments()).extracting(path -> path.getFileName().toString())
+                .containsExactly("00000000000000000007.log");
+        assertThat(starts(segments().getFirst())).as("the new segment has a header only").isEmpty();
+        log.append(data(7));
+        log.close();
+        writeSnapshot(6);
+        assertThat(recover().bases()).containsExactly(7L);
+    }
+
+    @Test
+    void aLogThatFailedOrIsClosedRefusesToDiscardItsSegments() {
+        CommitLog failed = CommitLog.open(directory, 1, CommitLog.DEFAULT_SEGMENT_LIMIT);
+        failed.fail();
+
+        assertThatThrownBy(() -> failed.discardAndRestart(2)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> failed.append(data(1))).isInstanceOf(IllegalStateException.class);
+        failed.close();
+        CommitLog closed = CommitLog.open(directory, 1, CommitLog.DEFAULT_SEGMENT_LIMIT);
+        closed.close();
+        assertThatThrownBy(() -> closed.discardAndRestart(2)).isInstanceOf(IllegalStateException.class);
     }
 
     // ------------------------------------------------------------------ keeping the two newest

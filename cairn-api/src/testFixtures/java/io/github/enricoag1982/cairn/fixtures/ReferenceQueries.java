@@ -12,7 +12,7 @@ import io.github.enricoag1982.cairn.query.Query;
  * their rows with those of these. Run them against a store in which the stories RD-1, RD-2 and RD-5 were replayed (see
  * {@link ReferenceStories}).
  *
- * <p>RD-11, the purge, is the only story that needs a feature that does not exist yet.
+ * <p>RD-11, the purge, is neither a transaction nor a query: {@link ReferenceStories#rd11PurgeAlice} builds it.
  */
 public final class ReferenceQueries {
 

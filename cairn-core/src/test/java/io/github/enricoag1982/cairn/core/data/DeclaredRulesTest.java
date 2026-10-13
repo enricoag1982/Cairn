@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,8 @@ class DeclaredRulesTest {
     /** Prepares a transaction as the store would, as the third commit, with only the code of the given rules. */
     private List<Problem> problemsOf(Transaction transaction) {
         return sequence.underWriterLock(() -> new Preparation(transaction, new SchemaIndex(schema), stored,
-                new HashMap<>(), IdGenerators.deterministic(), new CommitSequence.Commit(new Basis(3), NEXT_COMMIT_AT),
+                new HashMap<>(), Set.of(), IdGenerators.deterministic(),
+                new CommitSequence.Commit(new Basis(3), NEXT_COMMIT_AT),
                 new ValueChecks(), new Rules(List.of(new LeiChecksumRule())), sequence).run().problems());
     }
 
