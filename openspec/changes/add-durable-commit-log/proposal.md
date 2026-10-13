@@ -11,9 +11,9 @@ ADR-0022 decides what the log holds and how a store recovers. This change builds
 - A durable store: a store opened on a directory, which writes every committed transaction, of data or of the schema, to a commit log in that directory before the commit returns, and recovers its state from the directory when it is opened again.
 - Recovery applies what each transaction did, without validating, running rules, or asking the clock or the ID generator, so the recovered state is the committed state.
 - Snapshot files, written on request and when the store closes, so that recovery reads the newest snapshot and only the log after it. Older log segments and snapshots are deleted, keeping enough to recover if the newest snapshot is damaged.
-- Crash safety: an incomplete last record, as a crash leaves it, is dropped at recovery; damage anywhere else, or an unknown format version, stops the store from opening.
+- Crash safety: what a crash during a commit leaves at the end of the log is dropped at recovery; damage anywhere else, or an unknown format version, stops the store from opening.
 - One store per directory at a time, and a store that cannot write a commit refuses further commits until it is opened again.
-- Transaction times keep increasing, and new IDs never repeat recorded ones, after a store is opened again.
+- Transaction times keep increasing, new IDs never repeat recorded ones, and the ID generator keeps its format, after a store is opened again.
 
 ### Non-goals
 

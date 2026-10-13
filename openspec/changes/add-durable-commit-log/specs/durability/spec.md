@@ -27,7 +27,7 @@ THE SYSTEM SHALL open a store on a directory that keeps it on disk. A store open
 
 ### Requirement: Recovery repeats what was committed
 
-Recovery SHALL apply what each recorded transaction did. It SHALL NOT validate, run rules, or use the store's clock or ID generator. After recovery, transaction times SHALL keep increasing from the last recorded one, and a new entity or relationship SHALL NOT get an ID that the store already has.
+Recovery SHALL apply what each recorded transaction did. It SHALL NOT validate, run rules, or use the store's clock or ID generator. After recovery, transaction times SHALL keep increasing from the last recorded one, and a new entity or relationship SHALL NOT get an ID that the store already has. A store keeps the ID generator chosen when it was created: opening it with a generator that does not accept the IDs it holds SHALL fail with an exception.
 
 #### Scenario: Recovering without the code of a rule
 
@@ -39,6 +39,11 @@ Recovery SHALL apply what each recorded transaction did. It SHALL NOT validate, 
 - **WHEN** a durable store is opened again with a clock set before its last transaction time, and a transaction is committed
 - **THEN** the transaction time of the commit is after the last recorded one
 
+#### Scenario: Another ID generator
+
+- **WHEN** a durable store created with the default ID generator, which holds entities, is opened again with the deterministic ID generator
+- **THEN** opening fails with an exception
+
 #### Scenario: IDs after reopening
 
 - **WHEN** entities are created in a durable store with the deterministic ID generator, the store is opened again with a new deterministic ID generator, and an entity is created
@@ -46,12 +51,17 @@ Recovery SHALL apply what each recorded transaction did. It SHALL NOT validate, 
 
 ### Requirement: Crash safety
 
-Recovery SHALL drop a last record that is incomplete, as a crash during a commit leaves it, and open with every transaction before it. It SHALL refuse to open a store whose log is damaged anywhere else, or was written in a format version it does not know, with an exception that names the file, and SHALL change nothing on disk then.
+Recovery SHALL drop what a crash during a commit can leave at the end of the log, and open with every transaction before it: a last record that is cut short, or whose content fails its checksum with nothing but zero bytes after it, and a last log segment that holds nothing but zero bytes. Such a record may be one whose commit had returned, if only that record was damaged later; this cannot be told from a crash. Recovery SHALL refuse to open a store whose log is damaged anywhere else, or whose files were written in a format version it does not know, with an exception that names the file, and SHALL change nothing on disk then.
 
 #### Scenario: A commit cut short
 
 - **WHEN** the last record of a durable store's log is cut short, and the store is opened
 - **THEN** the store has every transaction before that record, and the next commit gets that record's basis
+
+#### Scenario: A last record full of zeros
+
+- **WHEN** the content of the last record of a durable store's log is zero bytes from some point on, as a file system that extends a file before writing its data can leave it after a crash, and the store is opened
+- **THEN** the store has every transaction before that record
 
 #### Scenario: A damaged log
 
@@ -79,7 +89,7 @@ A durable store SHALL write a snapshot file of its latest state when asked and w
 
 ### Requirement: One store per directory
 
-A directory SHALL be held by one open durable store at a time, in any process. Opening a store on a directory that another open store holds SHALL fail with an exception. Closing a store SHALL release the directory; a closed store SHALL refuse every further call.
+A directory SHALL be held by one open durable store at a time, in any process. Opening a store on a directory that another open store holds SHALL fail with an exception. Closing a store SHALL release the directory; a closed store SHALL refuse every further call but closing it again, which does nothing.
 
 #### Scenario: A directory in use
 
@@ -88,7 +98,7 @@ A directory SHALL be held by one open durable store at a time, in any process. O
 
 ### Requirement: A commit that cannot be written
 
-WHEN writing a commit to disk fails, THE SYSTEM SHALL NOT apply the transaction, SHALL report the failure with an exception, and SHALL refuse further commits and schema registrations until the store is opened again. Reads SHALL go on.
+WHEN writing a commit to disk fails, THE SYSTEM SHALL NOT apply the transaction, SHALL report the failure with an exception, and SHALL refuse further commits and schema registrations until the store is opened again. Reads SHALL go on. If the record of the failed commit reached the disk whole, recovery MAY apply it when the store is opened again, so a caller that retries the transaction should give it an idempotency key.
 
 #### Scenario: A failed write
 
