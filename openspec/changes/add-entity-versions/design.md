@@ -56,11 +56,11 @@ Constraints that shape the approach:
 - `Coordinates`: an effective instant and a sealed `KnownAt` (`latest()`, `basis(Basis)`, `transactionTime(Instant)`), built with `Coordinates.effectiveAt(instant)`, optionally `.knownAt(...)`.
 - `View`: `effectiveAt()`, `basis()`, `schema()`, `entity(EntityId)` returning `Optional<EntityState>`, `entities(String entityType)` returning `List<EntityState>`, and `timeline(EntityId)` returning `List<EntityState>`.
 - `EntityState(EntityId id, String entityType, Map<String, Value> values, EffectivePeriod period, Instant recordedAt, Basis recordedBasis)`, with values in a map ordered by the attributes' order in the schema.
-- `IdGenerator` (an interface: `next()` and `accepts(String)`), with `IdGenerators.uuidV7()`, `uuidV7(InstantSource, RandomGenerator)` and `deterministic()` in `cairn-core`.
+- `IdGenerator` (an interface: `next()`, `accepts(String)` and `copy()`, an independent copy in the same state), with `IdGenerators.uuidV7()`, `uuidV7(InstantSource, RandomGenerator)` and `deterministic()` in `cairn-core`.
 
 ### D3. One writer and one sequence
 
-- The store owns a `CommitSequence` (internal): it hands out the next basis and transaction time, the time strictly increasing and truncated to microseconds, as the schema registry does today.
+- The store owns a `CommitSequence` (internal package `io.github.enricoag1982.cairn.core.commit`): under its writer lock, `next()` proposes the next basis and transaction time (the time strictly increasing and truncated to microseconds) without advancing, and `publish(...)` advances the sequence and the latest basis once the commit's data is in place. A dry run or a rejected commit therefore uses no basis.
 - The store's schema registry is an `InMemorySchemaRegistry` built on the store's sequence and lock. `SchemaRegistries.inMemory(...)` keeps creating stand-alone registries with their own sequence.
 - One lock serializes schema and data commits. The latest committed basis is published through a volatile field after a commit's data is in place; views read only data at or below their basis, so they never wait and never see a partial commit.
 
@@ -88,7 +88,7 @@ Constraints that shape the approach:
 
 ### D7. Dry runs and idempotency
 
-- `dryRun` runs the same code as `commit` under the writer lock, up to the point of appending, and appends nothing. IDs for new entities are drawn from a throwaway copy of the generator state, so no ID is reserved.
+- `dryRun` runs the same code as `commit` under the writer lock, up to the point of appending, and appends nothing. IDs for new entities are drawn from `copy()` of the store's generator; a commit keeps the copy as the store's generator, and a dry run or a rejected commit throws it away, so no ID is reserved. A seeded UUIDv7 generator's copy shares its random source, so a dry run shifts later random bits but not their order.
 - The store keeps every committed idempotency key with its transaction and receipt. A transaction equal to the stored one (record equality) gets the stored receipt; any other with the same key is `IDEMPOTENCY_KEY_REUSED`.
 
 ### D8. ID generators

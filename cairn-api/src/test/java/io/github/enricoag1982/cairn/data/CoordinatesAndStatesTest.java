@@ -1,0 +1,98 @@
+package io.github.enricoag1982.cairn.data;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import io.github.enricoag1982.cairn.schema.Basis;
+import io.github.enricoag1982.cairn.schema.Value;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class CoordinatesAndStatesTest {
+
+    private static final Instant MARCH_31 = Instant.parse("2026-03-31T00:00:00Z");
+    private static final Instant APRIL_5 = Instant.parse("2026-04-05T00:00:00Z");
+
+    @Test
+    void coordinatesReadAsOfTheLatestBasisUnlessToldOtherwise() {
+        Coordinates coordinates = Coordinates.effectiveAt(MARCH_31);
+
+        assertThat(coordinates.effectiveAt()).isEqualTo(MARCH_31);
+        assertThat(coordinates.knownAt()).isEqualTo(KnownAt.latest());
+    }
+
+    @Test
+    void coordinatesCanBeKnownAtABasisOrATransactionTime() {
+        Coordinates base = Coordinates.effectiveAt(MARCH_31);
+
+        assertThat(base.knownAt(new Basis(4)).knownAt()).isEqualTo(new KnownAt.AtBasis(new Basis(4)));
+        assertThat(base.knownAt(APRIL_5).knownAt()).isEqualTo(new KnownAt.AtTransactionTime(APRIL_5));
+        assertThat(base.knownAt(KnownAt.basis(new Basis(4)))).isEqualTo(base.knownAt(new Basis(4)));
+        assertThat(base.knownAt(APRIL_5).effectiveAt()).isEqualTo(MARCH_31);
+    }
+
+    @Test
+    void knownAtReturnsNewCoordinatesAndLeavesTheOldOnesAlone() {
+        Coordinates base = Coordinates.effectiveAt(MARCH_31);
+
+        base.knownAt(APRIL_5);
+
+        assertThat(base.knownAt()).isEqualTo(KnownAt.latest());
+    }
+
+    @Test
+    void theEffectiveTimeIsTruncatedToMicroseconds() {
+        Coordinates coordinates = Coordinates.effectiveAt(Instant.parse("2026-03-31T10:15:30.123456789Z"));
+
+        assertThat(coordinates.effectiveAt()).isEqualTo(Instant.parse("2026-03-31T10:15:30.123456Z"));
+    }
+
+    @Test
+    void coordinatesRejectNulls() {
+        assertThatThrownBy(() -> Coordinates.effectiveAt(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Coordinates(MARCH_31, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> KnownAt.basis(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> KnownAt.transactionTime(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void anEntityStateKeepsTheOrderOfItsValues() {
+        Map<String, Value> values = new LinkedHashMap<>();
+        values.put("name", Value.of("A-1"));
+        values.put("currency", Value.of("EUR"));
+        values.put("balance", Value.of(1000));
+
+        EntityState state = state(values);
+        values.clear();
+
+        assertThat(state.values().keySet()).containsExactly("name", "currency", "balance");
+        assertThatThrownBy(() -> state.values().put("x", Value.of(1))).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void anEntityStateRejectsNulls() {
+        EffectivePeriod period = EffectivePeriod.from(MARCH_31);
+        Instant recorded = APRIL_5;
+        EntityId id = new EntityId("a");
+
+        assertThatThrownBy(() -> new EntityState(null, "T", Map.of(), period, recorded, new Basis(1)))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new EntityState(id, null, Map.of(), period, recorded, new Basis(1)))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new EntityState(id, "T", null, period, recorded, new Basis(1)))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new EntityState(id, "T", Map.of(), null, recorded, new Basis(1)))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new EntityState(id, "T", Map.of(), period, null, new Basis(1)))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new EntityState(id, "T", Map.of(), period, recorded, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    private static EntityState state(Map<String, Value> values) {
+        return new EntityState(new EntityId("a"), "Account", values, EffectivePeriod.from(MARCH_31), APRIL_5,
+                new Basis(2));
+    }
+}

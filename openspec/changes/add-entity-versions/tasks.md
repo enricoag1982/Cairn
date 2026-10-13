@@ -6,16 +6,16 @@
 
 ## 2. API (`cairn-api`, package `io.github.enricoag1982.cairn.data`)
 
-- [ ] 2.1 Add `EntityId`, `TemporaryId`, `Ref`, `EffectivePeriod`, `ConflictCheck` and `IdGenerator` (D2)
-- [ ] 2.2 Add `Transaction` with its builder, and the writes `Create`, `Patch`, `Replace` and `EndDate` (D2)
-- [ ] 2.3 Add `CommitResult`, `DryRunResult`, `Receipt` and `TransactionRecord` (D2)
-- [ ] 2.4 Add `Coordinates`, `KnownAt`, `View`, `EntityState` and `Store` (D2)
-- [ ] 2.5 Add the new problem codes with explanations (D6)
+- [x] 2.1 Add `EntityId`, `TemporaryId`, `Ref`, `EffectivePeriod`, `ConflictCheck` and `IdGenerator` (D2)
+- [x] 2.2 Add `Transaction` with its builder, and the writes `Create`, `Patch`, `Replace` and `EndDate` (D2)
+- [x] 2.3 Add `CommitResult`, `DryRunResult`, `Receipt` and `TransactionRecord` (D2)
+- [x] 2.4 Add `Coordinates`, `KnownAt`, `View`, `EntityState` and `Store` (D2)
+- [x] 2.5 Add the new problem codes with explanations (D6)
 
 ## 3. Engine (`cairn-core`)
 
-- [ ] 3.1 Add `IdGenerators` with UUIDv7 and deterministic generators (D8)
-- [ ] 3.2 Add the commit sequence and build the store's schema registry on it (D3)
+- [x] 3.1 Add `IdGenerators` with UUIDv7 and deterministic generators (D8)
+- [x] 3.2 Add the commit sequence and build the store's schema registry on it (D3)
 - [ ] 3.3 Keep timelines per entity and basis, and apply create, patch, replace and end-date (D4, D5)
 - [ ] 3.4 Validate the resulting state: types, values, constraints, required and deprecated attributes, uniqueness, conflicts, references and IDs (D6)
 - [ ] 3.5 Commit, dry run, idempotency and the transaction history (D7)

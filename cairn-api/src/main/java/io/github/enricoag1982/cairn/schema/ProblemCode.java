@@ -4,7 +4,8 @@ import java.util.Objects;
 
 /**
  * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and
- * {@code schema-evolution}), and for the reasons a schema document cannot be read (capability {@code schema-documents}).
+ * {@code schema-evolution}), for the reasons a schema document cannot be read (capability {@code schema-documents}),
+ * and for the reasons a data transaction is rejected (capabilities {@code transactions} and {@code entity-versions}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -119,7 +120,78 @@ public enum ProblemCode {
     INVALID_VALUE("A value in a schema document has the wrong kind, for example a number where text is expected, or "
             + "is written in a form that is not allowed, for example a multiplicity other than 0..1, 1..1, 0..* or "
             + "1..*. The expected and found details say which. Correct the value; put text that YAML would read as "
-            + "another kind, such as \"1.10\" or \"true\", in quotes.");
+            + "another kind, such as \"1.10\" or \"true\", in quotes."),
+    /** A write creates an entity of a name that is not an entity type. */
+    UNKNOWN_ENTITY_TYPE("A write creates an entity of a type name that the schema does not have as an entity type. "
+            + "Type names and aliases are compared without regard to case. Correct the name, which the hint suggests, "
+            + "or register the type first."),
+    /** A write creates an entity of an abstract entity type. */
+    ABSTRACT_ENTITY_TYPE("An abstract entity type has no entities of its own: it only groups its subtypes. Create the "
+            + "entity as one of the concrete subtypes."),
+    /** A write sets or replaces a value for a name that is not an attribute of the entity's type. */
+    UNKNOWN_ATTRIBUTE("A value is given for a name that is not an attribute, or an alias of one, of the entity's type, "
+            + "including the attributes of its supertypes and traits. Correct the name, which the hint suggests."),
+    /** A value does not have the attribute's value type. */
+    VALUE_TYPE_MISMATCH("A value must have the value type of its attribute; an int fits a long or decimal attribute, "
+            + "and a long fits a decimal attribute. The expected and found details name the types. Give a value of "
+            + "the expected type."),
+    /** A value lies outside the attribute's range. */
+    VALUE_OUT_OF_RANGE("A value must lie in the range that its attribute declares, respecting inclusive and "
+            + "exclusive bounds. The expected and found details give the range and the value. Give a value in the "
+            + "range."),
+    /** A string value is not one of the attribute's allowed values. */
+    VALUE_NOT_ALLOWED("The attribute accepts only the values it lists, compared exactly. The expected details list "
+            + "them. Give one of the allowed values."),
+    /** A string value does not match the attribute's pattern. */
+    VALUE_PATTERN_MISMATCH("A string value must match the attribute's pattern as a whole. The expected details give "
+            + "the pattern. Correct the value, for example its case or its length."),
+    /** A string value is shorter than the attribute's minimum length or longer than its maximum length. */
+    VALUE_LENGTH("A string value must have at least the minimum and at most the maximum length of its attribute, "
+            + "counted in Unicode code points. The expected details give the lengths. Shorten or lengthen the value."),
+    /** An attribute that is required has no value in some part of an entity's timeline. */
+    MISSING_REQUIRED_VALUE("A required attribute must have a value at every point in effective time in which the "
+            + "entity exists, also after a replace or a clear. Give the attribute a value for the whole period."),
+    /** A write sets an attribute that is deprecated. */
+    DEPRECATED_ATTRIBUTE("A deprecated attribute should no longer be used, so new writes may not set it; values "
+            + "written earlier stay readable. Remove the value from the write, or use the attribute that replaces it."),
+    /** Another entity has the same value of a unique attribute at some point in effective time. */
+    UNIQUE_VALUE_TAKEN("Two entities would have the same value of a unique attribute at the same point in effective "
+            + "time. The check covers all entities whose type has the attribute, including subtypes. Use another "
+            + "value, or change the other entity's value, or end it, so that the periods no longer overlap."),
+    /** A write refers to an ID that no entity has. */
+    UNKNOWN_ENTITY("A write patches, replaces or end-dates an entity that does not exist, by an ID that no entity of "
+            + "the store has. Correct the ID, or create the entity first."),
+    /** A patch or replace covers a period in which the entity does not exist. */
+    ENTITY_NOT_EFFECTIVE("A patch or replace must lie within the entity's lifetime, from its creation until its end-date. "
+            + "A write never extends a lifetime. Change the period, or create the entity for the period first."),
+    /** A write creates an entity with an ID that already exists. */
+    ENTITY_EXISTS("An entity with the supplied ID exists already, in the store or earlier in the same transaction. IDs "
+            + "are never reused. To change the entity, patch or replace it; otherwise leave the ID out, or supply "
+            + "another."),
+    /** A supplied ID is not in the format of the store's ID generator. */
+    INVALID_ENTITY_ID("A store accepts only supplied IDs in the format of its ID generator, which is chosen when the "
+            + "store is created; UUIDv7 by default, in lowercase hyphenated text. Supply an ID in that format, or "
+            + "leave the ID out so that the store generates one."),
+    /** A write refers to a temporary ID that the transaction does not create. */
+    UNKNOWN_TEMPORARY_ID("A temporary ID is valid only in the transaction that creates the entity. Create the entity "
+            + "with that temporary ID in the same transaction, or refer to the entity by its ID."),
+    /** Two writes of a transaction create entities with the same temporary ID. */
+    DUPLICATE_TEMPORARY_ID("A temporary ID names one entity in a transaction. Give each created entity its own "
+            + "temporary ID."),
+    /** An effective period ends at or before its start. */
+    INVALID_PERIOD("An effective period is half-open: it includes its start and excludes its end, so the end must be "
+            + "after the start. Leave the end out for a period without an end, or correct the instants."),
+    /** A conflict check found that the entity changed after the caller read it. */
+    CONFLICT("The entity, or for a per-attribute check an attribute that the write sets or clears, was changed by a "
+            + "transaction after the basis at which the caller read it. Read the entity again, decide whether the "
+            + "write still applies, and submit it with the new basis."),
+    /** A transaction names no principal. */
+    MISSING_PRINCIPAL("Every transaction records who submitted it, so it must name a principal that is not blank. "
+            + "Name the principal, for example an agent or a user."),
+    /** An idempotency key was used before by a transaction with other content. */
+    IDEMPOTENCY_KEY_REUSED("An idempotency key identifies one transaction: a transaction with the same writes, "
+            + "principal, party and reason is a retry and gets the first receipt, any other is rejected. Use a new key "
+            + "for a new transaction.");
 
     private final String explanation;
 

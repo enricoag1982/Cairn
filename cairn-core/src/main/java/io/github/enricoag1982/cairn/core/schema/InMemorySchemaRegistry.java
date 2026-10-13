@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.core.schema;
 
+import io.github.enricoag1982.cairn.core.commit.CommitSequence;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -18,7 +19,6 @@ import io.github.enricoag1982.cairn.schema.StoredDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import java.time.Instant;
 import java.time.InstantSource;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -36,6 +36,11 @@ import java.util.Set;
  * <p>Registrations are serialized: this is the single writer. Each applied registration publishes a new immutable
  * state, so reads never lock. Registering is planning followed by applying the plan, inside one lock, so a plan and a
  * registration of the same input always agree.
+ *
+ * <p>The registry takes the basis and the transaction time of every applied registration from a
+ * {@link CommitSequence}, and holds that sequence's writer lock while it registers. A stand-alone registry has a
+ * sequence of its own; the registry of a store shares the store's sequence, so schema transactions and data
+ * transactions are ordered together and the bases of the schema history are not consecutive.
  */
 public final class InMemorySchemaRegistry implements SchemaRegistry {
 
@@ -46,9 +51,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
             CompiledSchema schema,
             Map<String, OriginState> origins,
             List<SchemaTransaction> history,
-            long nextId,
-            long lastBasis,
-            Instant lastTime) {
+            long nextId) {
     }
 
     /**
@@ -60,9 +63,9 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         }
     }
 
-    private final InstantSource clock;
+    private final CommitSequence sequence;
     private final List<RuleDescriptor> rules;
-    private volatile State state = new State(CompiledSchema.EMPTY, Map.of(), List.of(), 1, 0, null);
+    private volatile State state = new State(CompiledSchema.EMPTY, Map.of(), List.of(), 1);
 
     /**
      * Creates an empty registry without available rules.
@@ -74,7 +77,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     }
 
     /**
-     * Creates an empty registry.
+     * Creates an empty stand-alone registry, with a commit sequence of its own.
      *
      * @param clock the source of transaction times
      * @param rules the rules that types may name
@@ -82,7 +85,19 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
      *                                  rules have the same name and version
      */
     public InMemorySchemaRegistry(InstantSource clock, Collection<RuleDescriptor> rules) {
-        this.clock = Objects.requireNonNull(clock, "clock");
+        this(new CommitSequence(clock), rules);
+    }
+
+    /**
+     * Creates an empty registry on a commit sequence, which other writers may share.
+     *
+     * @param sequence the sequence that supplies bases and transaction times, and the writer lock
+     * @param rules    the rules that types may name
+     * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two
+     *                                  rules have the same name and version
+     */
+    public InMemorySchemaRegistry(CommitSequence sequence, Collection<RuleDescriptor> rules) {
+        this.sequence = Objects.requireNonNull(sequence, "sequence");
         List<RuleDescriptor> sorted = Objects.requireNonNull(rules, "rules").stream()
                 .map(rule -> Objects.requireNonNull(rule, "rule"))
                 .sorted(Comparator.comparing(RuleDescriptor::name).thenComparingInt(RuleDescriptor::version))
@@ -109,16 +124,18 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     }
 
     @Override
-    public synchronized RegistrationResult register(Origin origin, SchemaDefinition definition) {
+    public RegistrationResult register(Origin origin, SchemaDefinition definition) {
         Objects.requireNonNull(origin, "origin");
         Objects.requireNonNull(definition, "definition");
-        State current = state;
-        Planned planned = plan(current, origin, definition);
-        return switch (planned.plan().outcome()) {
-            case REJECT -> new RegistrationResult.Rejected(planned.plan().problems());
-            case UNCHANGED -> new RegistrationResult.Unchanged(current.schema());
-            case APPLY -> apply(current, origin, planned);
-        };
+        return sequence.underWriterLock(() -> {
+            State current = state;
+            Planned planned = plan(current, origin, definition);
+            return switch (planned.plan().outcome()) {
+                case REJECT -> new RegistrationResult.Rejected(planned.plan().problems());
+                case UNCHANGED -> new RegistrationResult.Unchanged(current.schema());
+                case APPLY -> apply(current, origin, planned);
+            };
+        });
     }
 
     @Override
@@ -127,15 +144,19 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                 .plan();
     }
 
-    /** Records an accepted registration as a schema transaction. */
+    /**
+     * Records an accepted registration as a schema transaction. Called with the writer lock held. The new state is
+     * in place before the commit is published, so whoever learns of the basis finds the schema.
+     */
     private RegistrationResult apply(State current, Origin origin, Planned planned) {
         SchemaCompiler.Result compiled = planned.compiled();
-        Instant time = nextTransactionTime(current.lastTime());
-        Basis basis = new Basis(current.lastBasis() + 1);
+        CommitSequence.Commit commit = sequence.next();
+        Basis basis = commit.basis();
+        Instant time = commit.transactionTime();
         List<SchemaTransaction> history = new ArrayList<>(current.history());
         history.add(new SchemaTransaction(basis, time, origin, compiled.schema()));
-        state = new State(compiled.schema(), Map.copyOf(planned.origins()), List.copyOf(history), compiled.nextId(),
-                basis.value(), time);
+        state = new State(compiled.schema(), Map.copyOf(planned.origins()), List.copyOf(history), compiled.nextId());
+        sequence.publish(commit);
         return new RegistrationResult.Applied(time, basis, compiled.schema());
     }
 
@@ -323,13 +344,5 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         definition.traits().forEach(trait -> { names.add(trait.name()); names.addAll(trait.aliases()); });
         definition.relationshipTypes().forEach(type -> { names.add(type.name()); names.addAll(type.aliases()); });
         return names;
-    }
-
-    // ------------------------------------------------------------------ time
-
-    /** Transaction times have microsecond precision and strictly increase, even if the clock does not. */
-    private Instant nextTransactionTime(Instant last) {
-        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
-        return last != null && !now.isAfter(last) ? last.plus(1, ChronoUnit.MICROS) : now;
     }
 }

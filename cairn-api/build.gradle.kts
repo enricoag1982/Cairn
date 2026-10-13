@@ -4,4 +4,4 @@ plugins {
     `java-test-fixtures`
 }
 
-description = "Cairn public API: schema definitions, the resolved schema and the schema registry"
+description = "Cairn public API: schema definitions, the schema registry, and stores with their transactions and views"
