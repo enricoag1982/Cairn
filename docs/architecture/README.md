@@ -24,7 +24,7 @@ It is a living document: update it in the same pull request that changes the arc
 
 <!-- Technical, organizational and regulatory constraints. Link the ADR that introduced each one. -->
 
-- Implementation language: Java 25, see [ADR-0005](../decisions/0005-choose-primary-implementation-language.md). Built with Gradle, see [ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md): a convention plugin in `build-logic/`, a version catalog, and a Java 25 toolchain. CI also runs the build on the newest Java release, without blocking.
+- Implementation language: Java 25, see [ADR-0005](../decisions/0005-choose-primary-implementation-language.md). Built with Gradle, see [ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md). CI also runs the build on the newest Java release, without blocking.
 
 ## 3. Context and scope
 
@@ -81,7 +81,7 @@ flowchart LR
 
 <!-- Error handling, security, observability, persistence, configuration, testing strategy. -->
 
-- **Errors:** invalid input is never thrown. Registrations return a result that lists every problem, each with a stable code and a path; exceptions mean programming errors, such as a missing value.
+- **Errors:** an invalid schema definition never causes an exception. Registrations return a result that lists every problem, each with a stable code and a path. Exceptions mean programming errors: a missing value, or a `Multiplicity` other than 0 or 1 to 1 or unbounded.
 - **Concurrency:** registrations are serialized (the single writer). Each one publishes a new immutable state, so reads never lock.
 - **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase.
 - **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md). Tests run with compact object headers on.

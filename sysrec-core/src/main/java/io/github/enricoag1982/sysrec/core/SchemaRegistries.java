@@ -5,7 +5,7 @@ import io.github.enricoag1982.sysrec.schema.SchemaRegistry;
 import java.time.InstantSource;
 
 /**
- * Creates schema registries.
+ * Creates schema registries (capability {@code schema-evolution}).
  */
 public final class SchemaRegistries {
 

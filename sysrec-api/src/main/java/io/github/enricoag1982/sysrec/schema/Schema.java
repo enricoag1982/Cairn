@@ -4,7 +4,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * A registered, valid schema: the types of every origin, with identifiers and the resolved type hierarchy.
+ * A registered, valid schema: the types of every origin, with identifiers and the resolved type hierarchy
+ * (capabilities {@code type-model} and {@code schema-evolution}).
  * Instances are immutable. Lookups by name also accept aliases and ignore case.
  */
 public interface Schema {

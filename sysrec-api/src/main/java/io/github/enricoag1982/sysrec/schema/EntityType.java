@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * An entity type in a registered schema, with its place in the type hierarchy.
+ * An entity type in a registered schema, with its place in the type hierarchy (capability {@code type-model}).
  *
  * @param id         the schema identifier
  * @param name       the name

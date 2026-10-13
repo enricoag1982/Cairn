@@ -53,17 +53,17 @@ Constraints that shape the approach:
   - This keeps definitions plain data that any source can produce, including references to another origin's types.
   - Unknown names become validation problems instead of construction errors.
 - A fluent builder makes definitions pleasant to write by hand, for example `.entityType("Organization", t -> t.supertype("Party").attribute("lei", STRING, a -> a.unique()))`.
-- Record constructors only reject nulls. Every rule from the specs is checked by the validator, so all problems can be reported at once.
+- Record constructors only reject nulls, and `Multiplicity` rejects bounds it cannot express (anything but 0 or 1, and 1 or unbounded). Every rule from the specs is checked by the validator, so all problems can be reported at once.
 - Alternative: definitions holding object references. Rejected, because they cannot express references to other origins' types or invalid references.
 
 ### D3. Validation is a pure function that returns every problem
 
-- The validator takes a `SchemaDefinition` and the types of other origins, and returns a list of problems. It throws nothing.
+- The validator takes one combined `SchemaDefinition`, with the types of every origin, and returns a list of problems. It throws nothing.
 - Each `Problem` has a stable `ProblemCode` (an enum), a path (`Organization`, `Organization.lei`, `Owns.ownedBy`) and a message.
 - It runs in phases:
   1. names and syntax
-  2. resolving references
-  3. hierarchies: cycles, kinds of supertype, relationship ends
+  2. resolving references, including the kind of each supertype, included trait and relationship end
+  3. hierarchies: cycles
   4. effective attribute sets: name conflicts, ranges
   5. relationship rules: composition, symmetry, the ends of relationship subtypes
 - A later phase skips only the elements that an earlier phase found broken, so one mistake does not cause a cascade of follow-up problems. Everything else is still checked.
@@ -102,8 +102,9 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 
 - The API is a `SchemaRegistry` interface:
   - `register(Origin, SchemaDefinition)` returns a sealed `RegistrationResult`: `Applied` (transaction time, basis, schema), `Unchanged` (schema) or `Rejected` (problems).
+  - `validate(Origin, SchemaDefinition)` checks a definition without registering it.
   - `current()`, `asOf(Basis)`, `asOf(Instant)` and `history()` read the schema.
-- `register` is serialized, because it is the single writer (ADR-0007). History is an immutable list of (basis, transaction time, schema), published through a volatile reference, so readers never lock.
+- `register` is serialized, because it is the single writer (ADR-0007). History is an immutable list of (basis, transaction time, origin, schema), published through a volatile reference, so readers never lock.
 - Transaction time comes from an injected `java.time.InstantSource` and is truncated to microseconds. If the clock has not moved forward, the next microsecond is used, so transaction times strictly increase.
 - The basis is a `long` counter. It will be shared with data transactions once they exist.
 - An `Origin` is a name and a version. The version is parsed into numbers and compared one number at a time.
@@ -114,7 +115,7 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 ### D8. Tests
 
 - JUnit 6 and AssertJ, as test-only dependencies.
-- A fixture in the test sources builds the reference domain model.
+- A fixture in the test fixtures of `sysrec-api` (`src/testFixtures`) builds the reference domain model. `ReferenceModelTest` checks it against the reference domain page.
 - Every scenario in the two specs has one test, whose display name is the scenario's name, so a scenario can be traced to its test.
 - There is no conformance-suite module yet. Schema behavior does not depend on storage in this change, so the suite starts with `add-entity-versions`. The schema scenarios join the suite in `add-durable-commit-log`, when the schema moves onto the storage interface.
 

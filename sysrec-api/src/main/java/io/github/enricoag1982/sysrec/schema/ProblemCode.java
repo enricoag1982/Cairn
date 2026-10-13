@@ -1,7 +1,7 @@
 package io.github.enricoag1982.sysrec.schema;
 
 /**
- * Stable codes for the reasons a schema definition or registration is rejected.
+ * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and {@code schema-evolution}).
  */
 public enum ProblemCode {
     /** A name does not start with a letter, contains other characters than letters, digits and underscores, or is too long. */
@@ -26,7 +26,7 @@ public enum ProblemCode {
     RANGE_NOT_ALLOWED,
     /** A range bound does not fit the attribute's value type. */
     RANGE_LITERAL_MISMATCH,
-    /** A range's lower bound exceeds its upper bound, so no value fits. */
+    /** No value fits a range: its lower bound is above its upper bound, or equal to it while a bound is exclusive. */
     RANGE_EMPTY,
     /** A composition does not give each target exactly one source. */
     COMPOSITION_MULTIPLICITY,

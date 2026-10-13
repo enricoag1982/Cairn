@@ -6,14 +6,15 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * Builds a {@link SchemaDefinition}, for example:
+ * Builds a {@link SchemaDefinition} (capability {@code type-model}), for example:
  *
  * <pre>{@code
  * SchemaDefinition.builder()
- *     .trait("Named", t -> t.attribute("name", ValueType.STRING, a -> a.required()))
- *     .entityType("Party", e -> e.abstractType().includes("Named"))
- *     .entityType("Organization", e -> e.supertype("Party").attribute("lei", ValueType.STRING, a -> a.unique()))
- *     .relationshipType("Owns", r -> r.from("Organization").to("Party").inverse("ownedBy"))
+ *     .trait("Labelled", t -> t.attribute("label", ValueType.STRING, a -> a.required()))
+ *     .entityType("Asset", e -> e.abstractType().includes("Labelled"))
+ *     .entityType("Vehicle", e -> e.supertype("Asset").attribute("vin", ValueType.STRING, a -> a.unique()))
+ *     .entityType("Site")
+ *     .relationshipType("ParkedAt", r -> r.from("Vehicle").to("Site").inverse("parkedVehicles"))
  *     .build();
  * }</pre>
  */

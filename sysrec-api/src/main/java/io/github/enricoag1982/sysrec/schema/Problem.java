@@ -3,7 +3,7 @@ package io.github.enricoag1982.sysrec.schema;
 import java.util.Objects;
 
 /**
- * One reason a schema definition or registration is rejected.
+ * One reason a schema definition or registration is rejected (capabilities {@code type-model} and {@code schema-evolution}).
  *
  * @param code    a stable code
  * @param path    the element concerned: a type name, or a type name and an attribute or inverse name joined by a

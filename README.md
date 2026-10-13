@@ -25,7 +25,7 @@ The reasoning behind all of this is in the [API research note](docs/research/202
 - [Decision log](docs/decisions/README.md): what is decided and what is still open
 - [Glossary](docs/glossary.md): the terms used in specs, code and conversation
 - [Reference domain](docs/reference/reference-domain.md): the example model used in scenarios and tests
-- [Architecture](docs/architecture/README.md): how it is built (nothing yet)
+- [Architecture](docs/architecture/README.md): how it is built
 - [Setup status](docs/guides/start-a-new-project-from-this-template.md#status-in-sysrec): the template setup steps that are still open
 
 ## How this repository works

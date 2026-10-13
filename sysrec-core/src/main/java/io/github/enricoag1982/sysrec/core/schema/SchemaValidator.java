@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  */
 final class SchemaValidator {
 
-    private record Named(Kind kind, String name) {
+    private record TypeRef(Kind kind, String name) {
     }
 
     private record Entry(String name, String owner, String path, String label, boolean inverse) {
@@ -40,7 +40,7 @@ final class SchemaValidator {
 
     private final SchemaDefinition definition;
     private final List<Problem> problems = new ArrayList<>();
-    private final Map<String, Named> types = new HashMap<>();
+    private final Map<String, TypeRef> types = new HashMap<>();
     private final Map<String, String> entitySupertype = new HashMap<>();
     private final Map<String, List<String>> entityTraits = new HashMap<>();
     private final Map<String, String> relationshipSupertype = new HashMap<>();
@@ -111,7 +111,7 @@ final class SchemaValidator {
             invalidName(name, kind.label() + " name", name);
         }
         entries.add(new Entry(name, name, name, kind.label() + " " + name, false));
-        types.putIfAbsent(Names.key(name), new Named(kind, name));
+        types.putIfAbsent(Names.key(name), new TypeRef(kind, name));
         for (String alias : aliases) {
             if (!Names.isValid(alias)) {
                 invalidName(name, "alias", alias);
@@ -157,24 +157,24 @@ final class SchemaValidator {
 
     // ------------------------------------------------------------------ phase 2: references
 
-    private Optional<Named> resolve(String reference) {
-        Named named = types.get(Names.key(reference));
+    private Optional<TypeRef> resolve(String reference) {
+        TypeRef named = types.get(Names.key(reference));
         if (named != null) {
             return Optional.of(named);
         }
         for (EntityTypeDefinition type : definition.entityTypes()) {
             if (Names.contains(type.aliases(), reference)) {
-                return Optional.of(new Named(Kind.ENTITY_TYPE, type.name()));
+                return Optional.of(new TypeRef(Kind.ENTITY_TYPE, type.name()));
             }
         }
         for (TraitDefinition trait : definition.traits()) {
             if (Names.contains(trait.aliases(), reference)) {
-                return Optional.of(new Named(Kind.TRAIT, trait.name()));
+                return Optional.of(new TypeRef(Kind.TRAIT, trait.name()));
             }
         }
         for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
             if (Names.contains(type.aliases(), reference)) {
-                return Optional.of(new Named(Kind.RELATIONSHIP_TYPE, type.name()));
+                return Optional.of(new TypeRef(Kind.RELATIONSHIP_TYPE, type.name()));
             }
         }
         return Optional.empty();
@@ -216,7 +216,7 @@ final class SchemaValidator {
             broken.add(Names.key(owner));
             return Optional.empty();
         }
-        Optional<Named> named = resolve(reference);
+        Optional<TypeRef> named = resolve(reference);
         if (named.isEmpty()) {
             problems.add(new Problem(ProblemCode.UNKNOWN_REFERENCE, owner,
                     "The " + role + " '" + reference + "' of " + owner + " does not exist."));

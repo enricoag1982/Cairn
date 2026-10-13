@@ -1,7 +1,7 @@
 package io.github.enricoag1982.sysrec.schema;
 
 /**
- * The number of a committed transaction. It identifies the snapshot the transaction produced.
+ * The number of a committed transaction (capability {@code schema-evolution}). It identifies the snapshot the transaction produced.
  *
  * @param value the number; 0 is the empty store before any transaction
  */

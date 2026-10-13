@@ -49,7 +49,7 @@ Application build and test (Gradle, [ADR-0015](docs/decisions/0015-build-the-jav
 2. **Costly-to-reverse decision:** `npm run adr:new -- "Title"` and link it from the change's `design.md`. See the `record-decision` skill.
 3. **Implement:** `/opsx:apply`, and tick `tasks.md` as you go. If the spec turns out to be wrong, fix the delta spec first.
 4. **Document:** update affected docs in the same change and bump `last-reviewed`. See the `maintain-docs` skill.
-5. **Finish:** `npm run check`, then `/opsx:archive` so the specs reflect the new behavior.
+5. **Finish:** `npm run check` and `./gradlew build`, then `/opsx:archive` so the specs reflect the new behavior.
 
 Bug fixes that restore specified behavior and pure refactors need no spec change. Full details: [development workflow](docs/process/development-workflow.md).
 

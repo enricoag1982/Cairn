@@ -6,7 +6,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * Builds a {@link TraitDefinition}.
+ * Builds a {@link TraitDefinition} (capability {@code type-model}).
  */
 public final class TraitBuilder {
 

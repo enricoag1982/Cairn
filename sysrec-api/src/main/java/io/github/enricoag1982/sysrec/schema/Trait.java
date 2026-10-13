@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * A trait in a registered schema.
+ * A trait in a registered schema (capability {@code type-model}).
  *
  * @param id         the schema identifier
  * @param name       the name

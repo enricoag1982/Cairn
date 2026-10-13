@@ -6,7 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Builds an {@link AttributeDefinition}. Attributes start optional, not unique and without a range.
+ * Builds an {@link AttributeDefinition} (capability {@code type-model}). Attributes start optional, not unique and without a range.
  */
 public final class AttributeBuilder {
 

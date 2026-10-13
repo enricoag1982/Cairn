@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The outcome of {@link SchemaRegistry#register(Origin, SchemaDefinition)}.
+ * The outcome of {@link SchemaRegistry#register(Origin, SchemaDefinition)} (capability {@code schema-evolution}).
  */
 public sealed interface RegistrationResult {
 

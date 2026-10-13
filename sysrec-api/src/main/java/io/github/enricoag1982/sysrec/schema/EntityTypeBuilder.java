@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * Builds an {@link EntityTypeDefinition}. Entity types start concrete, without a supertype or traits.
+ * Builds an {@link EntityTypeDefinition} (capability {@code type-model}). Entity types start concrete, without a supertype or traits.
  */
 public final class EntityTypeBuilder {
 

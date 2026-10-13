@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * Builds a {@link RelationshipTypeDefinition}. Relationship types start as associations with any number of
+ * Builds a {@link RelationshipTypeDefinition} (capability {@code type-model}). Relationship types start as associations with any number of
  * relationships at both ends. A missing source, target or inverse name is left empty, and validation reports it.
  */
 public final class RelationshipTypeBuilder {

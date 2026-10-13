@@ -1,7 +1,7 @@
 package io.github.enricoag1982.sysrec.schema;
 
 /**
- * The schema identifier of an entity type, trait or relationship type. It is local to a store, never changes and is
+ * The schema identifier of an entity type, trait or relationship type (capability {@code schema-evolution}). It is local to a store, never changes and is
  * never reused.
  *
  * @param value the number
