@@ -36,5 +36,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0021](0021-generate-java-types-as-interfaces-with-snapshot-records-builders-of-writes-and-rule-base-classes.md) | Generate Java types as interfaces with snapshot records, builders of writes and rule base classes | accepted | 2026-10-13 |
 | [ADR-0022](0022-make-stores-durable-with-a-commit-log-of-effects-and-snapshots.md) | Make stores durable with a commit log of effects and snapshots | accepted | 2026-10-13 |
 | [ADR-0023](0023-express-queries-as-data-a-pipeline-of-steps-over-named-bindings-with-a-java-builder-and-a-json-form.md) | Express queries as data: a pipeline of steps over named bindings, with a Java builder and a JSON form | accepted | 2026-10-13 |
+| [ADR-0024](0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md) | Purge entities by removing them from all of history, and record that a purge happened | accepted | 2026-10-13 |
 
 <!-- decision-log:end -->
