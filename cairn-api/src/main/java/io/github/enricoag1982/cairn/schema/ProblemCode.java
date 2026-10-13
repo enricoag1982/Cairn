@@ -5,8 +5,8 @@ import java.util.Objects;
 /**
  * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and
  * {@code schema-evolution}), for the reasons a schema document cannot be read (capability {@code schema-documents}),
- * and for the reasons a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions} and
- * {@code entity-rules}).
+ * and for the reasons a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions},
+ * {@code entity-rules} and {@code relationships}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -129,9 +129,10 @@ public enum ProblemCode {
     /** A write creates an entity of an abstract entity type. */
     ABSTRACT_ENTITY_TYPE("An abstract entity type has no entities of its own: it only groups its subtypes. Create the "
             + "entity as one of the concrete subtypes."),
-    /** A write sets or replaces a value for a name that is not an attribute of the entity's type. */
-    UNKNOWN_ATTRIBUTE("A value is given for a name that is not an attribute, or an alias of one, of the entity's type, "
-            + "including the attributes of its supertypes and traits. Correct the name, which the hint suggests."),
+    /** A write sets or replaces a value for a name that is not an attribute of the entity's or relationship's type. */
+    UNKNOWN_ATTRIBUTE("A value is given for a name that is not an attribute, or an alias of one, of the type of the "
+            + "entity or relationship, including the attributes of its supertypes and traits. Correct the name, "
+            + "which the hint suggests."),
     /** A value does not have the attribute's value type. */
     VALUE_TYPE_MISMATCH("A value must have the value type of its attribute; an int fits a long or decimal attribute, "
             + "and a long fits a decimal attribute. The expected and found details name the types. Give a value of "
@@ -149,47 +150,52 @@ public enum ProblemCode {
     /** A string value is shorter than the attribute's minimum length or longer than its maximum length. */
     VALUE_LENGTH("A string value must have at least the minimum and at most the maximum length of its attribute, "
             + "counted in Unicode code points. The expected details give the lengths. Shorten or lengthen the value."),
-    /** An attribute that is required has no value in some part of an entity's timeline. */
+    /** An attribute that is required has no value in some part of the timeline of an entity or relationship. */
     MISSING_REQUIRED_VALUE("A required attribute must have a value at every point in effective time in which the "
-            + "entity exists, also after a replace or a clear. Give the attribute a value for the whole period."),
+            + "entity or relationship exists, also after a replace or a clear. Give the attribute a value for the "
+            + "whole period."),
     /** A write sets an attribute that is deprecated. */
     DEPRECATED_ATTRIBUTE("A deprecated attribute should no longer be used, so new writes may not set it; values "
             + "written earlier stay readable. Remove the value from the write, or use the attribute that replaces it."),
-    /** Another entity has the same value of a unique attribute at some point in effective time. */
-    UNIQUE_VALUE_TAKEN("Two entities would have the same value of a unique attribute at the same point in effective "
-            + "time. The check covers all entities whose type has the attribute, including subtypes. Use another "
-            + "value, or change the other entity's value, or end it, so that the periods no longer overlap."),
+    /** Another entity or relationship has the same value of a unique attribute at some point in effective time. */
+    UNIQUE_VALUE_TAKEN("Two entities, or two relationships, would have the same value of a unique attribute at the "
+            + "same point in effective time. The check covers all entities or relationships whose type has the "
+            + "attribute, including subtypes. Use another value, or change the other one's value, or end it, so that "
+            + "the periods no longer overlap."),
     /** A write refers to an ID that no entity has. */
     UNKNOWN_ENTITY("A write patches, replaces or end-dates an entity that does not exist, by an ID that no entity of "
             + "the store has. Correct the ID, or create the entity first."),
     /**
-     * A patch or replace covers a period in which the entity does not exist, or an end-date is at or before the
-     * entity's start.
+     * A patch or replace covers a period in which the entity or relationship does not exist, or an end-date is at or
+     * before its start.
      */
-    ENTITY_NOT_EFFECTIVE("A patch or replace must lie within the entity's lifetime, from its creation until its "
-            + "end-date, and an end-date must come after the entity's start. A write never extends a lifetime. Change "
-            + "the period or the instant, or create the entity for the period first."),
-    /** A write creates an entity with an ID that already exists. */
-    ENTITY_EXISTS("An entity with the supplied ID exists already, in the store or earlier in the same transaction. IDs "
-            + "are never reused. To change the entity, patch or replace it; otherwise leave the ID out, or supply "
-            + "another."),
+    ENTITY_NOT_EFFECTIVE("A patch or replace must lie within the lifetime of the entity or relationship, from its "
+            + "creation until its end-date, and an end-date must come after its start. A write never extends a "
+            + "lifetime. Change the period or the instant, or create it for the period first."),
+    /** A write creates an entity or relationship with an ID that already exists. */
+    ENTITY_EXISTS("An entity or relationship with the supplied ID exists already, in the store or earlier in the same "
+            + "transaction. IDs are never reused, and are unique across entities and relationships. To change it, "
+            + "patch or replace it; otherwise leave the ID out, or supply another."),
     /** A supplied ID is not in the format of the store's ID generator. */
     INVALID_ENTITY_ID("A store accepts only supplied IDs in the format of its ID generator, which is chosen when the "
             + "store is created; UUIDv7 by default, in lowercase hyphenated text. Supply an ID in that format, or "
             + "leave the ID out so that the store generates one."),
-    /** A write refers to a temporary ID that the transaction does not create. */
-    UNKNOWN_TEMPORARY_ID("A temporary ID is valid only in the transaction that creates the entity. Create the entity "
-            + "with that temporary ID in the same transaction, or refer to the entity by its ID."),
-    /** Two writes of a transaction create entities with the same temporary ID. */
-    DUPLICATE_TEMPORARY_ID("A temporary ID names one entity in a transaction. Give each created entity its own "
+    /** A write refers to a temporary ID that no earlier write of the transaction creates. */
+    UNKNOWN_TEMPORARY_ID("A temporary ID is valid only in the transaction that creates the entity or relationship, "
+            + "and only in writes after the one that creates it. Create it with that temporary ID earlier in the same "
+            + "transaction, or refer to it by its ID."),
+    /** Two writes of a transaction create entities or relationships with the same temporary ID. */
+    DUPLICATE_TEMPORARY_ID("A temporary ID names one entity or relationship in a transaction; entities and "
+            + "relationships share the same temporary IDs. Give each created entity or relationship its own "
             + "temporary ID."),
     /** An effective period ends at or before its start. */
     INVALID_PERIOD("An effective period is half-open: it includes its start and excludes its end, so the end must be "
             + "after the start. Leave the end out for a period without an end, or correct the instants."),
     /** A conflict check found that the entity changed after the caller read it. */
-    CONFLICT("The entity, or for a per-attribute check an attribute that the write sets or clears (the whole entity "
-            + "for a replace or an end-date), differs from its state at the basis at which the caller read it. Read the entity again, decide whether the "
-            + "write still applies, and submit it with the new basis."),
+    CONFLICT("The entity or relationship, or for a per-attribute check an attribute that the write sets or clears (the "
+            + "whole entity or relationship for a replace or an end-date), differs from its state at the basis at "
+            + "which the caller read it. Read it again, decide whether the write still applies, and submit it with "
+            + "the new basis."),
     /** A transaction names no principal. */
     MISSING_PRINCIPAL("Every transaction records who submitted it, so it must name a principal that is not blank. "
             + "Name the principal, for example an agent or a user."),
@@ -210,7 +216,43 @@ public enum ProblemCode {
     /** A type names a rule whose code the store does not have. */
     RULE_UNAVAILABLE("A type names a rule that the store declares but has no code for, so every write of an entity of "
             + "that type, or of one of its subtypes, is rejected, whatever the write changes. Create the store with "
-            + "the rule's code, or register a schema in which the type no longer names the rule.");
+            + "the rule's code, or register a schema in which the type no longer names the rule."),
+    /** A write relates entities with a name that is not a relationship type. */
+    UNKNOWN_RELATIONSHIP_TYPE("A write relates two entities with a type name that the schema does not have as a "
+            + "relationship type. Type names and aliases are compared without regard to case. Correct the name, which "
+            + "the hint suggests, or register the type first."),
+    /** The source or the target of a relationship is not an entity of the type that the relationship type needs. */
+    WRONG_END_TYPE("The source of a relationship must be an entity of the relationship type's source type, or of one of "
+            + "its subtypes, and the target an entity of its target type or of one of its subtypes. For a symmetric "
+            + "type either order is accepted. The expected and found details name the types. Relate entities of the "
+            + "right types."),
+    /** A relationship exists at a time at which one of its ends does not. */
+    END_NOT_EFFECTIVE("Both ends of a relationship must exist at every point of the relationship's effective period, "
+            + "so a write never relates an entity outside its lifetime. The found details name the end and the "
+            + "period in which it does not exist. Shorten the relationship's period, or create the entity for the "
+            + "period first."),
+    /** An entity ends, or has been shortened, while a relationship to it continues. */
+    RELATIONSHIP_OUTLIVES_END("A relationship cannot continue after one of its ends has ended. A transaction that "
+            + "ends an entity must end, from the same instant, every relationship that has the entity as an end; "
+            + "compositions end by themselves. End the relationship in the same transaction, or end the entity "
+            + "later."),
+    /** An entity has fewer relationships of a type than the minimum, at some point in effective time. */
+    TOO_FEW_RELATIONSHIPS("An entity must have at least the minimum number of relationships that a relationship type "
+            + "declares for its end, counting the relationships of the type and of its subtypes, at every point in "
+            + "effective time in which the entity exists. The path names the entity and the relationship type or "
+            + "inverse name. Relate the entity for the whole period, in the same transaction if it is new."),
+    /** An entity has more relationships of a type than the maximum, at some point in effective time. */
+    TOO_MANY_RELATIONSHIPS("An entity must have at most the maximum number of relationships that a relationship type "
+            + "declares for its end, counting the relationships of the type and of its subtypes, at every point in "
+            + "effective time. The path names the entity and the relationship type or inverse name. End a "
+            + "relationship before the next one starts, or do not relate the entity again."),
+    /** Two relationships of one type connect the same entities at the same time. */
+    DUPLICATE_RELATIONSHIP("Two relationships of the same type must not connect the same source and target at the "
+            + "same point in effective time; for a symmetric type the order of the ends does not matter. Change the "
+            + "period so that they no longer overlap, or patch the existing relationship instead."),
+    /** A write refers to an ID that no relationship has. */
+    UNKNOWN_RELATIONSHIP("A write patches, replaces or end-dates a relationship that does not exist, by an ID that no "
+            + "relationship of the store has. Correct the ID, or relate the entities first.");
 
     private final String explanation;
 

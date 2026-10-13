@@ -569,4 +569,88 @@ class TimelineTest {
         assertThatThrownBy(() -> entity.append(new Basis(4), first)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> entity.append(new Basis(2), first)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    // ------------------------------------------------------------------ lifetimes compared (relationships)
+
+    private static Timeline during(Instant from, Instant end) {
+        return Timeline.created(from, end, values("x", 1), RECORDED_1, new Basis(1));
+    }
+
+    @Test
+    void whatIsNotCoveredByAnotherTimelineIsTheStretchesWhereOnlyThisOneExists() {
+        Timeline relationship = during(JAN, Segment.OPEN);
+
+        assertThat(relationship.uncoveredBy(during(JAN, Segment.OPEN))).isEmpty();
+        assertThat(relationship.uncoveredBy(during(JAN, JUN))).containsExactly(new Timeline.Stretch(JUN, Segment.OPEN));
+        assertThat(relationship.uncoveredBy(during(MAR, Segment.OPEN))).containsExactly(new Timeline.Stretch(JAN, MAR));
+        assertThat(relationship.uncoveredBy(during(MAR, JUN))).containsExactly(new Timeline.Stretch(JAN, MAR),
+                new Timeline.Stretch(JUN, Segment.OPEN));
+        assertThat(relationship.uncoveredBy(Timeline.EMPTY)).containsExactly(new Timeline.Stretch(JAN, Segment.OPEN));
+        assertThat(Timeline.EMPTY.uncoveredBy(relationship)).isEmpty();
+    }
+
+    @Test
+    void stretchesThatTouchAreMergedAndSeveralCoveringSegmentsAreFollowed() {
+        Timeline split = set(during(JAN, Segment.OPEN), MAR, Segment.OPEN, BALANCE, Value.of(2));
+        Timeline gap = Timeline.of(List.of(
+                new Segment(JAN, MAR, values("a", 1), RECORDED_1, new Basis(1)),
+                new Segment(JUN, SEP, values("a", 1), RECORDED_1, new Basis(1))));
+
+        assertThat(split.uncoveredBy(during(JUN, Segment.OPEN))).as("two segments, one stretch")
+                .containsExactly(new Timeline.Stretch(JAN, JUN));
+        assertThat(during(JAN, SEP).uncoveredBy(gap)).containsExactly(new Timeline.Stretch(MAR, JUN));
+        assertThat(gap.uncoveredBy(during(JAN, SEP))).isEmpty();
+        assertThat(split.uncoveredBy(gap)).containsExactly(new Timeline.Stretch(MAR, JUN),
+                new Timeline.Stretch(SEP, Segment.OPEN));
+    }
+
+    @Test
+    void aTimelineGrewIfItExistsWhereThePreviousOneDidNotAndShrankIfThePreviousExistedWhereItDoesNot() {
+        Timeline before = during(JAN, Segment.OPEN);
+
+        assertThat(before.grewSince(Timeline.EMPTY)).isTrue();
+        assertThat(before.grewSince(before)).isFalse();
+        assertThat(before.grewSince(during(MAR, Segment.OPEN))).isTrue();
+        assertThat(before.grewSince(during(JAN, JUN))).isTrue();
+        assertThat(during(JAN, JUN).grewSince(before)).isFalse();
+        assertThat(during(JAN, JUN).shrankSince(before)).isTrue();
+        assertThat(before.shrankSince(during(JAN, JUN))).isFalse();
+        assertThat(during(JAN, JUN).shrankSince(during(JAN, JUN))).isFalse();
+        assertThat(during(JAN, JUN).shrankSince(during(JAN, SEP))).isTrue();
+        assertThat(Timeline.EMPTY.shrankSince(before)).isTrue();
+        assertThat(before.shrankSince(Timeline.EMPTY)).isFalse();
+    }
+
+    @Test
+    void theFirstOverlapOfTwoTimelinesIsTheEarliestStretchTheyShare() {
+        assertThat(during(JAN, JUN).firstOverlap(during(MAR, SEP))).contains(new Timeline.Stretch(MAR, JUN));
+        assertThat(during(JAN, MAR).firstOverlap(during(MAR, SEP))).as("half-open periods that touch").isEmpty();
+        assertThat(during(JAN, Segment.OPEN).firstOverlap(during(SEP, Segment.OPEN)))
+                .contains(new Timeline.Stretch(SEP, Segment.OPEN));
+        assertThat(during(JAN, Segment.OPEN).firstOverlap(Timeline.EMPTY)).isEmpty();
+        Timeline gap = Timeline.of(List.of(
+                new Segment(JAN, MAR, values("a", 1), RECORDED_1, new Basis(1)),
+                new Segment(JUN, SEP, values("a", 1), RECORDED_1, new Basis(1))));
+        assertThat(gap.firstOverlap(during(MAR, Segment.OPEN))).contains(new Timeline.Stretch(JUN, SEP));
+    }
+
+    @Test
+    void aRelationshipKeepsTheSameHistoryAsAnEntityDoes() {
+        StoredRelationship relationship = new StoredRelationship(
+                new io.github.enricoag1982.cairn.data.RelationshipId("r1"),
+                new io.github.enricoag1982.cairn.schema.TypeId(1), new io.github.enricoag1982.cairn.data.EntityId("a"),
+                new io.github.enricoag1982.cairn.data.EntityId("b"));
+        Timeline first = acme();
+        Timeline second = set(first, MAR, Segment.OPEN, BALANCE, Value.of(1500));
+
+        relationship.append(new Basis(1), first);
+        relationship.append(new Basis(4), second);
+
+        assertThat(relationship.source()).isEqualTo(new io.github.enricoag1982.cairn.data.EntityId("a"));
+        assertThat(relationship.target()).isEqualTo(new io.github.enricoag1982.cairn.data.EntityId("b"));
+        assertThat(relationship.at(new Basis(3))).isSameAs(first);
+        assertThat(relationship.latest()).isSameAs(second);
+        assertThat(relationship.latestBasis()).isEqualTo(new Basis(4));
+        assertThatThrownBy(() -> relationship.append(new Basis(4), first)).isInstanceOf(IllegalArgumentException.class);
+    }
 }

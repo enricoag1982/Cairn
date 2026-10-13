@@ -134,6 +134,84 @@ final class Timeline {
         return false;
     }
 
+    /** A stretch of effective time, from an instant to the first instant after it, which may be {@link Segment#OPEN}. */
+    record Stretch(Instant from, Instant end) {
+    }
+
+    /**
+     * The stretches of effective time in which this timeline exists and another one does not, merged where they touch.
+     * An entity, a relationship and its ends are compared this way: a relationship lies within the lifetimes of its
+     * ends if nothing is left over.
+     *
+     * @param other the timeline to subtract
+     * @return the stretches, in order; empty if the other timeline exists wherever this one does
+     */
+    List<Stretch> uncoveredBy(Timeline other) {
+        List<Stretch> missing = new ArrayList<>();
+        for (Segment mine : segments) {
+            Instant cursor = mine.from();
+            for (Segment theirs : other.segments) {
+                if (!theirs.end().isAfter(cursor)) {
+                    continue;
+                }
+                if (!theirs.from().isBefore(mine.end())) {
+                    break;
+                }
+                if (theirs.from().isAfter(cursor)) {
+                    add(missing, cursor, theirs.from());
+                }
+                cursor = max(cursor, theirs.end());
+                if (!cursor.isBefore(mine.end())) {
+                    break;
+                }
+            }
+            if (cursor.isBefore(mine.end())) {
+                add(missing, cursor, mine.end());
+            }
+        }
+        return missing;
+    }
+
+    /** Appends a stretch, merging it into the last one if they touch. */
+    private static void add(List<Stretch> stretches, Instant from, Instant end) {
+        if (!stretches.isEmpty() && stretches.getLast().end().equals(from)) {
+            Stretch last = stretches.removeLast();
+            stretches.add(new Stretch(last.from(), end));
+        } else {
+            stretches.add(new Stretch(from, end));
+        }
+    }
+
+    /** Tells whether this timeline exists at some instant at which a previous one did not: it was created or grew. */
+    boolean grewSince(Timeline previous) {
+        return !uncoveredBy(previous).isEmpty();
+    }
+
+    /** Tells whether a previous timeline existed at some instant at which this one does not: it was cut off. */
+    boolean shrankSince(Timeline previous) {
+        return !previous.uncoveredBy(this).isEmpty();
+    }
+
+    /**
+     * The first stretch of effective time in which both this timeline and another exist.
+     *
+     * @param other the other timeline
+     * @return the earliest common stretch; empty if the lifetimes have no instant in common
+     */
+    Optional<Stretch> firstOverlap(Timeline other) {
+        Stretch first = null;
+        for (Segment mine : segments) {
+            for (Segment theirs : other.segments) {
+                Instant from = max(mine.from(), theirs.from());
+                Instant end = min(mine.end(), theirs.end());
+                if (from.isBefore(end) && (first == null || from.isBefore(first.from()))) {
+                    first = new Stretch(from, end);
+                }
+            }
+        }
+        return Optional.ofNullable(first);
+    }
+
     /**
      * Changes the values of the entity in a period. The segments are split at the bounds of the period, and the change
      * is applied to the values of each part inside it. A part whose values the change leaves as they are keeps its

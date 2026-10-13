@@ -64,8 +64,23 @@ class ReferenceStoriesTest {
 
     @Test
     void rd5MatchesThePage() {
-        assertTold("RD-5", ReferenceStories.rd5Accounts(), ReferenceStories.rd5BalancePatch(ReferenceStories.A1),
+        assertTold("RD-5", ReferenceStories.rd5Accounts(ReferenceStories.BETA, ReferenceStories.ACME),
+                ReferenceStories.rd5BalancePatch(ReferenceStories.A1),
                 ReferenceStories.rd5BalanceCorrection(ReferenceStories.A1));
+    }
+
+    @Test
+    void rd5RelatesTheAccountsToTheHoldersThatThePageNames() {
+        assertThat(rows.get("RD-5")).contains("account A-1 is held by Beta and A-2 by ACME");
+
+        List<Write.Relate> relates = ReferenceStories.rd5Accounts(ReferenceStories.BETA, ReferenceStories.ACME)
+                .transaction().writes().stream().filter(Write.Relate.class::isInstance).map(Write.Relate.class::cast)
+                .toList();
+
+        assertThat(relates).extracting(Write.Relate::relationshipType).containsExactly("HeldBy", "HeldBy");
+        assertThat(relates).extracting(Write.Relate::source).containsExactly(ReferenceStories.A1, ReferenceStories.A2);
+        assertThat(relates).extracting(Write.Relate::target).containsExactly(ReferenceStories.BETA,
+                ReferenceStories.ACME);
     }
 
     @Test
@@ -86,8 +101,8 @@ class ReferenceStoriesTest {
     @Test
     void theFactsOfAStoryAreWhatTheFixtureWrites() {
         assertThat(facts(ReferenceStories.rd1Parties())).containsExactly("1 January", "ACME", "Beta", "Alice");
-        assertThat(facts(ReferenceStories.rd5Accounts())).containsExactly("1 January", "A-1", "EUR", "1,000", "A-2",
-                "2,000");
+        assertThat(facts(ReferenceStories.rd5Accounts(ReferenceStories.BETA, ReferenceStories.ACME)))
+                .containsExactly("1 January", "A-1", "EUR", "1,000", "A-2", "2,000");
         assertThat(facts(ReferenceStories.rd5BalancePatch(ReferenceStories.A1))).containsExactly("15 March", "1,500");
         assertThat(facts(ReferenceStories.rd5BalanceCorrection(ReferenceStories.A1)))
                 .containsExactly("15 March", "1,200");
@@ -159,6 +174,10 @@ class ReferenceStoriesTest {
                 case Write.Create create -> {
                     period(facts, create.period());
                     values(facts, create.values());
+                }
+                case Write.Relate relate -> {
+                    period(facts, relate.period());
+                    values(facts, relate.values());
                 }
                 case Write.Patch patch -> {
                     period(facts, patch.period());

@@ -303,9 +303,11 @@ class StoreViewsTest {
                         : type).toList());
         assertThat(reference.store.schema().register(ReferenceModel.origin("1.1.0"), renamed))
                 .isInstanceOf(RegistrationResult.Applied.class);
-        reference.commit(Transaction.by("importer").create(new TemporaryId("home"),
-                "Address", from(1, 1), values("street", "1 Main St", "city", "Springfield", "country", "US"))
-                .build());
+        TemporaryId home = new TemporaryId("home");
+        reference.commit(Transaction.by("importer")
+                .create(home, "Address", from(1, 1),
+                        values("street", "1 Main St", "city", "Springfield", "country", "US"))
+                .relate("HasAddress", acme, home, from(1, 1), values()).build());
 
         assertThat(reference.view(on(2, 1)).entities("Location")).extracting(EntityState::entityType)
                 .containsExactly("Location");

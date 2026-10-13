@@ -7,8 +7,10 @@ import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Store;
+import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
@@ -26,7 +28,7 @@ import java.util.List;
  * An in-memory store with the reference model registered and a clock that the test moves, with shortcuts to commit,
  * to reject and to replay the {@linkplain ReferenceStories stories of the reference domain}. It is created with the
  * rules of the reference domain: {@code lei-checksum} runs, and {@code total-ownership-at-most-100} is declared without
- * code until relationships exist. The deterministic ID
+ * code until the rules of relationships run. The deterministic ID
  * generator makes IDs predictable: {@link #id(int)}. It lives in the tests of {@code cairn-core}, because the test
  * fixtures of {@code cairn-api} cannot create a store; the stories, dates and values are in {@link ReferenceStories}.
  */
@@ -34,6 +36,8 @@ final class ReferenceStore {
 
     final TestClock clock = new TestClock();
     final Store store;
+    /** The receipt of the latest {@link #createParties()}. */
+    Receipt parties;
 
     /** A store with deterministic IDs, in which the reference model 1.0.0 was registered on 5 January. */
     ReferenceStore() {
@@ -86,9 +90,24 @@ final class ReferenceStore {
                 .declaredRules(ReferenceModel.declaredRules());
     }
 
-    /** The deterministic generator's n-th ID. */
+    /** The deterministic generator's n-th ID, as the ID of an entity. */
     static EntityId id(int n) {
         return new EntityId(String.format("00000000-0000-7000-8000-%012x", n));
+    }
+
+    /** The deterministic generator's n-th ID, as the ID of a relationship. */
+    static RelationshipId relationshipId(int n) {
+        return new RelationshipId(String.format("00000000-0000-7000-8000-%012x", n));
+    }
+
+    /** The ID of the entity that a receipt gives a temporary ID. */
+    static EntityId entity(Receipt receipt, TemporaryId temporaryId) {
+        return (EntityId) receipt.temporaryIds().get(temporaryId);
+    }
+
+    /** The ID of the relationship that a receipt gives a temporary ID. */
+    static RelationshipId relationship(Receipt receipt, TemporaryId temporaryId) {
+        return (RelationshipId) receipt.temporaryIds().get(temporaryId);
     }
 
     /** Moves the clock to a time; the transaction recorded next gets that transaction time. */
@@ -131,12 +150,20 @@ final class ReferenceStore {
 
     /** RD-1: ACME and Beta (organizations) and Alice (a person), from 1 January, recorded on 5 January. */
     Receipt createParties() {
-        return replay(ReferenceStories.rd1Parties());
+        parties = replay(ReferenceStories.rd1Parties());
+        return parties;
     }
 
-    /** RD-5: accounts A-1 and A-2 from 1 January with balances 1,000 and 2,000, recorded on 5 January. */
+    /**
+     * RD-1 and RD-5: the parties, then accounts A-1 (held by Beta) and A-2 (held by ACME) from 1 January with balances
+     * 1,000 and 2,000, both recorded on 5 January. An account needs its holder, so the parties are created first.
+     *
+     * @return the receipt of the accounts; the receipt of the parties is the field {@link #parties}
+     */
     Receipt createAccounts() {
-        return replay(ReferenceStories.rd5Accounts());
+        createParties();
+        return replay(ReferenceStories.rd5Accounts(parties.temporaryIds().get(ReferenceStories.BETA),
+                parties.temporaryIds().get(ReferenceStories.ACME)));
     }
 
     static void assertProblem(Problem problem, ProblemCode code, String path) {

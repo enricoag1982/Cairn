@@ -14,8 +14,8 @@ import java.util.ServiceLoader;
 
 /**
  * What a store is created with (design D2 of {@code add-entity-versions} and D2 of {@code add-entity-rules}): the clock
- * that gives transaction times, the generator of entity IDs, the rules that the store runs, and the rules that it
- * declares without code.
+ * that gives transaction times, the generator of entity and relationship IDs, the rules that the store runs, and the
+ * rules that it declares without code.
  *
  * <p>The descriptions of both kinds of rules are the rules available to the store's schema registry, which checks the
  * rules that types name against them. A store runs the rules that it has {@linkplain #rules() code} for, at commit. A
@@ -29,7 +29,8 @@ import java.util.ServiceLoader;
  * a rule that keeps no state is.
  *
  * @param clock         the source of transaction times
- * @param idGenerator   the generator of entity IDs, which also says which supplied IDs the store accepts
+ * @param idGenerator   the generator of entity and relationship IDs, which also says which supplied IDs the store
+ *                      accepts
  * @param rules         the rules, with their code, that the store runs at commit
  * @param declaredRules the descriptions of rules that the store declares without having their code: types of the
  *                      store's schema may name them, but a transaction that writes an entity whose type names one is
@@ -55,7 +56,7 @@ public record StoreSettings(
      * Creates settings without rules that have code.
      *
      * @param clock         the source of transaction times
-     * @param idGenerator   the generator of entity IDs
+     * @param idGenerator   the generator of entity and relationship IDs
      * @param declaredRules the descriptions of the rules that the store declares
      */
     public StoreSettings(InstantSource clock, IdGenerator idGenerator, List<RuleDescriptor> declaredRules) {
@@ -106,7 +107,7 @@ public record StoreSettings(
         }
 
         /**
-         * Sets the generator of entity IDs.
+         * Sets the generator of entity and relationship IDs.
          *
          * @param idGenerator the generator; by default a UUIDv7 generator that reads the clock of these settings
          * @return this builder

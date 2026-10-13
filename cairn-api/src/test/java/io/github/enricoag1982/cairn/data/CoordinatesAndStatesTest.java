@@ -91,6 +91,62 @@ class CoordinatesAndStatesTest {
                 .isInstanceOf(NullPointerException.class);
     }
 
+    @Test
+    void aRelationshipStateKeepsTheOrderOfItsValues() {
+        Map<String, Value> values = new LinkedHashMap<>();
+        values.put("share", Value.of(60));
+        values.put("note", Value.of("direct"));
+
+        RelationshipState state = relationship(values);
+        values.clear();
+
+        assertThat(state.values().keySet()).containsExactly("share", "note");
+        assertThatThrownBy(() -> state.values().put("x", Value.of(1))).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void aRelationshipStateHoldsItsTypeEndsAndRecording() {
+        RelationshipState state = relationship(Map.of("share", Value.of(60)));
+
+        assertThat(state.id()).isEqualTo(new RelationshipId("r"));
+        assertThat(state.relationshipType()).isEqualTo("Owns");
+        assertThat(state.source()).isEqualTo(new EntityId("acme"));
+        assertThat(state.target()).isEqualTo(new EntityId("beta"));
+        assertThat(state.period()).isEqualTo(EffectivePeriod.from(MARCH_31));
+        assertThat(state.recordedAt()).isEqualTo(APRIL_5);
+        assertThat(state.recordedBasis()).isEqualTo(new Basis(2));
+    }
+
+    @Test
+    void aRelationshipStateRejectsNulls() {
+        EffectivePeriod period = EffectivePeriod.from(MARCH_31);
+        RelationshipId id = new RelationshipId("r");
+        EntityId acme = new EntityId("acme");
+        EntityId beta = new EntityId("beta");
+
+        assertThatThrownBy(() -> new RelationshipState(null, "Owns", acme, beta, Map.of(), period, APRIL_5,
+                new Basis(1))).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(id, null, acme, beta, Map.of(), period, APRIL_5,
+                new Basis(1))).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(id, "Owns", null, beta, Map.of(), period, APRIL_5,
+                new Basis(1))).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(id, "Owns", acme, null, Map.of(), period, APRIL_5,
+                new Basis(1))).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(id, "Owns", acme, beta, null, period, APRIL_5, new Basis(1)))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(id, "Owns", acme, beta, Map.of(), null, APRIL_5,
+                new Basis(1))).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(id, "Owns", acme, beta, Map.of(), period, null,
+                new Basis(1))).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(id, "Owns", acme, beta, Map.of(), period, APRIL_5, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    private static RelationshipState relationship(Map<String, Value> values) {
+        return new RelationshipState(new RelationshipId("r"), "Owns", new EntityId("acme"), new EntityId("beta"),
+                values, EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2));
+    }
+
     private static EntityState state(Map<String, Value> values) {
         return new EntityState(new EntityId("a"), "Account", values, EffectivePeriod.from(MARCH_31), APRIL_5,
                 new Basis(2));

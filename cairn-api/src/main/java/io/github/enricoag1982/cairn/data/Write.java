@@ -9,8 +9,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * One change of a {@link Transaction} (capability {@code entity-versions}): create an entity, or patch, replace or
- * end-date one for an effective period.
+ * One change of a {@link Transaction} (capabilities {@code entity-versions} and {@code relationships}): create an
+ * entity, relate two entities, or patch, replace or end-date an entity or a relationship for an effective period.
  *
  * <p>Attribute values are keyed by the attribute's name or one of its aliases. The records only hold what the caller
  * wrote; the store checks it at commit and reports every problem found. Collections are copied and keep their
@@ -48,10 +48,50 @@ public sealed interface Write {
     }
 
     /**
-     * Sets some attributes of an entity for a period and leaves the others unchanged. It may also clear optional
-     * attributes. The entity must exist throughout the period.
+     * Relates a source entity to a target entity with a relationship type, for a period (capability
+     * {@code relationships}). The type and the ends of a relationship never change. The ends are entities of the
+     * relationship type's source and target types or of their subtypes, and exist throughout the period.
      *
-     * @param target the entity, by its ID or its temporary ID
+     * @param temporaryId      the name by which other writes of the transaction refer to the relationship, if it has
+     *                         one; entities and relationships share one namespace of temporary IDs
+     * @param id               the ID to give the relationship, in the format of the store's {@link IdGenerator}; empty
+     *                         to let the store generate one
+     * @param relationshipType the name or an alias of the relationship type, compared without regard to case
+     * @param source           the source entity, by its ID or by the temporary ID of an entity that an earlier write of
+     *                         the transaction creates; for a symmetric relationship type either end can be the source
+     * @param target           the target entity, by its ID or by the temporary ID of an entity that an earlier write of
+     *                         the transaction creates
+     * @param period           when the relationship is effective
+     * @param values           the values of its attributes
+     */
+    record Relate(
+            Optional<TemporaryId> temporaryId,
+            Optional<RelationshipId> id,
+            String relationshipType,
+            Ref source,
+            Ref target,
+            EffectivePeriod period,
+            Map<String, Value> values) implements Write {
+
+        /**
+         * Rejects null components and copies the values.
+         */
+        public Relate {
+            Objects.requireNonNull(temporaryId, "temporaryId");
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(relationshipType, "relationshipType");
+            Objects.requireNonNull(source, "source");
+            Objects.requireNonNull(target, "target");
+            Objects.requireNonNull(period, "period");
+            values = Copies.map(values, "values");
+        }
+    }
+
+    /**
+     * Sets some attributes of an entity or a relationship for a period and leaves the others unchanged. It may also
+     * clear optional attributes. The entity or relationship must exist throughout the period.
+     *
+     * @param target the entity or relationship, by its ID or its temporary ID
      * @param period the period the patch applies to
      * @param set    the attributes to set, with their new values
      * @param clear  the optional attributes to clear, by name or alias
@@ -77,10 +117,10 @@ public sealed interface Write {
     }
 
     /**
-     * Sets the complete state of an entity for a period: attributes that the write does not mention have no value in
-     * the period. The entity must exist throughout the period.
+     * Sets the complete state of an entity or a relationship for a period: attributes that the write does not mention
+     * have no value in the period. The entity or relationship must exist throughout the period.
      *
-     * @param target the entity, by its ID or its temporary ID
+     * @param target the entity or relationship, by its ID or its temporary ID
      * @param period the period the replacement applies to
      * @param values the complete values of the entity's attributes
      * @param check  the conflict check
@@ -100,10 +140,12 @@ public sealed interface Write {
     }
 
     /**
-     * Ends an entity from an instant in effective time: from then on, views do not find it. Nothing is deleted.
+     * Ends an entity or a relationship from an instant in effective time: from then on, views do not find it. Nothing
+     * is deleted. Ending an entity also ends its composition relationships and their targets from the same instant
+     * (capability {@code relationships}).
      *
-     * @param target the entity, by its ID or its temporary ID
-     * @param from   the first instant at which the entity no longer exists; truncated to microseconds
+     * @param target the entity or relationship, by its ID or its temporary ID
+     * @param from   the first instant at which it no longer exists; truncated to microseconds
      * @param check  the conflict check
      */
     record EndDate(Ref target, Instant from, ConflictCheck check) implements Write {

@@ -42,6 +42,11 @@ record Segment(Instant from, Instant end, Map<AttributeId, Value> values, Instan
         return period.until().orElse(OPEN);
     }
 
+    /** Describes a stretch of effective time, such as {@code from 2026-01-01T00:00:00Z until further notice}. */
+    static String describe(Instant from, Instant end) {
+        return "from " + from + (end.equals(OPEN) ? " until further notice" : " until " + end);
+    }
+
     /** The period of this segment, as the API reports it. */
     EffectivePeriod period() {
         return end.equals(OPEN) ? EffectivePeriod.from(from) : EffectivePeriod.between(from, end);

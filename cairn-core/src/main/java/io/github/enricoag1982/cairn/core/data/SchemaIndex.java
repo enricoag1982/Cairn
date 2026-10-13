@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.schema.EntityType;
+import io.github.enricoag1982.cairn.schema.RelationshipType;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import java.util.HashMap;
@@ -12,18 +13,21 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Lookups in a {@link Schema} by identifier, which entities store: the entity type of a {@link TypeId}, and a type with
- * its subtypes. Built once for a schema and safe for use by several threads.
+ * Lookups in a {@link Schema} by identifier, which entities and relationships store: the entity or relationship type of
+ * a {@link TypeId}, and a type with its subtypes. Built once for a schema and safe for use by several threads.
  */
 final class SchemaIndex {
 
     private final Schema schema;
     private final Map<TypeId, EntityType> types = new HashMap<>();
+    private final Map<TypeId, RelationshipType> relationshipTypes = new HashMap<>();
     private final Map<TypeId, Set<TypeId>> withSubtypes = new ConcurrentHashMap<>();
+    private final Map<TypeId, Set<TypeId>> relationshipWithSubtypes = new ConcurrentHashMap<>();
 
     SchemaIndex(Schema schema) {
         this.schema = Objects.requireNonNull(schema, "schema");
         schema.entityTypes().forEach(type -> types.put(type.id(), type));
+        schema.relationshipTypes().forEach(type -> relationshipTypes.put(type.id(), type));
     }
 
     Schema schema() {
@@ -41,6 +45,22 @@ final class SchemaIndex {
             ids.add(type.id());
             for (String subtype : type.subtypes()) {
                 schema.entityType(subtype).ifPresent(found -> ids.add(found.id()));
+            }
+            return Set.copyOf(ids);
+        });
+    }
+
+    Optional<RelationshipType> relationshipType(TypeId id) {
+        return Optional.ofNullable(relationshipTypes.get(id));
+    }
+
+    /** The identifiers of a relationship type and of all its subtypes. */
+    Set<TypeId> typeAndSubtypes(RelationshipType type) {
+        return relationshipWithSubtypes.computeIfAbsent(type.id(), id -> {
+            Set<TypeId> ids = new HashSet<>();
+            ids.add(type.id());
+            for (String subtype : type.subtypes()) {
+                schema.relationshipType(subtype).ifPresent(found -> ids.add(found.id()));
             }
             return Set.copyOf(ids);
         });

@@ -21,6 +21,9 @@ class TransactionTest {
     private static final EffectivePeriod FROM_JAN_1 = EffectivePeriod.from(JAN_1);
     private static final EntityId ACME_ID = new EntityId("00000000-0000-7000-8000-000000000001");
     private static final TemporaryId ACME = new TemporaryId("acme");
+    private static final TemporaryId BETA = new TemporaryId("beta");
+    private static final TemporaryId OWNS = new TemporaryId("owns");
+    private static final RelationshipId OWNS_ID = new RelationshipId("00000000-0000-7000-8000-000000000009");
 
     @Test
     void aTransactionHasAPrincipalAndNothingElseByDefault() {
@@ -97,6 +100,83 @@ class TransactionTest {
                 new Write.Create(Optional.of(ACME), Optional.empty(), "Organization", FROM_JAN_1, values),
                 new Write.Create(Optional.empty(), Optional.of(ACME_ID), "Organization", FROM_JAN_1, values),
                 new Write.Create(Optional.of(ACME), Optional.of(ACME_ID), "Organization", FROM_JAN_1, values));
+    }
+
+    @Test
+    void relatesInAllItsForms() {
+        Map<String, Value> values = Map.of("share", Value.of(60));
+
+        Transaction transaction = Transaction.by("p")
+                .relate("Owns", ACME, BETA, FROM_JAN_1, values)
+                .relate(OWNS, "Owns", ACME, BETA, FROM_JAN_1, values)
+                .relate(OWNS_ID, "Owns", ACME_ID, BETA, FROM_JAN_1, values)
+                .relate(OWNS, OWNS_ID, "Owns", ACME, ACME_ID, FROM_JAN_1, values)
+                .build();
+
+        assertThat(transaction.writes()).containsExactly(
+                new Write.Relate(Optional.empty(), Optional.empty(), "Owns", ACME, BETA, FROM_JAN_1, values),
+                new Write.Relate(Optional.of(OWNS), Optional.empty(), "Owns", ACME, BETA, FROM_JAN_1, values),
+                new Write.Relate(Optional.empty(), Optional.of(OWNS_ID), "Owns", ACME_ID, BETA, FROM_JAN_1, values),
+                new Write.Relate(Optional.of(OWNS), Optional.of(OWNS_ID), "Owns", ACME, ACME_ID, FROM_JAN_1,
+                        values));
+    }
+
+    @Test
+    void anyWriteCanTargetARelationshipByItsIdOrItsTemporaryId() {
+        Map<String, Value> values = Map.of("share", Value.of(55));
+        ConflictCheck check = ConflictCheck.perEntity(new Basis(3));
+
+        Transaction transaction = Transaction.by("p")
+                .patch(OWNS_ID, FROM_JAN_1, values)
+                .replace(OWNS, FROM_JAN_1, values, check)
+                .endDate(OWNS_ID, JAN_1)
+                .build();
+
+        assertThat(transaction.writes()).containsExactly(
+                new Write.Patch(OWNS_ID, FROM_JAN_1, values, Set.of(), ConflictCheck.none()),
+                new Write.Replace(OWNS, FROM_JAN_1, values, check),
+                new Write.EndDate(OWNS_ID, JAN_1, ConflictCheck.none()));
+    }
+
+    @Test
+    void relateRecordsCopyTheirValuesAndKeepTheirOrder() {
+        Map<String, Value> values = new LinkedHashMap<>();
+        values.put("share", Value.of(60));
+        values.put("note", Value.of("a"));
+        Write.Relate relate = new Write.Relate(Optional.empty(), Optional.empty(), "Owns", ACME, BETA, FROM_JAN_1,
+                values);
+
+        values.put("late", Value.of(2));
+
+        assertThat(relate.values().keySet()).containsExactly("share", "note");
+        assertThatThrownBy(() -> relate.values().put("x", Value.of(3))).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void relateRejectsNullParts() {
+        Map<String, Value> values = Map.of();
+        Optional<TemporaryId> none = Optional.empty();
+        Optional<RelationshipId> noId = Optional.empty();
+
+        assertThatThrownBy(() -> new Write.Relate(null, noId, "Owns", ACME, BETA, FROM_JAN_1, values))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Write.Relate(none, null, "Owns", ACME, BETA, FROM_JAN_1, values))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Write.Relate(none, noId, null, ACME, BETA, FROM_JAN_1, values))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Write.Relate(none, noId, "Owns", null, BETA, FROM_JAN_1, values))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Write.Relate(none, noId, "Owns", ACME, null, FROM_JAN_1, values))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Write.Relate(none, noId, "Owns", ACME, BETA, null, values))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Write.Relate(none, noId, "Owns", ACME, BETA, FROM_JAN_1, null))
+                .isInstanceOf(NullPointerException.class);
+        Transaction.Builder builder = Transaction.by("p");
+        assertThatThrownBy(() -> builder.relate((TemporaryId) null, "Owns", ACME, BETA, FROM_JAN_1, values))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> builder.relate((RelationshipId) null, "Owns", ACME, BETA, FROM_JAN_1, values))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test

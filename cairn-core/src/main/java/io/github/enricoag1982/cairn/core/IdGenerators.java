@@ -1,6 +1,5 @@
 package io.github.enricoag1982.cairn.core;
 
-import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import java.security.SecureRandom;
 import java.time.InstantSource;
@@ -82,11 +81,11 @@ public final class IdGenerators {
     }
 
     /** Builds the text form from the two halves of the 128 bits. */
-    private static EntityId id(long mostSignificantBits, long leastSignificantBits) {
+    private static String id(long mostSignificantBits, long leastSignificantBits) {
         String high = HEX.toHexDigits(mostSignificantBits);
         String low = HEX.toHexDigits(leastSignificantBits);
-        return new EntityId(high.substring(0, 8) + '-' + high.substring(8, 12) + '-' + high.substring(12) + '-'
-                + low.substring(0, 4) + '-' + low.substring(4));
+        return high.substring(0, 8) + '-' + high.substring(8, 12) + '-' + high.substring(12) + '-'
+                + low.substring(0, 4) + '-' + low.substring(4);
     }
 
     /** Tells whether a text is a lowercase, hyphenated UUID of version 7 and variant {@code 10}. */
@@ -125,7 +124,7 @@ public final class IdGenerators {
         }
 
         @Override
-        public synchronized EntityId next() {
+        public synchronized String next() {
             long now = Math.max(0, clock.millis());
             if (now > millis) {
                 millis = now;
@@ -164,7 +163,7 @@ public final class IdGenerators {
         }
 
         @Override
-        public synchronized EntityId next() {
+        public synchronized String next() {
             if (count == RAND_B_MASK) {
                 throw new IllegalStateException("The deterministic generator has no IDs left.");
             }

@@ -6,7 +6,7 @@ import java.util.Optional;
 /**
  * One reason a schema definition or registration is rejected (capabilities {@code type-model} and {@code schema-evolution}),
  * a schema document cannot be read (capability {@code schema-documents}), or a data transaction is rejected
- * (capabilities {@code transactions}, {@code entity-versions} and {@code entity-rules}).
+ * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}).
  *
  * <p>The code, path and message are always present. A problem can also say what was expected, what was found and how
  * to fix it. These details are text for people and agents to read: anything a program needs to act on is in the

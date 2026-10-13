@@ -10,6 +10,7 @@ import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.KnownAt;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
@@ -34,7 +35,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A store that keeps everything in memory (design D3 to D7 of {@code add-entity-versions}, D2 and D3 of
- * {@code add-entity-rules}, ADR-0007, ADR-0008). Use {@code Stores.inMemory} to create one.
+ * {@code add-entity-rules}, D2 and D3 of {@code add-relationships}, ADR-0007, ADR-0008). Use {@code Stores.inMemory}
+ * to create one.
  *
  * <p>One writer commits at a time, holding the writer lock of the store's {@link CommitSequence}, which the schema
  * registry shares. A commit applies the writes to working copies, validates the result, runs the rules, and only then
@@ -54,12 +56,14 @@ public final class InMemoryStore implements Store {
     private final CommitSequence sequence;
     private final InMemorySchemaRegistry registry;
     private final ConcurrentSkipListMap<EntityId, StoredEntity> entities = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<RelationshipId, StoredRelationship> relationships =
+            new ConcurrentSkipListMap<>();
     private final CopyOnWriteArrayList<TransactionRecord> records = new CopyOnWriteArrayList<>();
     private final ValueChecks checks = new ValueChecks();
     private final Rules rules;
     /** The idempotency keys of committed transactions; guarded by the writer lock. */
     private final Map<String, Keyed> keys = new HashMap<>();
-    /** The ID generator of the store; guarded by the writer lock. */
+    /** The ID generator of the store, for entities and relationships alike; guarded by the writer lock. */
     private IdGenerator generator;
 
     /**
@@ -167,23 +171,35 @@ public final class InMemoryStore implements Store {
      * that drops the result leaves no trace. Called with the lock held.
      */
     private Preparation prepare(Transaction transaction) {
-        return new Preparation(transaction, new SchemaIndex(registry.current()), entities, generator.copy(),
-                sequence.next(), checks, rules, sequence).run();
+        return new Preparation(transaction, new SchemaIndex(registry.current()), entities, relationships,
+                generator.copy(), sequence.next(), checks, rules, sequence).run();
     }
 
     /**
-     * Makes a valid preparation the store's latest state: appends the new timelines, records the transaction and its
-     * idempotency key, keeps the ID generator's advanced copy, and publishes the basis last, so that a reader that
-     * learns of the basis finds all of it. Called with the lock held.
+     * Makes a valid preparation the store's latest state: appends the new timelines of entities and relationships,
+     * records the transaction and its idempotency key, keeps the ID generator's advanced copy, and publishes the basis
+     * last, so that a reader that learns of the basis finds all of it. Called with the lock held.
      */
     private Receipt record(Transaction transaction, Preparation preparation) {
         CommitSequence.Commit commit = preparation.commit();
         for (Preparation.Change change : preparation.changes()) {
-            StoredEntity entity = change.created() ? new StoredEntity(change.id(), change.type())
-                    : entities.get(change.id());
-            entity.append(commit.basis(), change.timeline());
-            if (change.created()) {
-                entities.put(change.id(), entity);
+            switch (change.id()) {
+                case EntityId id -> {
+                    StoredEntity entity = change.created() ? new StoredEntity(id, change.type()) : entities.get(id);
+                    entity.append(commit.basis(), change.timeline());
+                    if (change.created()) {
+                        entities.put(id, entity);
+                    }
+                }
+                case RelationshipId id -> {
+                    StoredRelationship relationship = change.created()
+                            ? new StoredRelationship(id, change.type(), change.source(), change.target())
+                            : relationships.get(id);
+                    relationship.append(commit.basis(), change.timeline());
+                    if (change.created()) {
+                        relationships.put(id, relationship);
+                    }
+                }
             }
         }
         Receipt receipt = new Receipt(commit.basis(), commit.transactionTime(), preparation.temporaryIds(),

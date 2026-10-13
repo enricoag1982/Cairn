@@ -44,6 +44,19 @@ class ResultsAndHistoryTest {
     }
 
     @Test
+    void aReceiptListsRelationshipsWithTheEntitiesInTheOrderOfTheWrites() {
+        RelationshipId owns = new RelationshipId("00000000-0000-7000-8000-000000000003");
+        Map<TemporaryId, Id> temporaryIds = new LinkedHashMap<>();
+        temporaryIds.put(new TemporaryId("acme"), ACME_ID);
+        temporaryIds.put(new TemporaryId("owns"), owns);
+
+        Receipt receipt = receipt(temporaryIds, List.of(ACME_ID, BETA_ID, owns));
+
+        assertThat(receipt.temporaryIds()).containsEntry(new TemporaryId("owns"), owns);
+        assertThat(receipt.created()).containsExactly(ACME_ID, BETA_ID, owns);
+    }
+
+    @Test
     void aReceiptHoldsWhatTheTransactionRecorded() {
         Receipt receipt = receipt(Map.of(), List.of(ACME_ID));
 

@@ -1,14 +1,17 @@
 package io.github.enricoag1982.cairn.data;
 
 /**
- * Generates the IDs of the entities of one store, and says which IDs the store accepts (ADR-0019, capability
- * {@code transactions}). A store has exactly one generator, chosen when the store is created.
+ * Generates the IDs of the entities and relationships of one store, and says which IDs the store accepts (ADR-0019,
+ * capabilities {@code transactions} and {@code relationships}). A store has exactly one generator, chosen when the
+ * store is created, and it uses it for both kinds of IDs: the generator returns the text of an ID, and the store wraps
+ * it as an {@link EntityId} or a {@link RelationshipId}.
  *
  * <p>A generator is a small state machine: {@link #next()} advances it, and {@link #copy()} duplicates its state. A
  * store does not know whether a transaction commits until it has validated it, and validation needs the IDs of the
- * entities the transaction creates. It therefore draws them from a copy. A dry run and a rejected transaction throw
- * the copy away, so they reserve no ID; a committed transaction makes the copy the store's generator. Two generators in
- * the same state return the same IDs, except for bits that come from a shared source of randomness.
+ * entities and relationships the transaction creates. It therefore draws them from a copy. A dry run and a rejected
+ * transaction throw the copy away, so they reserve no ID; a committed transaction makes the copy the store's generator.
+ * Two generators in the same state return the same IDs, except for bits that come from a shared source of
+ * randomness.
  *
  * <p>A store calls its generator only while it holds its writer lock. The generators of the engine are also safe to
  * use from several threads.
@@ -16,12 +19,12 @@ package io.github.enricoag1982.cairn.data;
 public interface IdGenerator {
 
     /**
-     * Generates the next ID and advances the generator. The ID is {@linkplain #accepts(String) accepted} by this
+     * Generates the next ID and advances the generator. The text is {@linkplain #accepts(String) accepted} by this
      * generator and has not been returned before by this generator.
      *
-     * @return the ID
+     * @return the text form of the ID, never null
      */
-    EntityId next();
+    String next();
 
     /**
      * Tells whether a text is an ID in the format of this generator. A store accepts a supplied ID only if it does.

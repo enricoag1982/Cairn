@@ -11,7 +11,7 @@ import java.util.Set;
 
 /**
  * A set of writes that a store commits atomically, with who submits it, for whom, and why (ADR-0017, capabilities
- * {@code transactions} and {@code entity-versions}). Either every write is recorded or none is.
+ * {@code transactions}, {@code entity-versions} and {@code relationships}). Either every write is recorded or none is.
  *
  * <p>Build one with {@link #by(String)}. Two transactions are equal if their principal, party acted for, reason,
  * idempotency key and writes are, which is how a store recognizes a retry of a transaction with an idempotency key.
@@ -173,9 +173,78 @@ public record Transaction(
         }
 
         /**
+         * Adds a write that relates two entities, with a generated ID.
+         *
+         * @param relationshipType the name or an alias of the relationship type
+         * @param source           the source entity, by its ID or temporary ID
+         * @param target           the target entity, by its ID or temporary ID
+         * @param period           when the relationship is effective
+         * @param values           the values of its attributes
+         * @return this builder
+         */
+        public Builder relate(String relationshipType, Ref source, Ref target, EffectivePeriod period,
+                Map<String, Value> values) {
+            return write(new Write.Relate(Optional.empty(), Optional.empty(), relationshipType, source, target,
+                    period, values));
+        }
+
+        /**
+         * Adds a write that relates two entities, with a generated ID and a temporary ID, which other writes of this
+         * transaction use to refer to the relationship.
+         *
+         * @param temporaryId      the temporary ID
+         * @param relationshipType the name or an alias of the relationship type
+         * @param source           the source entity, by its ID or temporary ID
+         * @param target           the target entity, by its ID or temporary ID
+         * @param period           when the relationship is effective
+         * @param values           the values of its attributes
+         * @return this builder
+         */
+        public Builder relate(TemporaryId temporaryId, String relationshipType, Ref source, Ref target,
+                EffectivePeriod period, Map<String, Value> values) {
+            return write(new Write.Relate(Optional.of(Objects.requireNonNull(temporaryId, "temporaryId")),
+                    Optional.empty(), relationshipType, source, target, period, values));
+        }
+
+        /**
+         * Adds a write that relates two entities, with an ID supplied by the caller.
+         *
+         * @param id               the ID, in the format of the store's generator
+         * @param relationshipType the name or an alias of the relationship type
+         * @param source           the source entity, by its ID or temporary ID
+         * @param target           the target entity, by its ID or temporary ID
+         * @param period           when the relationship is effective
+         * @param values           the values of its attributes
+         * @return this builder
+         */
+        public Builder relate(RelationshipId id, String relationshipType, Ref source, Ref target,
+                EffectivePeriod period, Map<String, Value> values) {
+            return write(new Write.Relate(Optional.empty(), Optional.of(Objects.requireNonNull(id, "id")),
+                    relationshipType, source, target, period, values));
+        }
+
+        /**
+         * Adds a write that relates two entities, with an ID supplied by the caller and a temporary ID.
+         *
+         * @param temporaryId      the temporary ID
+         * @param id               the ID, in the format of the store's generator
+         * @param relationshipType the name or an alias of the relationship type
+         * @param source           the source entity, by its ID or temporary ID
+         * @param target           the target entity, by its ID or temporary ID
+         * @param period           when the relationship is effective
+         * @param values           the values of its attributes
+         * @return this builder
+         */
+        public Builder relate(TemporaryId temporaryId, RelationshipId id, String relationshipType, Ref source,
+                Ref target, EffectivePeriod period, Map<String, Value> values) {
+            return write(new Write.Relate(Optional.of(Objects.requireNonNull(temporaryId, "temporaryId")),
+                    Optional.of(Objects.requireNonNull(id, "id")), relationshipType, source, target, period, values));
+        }
+
+        /**
          * Adds a patch without a conflict check that sets attributes for a period.
          *
-         * @param target the entity, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID
          * @param period the period the patch applies to
          * @param set    the attributes to set, with their new values
          * @return this builder
@@ -187,7 +256,7 @@ public record Transaction(
         /**
          * Adds a patch with a conflict check that sets attributes for a period.
          *
-         * @param target the entity, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID
          * @param period the period the patch applies to
          * @param set    the attributes to set, with their new values
          * @param check  the conflict check
@@ -200,7 +269,7 @@ public record Transaction(
         /**
          * Adds a patch that sets some attributes and clears others for a period.
          *
-         * @param target the entity, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID
          * @param period the period the patch applies to
          * @param set    the attributes to set, with their new values
          * @param clear  the optional attributes to clear
@@ -215,7 +284,7 @@ public record Transaction(
         /**
          * Adds a replacement without a conflict check.
          *
-         * @param target the entity, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID
          * @param period the period the replacement applies to
          * @param values the complete values of the entity's attributes
          * @return this builder
@@ -227,7 +296,7 @@ public record Transaction(
         /**
          * Adds a replacement with a conflict check.
          *
-         * @param target the entity, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID
          * @param period the period the replacement applies to
          * @param values the complete values of the entity's attributes
          * @param check  the conflict check
@@ -240,8 +309,8 @@ public record Transaction(
         /**
          * Adds an end-date without a conflict check.
          *
-         * @param target the entity, by its ID or temporary ID
-         * @param from   the first instant at which the entity no longer exists
+         * @param target the entity or relationship, by its ID or temporary ID
+         * @param from   the first instant at which the entity or relationship no longer exists
          * @return this builder
          */
         public Builder endDate(Ref target, Instant from) {
@@ -251,8 +320,8 @@ public record Transaction(
         /**
          * Adds an end-date with a conflict check.
          *
-         * @param target the entity, by its ID or temporary ID
-         * @param from   the first instant at which the entity no longer exists
+         * @param target the entity or relationship, by its ID or temporary ID
+         * @param from   the first instant at which the entity or relationship no longer exists
          * @param check  the conflict check
          * @return this builder
          */

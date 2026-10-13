@@ -17,8 +17,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The stories of the reference domain ({@code docs/reference/reference-domain.md}) that need no relationships or queries,
- * as the transactions that tell them, with the dates at which they are recorded.
+ * The stories of the reference domain ({@code docs/reference/reference-domain.md}) that need no queries, as the
+ * transactions that tell them, with the dates at which they are recorded.
  *
  * <p>Stories are in 2026 unless they say otherwise. "Recorded" is the transaction time: a {@link Recording} is
  * replayed on a store with a {@link TestClock} moved to its recording date, at midnight UTC. Effective dates are at
@@ -55,6 +55,12 @@ public final class ReferenceStories {
 
     /** The temporary ID of account A-2. */
     public static final TemporaryId A2 = new TemporaryId("a2");
+
+    /** The temporary ID of the {@code HeldBy} relationship between account A-1 and its holder, Beta, in the story RD-5. */
+    public static final TemporaryId HELD_BY_A1 = new TemporaryId("heldByA1");
+
+    /** The temporary ID of the {@code HeldBy} relationship between account A-2 and its holder, ACME, in the story RD-5. */
+    public static final TemporaryId HELD_BY_A2 = new TemporaryId("heldByA2");
 
     /** ACME's Legal Entity Identifier in the story RD-9. */
     public static final String LEI = "5493001KJTIIGC8Y1R12";
@@ -99,15 +105,21 @@ public final class ReferenceStories {
     }
 
     /**
-     * RD-5, without the relationships. Recorded 5 January: accounts A-1 and A-2 exist from 1 January, with balances
-     * 1,000 and 2,000 in euros. They are named by {@link #A1} and {@link #A2}.
+     * RD-5, the accounts. Recorded 5 January: account A-1 is held by Beta and A-2 by ACME, both from 1 January, with
+     * balances 1,000 and 2,000, both in euros. The accounts are named by {@link #A1} and {@link #A2}, and their
+     * {@code HeldBy} relationships by {@link #HELD_BY_A1} and {@link #HELD_BY_A2}. An account has exactly one holder
+     * at every point in time, so the accounts are created together with the relationships.
      *
+     * @param beta the holder of A-1, for example {@link #BETA} in the transaction that creates it, or its ID
+     * @param acme the holder of A-2, for example {@link #ACME} in the transaction that creates it, or its ID
      * @return the recording
      */
-    public static Recording rd5Accounts() {
+    public static Recording rd5Accounts(Ref beta, Ref acme) {
         return new Recording(on(1, 5), Transaction.by(PRINCIPAL)
                 .create(A1, "Account", from(1, 1), values("number", "A-1", "currency", "EUR", "balance", money("1000")))
                 .create(A2, "Account", from(1, 1), values("number", "A-2", "currency", "EUR", "balance", money("2000")))
+                .relate(HELD_BY_A1, "HeldBy", A1, beta, from(1, 1), values())
+                .relate(HELD_BY_A2, "HeldBy", A2, acme, from(1, 1), values())
                 .build());
     }
 

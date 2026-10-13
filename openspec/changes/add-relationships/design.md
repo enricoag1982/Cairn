@@ -35,15 +35,17 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 
 ### D3. Integrity checks, after the writes are applied
 
-- **Ends:** each touched relationship's source and target are entities of the right types, and exist at every point of the relationship's lifetime.
+- **Ends:** each relationship's source and target are entities of the right types, checked when it is related, with the other write checks; a relationship that fails them takes no part in the checks below. Each touched relationship's ends exist at every point of its lifetime (`END_NOT_EFFECTIVE`, one problem per relationship naming the ends; a relationship whose lifetime did not grow and outlives an ended end is `RELATIONSHIP_OUTLIVES_END` instead).
 - **Lifetimes:** for each entity whose lifetime shrank, every relationship with that entity as an end lies within the new lifetime.
 - **Multiplicities:** for every entity that is an end of a touched relationship, or is touched itself, and for every relationship type whose source or target type is the entity's type or a supertype, the count of active relationships is computed on each interval between consecutive boundaries (relationship starts and ends, and the entity's own) and compared with the minimum and maximum. A minimum of 1 is checked only within the entity's lifetime.
-- **Duplicates:** two relationships of the same type with the same ends (in either order for symmetric types) must not overlap.
+- **Duplicates:** two relationships of the same type with the same ends (in either order for symmetric types) must not overlap; the later one gets the problem.
+- Entities that are only ends of touched relationships take part in the lifetime and multiplicity checks, but are not validated again, do not run rules and are not recorded.
+- IDs of entities and relationships share one namespace: `ENTITY_EXISTS` and `INVALID_ENTITY_ID` cover both kinds, and an entity ID given where a relationship is expected (or the reverse) is `UNKNOWN_ENTITY`, `UNKNOWN_RELATIONSHIP` or `WRONG_END_TYPE`.
 - New problem codes: `UNKNOWN_RELATIONSHIP_TYPE`, `WRONG_END_TYPE`, `END_NOT_EFFECTIVE`, `RELATIONSHIP_OUTLIVES_END`, `TOO_FEW_RELATIONSHIPS`, `TOO_MANY_RELATIONSHIPS`, `DUPLICATE_RELATIONSHIP` and `UNKNOWN_RELATIONSHIP`. Paths name the relationship (`$owns1`, its ID, or `@write.<n>` when it has neither), or, for multiplicities, the entity followed by the relationship type's or inverse name in brackets (`$a3[HeldBy]`), so they cannot be mistaken for attribute paths.
 
 ### D4. Composition cascades
 
-- Before the integrity checks, for each entity that a write ends, the engine adds end-date writes from the same instant for every composition relationship whose source is that entity, and for their targets, recursively. The added writes are part of the transaction and appear in its effects.
+- After all writes are applied and before the integrity checks, for each entity that a write ends, the engine ends from the same instant every composition relationship whose source is that entity and that continues past the instant, and their targets, recursively. Compositions created in the same transaction are covered too. `Receipt` gains `ended`, the IDs of the relationships and entities that cascades ended, so callers see them.
 - A target that a cascade ends must not have relationships of its own that continue; the lifetime check reports them.
 
 ### D5. Rules on relationships

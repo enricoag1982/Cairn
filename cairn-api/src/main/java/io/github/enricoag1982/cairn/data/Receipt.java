@@ -9,14 +9,15 @@ import java.util.Optional;
 
 /**
  * The proof that a transaction was committed (capability {@code transactions}): when and at which basis it was
- * recorded, which entities it created, and who and why it recorded.
+ * recorded, which entities and relationships it created, and who and why it recorded.
  *
  * <p>A transaction with an idempotency key that is submitted again gets the receipt of the first submission.
  *
  * @param basis           the basis the transaction produced
  * @param transactionTime when the transaction was recorded, with microsecond precision
- * @param temporaryIds    the ID of every entity the transaction named with a temporary ID, in the order of the writes
- * @param created         the ID of every entity the transaction created, in the order of the writes
+ * @param temporaryIds    the ID of every entity or relationship the transaction named with a temporary ID, in the
+ *                        order of the writes; an {@link EntityId} or a {@link RelationshipId}
+ * @param created         the ID of every entity and relationship the transaction created, in the order of the writes
  * @param principal       who submitted the transaction
  * @param onBehalfOf      the party the principal acted for, if given
  * @param reason          why the transaction was submitted, if given

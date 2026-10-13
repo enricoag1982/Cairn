@@ -5,8 +5,9 @@ import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import java.util.List;
 
 /**
- * A system of record: a schema, and the entities written under it, with history on two time axes (ADR-0007, ADR-0008,
- * capabilities {@code transactions}, {@code entity-versions} and {@code views}).
+ * A system of record: a schema, and the entities and relationships written under it, with history on two time axes
+ * (ADR-0007, ADR-0008, capabilities {@code transactions}, {@code entity-versions}, {@code relationships} and
+ * {@code views}).
  *
  * <p>One writer orders all commits, schema transactions and data transactions alike; they share one sequence of bases
  * and transaction times. Reads never wait: they go through {@linkplain View views}.

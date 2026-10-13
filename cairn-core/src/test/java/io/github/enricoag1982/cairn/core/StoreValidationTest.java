@@ -121,8 +121,11 @@ class StoreValidationTest {
 
     @Test
     void aValueThatIsNotAllowedIsReported() {
+        EntityId beta = (EntityId) reference.createParties().temporaryIds().get(BETA);
+        TemporaryId role = new TemporaryId("role");
         List<Problem> problems = reference.reject(Transaction.by("importer")
-                .create(new TemporaryId("role"), "CustomerRole", from(3, 1), values("segment", "Private")).build());
+                .create(role, "CustomerRole", from(3, 1), values("segment", "Private"))
+                .relate("PlayedBy", role, beta, from(3, 1), values()).build());
 
         Problem problem = only(problems);
         assertProblem(problem, ProblemCode.VALUE_NOT_ALLOWED, "$role.segment");

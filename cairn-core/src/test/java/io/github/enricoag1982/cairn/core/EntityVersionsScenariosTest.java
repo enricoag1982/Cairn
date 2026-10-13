@@ -119,9 +119,12 @@ class EntityVersionsScenariosTest {
     @Test
     @DisplayName("Scenario: Value that breaks a pattern")
     void valueThatBreaksAPattern() {
+        EntityId beta = (EntityId) reference.createParties().temporaryIds().get(BETA);
+
         List<Problem> problems = reference.reject(Transaction.by("importer")
                 .create(A1, "Account", from(1, 1),
-                        values("number", "A-1", "currency", "eur", "balance", money("1000"))).build());
+                        values("number", "A-1", "currency", "eur", "balance", money("1000")))
+                .relate("HeldBy", A1, beta, from(1, 1), values()).build());
 
         assertProblem(only(problems), ProblemCode.VALUE_PATTERN_MISMATCH, "$a1.currency");
     }

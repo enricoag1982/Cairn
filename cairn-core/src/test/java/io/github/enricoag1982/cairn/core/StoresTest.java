@@ -35,7 +35,7 @@ class StoresTest {
         StoreSettings settings = StoreSettings.defaults();
 
         assertThat(settings.declaredRules()).isEmpty();
-        assertThat(settings.idGenerator().accepts(IdGenerators.uuidV7().next().value())).isTrue();
+        assertThat(settings.idGenerator().accepts(IdGenerators.uuidV7().next())).isTrue();
         assertThat(settings.idGenerator().accepts("not an id")).isFalse();
         assertThat(settings.clock().instant()).isBetween(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60));
     }
@@ -149,6 +149,6 @@ class StoresTest {
         }
 
         assertThat(ids).containsExactly(id(1), id(1));
-        assertThat(generator.next()).as("the generator of the settings was not used up").isEqualTo(id(1));
+        assertThat(generator.next()).as("the generator of the settings was not used up").isEqualTo(id(1).value());
     }
 }

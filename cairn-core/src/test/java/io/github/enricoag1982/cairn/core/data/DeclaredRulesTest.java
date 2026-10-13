@@ -82,7 +82,7 @@ class DeclaredRulesTest {
     /** Prepares a transaction as the store would, as the third commit, with only the code of the given rules. */
     private List<Problem> problemsOf(Transaction transaction) {
         return sequence.underWriterLock(() -> new Preparation(transaction, new SchemaIndex(schema), stored,
-                IdGenerators.deterministic(), new CommitSequence.Commit(new Basis(3), NEXT_COMMIT_AT),
+                new HashMap<>(), IdGenerators.deterministic(), new CommitSequence.Commit(new Basis(3), NEXT_COMMIT_AT),
                 new ValueChecks(), new Rules(List.of(new LeiChecksumRule())), sequence).run().problems());
     }
 
@@ -140,7 +140,7 @@ class DeclaredRulesTest {
     void anEntityOfATypeThatNamesNoDeclaredRuleIsNotAffected() {
         List<Problem> problems = problemsOf(Transaction.by("importer")
                 .create(HOME, "Address", from(1, 1), values("street", "Main Street", "city", "Rome", "country", "IT"))
-                .build());
+                .relate("HasAddress", ALICE, HOME, from(1, 1), values()).build());
 
         assertThat(problems).as("Alice is not written, so her rule does not matter").isEmpty();
     }
@@ -157,7 +157,8 @@ class DeclaredRulesTest {
     void theProblemOfARuleWithoutCodeComesAfterTheDeclarativeProblemsOfEveryEntity() {
         List<Problem> problems = problemsOf(Transaction.by("importer")
                 .patch(ALICE, from(1, 1), values("name", "Alice"))
-                .create(HOME, "Address", from(1, 1), values("street", "Main Street", "country", "IT")).build());
+                .create(HOME, "Address", from(1, 1), values("street", "Main Street", "country", "IT"))
+                .relate("HasAddress", ALICE, HOME, from(1, 1), values()).build());
 
         assertThat(problems).extracting(Problem::code, Problem::path).containsExactly(
                 tuple(ProblemCode.MISSING_REQUIRED_VALUE, "$home.city"),
