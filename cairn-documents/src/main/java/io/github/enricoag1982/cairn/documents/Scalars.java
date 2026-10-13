@@ -117,6 +117,11 @@ final class Scalars {
         return Optional.of(sign + (whole.isEmpty() ? "0" : whole) + fraction + exponent);
     }
 
+    /** The instant that a string scalar spells in ISO 8601 form, or empty for any other scalar. */
+    static Optional<Instant> instantValue(ScalarNode scalar) {
+        return isString(scalar) ? instant(scalar.getValue()) : Optional.empty();
+    }
+
     /** The value of a scalar that {@link #isBoolean} is true for. */
     static boolean booleanValue(ScalarNode scalar) {
         return scalar.getValue().toLowerCase(Locale.ROOT).equals("true");

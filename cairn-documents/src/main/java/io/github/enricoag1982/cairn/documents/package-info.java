@@ -14,5 +14,15 @@
  * order, leaving out every default, so that reading the text gives back an equal origin and definition.
  * {@link io.github.enricoag1982.cairn.documents.SchemaDocuments#jsonSchema()} returns the published JSON Schema
  * (draft 2020-12, {@code urn:cairn:schema-document:1}) that describes the documents.
+ *
+ * <p>Transaction payloads (capability {@code json-payloads}):
+ * {@link io.github.enricoag1982.cairn.documents.Payloads#readTransaction(String,
+ * io.github.enricoag1982.cairn.schema.Schema, io.github.enricoag1982.cairn.documents.IdLookup)}
+ * reads a payload, written in YAML 1.2 or as JSON, into a transaction with values typed by the schema, strictly and
+ * with the same located problems as schema documents. A
+ * {@link io.github.enricoag1982.cairn.documents.TransactionPayload} that was read can
+ * {@linkplain io.github.enricoag1982.cairn.documents.TransactionPayload#locate(java.util.List) locate} the problems
+ * that a dry run or a commit of its transaction reports: at the last write that concerns the entity, relationship or
+ * attribute, at the attribute's key where there is one.
  */
 package io.github.enricoag1982.cairn.documents;

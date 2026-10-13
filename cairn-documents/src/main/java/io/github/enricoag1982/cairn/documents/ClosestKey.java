@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.documents;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -31,6 +32,20 @@ final class ClosestKey {
                 .min(Comparator.comparingInt((String key) -> distance(lowered, key.toLowerCase(Locale.ROOT)))
                         .thenComparing(String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(Comparator.naturalOrder()));
+    }
+
+    /**
+     * Orders all the known keys by how close they are to the given key, the closest first, with the order of
+     * {@link #of} for keys that are equally close. Unlike {@link #of} it keeps keys that are further than
+     * {@value #MAX_DISTANCE} letters away, so that a hint can list every choice.
+     */
+    static List<String> ranked(String given, Collection<String> known) {
+        String lowered = given.toLowerCase(Locale.ROOT);
+        return known.stream()
+                .sorted(Comparator.comparingInt((String key) -> distance(lowered, key.toLowerCase(Locale.ROOT)))
+                        .thenComparing(String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Comparator.naturalOrder()))
+                .toList();
     }
 
     /** The Levenshtein distance: the fewest single-character insertions, deletions and substitutions between two texts. */

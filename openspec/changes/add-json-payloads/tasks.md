@@ -2,8 +2,8 @@
 
 ## 1. Payloads
 
-- [ ] 1.1 Read transaction payloads into transactions with typed values, reusing the strict node-tree reader of schema documents (D1, D2)
-- [ ] 1.2 Locate reading, dry-run and commit problems in payloads (D3)
+- [x] 1.1 Read transaction payloads into transactions with typed values, reusing the strict node-tree reader of schema documents (D1, D2)
+- [x] 1.2 Locate reading, dry-run and commit problems in payloads (D3)
 - [ ] 1.3 Write receipts, states, links, steps and problems as JSON (D4)
 
 ## 2. JSON Schemas

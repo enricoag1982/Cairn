@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import org.snakeyaml.engine.v2.nodes.MappingNode;
 import org.snakeyaml.engine.v2.nodes.Node;
 import org.snakeyaml.engine.v2.nodes.NodeTuple;
@@ -17,8 +18,11 @@ import org.snakeyaml.engine.v2.nodes.ScalarNode;
 import org.snakeyaml.engine.v2.nodes.SequenceNode;
 
 /**
- * Finds the YAML features outside the subset that schema documents use: anchors and aliases, explicit tags, merge keys,
- * and more than one document in a stream (design D5).
+ * Finds the YAML features outside the subset that schema documents and transaction payloads use: anchors and aliases,
+ * explicit tags, merge keys, and more than one document in a stream (design D5 of {@code add-schema-documents}).
+ *
+ * <p>The reader that asks says what the text is and what path a problem about a position in it carries, because the
+ * elements of a schema document (types, attributes) and of a payload (writes) are not the same.
  *
  * <p>An alias is the same node in two places of the tree, so it needs no report of its own: there is no alias without an
  * anchor, and the anchor is reported. A node that was seen before is not looked into again, which also keeps the work
@@ -30,20 +34,29 @@ final class YamlSubset {
 
     private final Map<Node, String> explicitTags;
     private final Map<Node, Node> mergeKeys;
+    private final Function<List<String>, String> elementPath;
     private final Set<Node> seen = Collections.newSetFromMap(new IdentityHashMap<>());
     private final List<Problem> problems = new ArrayList<>();
 
-    private YamlSubset(YamlTree.Composed composed) {
+    private YamlSubset(YamlTree.Composed composed, Function<List<String>, String> elementPath) {
         this.explicitTags = composed.explicitTags();
         this.mergeKeys = composed.mergeKeys();
+        this.elementPath = elementPath;
     }
 
-    /** Finds the features of a composed document that are outside the subset, each with its location. */
-    static List<Problem> problems(YamlTree.Composed composed) {
-        YamlSubset subset = new YamlSubset(composed);
+    /**
+     * Finds the features of a composed text that are outside the subset, each with its location.
+     *
+     * @param composed    the text
+     * @param what        what the text is, with its article, such as {@code a schema document}
+     * @param elementPath the path of the element that the node at a position belongs to, from the keys and indexes that
+     *                    lead to the position, which are empty for the root of the text
+     */
+    static List<Problem> problems(YamlTree.Composed composed, String what, Function<List<String>, String> elementPath) {
+        YamlSubset subset = new YamlSubset(composed, elementPath);
         composed.root().ifPresent(root -> subset.scan(root, List.of()));
-        composed.extraDocument().ifPresent(mark -> subset.add(Keys.DOCUMENT_PATH,
-                "The text has more than one YAML document, but a schema document is exactly one.",
+        composed.extraDocument().ifPresent(mark -> subset.add(elementPath.apply(List.of()),
+                "The text has more than one YAML document, but " + what + " is exactly one.",
                 "one YAML document", "a second document, which starts here",
                 "Remove the '---' separator and everything after the first document, or put the second document in a "
                         + "file of its own.", Marks.location("", mark)));
@@ -55,7 +68,7 @@ final class YamlSubset {
             return;
         }
         String pointer = pointer(tokens);
-        String path = elementPath(tokens);
+        String path = elementPath.apply(tokens);
         node.getAnchor().ifPresent(anchor -> add(path,
                 "Anchors and aliases are not supported; this is the anchor '&" + anchor.getValue() + "'.",
                 "a value written out in full", "&" + anchor.getValue(),
@@ -105,22 +118,5 @@ final class YamlSubset {
             pointer = Pointers.child(pointer, token);
         }
         return pointer;
-    }
-
-    /** The path of the element that the node at a position in the document belongs to (design D5). */
-    private static String elementPath(List<String> tokens) {
-        if (tokens.isEmpty()) {
-            return Keys.DOCUMENT_PATH;
-        }
-        String section = tokens.getFirst();
-        if (section.equals("origin")) {
-            return Keys.ORIGIN_PATH;
-        }
-        boolean types = section.equals("traits") || section.equals("entityTypes") || section.equals("relationshipTypes");
-        if (!types || tokens.size() < 2) {
-            return Keys.DOCUMENT_PATH;
-        }
-        String type = tokens.get(1);
-        return tokens.size() >= 4 && tokens.get(2).equals("attributes") ? type + "." + tokens.get(3) : type;
     }
 }

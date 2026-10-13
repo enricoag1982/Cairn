@@ -32,7 +32,7 @@ Every problem from reading a payload SHALL be located in it by a JSON Pointer, a
 
 #### Scenario: Locating a value problem
 
-- **WHEN** a payload's second write creates account A-1 with the currency `eur`, and its dry run's problems are located in the payload
+- **WHEN** a payload's second write creates account A-1 with the currency `eur`, a later write relates it to its holder, and its dry run's problems are located in the payload
 - **THEN** the problem is located at `/writes/1/create/values/currency`
 
 ### Requirement: Results as JSON

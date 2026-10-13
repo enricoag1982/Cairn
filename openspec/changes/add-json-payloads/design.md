@@ -19,7 +19,7 @@
 
 ### D1. API in `cairn-documents`
 
-- `Payloads.readTransaction(String text, Schema schema)` returns a sealed `PayloadReadResult`: `Read(TransactionPayload payload)` or `Invalid(List<Problem> problems)`. `TransactionPayload(Transaction transaction, PayloadLocations locations)` with `locate(List<Problem>)`.
+- `Payloads.readTransaction(String text, Schema schema, IdLookup lookup)` (and an overload without a lookup) returns a sealed `PayloadReadResult`: `Read(TransactionPayload payload)` or `Invalid(List<Problem> problems)`. `TransactionPayload(Transaction transaction, PayloadLocations locations)` with `locate(List<Problem>)`.
 - `Payloads.toJson(...)` overloads for `Receipt`, `EntityState`, `RelationshipState`, lists of states, `Link`, `Step` and `Problem`.
 - `JsonSchemas.values(Schema schema, String typeName)` and `JsonSchemas.transactions(Schema schema)` return JSON Schema text.
 
@@ -29,11 +29,14 @@
 - Write keys mirror the records: `create { temporaryId, id, entityType, from, until, values }`, `relate { temporaryId, id, relationshipType, source, target, from, until, values }`, `patch { target, from, until, set, clear, conflictCheck }`, `replace { target, from, until, values, conflictCheck }`, `endDate { target, from, conflictCheck }`.
 - `conflictCheck` is `{ perEntity: <basis> }` or `{ perAttribute: <basis> }`; absent means none.
 - References: `$name` is a temporary ID; anything else is an ID. Because `Ref` is typed, the reader decides whether an ID names an entity or a relationship with a lookup the caller passes, which a store's latest view provides through timelines (`view.timeline(id)` or `view.relationshipTimeline(id)` being non-empty), so that ended, past and future-dated subjects are found too. An ID that names neither is read as an entity ID, so that the engine reports it as unknown.
-- The type of a `patch` or `replace` target is found from the payload (a temporary ID created earlier in it) or from the schema and store: the reader takes an optional resolver from IDs to type names, built from a view's timelines (`EntityState::entityType` or `RelationshipState::relationshipType` of any version); without it, values are read by their own YAML type.
+- The type of a `patch` or `replace` target is found from the payload (a temporary ID created earlier in it) or from the store: `IdLookup` answers, for an ID, whether it names an entity or a relationship and its type name; `IdLookup.from(View)` uses the view's timelines, so ended, past and future-dated subjects are found. Without a lookup, values are read by their own YAML type.
+- Required keys: `cairn`, `principal` and `writes`; `create` needs `entityType` and `from`; `relate` needs `relationshipType`, `source`, `target` and `from`; `patch` and `endDate` need `target` and `from`; `replace` also needs `values`, so a forgotten `values` cannot wipe a state. A `temporaryId` may be written with or without its `$`; references must start with `$` to be temporary IDs.
+- Reading problems reuse the document problem codes, with the engine's path forms (`@transaction`, `@write.<n>`, `@write.<n>.<attribute>`); an unknown write kind is `UNKNOWN_KEY` at the write, whose hint lists the kinds, closest first.
+- The strict node reading of schema documents is extracted into `NodeReader`, which both readers use.
 
 ### D3. Locations
 
-- The reader records, for every write, the pointer of the write and of each value key, and maps problem paths (`$acme.name`, `<id>.balance`, `$owns1`) to the last write concerning that reference, then to the value key if the path has an attribute. `@write.<n>` and `@write.<n>.<attribute>` map to `/writes/<n>` and its value key; `@transaction` maps to the payload's root. A multiplicity path (`$a3[HeldBy]`, `<id>[holds]`) maps to the last write concerning the entity before the bracket. A problem about a subject that no write in the payload names (a stored relationship that outlives an ended entity, a cascaded target, an end touched only through a relationship) maps to the last write concerning a subject it names in its message or details, or else to the payload's root.
+- The reader records, for every write, the pointer of the write and of each value key, and maps problem paths (`$acme.name`, `<id>.balance`, `$owns1`) to the last write concerning that reference, then to the value key if the path has an attribute. `@write.<n>` and `@write.<n>.<attribute>` map to `/writes/<n>` and its value key; `@transaction` maps to the payload's root. A multiplicity path (`$a3[HeldBy]`, `<id>[holds]`) maps to the last write concerning the entity before the bracket. A problem about a subject that no write in the payload names (a stored relationship that outlives an ended entity, a cascaded target, an end touched only through a relationship) maps to the last write concerning a subject that its message, found or expected value names, or else to the payload's root. Writes about a subject (create, relate, patch, replace and end-date of it) win over writes that only name it as a relationship end.
 
 ### D4. JSON forms
 

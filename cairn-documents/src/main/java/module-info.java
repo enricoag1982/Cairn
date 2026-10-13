@@ -1,5 +1,6 @@
 /**
- * Schema documents: reading and writing them, locating problems in them, and the published JSON Schema.
+ * Schema documents: reading and writing them, locating problems in them, and the published JSON Schema. Transaction
+ * payloads: reading them into transactions, and locating problems in them.
  */
 // The name follows the io.github.<user> convention; the user name ends in digits by necessity.
 @SuppressWarnings("module")

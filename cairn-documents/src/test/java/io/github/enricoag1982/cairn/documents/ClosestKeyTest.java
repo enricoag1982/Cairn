@@ -42,6 +42,15 @@ class ClosestKeyTest {
     }
 
     @Test
+    void rankingListsEveryKeyTheClosestFirst() {
+        assertThat(ClosestKey.ranked("creat", PayloadKeys.KINDS)).startsWith("create").containsExactlyInAnyOrderElementsOf(
+                PayloadKeys.KINDS);
+        assertThat(ClosestKey.ranked("pach", PayloadKeys.KINDS)).startsWith("patch");
+        assertThat(ClosestKey.ranked("bat", List.of("mat", "Hat", "cat", "battery"))).containsExactly(
+                "cat", "Hat", "mat", "battery");
+    }
+
+    @Test
     void theCloserKeyWinsAndTiesGoToTheAlphabeticallyFirst() {
         assertThat(ClosestKey.of("cat", List.of("cart", "cat", "cats"))).contains("cat");
         assertThat(ClosestKey.of("bat", List.of("hat", "cat", "mat"))).contains("cat");
