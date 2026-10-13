@@ -27,10 +27,10 @@
 - [ ] 4.1 Move the settable test clock to the test fixtures and add `ReferenceStories` (D9)
 - [x] 4.2 One test per scenario of `transactions`, `entity-versions`, `views` and the new `schema-evolution` requirement, named `Scenario: <name>`
 - [ ] 4.3 Unit tests for timeline splitting and merging, and for the ID generators; verify `./gradlew build` passes
+- [ ] 4.4 Locate problems about entities created without a temporary or supplied ID at `@write.<n>`, with a test for the new scenario
 
 ## 5. Documentation
 
 - [x] 5.1 Add to `docs/glossary.md`: dry run, idempotency key, temporary ID, receipt, principal, store, timeline; update entity version and view
 - [ ] 5.2 Update the building blocks and runtime view in `docs/architecture/README.md`, and the status in `AGENTS.md` and `README.md`; bump `last-reviewed`
 - [ ] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
-- [ ] 4.4 Locate problems about entities created without a temporary or supplied ID at `@write.<n>`, with a test for the new scenario
