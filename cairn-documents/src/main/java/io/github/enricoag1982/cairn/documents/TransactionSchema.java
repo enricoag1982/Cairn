@@ -56,7 +56,8 @@ final class TransactionSchema {
                 .put("onBehalfOf", string("The party the principal acts for, if it acts for one."))
                 .put("reason", string("Why the transaction is submitted."))
                 .put("idempotencyKey", string("A key that identifies this transaction. Submitting the same transaction "
-                        + "again with the same key is a retry, and gets the receipt of the first submission."))
+                        + "again with the same key is a retry, and gets the receipt of the first submission, unless a "
+                        + "purge removed what it wrote."))
                 .put("writes", new Mapping()
                         .put("description", "The writes of the transaction, in order. They are committed together, or "
                                 + "not at all.")

@@ -230,14 +230,14 @@ class PurgeTest {
         List<Problem> problems = rejected(tree.store.purge(purge(bob)));
         PurgeResult.Purged both = purged(tree.store.purge(purge(bob, team)));
 
-        assertThat(first.record().entities()).containsExactly(ann);
+        assertThat(first.entities()).containsExactly(ann);
         assertThat(problems).singleElement().satisfies(problem -> {
             assertThat(problem.code()).isEqualTo(ProblemCode.TOO_FEW_RELATIONSHIPS);
             assertThat(problem.path()).isEqualTo(team.value());
             assertThat(problem.message()).contains("members");
             assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("Purge " + team.value()));
         });
-        assertThat(both.record().entities()).containsExactly(bob, team);
+        assertThat(both.entities()).containsExactly(bob, team);
         assertThat(tree.view(on(3, 31)).entity(team)).isEmpty();
     }
 
@@ -251,8 +251,8 @@ class PurgeTest {
 
         PurgeResult.Purged result = purgeNow(beta);
 
-        assertThat(result.record().entities()).containsExactly(beta);
-        assertThat(result.record().relationships()).containsExactly(owns);
+        assertThat(result.entities()).containsExactly(beta);
+        assertThat(result.relationships()).containsExactly(owns);
         assertThat(reference.view(on(3, 31)).entity(acme)).as("ACME stays").isPresent();
         assertThat(reference.view(on(3, 31)).navigate(acme, "Owns")).isEmpty();
     }
@@ -263,7 +263,7 @@ class PurgeTest {
 
         PurgeResult.Purged result = purgeNow(alice, alice);
 
-        assertThat(result.record().entities()).containsExactly(alice);
+        assertThat(result.entities()).containsExactly(alice);
     }
 
     @Test
@@ -337,9 +337,9 @@ class PurgeTest {
 
         PurgeResult.Purged result = purged(tree.store().store.purge(purge(tree.folder())));
 
-        assertThat(result.record().entities()).as("the folder, then each file with its chunks")
+        assertThat(result.entities()).as("the folder, then each file with its chunks")
                 .containsExactly(tree.folder(), tree.spreadsheet(), tree.chunk1(), tree.chunk2(), tree.notes());
-        assertThat(result.record().relationships()).as("in the order of their IDs")
+        assertThat(result.relationships()).as("in the order of their IDs")
                 .containsExactly(tree.contains1(), tree.splits1(), tree.splits2(), tree.contains2(), tree.tagged());
         View view = tree.store().view(on(3, 31));
         assertThat(view.entities("Folder")).isEmpty();
@@ -356,7 +356,7 @@ class PurgeTest {
 
         PurgeResult.Purged result = purged(tree.store().store.purge(purge(tree.chunk2(), tree.folder())));
 
-        assertThat(result.record().entities()).containsExactly(tree.chunk2(), tree.folder(), tree.spreadsheet(),
+        assertThat(result.entities()).containsExactly(tree.chunk2(), tree.folder(), tree.spreadsheet(),
                 tree.chunk1(), tree.notes());
     }
 
@@ -366,14 +366,14 @@ class PurgeTest {
 
         PurgeResult.Purged result = purged(tree.store().store.purge(purge(tree.chunk1())));
 
-        assertThat(result.record().entities()).containsExactly(tree.chunk1());
-        assertThat(result.record().relationships()).containsExactly(tree.splits1());
+        assertThat(result.entities()).containsExactly(tree.chunk1());
+        assertThat(result.relationships()).containsExactly(tree.splits1());
         assertThat(tree.store().view(on(3, 31)).entity(tree.spreadsheet())).isPresent();
         assertThat(tree.store().view(on(3, 31)).navigate(tree.spreadsheet(), "Splits")).hasSize(1);
     }
 
     @Test
-    void aCompositionThatEndedLongAgoStillMakesItsTargetPartOfThePurge() {
+    void aTargetThatOnlyThePurgedEntityEverComposedGoesWithItEvenIfTheCompositionEndedLongAgo() {
         Receipt parties = reference.createParties();
         EntityId alice = entity(parties, ALICE);
         EffectivePeriod untilMarch = EffectivePeriod.between(on(1, 1), on(3, 1));
@@ -386,8 +386,90 @@ class PurgeTest {
 
         PurgeResult.Purged result = purgeNow(alice);
 
-        assertThat(result.record().entities()).containsExactly(alice, home);
+        assertThat(result.entities()).containsExactly(alice, home);
         assertThat(reference.view(on(1, 31)).entity(home)).isEmpty();
+    }
+
+    /** A folder and the file that it holds until 1 March and another folder holds from then on. */
+    private record Handover(ReferenceStore store, EntityId first, EntityId second, EntityId file,
+            RelationshipId firstContains, RelationshipId secondContains) {
+    }
+
+    private static Handover aFileThatChangedFolders() {
+        ReferenceStore tree = ReferenceStore.with(TREE);
+        Receipt receipt = tree.commit(Transaction.by("importer")
+                .create(FOLDER, "Folder", from(1, 1), values("name", "Work"))
+                .create(NOTES, "Folder", from(1, 1), values("name", "Archive"))
+                .create(SPREADSHEET, "File", from(1, 1), values("name", "budget.xlsx"))
+                .relate(CONTAINS_1, "Contains", FOLDER, SPREADSHEET, from(1, 1), values()).build());
+        RelationshipId firstContains = relationship(receipt, CONTAINS_1);
+        Receipt moved = tree.commit(Transaction.by("importer")
+                .endDate(firstContains, on(3, 1))
+                .relate(CONTAINS_2, "Contains", entity(receipt, NOTES), entity(receipt, SPREADSHEET), from(3, 1),
+                        values()).build());
+        return new Handover(tree, entity(receipt, FOLDER), entity(receipt, NOTES), entity(receipt, SPREADSHEET),
+                firstContains, relationship(moved, CONTAINS_2));
+    }
+
+    @Test
+    void aTargetThatAnotherEntityComposedTooStaysAndEachOfTheirPurgesIsRefusedForIt() {
+        Handover handover = aFileThatChangedFolders();
+
+        for (EntityId folder : List.of(handover.first(), handover.second())) {
+            List<Problem> problems = rejected(handover.store().store.purge(purge(folder)));
+
+            assertThat(problems).as("the folder " + folder).singleElement().satisfies(problem -> {
+                assertThat(problem.code()).isEqualTo(ProblemCode.TOO_FEW_RELATIONSHIPS);
+                assertThat(problem.path()).isEqualTo(handover.file().value());
+            });
+        }
+        assertThat(handover.store().store.purges()).isEmpty();
+        assertThat(handover.store().view(on(2, 1)).entity(handover.file())).isPresent();
+    }
+
+    @Test
+    void aTargetThatAnotherEntityComposedTooGoesOnceEveryEntityThatComposedItIsPurged() {
+        Handover handover = aFileThatChangedFolders();
+
+        PurgeResult.Purged both = purged(handover.store().store.purge(purge(handover.first(), handover.second())));
+
+        assertThat(both.entities()).as("the folders, then the file that only they composed")
+                .containsExactly(handover.first(), handover.second(), handover.file());
+        assertThat(both.relationships()).containsExactly(handover.firstContains(), handover.secondContains());
+        assertThat(handover.store().view(on(2, 1)).entity(handover.file())).isEmpty();
+    }
+
+    @Test
+    void aTargetThatIsNamedIsPurgedWithoutItsSourcesAndTheOtherSourceRemains() {
+        Handover handover = aFileThatChangedFolders();
+
+        PurgeResult.Purged result = purged(handover.store().store.purge(purge(handover.first(), handover.file())));
+
+        assertThat(result.entities()).containsExactly(handover.first(), handover.file());
+        assertThat(result.relationships()).containsExactly(handover.firstContains(), handover.secondContains());
+        assertThat(handover.store().view(on(4, 1)).entity(handover.second())).as("the other folder stays").isPresent();
+    }
+
+    @Test
+    void aTargetWaitsForItsOtherSourcesThatThePurgeTakesToo() {
+        ReferenceStore tree = ReferenceStore.with(TREE);
+        Receipt receipt = tree.commit(Transaction.by("importer")
+                .create(FOLDER, "Folder", from(1, 1), values("name", "Work"))
+                .create(SPREADSHEET, "File", from(1, 1), values("name", "budget.xlsx"))
+                .create(NOTES, "File", from(1, 1), values("name", "notes.txt"))
+                .create(CHUNK_1, "Chunk", from(1, 1), values("name", "shared"))
+                .relate(CONTAINS_1, "Contains", FOLDER, SPREADSHEET, from(1, 1), values())
+                .relate(CONTAINS_2, "Contains", FOLDER, NOTES, from(1, 1), values())
+                .relate(SPLITS_1, "Splits", SPREADSHEET, CHUNK_1, from(1, 1), values()).build());
+        EntityId chunk = entity(receipt, CHUNK_1);
+        tree.commit(Transaction.by("importer").endDate(relationship(receipt, SPLITS_1), on(3, 1))
+                .relate("Splits", entity(receipt, NOTES), chunk, from(3, 1), values()).build());
+
+        PurgeResult.Purged result = purged(tree.store.purge(purge(entity(receipt, SPREADSHEET),
+                entity(receipt, FOLDER))));
+
+        assertThat(result.entities()).as("the chunk waits for the notes, which the folder takes").containsExactly(
+                entity(receipt, SPREADSHEET), entity(receipt, FOLDER), entity(receipt, NOTES), chunk);
     }
 
     @Test
@@ -400,7 +482,7 @@ class PurgeTest {
 
         PurgeResult.Purged result = purgeNow(acme, beta);
 
-        assertThat(result.record().relationships()).containsExactly(owns);
+        assertThat(result.relationships()).containsExactly(owns);
     }
 
     @Test
@@ -549,11 +631,15 @@ class PurgeTest {
             assertThat(problemsOf(reference.store.commit(purgedTransaction))).as(key).singleElement()
                     .satisfies(problem -> {
                         assertThat(problem.code()).isEqualTo(ProblemCode.IDEMPOTENCY_KEY_PURGED);
-                        assertThat(problem.path()).isEqualTo("@transaction.idempotencyKey");
+                        assertThat(problem.path()).isEqualTo("@transaction");
                         assertThat(problem.message()).contains(key);
                     });
-            assertThat(reference.store.dryRun(purgedTransaction)).as(key + " in a dry run")
-                    .isInstanceOf(DryRunResult.Rejected.class);
+            DryRunResult dryRun = reference.store.dryRun(purgedTransaction);
+            assertThat(dryRun).as(key + " in a dry run").isInstanceOf(DryRunResult.Rejected.class);
+            assertThat(((DryRunResult.Rejected) dryRun).problems()).singleElement().satisfies(problem -> {
+                assertThat(problem.code()).isEqualTo(ProblemCode.IDEMPOTENCY_KEY_PURGED);
+                assertThat(problem.path()).isEqualTo("@transaction");
+            });
         }
         assertThat(reference.store.latestBasis()).as("nothing was recorded").isEqualTo(before);
     }
@@ -593,19 +679,43 @@ class PurgeTest {
         PurgeRecord first = purgeNow(alice).record();
         reference.store.commit(Transaction.by("importer").create("Person", from(1, 1), values("name", "Bob")).build());
         reference.recordedOn(on(3, 2));
-        PurgeRecord second = purged(reference.store.purge(Purge.by("dpo").onBehalfOf("acme").reason("Closed")
+        PurgeRecord second = purged(reference.store.purge(Purge.by("dpo").onBehalfOf("DSR-2026-0043").reason("Closed")
                 .entity(acme).build())).record();
 
         assertThat(reference.store.purges()).containsExactly(first, second);
+        assertThat(first.entities()).isEqualTo(1);
+        assertThat(first.relationships()).isZero();
         assertThat(first.basis()).isEqualTo(new Basis(3));
         assertThat(second.basis()).isEqualTo(new Basis(5));
         assertThat(first.transactionTime()).isEqualTo(on(3, 2));
         assertThat(second.transactionTime()).as("the sequence never goes back").isAfter(first.transactionTime());
-        assertThat(second.onBehalfOf()).contains("acme");
+        assertThat(second.onBehalfOf()).contains("DSR-2026-0043");
         assertThat(reference.store.latestBasis()).isEqualTo(new Basis(5));
         assertThat(reference.store.transactions()).extracting(TransactionRecord::basis)
                 .containsExactly(new Basis(2), new Basis(4));
         assertThatThrownBy(() -> reference.store.purges().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void theStoreTellsWhetherAnIdWasPurgedWithoutListingThePurgedIds() {
+        Receipt parties = reference.createParties();
+        EntityId beta = entity(parties, BETA);
+        EntityId alice = entity(parties, ALICE);
+        RelationshipId employs = relationship(reference.replay(ReferenceStories.rd3Employment(beta, alice)),
+                BETA_EMPLOYS_ALICE);
+        assertThat(reference.store.wasPurged(alice)).isFalse();
+
+        purgeNow(alice);
+
+        assertThat(reference.store.wasPurged(alice)).isTrue();
+        assertThat(reference.store.wasPurged(employs)).as("the ID of a relationship too").isTrue();
+        assertThat(reference.store.wasPurged(beta)).isFalse();
+        assertThat(reference.store.wasPurged(ReferenceStore.id(99))).isFalse();
+        assertThatThrownBy(() -> reference.store.wasPurged(null)).isInstanceOf(NullPointerException.class);
+        assertThat(reference.store.purges()).singleElement().satisfies(record -> {
+            assertThat(record.entities()).isEqualTo(1);
+            assertThat(record.relationships()).isEqualTo(1);
+        });
     }
 
     @Test
@@ -660,11 +770,11 @@ class PurgeTest {
     void aPurgeRecordsThePartyActedFor() {
         EntityId alice = entity(reference.createParties(), ALICE);
 
-        PurgeRecord record = purged(reference.store.purge(Purge.by("dpo").onBehalfOf("alice")
+        PurgeRecord record = purged(reference.store.purge(Purge.by("dpo").onBehalfOf("DSR-2026-0042")
                 .reason("Erasure request").entity(alice).build())).record();
 
         assertThat(record.principal()).isEqualTo("dpo");
-        assertThat(record.onBehalfOf()).contains("alice");
+        assertThat(record.onBehalfOf()).contains("DSR-2026-0042");
         assertThat(record.reason()).isEqualTo("Erasure request");
         assertThat(new ArrayList<>(reference.store.purges())).containsExactly(record);
     }

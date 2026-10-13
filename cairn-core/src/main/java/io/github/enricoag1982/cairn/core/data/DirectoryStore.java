@@ -13,6 +13,7 @@ import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.DurableStore;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Purge;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
@@ -247,6 +248,9 @@ public final class DirectoryStore implements DurableStore {
 
     @Override
     public PurgeResult purge(Purge purge) {
+        // A thread that holds the writer lock, such as a rule that purges, must not take the snapshot lock after it, which
+        // close() takes first: refuse it before any lock is taken.
+        store.refuseWriterLockHolder();
         // The snapshot lock first, as close() takes it, so that no snapshot file is being written while the purge removes
         // the data, and none is written after it that holds the data: the writer lock comes second.
         snapshotLock.lock();
@@ -262,6 +266,12 @@ public final class DirectoryStore implements DurableStore {
     public List<PurgeRecord> purges() {
         requireOpen();
         return store.purges();
+    }
+
+    @Override
+    public boolean wasPurged(Id id) {
+        requireOpen();
+        return store.wasPurged(id);
     }
 
     /**

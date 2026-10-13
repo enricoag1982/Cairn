@@ -25,8 +25,9 @@ import java.util.Optional;
  * above the basis is left out.
  *
  * <p>A purge is the exception: it removes what was published (ADR-0024). The durable store therefore writes no snapshot
- * file while a purge runs, and a snapshot file holds the purge records and the purged idempotency keys besides the
- * data that remains, so that the purged IDs and keys stay unusable.
+ * file while a purge runs, and a snapshot file holds the purge records, the digests of the purged IDs and the purged
+ * idempotency keys besides the data that remains, so that the purged IDs and keys stay unusable without the IDs being
+ * kept.
  */
 final class StoreImage {
 
@@ -55,6 +56,7 @@ final class StoreImage {
         List<PurgeRecord> purges = store.purges().stream()
                 .filter(record -> record.basis().compareTo(basis) <= 0)
                 .toList();
+        List<String> purgedIds = store.purgedDigests().stream().sorted().toList();
         List<String> purgedKeys = store.purgedKeys().stream().sorted().toList();
         Instant lastTime = null;
         for (SchemaRecord record : schema) {
@@ -67,7 +69,7 @@ final class StoreImage {
             lastTime = later(lastTime, record.transactionTime());
         }
         return new Snapshots.Content(basis, Optional.ofNullable(lastTime), schema, transactions, keyed, purges,
-                purgedKeys, () -> histories(store, basis));
+                purgedIds, purgedKeys, () -> histories(store, basis));
     }
 
     private static Instant later(Instant first, Instant second) {

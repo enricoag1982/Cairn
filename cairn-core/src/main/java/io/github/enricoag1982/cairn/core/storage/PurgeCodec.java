@@ -1,17 +1,17 @@
 package io.github.enricoag1982.cairn.core.storage;
 
-import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
-import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.schema.Basis;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
  * Writes and reads a {@link PurgeRecord} in format version 1: the basis, the transaction time, the principal, the party
- * acted for, the reason, and the IDs of the entities and of the relationships that the purge removed. The log writes it
- * after a kind byte, and a snapshot file writes it in a frame of its own.
+ * acted for, the reason, and the numbers of entities and relationships that the purge removed. The log writes it after a
+ * kind byte, followed by the digests of the removed IDs, and a snapshot file writes it in a frame of its own. Digests are
+ * written as their 32 bytes each.
  */
 final class PurgeCodec {
 
@@ -24,8 +24,8 @@ final class PurgeCodec {
         out.writeText(record.principal());
         out.writeOptionalText(record.onBehalfOf());
         out.writeText(record.reason());
-        out.writeAll(record.entities(), (encoder, id) -> encoder.writeText(id.value()));
-        out.writeAll(record.relationships(), (encoder, id) -> encoder.writeText(id.value()));
+        out.writeInt(record.entities());
+        out.writeInt(record.relationships());
     }
 
     static PurgeRecord read(Decoder in) {
@@ -34,8 +34,41 @@ final class PurgeCodec {
         String principal = in.readText();
         Optional<String> onBehalfOf = in.readOptionalText();
         String reason = in.readText();
-        List<EntityId> entities = in.readAll(decoder -> new EntityId(decoder.readText()));
-        List<RelationshipId> relationships = in.readAll(decoder -> new RelationshipId(decoder.readText()));
+        int entities = in.readInt();
+        int relationships = in.readInt();
+        if (entities < 0 || relationships < 0) {
+            throw new CorruptRecordException("A purge removes a number of entities and relationships that is not "
+                    + "negative, but the record says " + entities + " and " + relationships + ".");
+        }
         return new PurgeRecord(basis, transactionTime, principal, onBehalfOf, reason, entities, relationships);
+    }
+
+    static void writeDigest(Encoder out, String digest) {
+        out.writeRaw(IdDigests.toBytes(digest));
+    }
+
+    static String readDigest(Decoder in) {
+        byte[] bytes = new byte[IdDigests.LENGTH];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) in.readByte();
+        }
+        return IdDigests.fromBytes(bytes);
+    }
+
+    static void writeDigests(Encoder out, List<String> digests) {
+        out.writeAll(digests, PurgeCodec::writeDigest);
+    }
+
+    static List<String> readDigests(Decoder in) {
+        int count = in.readInt();
+        if (count < 0 || (long) count * IdDigests.LENGTH > in.remaining()) {
+            throw new CorruptRecordException("The count " + count + " of digests exceeds the " + in.remaining()
+                    + " bytes that are left.");
+        }
+        List<String> digests = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            digests.add(readDigest(in));
+        }
+        return digests;
     }
 }

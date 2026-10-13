@@ -29,8 +29,8 @@ import java.util.function.Function;
  * file of the directory {@code snapshots} named after that basis. After the header, the file is a sequence of frames, as
  * in the log, each holding one item: the basis and the time of the latest transaction, then the schema transactions as
  * their log records, the transaction records, the transactions with an idempotency key and their receipts, the purge
- * records, the idempotency keys whose transactions a purge removed, and the history of each entity and relationship; an
- * end frame closes the file and counts the frames before it. A file is
+ * records, the digests of the IDs that purges removed, the idempotency keys whose transactions a purge removed, and the
+ * history of each entity and relationship; an end frame closes the file and counts the frames before it. A file is
  * <em>complete</em> only if every frame matches its checksum and the end frame is last.
  *
  * <p>A snapshot is written to a temporary file in the same directory, forced to disk and renamed, and the directory is
@@ -44,6 +44,7 @@ public final class Snapshots {
     private static final int HISTORY = 19;
     private static final int PURGE = 20;
     private static final int PURGED_KEY = 21;
+    private static final int PURGED_ID = 22;
     private static final int END = 31;
 
     /** The number of valid snapshot files to keep. */
@@ -89,6 +90,14 @@ public final class Snapshots {
         void purge(PurgeRecord record);
 
         /**
+         * The digest of the ID of an entity or relationship that a purge removed before the snapshot: the store never
+         * holds the ID itself, only this, which it uses to refuse the ID.
+         *
+         * @param digest the {@linkplain IdDigests digest} of the ID
+         */
+        void purgedId(String digest);
+
+        /**
          * An idempotency key whose transaction wrote data that a purge removed, so that the store no longer holds the
          * transaction. Repeating the key is refused.
          *
@@ -113,7 +122,8 @@ public final class Snapshots {
      * @param schema              the schema transactions at or below the basis, in order
      * @param transactions        the data transactions at or below the basis, in order
      * @param keyed               the transactions with an idempotency key at or below the basis
-     * @param purges              the purges at or below the basis, in order
+     * @param purges              the purge records at or below the basis, in order
+     * @param purgedIds           the digests of the IDs that purges removed
      * @param purgedKeys          the idempotency keys whose transactions wrote data that a purge removed
      * @param histories           the entities and relationships, each with the timelines recorded at or below the basis
      */
@@ -124,6 +134,7 @@ public final class Snapshots {
             List<TransactionRecord> transactions,
             List<KeyedTransaction> keyed,
             List<PurgeRecord> purges,
+            List<String> purgedIds,
             List<String> purgedKeys,
             Iterable<History> histories) {
 
@@ -137,6 +148,7 @@ public final class Snapshots {
             transactions = List.copyOf(transactions);
             keyed = List.copyOf(keyed);
             purges = List.copyOf(purges);
+            purgedIds = List.copyOf(purgedIds);
             purgedKeys = List.copyOf(purgedKeys);
             Objects.requireNonNull(histories, "histories");
         }
@@ -222,6 +234,13 @@ public final class Snapshots {
             Encoder frame = Encoder.framed();
             frame.writeByte(PURGE);
             PurgeCodec.write(frame, purge);
+            out.write(frame.finishFrame());
+            frames++;
+        }
+        for (String digest : content.purgedIds()) {
+            Encoder frame = Encoder.framed();
+            frame.writeByte(PURGED_ID);
+            PurgeCodec.writeDigest(frame, digest);
             out.write(frame.finishFrame());
             frames++;
         }
@@ -439,6 +458,7 @@ public final class Snapshots {
                         case KEYED -> receiver.keyed(decode(frame.payload(), Snapshots::readKeyed));
                         case HISTORY -> receiver.history(decode(frame.payload(), EffectCodec::readHistory));
                         case PURGE -> receiver.purge(decode(frame.payload(), PurgeCodec::read));
+                        case PURGED_ID -> receiver.purgedId(decode(frame.payload(), PurgeCodec::readDigest));
                         case PURGED_KEY -> receiver.purgedKey(decode(frame.payload(), Decoder::readText));
                         case END -> {
                             return;

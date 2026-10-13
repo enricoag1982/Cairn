@@ -97,6 +97,27 @@ public final class CommitSequence {
     }
 
     /**
+     * Refuses the calling thread, without taking any lock, if it holds the writer lock: it is committing, registering a
+     * schema, or running rules. A caller that has to take a lock of its own before the writer lock, in an order that
+     * others keep, calls it first, because the thread that holds the writer lock must not take that lock afterwards. A
+     * refusal while the thread runs rules is {@linkplain #refusedWrites() counted}, like that of
+     * {@link #underWriterLock(Supplier)}.
+     *
+     * @throws IllegalStateException if the calling thread holds the writer lock
+     */
+    public void refuseWriterLockHolder() {
+        if (writerLock.isHeldByCurrentThread()) {
+            if (runningRules) {
+                refusedWrites++;
+                throw new IllegalStateException("The store is running rules, and a rule must not write: commits, dry "
+                        + "runs, schema registrations and purges are refused until the rules have returned.");
+            }
+            throw new IllegalStateException("The calling thread holds the writer lock of the store, because it is "
+                    + "committing or registering a schema, so it cannot start a purge.");
+        }
+    }
+
+    /**
      * Runs an action in which the writer runs rules. While it runs, {@link #underWriterLock(Supplier)} throws an
      * {@code IllegalStateException} in the writer thread, so that a commit, a dry run or a schema registration that a
      * rule starts fails. Other threads wait for the writer lock as before. Reads are not affected: they take no lock.

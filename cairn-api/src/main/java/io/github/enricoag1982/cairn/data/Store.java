@@ -30,7 +30,7 @@ public interface Store {
      * <p>A transaction with an idempotency key that a committed transaction already used, and that is equal to it, gets
      * the earlier receipt and records nothing; with other content it is rejected. A transaction with the key of one
      * that wrote data which a {@linkplain #purge(Purge) purge} removed is rejected with the problem
-     * {@code IDEMPOTENCY_KEY_PURGED}, whatever its content.
+     * {@code IDEMPOTENCY_KEY_PURGED}, at {@code @transaction}, whatever its content.
      *
      * @param transaction the transaction
      * @return the receipt, or every problem found
@@ -88,37 +88,57 @@ public interface Store {
     /**
      * Purges entities: removes them from all of history (ADR-0024, capability {@code purge}). It removes every version
      * of the named entities at every basis, every relationship from or to them with all its versions, and the targets of
-     * their compositions, as end-dating ends them, with their own relationships. Afterwards every view, at every basis
-     * and including views that were opened before the purge, and every timeline and query reads as if the removed
-     * entities and relationships had never been recorded. The purge is recorded as a transaction of its own, which
-     * {@link #purges()} lists; a durable store has removed the data from its files too before the call returns. Rules do
-     * not run, because a purge writes no versions.
+     * their compositions that no other entity ever composed, with their own relationships. Afterwards every view, at
+     * every basis and including views that were opened before the purge, and every timeline and query reads as if the
+     * removed entities and relationships had never been recorded. The purge is recorded as a transaction of its own,
+     * which {@link #purges()} lists with numbers, not IDs; the IDs of what was removed are returned to the caller, once.
+     * A durable store has removed the data from its files too before the call returns. Rules do not run, because a purge
+     * writes no versions.
      *
      * <p>The IDs of what was removed are never given to a new entity or relationship, and a write that supplies one is
-     * rejected. The idempotency keys of transactions that wrote removed data stay used, and a transaction that repeats
-     * one is rejected.
+     * rejected; the store keeps digests of them for that, and {@link #wasPurged(Id)} answers from them. The idempotency
+     * keys of transactions that wrote removed data stay used, and a transaction that repeats one is rejected.
      *
      * <p>A purge is rejected, and nothing is changed and no basis is used, if it names an ID that no entity has
      * ({@code UNKNOWN_ENTITY}, at {@code @purge.<n>}, with {@code n} the position in the purge counted from 0), or if
      * an entity that remains would be left with fewer relationships of a type than the type's minimum at some point in
      * effective time in which the entity exists ({@code TOO_FEW_RELATIONSHIPS}, at the entity's ID, with the hint to
-     * purge that entity too). Every problem is reported.
+     * purge that entity too). That includes the target of a composition that another entity composed too: it is purged
+     * with its sources only if every composition that ever had it as target has a source in the purge, and otherwise it
+     * stays, and misses its source while the purge's entity composed it. Every problem is reported.
      *
-     * <p>A view that reads while a purge runs may see part of it, but never a relationship whose end is missing; once
-     * the purge has returned, every view reads the purged state. Applications should not rely on views across a purge.
+     * <p>Once the purge has returned, every view reads the purged state. While it runs, a single lookup of a view never
+     * finds a relationship whose end is missing, because the relationships are removed before the entities, but a view
+     * that reads during a purge may see part of it: a relationship that was read before its end was removed has no end
+     * when the end is read next, and a read that lists versions, such as {@code navigateTimeline}, may list a
+     * relationship whose end is already gone. Applications should not rely on views across a purge.
      *
-     * @param purge the entities to purge, with who asks, for whom and why
-     * @return the record of the purge, or every problem found
-     * @throws IllegalStateException if a rule of this store calls it while the store runs rules: a rule must not write
+     * @param purge the entities to purge, with who asks, for whom and why; the principal, the party and the reason stay
+     *              in the purge record, so they must not identify the data subject
+     * @return the record of the purge with the IDs it removed, or every problem found
+     * @throws IllegalStateException if a rule of this store calls it while the store runs rules, or the calling thread is
+     *                               committing: a rule must not write
      */
     PurgeResult purge(Purge purge);
 
     /**
-     * Lists the purges, with their principal, party acted for, reason, basis and transaction time, and the IDs they
-     * removed. The records of the data transactions that came before them are still listed by {@link #transactions()},
-     * which lists data transactions only.
+     * Lists the purge records: for each purge its basis, transaction time, principal, party acted for and reason, and
+     * the numbers of entities and relationships it removed, but not what it removed. The records of the data
+     * transactions that came before them are still listed by {@link #transactions()}, which lists data transactions
+     * only.
      *
-     * @return the purges, oldest first
+     * @return the purge records, oldest first
      */
     List<PurgeRecord> purges();
+
+    /**
+     * Tells whether an entity or relationship with this ID was purged. The store keeps digests of the IDs that purges
+     * removed, not the IDs, so it can answer for an ID that it is asked about but cannot list them. A purged ID is
+     * never given to a new entity or relationship, and is refused when a write supplies it. The ID of an entity and the
+     * ID of a relationship are never the same, so the answer does not depend on which kind of ID is given.
+     *
+     * @param id the ID of an entity or relationship
+     * @return {@code true} if a purge removed what had this ID
+     */
+    boolean wasPurged(Id id);
 }

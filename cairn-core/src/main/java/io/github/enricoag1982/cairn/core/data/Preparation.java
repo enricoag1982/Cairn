@@ -75,7 +75,7 @@ final class Preparation {
      * @param index               the schema the transaction is validated against
      * @param storedEntities      the entities of the store, ordered by ID
      * @param storedRelationships the relationships of the store, ordered by ID
-     * @param purgedIds           the IDs that purges removed, which no new entity or relationship may have
+     * @param purgedDigests       the digests of the IDs that purges removed, which no new entity or relationship may have
      * @param generator           a copy of the store's ID generator, which this preparation advances
      * @param commit              the basis and transaction time the transaction would get
      * @param checks              the value checks
@@ -84,11 +84,11 @@ final class Preparation {
      *                            writes while the rules run
      */
     Preparation(Transaction transaction, SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
-            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedIds, IdGenerator generator,
+            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedDigests, IdGenerator generator,
             CommitSequence.Commit commit, ValueChecks checks, Rules rules, CommitSequence sequence) {
         this.transaction = transaction;
         this.commit = commit;
-        this.workspace = new Workspace(index, storedEntities, storedRelationships, purgedIds, generator, problems);
+        this.workspace = new Workspace(index, storedEntities, storedRelationships, purgedDigests, generator, problems);
         WriteChecks writeChecks = new WriteChecks(problems);
         this.creations = new Creations(workspace, writeChecks, commit);
         this.amendments = new Amendments(workspace, writeChecks, commit);

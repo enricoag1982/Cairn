@@ -256,6 +256,27 @@ class CommitSequenceTest {
     }
 
     @Test
+    void aCallerThatMustTakeAnotherLockFirstRefusesTheThreadThatHoldsTheWriterLockWithoutTakingAnyLock() {
+        CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
+
+        sequence.refuseWriterLockHolder();
+
+        sequence.underWriterLock(() -> {
+            assertThatThrownBy(sequence::refuseWriterLockHolder).isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("writer lock");
+            assertThat(sequence.refusedWrites()).as("a thread that only commits is not counted as a rule").isZero();
+            sequence.whileRunningRules(() -> {
+                assertThatThrownBy(sequence::refuseWriterLockHolder).isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("running rules");
+                assertThat(sequence.refusedWrites()).as("a refusal while rules run is counted").isEqualTo(1);
+                return null;
+            });
+            return null;
+        });
+        sequence.refuseWriterLockHolder();
+    }
+
+    @Test
     void runningRulesNeedsTheWriterLockAndOnlyRefusesTheThreadThatHoldsIt() throws InterruptedException {
         CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
         assertThatThrownBy(() -> sequence.whileRunningRules(() -> "unlocked"))

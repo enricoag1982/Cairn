@@ -42,6 +42,7 @@ final class RecordCodec {
             case PurgeLogRecord purge -> {
                 out.writeByte(PURGE);
                 PurgeCodec.write(out, purge.purge());
+                PurgeCodec.writeDigests(out, purge.removed());
             }
         }
         return out.finishFrame();
@@ -63,7 +64,7 @@ final class RecordCodec {
             LogRecord record = switch (kind) {
                 case SCHEMA -> SchemaRecordReader.read(in);
                 case DATA -> DataRecordReader.read(in);
-                case PURGE -> new PurgeLogRecord(PurgeCodec.read(in));
+                case PURGE -> new PurgeLogRecord(PurgeCodec.read(in), PurgeCodec.readDigests(in));
                 default -> throw new CorruptRecordException("The record kind " + kind + " is not known.");
             };
             in.requireEnd();

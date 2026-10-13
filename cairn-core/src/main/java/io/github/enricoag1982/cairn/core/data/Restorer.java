@@ -18,8 +18,9 @@ import java.util.Map;
 /**
  * Puts a store back the way a log and a snapshot file recorded it (design D4 of {@code add-durable-commit-log} and of
  * {@code add-purge}): the schema transactions, the timelines of entities and relationships, the transaction records, the
- * idempotency keys with their receipts, and the purges: a purge record of a snapshot file with the purged IDs and keys,
- * and one of the log, which removes what it lists. It applies what it is given and checks nothing but that a change finds what it changes: it never
+ * idempotency keys with their receipts, and the purges: the purge records of a snapshot file with the digests of the
+ * purged IDs and the purged keys, and those of the log, which remove the entities and relationships whose IDs have the
+ * digests they list. It applies what it is given and checks nothing but that a change finds what it changes: it never
  * validates, runs rules, or asks the clock or the ID generator. Used once, on an empty store, by one thread, before the
  * store is used.
  */
@@ -54,6 +55,11 @@ final class Restorer implements Recovery.Replay {
     }
 
     @Override
+    public void purgedId(String digest) {
+        store.purgedDigests().add(digest);
+    }
+
+    @Override
     public void purgedKey(String key) {
         store.purgedKeys().add(key);
     }
@@ -84,7 +90,7 @@ final class Restorer implements Recovery.Replay {
         switch (record) {
             case SchemaRecord schema -> store.registry().restore(schema);
             case DataRecord data -> restore(data);
-            case PurgeLogRecord purge -> store.applyPurge(purge.purge());
+            case PurgeLogRecord purge -> store.replayPurge(purge);
         }
     }
 

@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.schema.Problems;
+import io.github.enricoag1982.cairn.core.storage.IdDigests;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
@@ -26,7 +27,7 @@ final class Workspace {
     private final SchemaIndex index;
     private final Map<EntityId, StoredEntity> storedEntities;
     private final Map<RelationshipId, StoredRelationship> storedRelationships;
-    private final Set<String> purgedIds;
+    private final Set<String> purgedDigests;
     private final IdGenerator generator;
     private final ProblemLog problems;
     /** The entities and relationships the transaction touches, in the order of the first touch. */
@@ -40,18 +41,18 @@ final class Workspace {
      * @param index               the schema the transaction is validated against
      * @param storedEntities      the entities of the store, ordered by ID
      * @param storedRelationships the relationships of the store, ordered by ID
-     * @param purgedIds           the IDs of the entities and relationships that purges removed, which are never given
-     *                            to a new entity or relationship
+     * @param purgedDigests       the digests of the IDs of the entities and relationships that purges removed, which are
+     *                            never given to a new entity or relationship
      * @param generator           a copy of the store's ID generator, which the preparation advances
      * @param problems            where problems about references and IDs are reported
      */
     Workspace(SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
-            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedIds, IdGenerator generator,
-            ProblemLog problems) {
+            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedDigests,
+            IdGenerator generator, ProblemLog problems) {
         this.index = index;
         this.storedEntities = storedEntities;
         this.storedRelationships = storedRelationships;
-        this.purgedIds = purgedIds;
+        this.purgedDigests = purgedDigests;
         this.generator = generator;
         this.problems = problems;
     }
@@ -192,9 +193,12 @@ final class Workspace {
         return storedEntities.containsKey(new EntityId(text)) || storedRelationships.containsKey(new RelationshipId(text));
     }
 
-    /** Tells whether a purge removed the entity or relationship that had an ID (capability {@code purge}). */
+    /**
+     * Tells whether a purge removed the entity or relationship that had an ID (capability {@code purge}), by the digest
+     * of the ID, which is all the store keeps of it. A store that never purged computes nothing.
+     */
     boolean purged(String text) {
-        return purgedIds.contains(text);
+        return !purgedDigests.isEmpty() && purgedDigests.contains(IdDigests.of(text));
     }
 
     /**

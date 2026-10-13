@@ -319,11 +319,13 @@ class RecordCodecTest {
 
     // ------------------------------------------------------------------ purges
 
+    private static final String DIGEST_1 = IdDigests.of("e-1");
+    private static final String DIGEST_2 = IdDigests.of("r-1");
+
     @Test
     void aPurgeRecordWithEveryFieldSetReadsBackEqual() {
-        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(7), T1, "dpo", Optional.of("alice"),
-                "Erasure request, with ünïcode and 😀", List.of(new EntityId("e-1"), new EntityId("e-3")),
-                List.of(new RelationshipId("r-1"), new RelationshipId("r-2"))));
+        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(7), T1, "dpo", Optional.of("DSR-2026-0042"),
+                "Erasure request, with ünïcode and 😀", 2, 1), List.of(DIGEST_1, DIGEST_2, IdDigests.of("e-3")));
 
         LogRecord read = roundTrip(record);
 
@@ -334,17 +336,30 @@ class RecordCodecTest {
     }
 
     @Test
-    void aPurgeRecordWithoutAPartyActedForOrRelationshipsReadsBackEqual() {
-        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(2), T2, "dpo", Optional.empty(), "Why",
-                List.of(new EntityId("e-1")), List.of()));
+    void aPurgeRecordWithoutAPartyActedForOrDigestsReadsBackEqual() {
+        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(2), T2, "dpo", Optional.empty(), "Why", 0,
+                0), List.of());
 
         assertThat(roundTrip(record)).isEqualTo(record);
     }
 
     @Test
+    void aPurgeRecordHoldsNoIdInClearText() {
+        EntityId alice = new EntityId("00000000-0000-7000-8000-000000000003");
+        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(2), T2, "dpo", Optional.empty(), "Why", 1,
+                0), List.of(IdDigests.of(alice.value())));
+
+        byte[] frame = RecordCodec.encode(record);
+
+        assertThat(new String(frame, StandardCharsets.ISO_8859_1)).doesNotContain(alice.value());
+        assertThat(IdDigests.of(alice.value())).hasSize(64).matches("[0-9a-f]{64}");
+        assertThat(IdDigests.of(alice.value())).isNotEqualTo(IdDigests.of(alice.value() + " "));
+    }
+
+    @Test
     void aPurgeRecordThatIsCutShortOrHasBytesLeftOverIsCorrupt() {
-        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(2), T2, "dpo", Optional.of("alice"),
-                "Why", List.of(new EntityId("e-1")), List.of(new RelationshipId("r-1"))));
+        PurgeLogRecord record = new PurgeLogRecord(new PurgeRecord(new Basis(2), T2, "dpo", Optional.of("DSR-1"),
+                "Why", 1, 1), List.of(DIGEST_1, DIGEST_2));
         byte[] frame = RecordCodec.encode(record);
         byte[] payload = Arrays.copyOfRange(frame, Encoder.FRAME_HEADER, frame.length);
 
@@ -353,6 +368,33 @@ class RecordCodecTest {
                 .isInstanceOf(CorruptRecordException.class);
         assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, Arrays.copyOf(payload, payload.length + 1)))
                 .isInstanceOf(CorruptRecordException.class);
+    }
+
+    @Test
+    void aPurgeRecordWithANegativeCountOrADigestCountThatExceedsTheRecordIsCorrupt() {
+        Encoder negative = Encoder.plain();
+        negative.writeByte(RecordCodec.PURGE);
+        PurgeCodec.write(negative, new PurgeRecord(new Basis(2), T2, "dpo", Optional.empty(), "Why", 1, 1));
+        byte[] payload = negative.toByteArray();
+        // The entity count is the first of the last eight bytes: make it -1.
+        payload[payload.length - 8] = (byte) 0xFF;
+        payload[payload.length - 7] = (byte) 0xFF;
+        payload[payload.length - 6] = (byte) 0xFF;
+        payload[payload.length - 5] = (byte) 0xFF;
+        assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, withNoDigests(payload)))
+                .isInstanceOf(CorruptRecordException.class);
+
+        Encoder tooMany = Encoder.plain();
+        tooMany.writeByte(RecordCodec.PURGE);
+        PurgeCodec.write(tooMany, new PurgeRecord(new Basis(2), T2, "dpo", Optional.empty(), "Why", 1, 1));
+        tooMany.writeInt(1_000_000);
+        assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, tooMany.toByteArray()))
+                .isInstanceOf(CorruptRecordException.class);
+    }
+
+    private static byte[] withNoDigests(byte[] payload) {
+        byte[] extended = Arrays.copyOf(payload, payload.length + 4);
+        return extended;
     }
 
     // ------------------------------------------------------------------ primitives

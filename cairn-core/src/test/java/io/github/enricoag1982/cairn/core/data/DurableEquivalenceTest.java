@@ -146,7 +146,7 @@ class DurableEquivalenceTest {
 
     /** Beta, with the account and the customer role that need it: nothing that remains is left without a relationship. */
     private static Purge betaWithWhatNeedsIt(ReferenceTales.Told told) {
-        return Purge.by("dpo").onBehalfOf("beta").reason("Closure")
+        return Purge.by("dpo").onBehalfOf("DSR-2026-0044").reason("Closure")
                 .entity(entity(told.parties, BETA)).entity(entity(told.accounts, A1))
                 .entity(entity(told.customer, CUSTOMER_ROLE)).build();
     }

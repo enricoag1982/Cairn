@@ -11,16 +11,22 @@ import java.util.Optional;
  * recorded.
  *
  * <p>A purge removes every version of the named entities at every basis, every relationship from or to them with all its
- * versions, and, as end-dating ends them, the targets of their compositions, together with their relationships. A store
- * refuses a purge that names an ID that no entity has, or that would leave an entity without a relationship that its
- * type requires.
+ * versions, and the targets of their compositions that no other entity ever composed, together with their
+ * relationships. A store refuses a purge that names an ID that no entity has, or that would leave an entity without a
+ * relationship that its type requires, such as the target of a composition that another entity composed too.
  *
- * <p>Build one with {@link #by(String)}. Unlike a transaction, a purge that has no reason, no entity or no principal is a
- * programming error: the constructor and the builder throw an {@code IllegalArgumentException}.
+ * <p>The principal, the party acted for and the reason stay in the store's {@linkplain PurgeRecord purge record} for as
+ * long as the store lives. Do not put the identity of the data subject in them, nor anything that identifies the person
+ * whose data is erased: refer to the request by a ticket or case reference instead, such as {@code DSR-2026-0042}.
  *
- * @param principal  who asks for the purge, for example {@code dpo}
- * @param onBehalfOf the party the principal acts for, if any, such as the person who asked for the erasure
- * @param reason     why the entities are purged; never blank
+ * <p>Build one with {@link #by(String)}. Unlike a transaction, a purge without a principal, a reason or an entity is a
+ * programming error: a component that is null throws a {@code NullPointerException}, and one that is blank, or an empty
+ * list of entities, throws an {@code IllegalArgumentException}, from the constructor and from the builder alike.
+ *
+ * @param principal  who asks for the purge, for example {@code dpo}; never blank
+ * @param onBehalfOf the party the principal acts for, if any, such as the controller that ordered the erasure; not the
+ *                   data subject
+ * @param reason     why the entities are purged, such as a ticket reference; never blank
  * @param entities   the entities to purge, by ID, in the order given; never empty. The targets of their compositions
  *                   are purged with them and are not named here
  */
@@ -29,6 +35,7 @@ public record Purge(String principal, Optional<String> onBehalfOf, String reason
     /**
      * Rejects null components, and copies the entities.
      *
+     * @throws NullPointerException     if a component is null
      * @throws IllegalArgumentException if the principal or the reason is blank, or if no entity is named
      */
     public Purge {
@@ -75,7 +82,7 @@ public record Purge(String principal, Optional<String> onBehalfOf, String reason
         /**
          * Names the party the principal acts for.
          *
-         * @param party the party, for example the identifier of the person who asked for the erasure
+         * @param party the party, for example the controller that ordered the erasure; not the data subject
          * @return this builder
          */
         public Builder onBehalfOf(String party) {
@@ -86,7 +93,8 @@ public record Purge(String principal, Optional<String> onBehalfOf, String reason
         /**
          * Gives the reason for the purge.
          *
-         * @param reason the reason, in words; must not be blank
+         * @param reason the reason, in words or as a ticket reference; must not be blank, and must not identify the
+         *               data subject
          * @return this builder
          */
         public Builder reason(String reason) {
@@ -109,10 +117,11 @@ public record Purge(String principal, Optional<String> onBehalfOf, String reason
          * Builds the purge.
          *
          * @return the purge
-         * @throws IllegalArgumentException if the principal or the reason is blank or missing, or if no entity was added
+         * @throws NullPointerException     if the principal is null, or no reason was given
+         * @throws IllegalArgumentException if the principal or the reason is blank, or if no entity was added
          */
         public Purge build() {
-            return new Purge(principal, onBehalfOf, reason == null ? "" : reason, entities);
+            return new Purge(principal, onBehalfOf, reason, entities);
         }
     }
 }

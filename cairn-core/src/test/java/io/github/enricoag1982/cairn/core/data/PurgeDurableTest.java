@@ -11,37 +11,49 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.enricoag1982.cairn.core.IdGenerators;
 import io.github.enricoag1982.cairn.core.storage.CommitLog;
+import io.github.enricoag1982.cairn.core.storage.IdDigests;
 import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.EntityRule;
+import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Purge;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
+import io.github.enricoag1982.cairn.data.RuleContext;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
+import io.github.enricoag1982.cairn.fixtures.TotalOwnershipRule;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -200,7 +212,7 @@ class PurgeDurableTest {
         Transaction bob = keyed("bob", Transaction.by("importer").create("Person", from(1, 1), values("name", "Bob"))
                 .build());
         Receipt bobReceipt = DurableFixture.commit(store, bob);
-        PurgeRecord second = purged(store.purge(Purge.by("dpo").onBehalfOf("bob").reason("Closed")
+        PurgeRecord second = purged(store.purge(Purge.by("dpo").onBehalfOf("DSR-2026-0045").reason("Closed")
                 .entity((EntityId) bobReceipt.created().getFirst()).build()));
         store.close();
 
@@ -210,7 +222,7 @@ class PurgeDurableTest {
         assertThat(reopened.latestBasis()).isEqualTo(second.basis());
         assertThat(problemsOf(reopened.commit(told.keyed()))).singleElement().satisfies(problem -> {
             assertThat(problem.code()).isEqualTo(ProblemCode.IDEMPOTENCY_KEY_PURGED);
-            assertThat(problem.path()).isEqualTo("@transaction.idempotencyKey");
+            assertThat(problem.path()).isEqualTo("@transaction");
         });
         assertThat(problemsOf(reopened.commit(bob))).singleElement()
                 .satisfies(problem -> assertThat(problem.code()).isEqualTo(ProblemCode.IDEMPOTENCY_KEY_PURGED));
@@ -253,10 +265,13 @@ class PurgeDurableTest {
         DirectoryStore recovered = durable.open();
 
         assertThat(recovered.purges()).singleElement().satisfies(record -> {
-            assertThat(record.entities()).containsExactly(told.alice());
-            assertThat(record.relationships()).containsExactly(told.employs());
+            assertThat(record.entities()).isEqualTo(1);
+            assertThat(record.relationships()).isEqualTo(1);
             assertThat(record.basis()).isEqualTo(new Basis(4));
         });
+        assertThat(recovered.wasPurged(told.alice())).isTrue();
+        assertThat(recovered.wasPurged(told.employs())).isTrue();
+        assertThat(recovered.wasPurged(told.beta())).isFalse();
         assertThat(names(StoreFiles.snapshots(directory))).as("recovery wrote a snapshot file at the purge")
                 .containsExactly(String.format("%020d.snapshot", 4));
         assertThat(names(StoreFiles.segments(directory))).as("and left only the segment that follows it")
@@ -310,16 +325,136 @@ class PurgeDurableTest {
         DurableFixture.crash(store);
         CommitLog log = CommitLog.open(directory, latest.value() + 1, CommitLog.DEFAULT_SEGMENT_LIMIT);
         log.append(new PurgeLogRecord(new PurgeRecord(new Basis(latest.value() + 1),
-                Instant.parse("2027-01-01T00:00:00Z"), "dpo", Optional.empty(), "Erasure request",
-                List.of(UNKNOWN), List.of())));
+                Instant.parse("2027-01-01T00:00:00Z"), "dpo", Optional.empty(), "Erasure request", 1, 0),
+                List.of(IdDigests.of(UNKNOWN.value()))));
         log.close();
         Map<String, byte[]> before = StoreFiles.contents(directory);
 
         assertThatThrownBy(() -> durable.open()).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("the record cannot be applied").hasMessageContaining(UNKNOWN.value());
+                .hasMessageContaining("the record cannot be applied").hasMessageContaining("purge of basis");
 
         assertThat(StoreFiles.contents(directory)).as("no file was changed").containsOnlyKeys(before.keySet())
                 .allSatisfy((name, bytes) -> assertThat(bytes).as(name).isEqualTo(before.get(name)));
+    }
+
+    @Test
+    void aDamagedSnapshotFileAfterAPurgeAndCommitsAfterItIsRefusedToo() {
+        DirectoryStore store = durable.openWithReferenceModel();
+        Told told = tell(store);
+        purged(store.purge(purge(told.alice())));
+        DurableFixture.commit(store, Transaction.by("importer").create("Person", from(1, 1), values("name", "Bob"))
+                .build());
+        DurableFixture.crash(store);
+        Path snapshot = StoreFiles.snapshots(directory).getFirst();
+        Path segment = StoreFiles.lastSegment(directory);
+        assertThat(StoreFiles.recordStarts(segment)).as("the log has the commit after the purge").hasSize(1);
+        StoreFiles.damage(snapshot, StoreFiles.size(snapshot) - 10);
+        Map<String, byte[]> before = StoreFiles.contents(directory);
+
+        assertThatThrownBy(() -> durable.open()).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(snapshot.toString()).hasMessageContaining(segment.toString())
+                .hasMessageContaining("not at basis 1");
+
+        assertThat(StoreFiles.contents(directory)).containsOnlyKeys(before.keySet())
+                .allSatisfy((name, bytes) -> assertThat(bytes).as(name).isEqualTo(before.get(name)));
+    }
+
+    @Test
+    void aDamagedSnapshotFileAfterAPurgeStillLetsTheOlderOneRecoverAStoreThatWroteTwo() {
+        DirectoryStore store = durable.openWithReferenceModel();
+        Told told = tell(store);
+        purged(store.purge(purge(told.alice())));
+        DurableFixture.commit(store, Transaction.by("importer").create("Person", from(1, 1), values("name", "Bob"))
+                .build());
+        store.writeSnapshot();
+        DurableFixture.commit(store, Transaction.by("importer").create("Person", from(1, 1), values("name", "Carol"))
+                .build());
+        DurableFixture.crash(store);
+        assertThat(StoreFiles.snapshots(directory)).hasSize(2);
+        Path newest = StoreFiles.snapshots(directory).getLast();
+        StoreFiles.damage(newest, StoreFiles.size(newest) - 10);
+
+        DirectoryStore reopened = durable.open();
+
+        assertThat(reopened.view(Coordinates.effectiveAt(on(3, 31))).entities("Person")).as("Bob and Carol").hasSize(2);
+        assertThat(reopened.purges()).hasSize(1);
+        assertThat(reopened.wasPurged(told.alice())).isTrue();
+    }
+
+    // ------------------------------------------------------------------ a rule that purges
+
+    /** How long the thread that stands for close() holds the snapshot lock, at most. */
+    private static final Duration HOLD = Duration.ofSeconds(8);
+
+    /** A rule of the reference domain's Organization that tries to purge, while holding a lock that close() takes first. */
+    private static final class PurgingRule implements EntityRule {
+
+        final AtomicReference<DirectoryStore> store = new AtomicReference<>();
+        final AtomicReference<Throwable> outcome = new AtomicReference<>();
+        final AtomicReference<Duration> waited = new AtomicReference<>(Duration.ZERO);
+        final EntityId target = new EntityId("00000000-0000-7000-8000-0000000000ff");
+
+        @Override
+        public RuleDescriptor descriptor() {
+            return LeiChecksumRule.DESCRIPTOR;
+        }
+
+        @Override
+        public void check(EntityState version, RuleContext context) {
+            DirectoryStore durableStore = store.get();
+            CountDownLatch holding = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            // Another thread holds the snapshot lock, as close() does while it waits for the writer lock, which this
+            // thread holds: a purge that took the snapshot lock now would wait for that thread, which waits for this
+            // one. The other thread gives up after a few seconds, so that a purge that waits is seen by how long it did.
+            Thread closer = new Thread(() -> {
+                durableStore.snapshotLock().lock();
+                try {
+                    holding.countDown();
+                    release.await(HOLD.toMillis(), TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    durableStore.snapshotLock().unlock();
+                }
+            });
+            closer.start();
+            long start = System.nanoTime();
+            try {
+                holding.await();
+                durableStore.purge(purge(target));
+                outcome.set(new AssertionError("The purge was not refused."));
+            } catch (IllegalStateException e) {
+                outcome.set(e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                waited.set(Duration.ofNanos(System.nanoTime() - start));
+                release.countDown();
+            }
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    void aRuleThatPurgesIsRefusedBeforeAnyLockIsTakenAndTheRefusalIsCounted() {
+        PurgingRule rule = new PurgingRule();
+        DirectoryStore store = durable.open(durable.clock, IdGenerators.deterministic(),
+                List.of(rule, new TotalOwnershipRule()), List.of());
+        DurableFixture.registerReferenceModel(store);
+        rule.store.set(store);
+
+        List<Problem> problems = durable.rejectReplay(store, ReferenceStories.rd1Parties());
+
+        assertThat(rule.outcome.get()).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("running rules");
+        assertThat(rule.waited.get()).as("the purge is refused at once, not after the lock is free")
+                .isLessThan(HOLD.dividedBy(2));
+        assertThat(problems).as("a rule that catches the refusal is still reported, for ACME and Beta").hasSize(2)
+                .allSatisfy(problem -> assertThat(problem.code()).isEqualTo(ProblemCode.RULE_FAILED));
+        assertThat(store.purges()).isEmpty();
+        assertThat(store.snapshotLock().isLocked()).as("no thread holds the snapshot lock").isFalse();
+        assertThat(store.writeSnapshot()).isEqualTo(store.latestBasis());
     }
 
     // ------------------------------------------------------------------ a purge that cannot be made durable

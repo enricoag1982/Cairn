@@ -3,10 +3,8 @@ package io.github.enricoag1982.cairn.core.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.Receipt;
-import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.schema.Basis;
@@ -18,6 +16,7 @@ import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -53,6 +52,7 @@ class RecoveryTest {
         final List<KeyedTransaction> keyed = new ArrayList<>();
         final List<History> histories = new ArrayList<>();
         final List<PurgeRecord> purges = new ArrayList<>();
+        final List<String> purgedIds = new ArrayList<>();
         final List<String> purgedKeys = new ArrayList<>();
 
         @Override
@@ -73,6 +73,11 @@ class RecoveryTest {
         @Override
         public void purge(PurgeRecord record) {
             purges.add(record);
+        }
+
+        @Override
+        public void purgedId(String digest) {
+            purgedIds.add(digest);
         }
 
         @Override
@@ -473,6 +478,7 @@ class RecoveryTest {
         byte[] bytes = new byte[64];
         bytes[40] = 3;
         Files.write(last, bytes);
+        writeSnapshot(Long.parseLong(last.getFileName().toString().replace(".log", "")) - 1);
 
         assertThatThrownBy(this::recover).as("a zero header and other data after it")
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining(last.toString())
@@ -567,6 +573,7 @@ class RecoveryTest {
         writeLog(3, CommitLog.DEFAULT_SEGMENT_LIMIT);
         Path segment = segments().getFirst();
         Files.move(segment, segment.resolveSibling(String.format("%020d.log", 2)));
+        writeSnapshot(1); // The log needs not start at the first basis, so that the segment itself is what is wrong.
 
         assertThatThrownBy(this::recover).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("named after the basis 2");
@@ -593,7 +600,7 @@ class RecoveryTest {
         TransactionRecord entry = new TransactionRecord(new Basis(basis), START.plusSeconds(basis), "tester",
                 Optional.empty(), Optional.empty());
         Snapshots.write(directory, new Snapshots.Content(new Basis(basis), Optional.of(START.plusSeconds(basis)),
-                List.of(schema(1)), List.of(entry), List.of(), List.of(), List.of(), List.of()));
+                List.of(schema(1)), List.of(entry), List.of(), List.of(), List.of(), List.of(), List.of()));
     }
 
     @Test
@@ -601,7 +608,7 @@ class RecoveryTest {
         TransactionRecord entry = new TransactionRecord(new Basis(2), START.plusSeconds(2), "tester",
                 Optional.of("sales"), Optional.of("why"));
         Snapshots.write(directory, new Snapshots.Content(new Basis(2), Optional.of(START.plusSeconds(2)),
-                List.of(schema(1)), List.of(entry), List.of(), List.of(), List.of(), List.of()));
+                List.of(schema(1)), List.of(entry), List.of(), List.of(), List.of(), List.of(), List.of()));
 
         Collected collected = new Collected();
         Optional<Snapshots.Loaded> loaded = Snapshots.loadNewest(directory, collected);
@@ -725,6 +732,69 @@ class RecoveryTest {
                 .hasMessageContaining("records are missing");
     }
 
+    // ------------------------------------------------------------------ never open a store empty
+
+    private void assertRefusedAndUnchanged(String... named) throws IOException {
+        Map<String, byte[]> before = contents();
+
+        assertThatThrownBy(this::recover).isInstanceOf(IllegalStateException.class)
+                .satisfies(e -> assertThat(e.getMessage()).contains(named));
+
+        assertThat(contents()).containsOnlyKeys(before.keySet()).allSatisfy((name, bytes) -> assertThat(bytes)
+                .as(name).isEqualTo(before.get(name)));
+    }
+
+    @Test
+    void ifNoSnapshotFileIsValidAndTheLogStartsAfterTheFirstBasisRecoveryRefusesNamingTheFilesAndChangesNothing()
+            throws IOException {
+        writeSnapshot(3);
+        CommitLog.open(directory, 4, CommitLog.DEFAULT_SEGMENT_LIMIT).close();
+        flip(snapshots().getFirst(), FileFormat.HEADER_LENGTH + Encoder.FRAME_HEADER + 2);
+
+        assertRefusedAndUnchanged(snapshots().getFirst().toString(), segments().getFirst().toString());
+    }
+
+    @Test
+    void theSameHoldsIfTheLogHasRecordsAfterTheDamagedSnapshotFile() throws IOException {
+        writeSnapshot(3);
+        CommitLog log = CommitLog.open(directory, 4, CommitLog.DEFAULT_SEGMENT_LIMIT);
+        log.append(data(4));
+        log.append(data(5));
+        log.close();
+        flip(snapshots().getFirst(), FileFormat.HEADER_LENGTH + Encoder.FRAME_HEADER + 2);
+
+        assertRefusedAndUnchanged(snapshots().getFirst().toString(), segments().getFirst().toString());
+    }
+
+    @Test
+    void theSameHoldsIfThereIsNoLogAtAllAndASnapshotFileNamedALaterBasis() throws IOException {
+        writeSnapshot(3);
+        flip(snapshots().getFirst(), FileFormat.HEADER_LENGTH + Encoder.FRAME_HEADER + 2);
+
+        assertRefusedAndUnchanged(snapshots().getFirst().toString());
+    }
+
+    @Test
+    void aStoreWithoutAnyDataOrAnEmptyStoresSnapshotFileIsStillOpenedEmpty() throws IOException {
+        assertThat(recover().records).isEmpty();
+        Snapshots.write(directory, new Snapshots.Content(Basis.NONE, Optional.empty(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of()));
+        flip(snapshots().getFirst(), FileFormat.HEADER_LENGTH + Encoder.FRAME_HEADER + 2);
+
+        Recovery.Result result = Recovery.recover(directory, new Collected());
+
+        assertThat(result.latest()).isEqualTo(Basis.NONE);
+    }
+
+    @Test
+    void aDamagedSnapshotFileDoesNotStopRecoveryFromALogThatStartsAtTheFirstBasis() throws IOException {
+        writeLog(4, 150);
+        writeSnapshot(3);
+        flip(snapshots().getFirst(), FileFormat.HEADER_LENGTH + Encoder.FRAME_HEADER + 2);
+
+        assertThat(recover().bases()).containsExactly(1L, 2L, 3L, 4L);
+    }
+
     @Test
     void aTemporaryFileThatACrashLeftIsDeletedWhenRecoverySucceeds() throws IOException {
         writeLog(2, CommitLog.DEFAULT_SEGMENT_LIMIT);
@@ -739,16 +809,18 @@ class RecoveryTest {
     // ------------------------------------------------------------------ purges
 
     private static PurgeRecord purge(long basis) {
-        return new PurgeRecord(new Basis(basis), START.plusSeconds(basis), "dpo", Optional.of("alice"),
-                "Erasure request", List.of(new EntityId("e-1"), new EntityId("e-2")),
-                List.of(new RelationshipId("r-1")));
+        return new PurgeRecord(new Basis(basis), START.plusSeconds(basis), "dpo", Optional.of("DSR-2026-0042"),
+                "Erasure request", 2, 1);
     }
+
+    private static final List<String> DIGESTS = List.of(IdDigests.of("entity-id-1"),
+            IdDigests.of("entity-id-2"), IdDigests.of("relationship-id-1"));
 
     private void writeSnapshotWithPurge(long basis, PurgeRecord purge, List<String> purgedKeys) throws IOException {
         TransactionRecord entry = new TransactionRecord(new Basis(basis), START.plusSeconds(basis), "tester",
                 Optional.empty(), Optional.empty());
         Snapshots.write(directory, new Snapshots.Content(new Basis(basis), Optional.of(START.plusSeconds(basis)),
-                List.of(schema(1)), List.of(entry), List.of(), List.of(purge), purgedKeys, List.of()));
+                List.of(schema(1)), List.of(entry), List.of(), List.of(purge), DIGESTS, purgedKeys, List.of()));
     }
 
     @Test
@@ -759,6 +831,9 @@ class RecoveryTest {
         Recovery.Result result = Recovery.recover(directory, collected);
 
         assertThat(collected.purges).containsExactly(purge(4));
+        assertThat(collected.purgedIds).containsExactlyElementsOf(DIGESTS);
+        assertThat(new String(Files.readAllBytes(snapshots().getFirst()), StandardCharsets.ISO_8859_1))
+                .as("the IDs are not in the file").doesNotContain("entity-id-").doesNotContain("relationship-id-");
         assertThat(collected.purgedKeys).containsExactly("key-b", "key-a");
         assertThat(result.lastPurge()).contains(new Basis(4));
         assertThat(result.purgePending()).as("the snapshot file holds the purge").isFalse();
@@ -769,13 +844,13 @@ class RecoveryTest {
         CommitLog log = CommitLog.open(directory, 1, CommitLog.DEFAULT_SEGMENT_LIMIT);
         log.append(data(1));
         log.append(data(2));
-        log.append(new PurgeLogRecord(purge(3)));
+        log.append(new PurgeLogRecord(purge(3), DIGESTS));
         log.close();
 
         Collected collected = new Collected();
         Recovery.Result result = Recovery.recover(directory, collected);
 
-        assertThat(collected.records).isEqualTo(List.of(data(1), data(2), new PurgeLogRecord(purge(3))));
+        assertThat(collected.records).isEqualTo(List.of(data(1), data(2), new PurgeLogRecord(purge(3), DIGESTS)));
         assertThat(result.latest()).isEqualTo(new Basis(3));
         assertThat(result.lastTransactionTime()).contains(START.plusSeconds(3));
         assertThat(result.lastPurge()).contains(new Basis(3));

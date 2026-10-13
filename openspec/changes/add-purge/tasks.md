@@ -20,4 +20,4 @@
 - [x] 4.1 Update `Purge` and add `Purge record` in `docs/glossary.md`
 - [x] 4.2 Update the guide for durable stores, the reference domain and the architecture page
 - [x] 4.3 Update `AGENTS.md`, `README.md` and `openspec/config.yaml` (ADR-0024), and bump `last-reviewed`
-- [ ] 4.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

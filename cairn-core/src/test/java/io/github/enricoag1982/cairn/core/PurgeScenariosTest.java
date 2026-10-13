@@ -112,8 +112,8 @@ class PurgeScenariosTest {
 
         PurgeResult.Purged result = purged(reference.store.purge(ReferenceStories.rd11PurgeAlice(alice)));
 
-        assertThat(result.record().entities()).containsExactly(alice);
-        assertThat(result.record().relationships()).containsExactly(employs);
+        assertThat(result.entities()).containsExactly(alice);
+        assertThat(result.relationships()).containsExactly(employs);
         assertThat(everyView()).as("the views of every basis and effective time").hasSize(5 * EFFECTIVE_TIMES.size())
                 .allSatisfy(view -> {
                     assertThat(view.entity(alice)).isEmpty();
@@ -152,8 +152,8 @@ class PurgeScenariosTest {
 
         PurgeResult.Purged result = purged(reference.store.purge(ReferenceStories.rd11PurgeAlice(alice)));
 
-        assertThat(result.record().entities()).containsExactly(alice, home);
-        assertThat(result.record().relationships()).containsExactly(hasAddress);
+        assertThat(result.entities()).containsExactly(alice, home);
+        assertThat(result.relationships()).containsExactly(hasAddress);
         assertThat(everyView()).allSatisfy(view -> {
             assertThat(view.entity(home)).isEmpty();
             assertThat(view.timeline(home)).isEmpty();
@@ -164,6 +164,39 @@ class PurgeScenariosTest {
     }
 
     // ------------------------------------------------------------------ refused purges
+
+    @Test
+    @DisplayName("Scenario: A target that another party composed too")
+    void aTargetThatAnotherPartyComposedToo() {
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId alice = entity(parties, ALICE);
+        Receipt withAddress = reference.commit(Transaction.by("importer")
+                .create(HOME, "Address", from(1, 1),
+                        values("street", "1 Main St", "city", "Springfield", "country", "US"))
+                .relate(HAS_ADDRESS, "HasAddress", alice, HOME, from(1, 1), values()).build());
+        EntityId home = entity(withAddress, HOME);
+        // On 1 March the Address passes from Alice to ACME, in one transaction, so that it always has one source.
+        reference.commit(Transaction.by("importer")
+                .endDate(relationship(withAddress, HAS_ADDRESS), on(3, 1))
+                .relate("HasAddress", acme, home, from(3, 1), values()).build());
+        assertThat(reference.view(on(2, 1)).navigate(alice, "HasAddress")).hasSize(1);
+        assertThat(reference.view(on(4, 1)).navigate(acme, "HasAddress")).hasSize(1);
+        Basis before = reference.store.latestBasis();
+
+        List<Problem> problems = rejected(reference.store.purge(ReferenceStories.rd11PurgeAlice(alice)));
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.TOO_FEW_RELATIONSHIPS);
+            assertThat(problem.path()).isEqualTo(home.value());
+            assertThat(problem.message()).contains(home.value());
+            assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("Purge " + home.value()));
+        });
+        assertThat(reference.view(on(2, 1)).entity(alice)).as("Alice still exists").isPresent();
+        assertThat(reference.view(on(2, 1)).entity(home)).as("and so does the Address").isPresent();
+        assertThat(reference.store.latestBasis()).as("no basis is used").isEqualTo(before);
+        assertThat(reference.store.purges()).isEmpty();
+    }
 
     @Test
     @DisplayName("Scenario: An account left without a holder")
@@ -204,8 +237,8 @@ class PurgeScenariosTest {
         PurgeResult.Purged result = purged(reference.store.purge(
                 Purge.by("dpo").reason("Erasure request").entity(beta).entity(a1).build()));
 
-        assertThat(result.record().entities()).containsExactly(beta, a1);
-        assertThat(result.record().relationships()).containsExactly(heldByA1);
+        assertThat(result.entities()).containsExactly(beta, a1);
+        assertThat(result.relationships()).containsExactly(heldByA1);
         assertThat(everyView()).allSatisfy(view -> {
             assertThat(view.entity(beta)).isEmpty();
             assertThat(view.entity(a1)).isEmpty();
@@ -232,10 +265,16 @@ class PurgeScenariosTest {
         PurgeResult.Purged result = purged(reference.store.purge(Purge.by("dpo").reason("Erasure request")
                 .entity(alice).build()));
 
+        assertThat(result.entities()).as("the purge returns the IDs it removed").containsExactly(alice);
+        assertThat(result.relationships()).containsExactly(employs);
         PurgeRecord expected = new PurgeRecord(new Basis(afterRd3.value() + 1), on(3, 2), "dpo", Optional.empty(),
-                "Erasure request", List.of(alice), List.of(employs));
+                "Erasure request", 1, 1);
         assertThat(result.record()).isEqualTo(expected);
-        assertThat(reference.store.purges()).containsExactly(expected);
+        assertThat(reference.store.purges()).as("the store lists a record with counts, not IDs")
+                .containsExactly(expected);
+        assertThat(reference.store.wasPurged(alice)).as("the store tells that Alice's ID was purged").isTrue();
+        assertThat(reference.store.wasPurged(employs)).isTrue();
+        assertThat(reference.store.wasPurged(beta)).isFalse();
         assertThat(reference.store.latestBasis()).isEqualTo(expected.basis());
         assertThat(reference.store.transactions()).extracting(TransactionRecord::basis)
                 .as("the data transactions of RD-1 and RD-3 are still listed")
@@ -285,7 +324,7 @@ class PurgeScenariosTest {
         List<Problem> problems = ((CommitResult.Rejected) result).problems();
         assertThat(problems).singleElement().satisfies(problem -> {
             assertThat(problem.code()).isEqualTo(ProblemCode.IDEMPOTENCY_KEY_PURGED);
-            assertThat(problem.path()).isEqualTo("@transaction.idempotencyKey");
+            assertThat(problem.path()).isEqualTo("@transaction");
             assertThat(problem.message()).contains("import-rd1");
         });
         assertThat(reference.store.latestBasis()).as("nothing was recorded").isEqualTo(before);

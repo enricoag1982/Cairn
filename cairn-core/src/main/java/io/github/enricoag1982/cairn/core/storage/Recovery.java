@@ -14,6 +14,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Reads a store's directory back (design D4 of {@code add-durable-commit-log}). It hands to a {@link Replay} what the
@@ -23,7 +24,10 @@ import java.util.Optional;
  * it still hold the purged data.
  *
  * <ul>
- *   <li>A snapshot file that is not valid is skipped, and the next older one is used; with none, recovery starts empty.
+ *   <li>A snapshot file that is not valid is skipped, and the next older one is used; with none, recovery starts empty
+ *       and replays the log, which must then start at the first basis: if it starts later, or has no segment although a
+ *       snapshot file named a later basis, the files that held the rest are gone, and recovery fails and changes nothing
+ *       instead of opening a store that lacks them.
  *   <li>Log segments are read in the order of their first basis. Records at or below the snapshot's basis are skipped.
  *       The first record after it must have the next basis, and every record the next one after its predecessor.
  *   <li>A bad record at position {@code p} of the last segment is where a crash cut the log, and the segment is
@@ -109,6 +113,11 @@ public final class Recovery {
         }
 
         @Override
+        public void purgedId(String digest) {
+            replay.purgedId(digest);
+        }
+
+        @Override
         public void purgedKey(String key) {
             replay.purgedKey(key);
         }
@@ -136,7 +145,9 @@ public final class Recovery {
      * @return the latest basis and transaction time recovered, and the purges that it saw
      * @throws UncheckedIOException  if reading or truncating a file fails
      * @throws IllegalStateException        if a file is damaged anywhere but at the end of the last segment, was written
-     *                                      in a format version that is not known, or the log has a gap
+     *                                      in a format version that is not known, the log has a gap, or no snapshot file
+     *                                      is valid and the log does not start at the first basis; nothing changes on
+     *                                      disk in the last case
      */
     public static Result recover(Path storeDirectory, Replay target) {
         Watching replay = new Watching(target);
@@ -147,6 +158,9 @@ public final class Recovery {
             long snapshotBasis = latest;
             List<FileFormat.Numbered> segments = FileFormat.list(storeDirectory.resolve(FileFormat.LOG_DIRECTORY),
                     FileFormat.LOG_SUFFIX);
+            if (snapshot.isEmpty()) {
+                requireTheLogToStartAtTheFirstBasis(storeDirectory, segments);
+            }
             Cursor cursor = new Cursor(snapshotBasis, latest, lastTime);
             for (int i = 0; i < segments.size(); i++) {
                 boolean last = i == segments.size() - 1;
@@ -162,6 +176,39 @@ public final class Recovery {
         } catch (IOException e) {
             throw new UncheckedIOException("Reading the directory " + storeDirectory + " failed.", e);
         }
+    }
+
+    /**
+     * Refuses to recover a store from the log alone when the log does not start at the first basis: what the deleted
+     * files held is missing, as after a purge, which deletes every snapshot file but one, when that one is damaged. The
+     * store would open without it, and look empty or short, instead of failing. Nothing on disk changes: this is checked
+     * before any file is read or written.
+     *
+     * @throws IllegalStateException naming the snapshot files and the first segment
+     */
+    private static void requireTheLogToStartAtTheFirstBasis(Path storeDirectory, List<FileFormat.Numbered> segments)
+            throws IOException {
+        List<FileFormat.Numbered> snapshots = FileFormat.list(storeDirectory.resolve(FileFormat.SNAPSHOT_DIRECTORY),
+                FileFormat.SNAPSHOT_SUFFIX);
+        if (segments.isEmpty()) {
+            if (snapshots.stream().anyMatch(file -> file.basis() > 0)) {
+                throw new IllegalStateException("No snapshot file is valid (" + names(snapshots) + ") and the log has no "
+                        + "segment, so the store would open without what its snapshot files held. Restore the files, "
+                        + "or remove them to start an empty store.");
+            }
+            return;
+        }
+        FileFormat.Numbered first = segments.getFirst();
+        if (first.basis() > 1) {
+            throw new IllegalStateException("No snapshot file is valid (" + (snapshots.isEmpty() ? "there is none"
+                    : names(snapshots)) + ") and the log starts at basis " + first.basis() + " in " + first.path()
+                    + ", not at basis 1, so the store would open without what the deleted files held. Restore the "
+                    + "snapshot file, or remove the files to start an empty store.");
+        }
+    }
+
+    private static String names(List<FileFormat.Numbered> files) {
+        return files.stream().map(file -> file.path().toString()).collect(Collectors.joining(", "));
     }
 
     /** Where the replay stands. */

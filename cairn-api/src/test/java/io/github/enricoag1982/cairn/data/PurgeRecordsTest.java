@@ -6,7 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import java.lang.reflect.RecordComponent;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -22,10 +24,11 @@ class PurgeRecordsTest {
 
     @Test
     void aPurgeHoldsWhoAsksForWhomWhyAndWhat() {
-        Purge purge = Purge.by("dpo").onBehalfOf("alice").reason("Erasure request").entity(ALICE).entity(BETA).build();
+        Purge purge = Purge.by("dpo").onBehalfOf("DSR-2026-0042").reason("Erasure request").entity(ALICE)
+                .entity(BETA).build();
 
         assertThat(purge.principal()).isEqualTo("dpo");
-        assertThat(purge.onBehalfOf()).contains("alice");
+        assertThat(purge.onBehalfOf()).contains("DSR-2026-0042");
         assertThat(purge.reason()).isEqualTo("Erasure request");
         assertThat(purge.entities()).containsExactly(ALICE, BETA);
     }
@@ -38,13 +41,14 @@ class PurgeRecordsTest {
     }
 
     @Test
-    void aBlankOrMissingReasonIsAProgrammingError() {
+    void aBlankReasonIsAProgrammingErrorAndAMissingOneIsANullPointer() {
         assertThatThrownBy(() -> Purge.by("dpo").reason(" ").entity(ALICE).build())
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("reason");
         assertThatThrownBy(() -> Purge.by("dpo").reason("").entity(ALICE).build())
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Purge.by("dpo").entity(ALICE).build())
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("reason");
+                .as("a reason that was never given is null").isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("reason");
         assertThatThrownBy(() -> new Purge("dpo", Optional.empty(), "\t", List.of(ALICE)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -92,53 +96,61 @@ class PurgeRecordsTest {
     }
 
     @Test
-    void aPurgeRecordHoldsWhatWasRemovedInTheOrderGivenAndCopiesIt() {
-        List<EntityId> entities = new ArrayList<>(List.of(ALICE, BETA));
-        List<RelationshipId> relationships = new ArrayList<>(List.of(EMPLOYS));
-
-        PurgeRecord record = new PurgeRecord(new Basis(4), RECORDED, "dpo", Optional.of("alice"), "Erasure request",
-                entities, relationships);
-        entities.clear();
-        relationships.clear();
+    void aPurgeRecordHoldsCountsAndNoIds() {
+        PurgeRecord record = new PurgeRecord(new Basis(4), RECORDED, "dpo", Optional.of("DSR-2026-0042"),
+                "Erasure request", 2, 1);
 
         assertThat(record.basis()).isEqualTo(new Basis(4));
         assertThat(record.transactionTime()).isEqualTo(RECORDED);
         assertThat(record.principal()).isEqualTo("dpo");
-        assertThat(record.onBehalfOf()).contains("alice");
+        assertThat(record.onBehalfOf()).contains("DSR-2026-0042");
         assertThat(record.reason()).isEqualTo("Erasure request");
-        assertThat(record.entities()).containsExactly(ALICE, BETA);
-        assertThat(record.relationships()).containsExactly(EMPLOYS);
-        assertThatThrownBy(() -> record.entities().clear()).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> record.relationships().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(record.entities()).isEqualTo(2);
+        assertThat(record.relationships()).isEqualTo(1);
+        assertThat(Arrays.stream(PurgeRecord.class.getRecordComponents()).map(RecordComponent::getType).toList())
+                .as("what a purge removed is not in the record").containsExactly(Basis.class, Instant.class,
+                        String.class, Optional.class, String.class, int.class, int.class);
     }
 
     @Test
-    void aPurgeRecordRejectsNullComponents() {
-        assertThatThrownBy(() -> new PurgeRecord(null, RECORDED, "dpo", Optional.empty(), "why", List.of(), List.of()))
+    void aPurgeRecordRejectsNullComponentsAndNegativeCounts() {
+        assertThatThrownBy(() -> new PurgeRecord(null, RECORDED, "dpo", Optional.empty(), "why", 0, 0))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), null, "dpo", Optional.empty(), "why", List.of(),
-                List.of())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, null, Optional.empty(), "why", List.of(),
-                List.of())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, "dpo", null, "why", List.of(), List.of()))
+        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), null, "dpo", Optional.empty(), "why", 0, 0))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, "dpo", Optional.empty(), null, List.of(),
-                List.of())).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, null, Optional.empty(), "why", 0, 0))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, "dpo", null, "why", 0, 0))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, "dpo", Optional.empty(), null, 0, 0))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, "dpo", Optional.empty(), "why", -1, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PurgeRecord(new Basis(1), RECORDED, "dpo", Optional.empty(), "why", 0, -1))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void aPurgeResultIsPurgedWithItsRecordOrRejectedWithACopyOfTheProblems() {
-        PurgeRecord record = new PurgeRecord(new Basis(4), RECORDED, "dpo", Optional.empty(), "Erasure request",
-                List.of(ALICE), List.of(EMPLOYS));
+    void aPurgeResultIsPurgedWithItsRecordAndTheIdsItRemovedOrRejectedWithACopyOfTheProblems() {
+        PurgeRecord record = new PurgeRecord(new Basis(4), RECORDED, "dpo", Optional.empty(), "Erasure request", 1, 1);
+        List<EntityId> entities = new ArrayList<>(List.of(ALICE));
+        List<RelationshipId> relationships = new ArrayList<>(List.of(EMPLOYS));
         List<Problem> problems = new ArrayList<>(List.of(new Problem(ProblemCode.UNKNOWN_ENTITY, "@purge.0", "No.")));
 
-        PurgeResult purged = new PurgeResult.Purged(record);
+        PurgeResult.Purged purged = new PurgeResult.Purged(record, entities, relationships);
         PurgeResult.Rejected rejected = new PurgeResult.Rejected(problems);
+        entities.clear();
+        relationships.clear();
         problems.clear();
 
-        assertThat(((PurgeResult.Purged) purged).record()).isSameAs(record);
+        assertThat(purged.record()).isSameAs(record);
+        assertThat(purged.entities()).containsExactly(ALICE);
+        assertThat(purged.relationships()).containsExactly(EMPLOYS);
+        assertThatThrownBy(() -> purged.entities().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> purged.relationships().clear()).isInstanceOf(UnsupportedOperationException.class);
         assertThat(rejected.problems()).hasSize(1);
         assertThatThrownBy(() -> rejected.problems().clear()).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> new PurgeResult.Purged(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PurgeResult.Purged(null, List.of(), List.of()))
+                .isInstanceOf(NullPointerException.class);
     }
 }

@@ -31,7 +31,7 @@ import java.util.TreeSet;
 
 /**
  * Compares two stores (design D8 of {@code add-durable-commit-log} and D5 of {@code add-purge}): the schema history, the
- * transaction records, the purge records, the receipts of idempotency keys, and, for every basis, the timelines of every entity and relationship and the views at
+ * transaction records, the purge records and which IDs were purged, the receipts of idempotency keys, and, for every basis, the timelines of every entity and relationship and the views at
  * the given effective times. A durable store and an in-memory store that committed the same transactions must be
  * equivalent, before the durable store is reopened and after.
  *
@@ -127,6 +127,9 @@ final class StoreEquivalence {
             }
         }
         observe(views, "latest", store.view(Coordinates.effectiveAt(effectiveTimes.getFirst())), ids);
+        for (Id id : ids) {
+            views.put("was purged " + id, store.wasPurged(id));
+        }
         return new Observation(latest, store.transactions(), store.purges(), store.declaredRules(), schemaHistory,
                 keyedResults, views);
     }

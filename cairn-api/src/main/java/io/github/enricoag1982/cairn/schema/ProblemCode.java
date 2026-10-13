@@ -233,8 +233,8 @@ public enum ProblemCode {
     IDEMPOTENCY_KEY_PURGED("The idempotency key was used by a transaction that wrote an entity or a relationship which a "
             + "purge removed later, so the store no longer has that transaction and cannot tell a retry from another "
             + "transaction, and recording it again would bring the purged data back. The key stays used for good, and "
-            + "the path is the idempotency key of the transaction. Use a new idempotency key if the transaction is "
-            + "meant to be recorded again."),
+            + "the path is @transaction, like that of a key that was reused. Use a new idempotency key if the "
+            + "transaction is meant to be recorded again."),
     /** A rule found that a version of an entity or of a relationship breaks it. */
     RULE_VIOLATION("A rule that the type of an entity or relationship, or one of its supertypes, names found that a "
             + "version of the entity or relationship breaks it. The problem's rule code, qualified by the rule's name, "
