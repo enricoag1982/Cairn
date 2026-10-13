@@ -111,3 +111,4 @@ Expressions in the Common Expression Language (CEL) are a later, optional additi
 - Kubernetes validates custom resources the same way: a declarative schema, then CEL rules, then code in admission webhooks: <https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules>
 - Common Expression Language: <https://cel.dev/>
 - ISO 17442 (LEI) check digits use ISO 7064 MOD 97-10.
+- A rule runs again when a transaction changes the data it read, so it no longer needs to be attached to the types whose writes can break it. See [ADR-0025](0025-run-a-rule-again-when-the-data-it-read-changes.md).

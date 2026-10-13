@@ -78,3 +78,4 @@ Chosen option: "A log of the effects of each commit, with snapshots", because it
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, with the proposal of `add-durable-commit-log`.
 - Grouping commits before forcing them to disk, a change feed, and replicas build on the same log later.
+- After recovery, a store runs its rules once, without judging their verdicts, to learn what they read; recovery itself still only applies effects. See [ADR-0025](0025-run-a-rule-again-when-the-data-it-read-changes.md).
