@@ -7,7 +7,7 @@ You, or your AI agents, define typed entities and relationships, with inheritanc
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which runs Java rules at commit, are built; so are transaction payloads and JSON results, tools that serve a store to AI agents over the Model Context Protocol, Java types generated from schema documents with a Gradle plugin, stores kept on disk that recover after a crash, queries with aggregation, and purges for legal erasure; a key-value store is not. The core design is recorded in accepted decision records.
+> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which runs Java rules at commit and again when what they read changes, are built; so are transaction payloads and JSON results, tools that serve a store to AI agents over the Model Context Protocol, Java types generated from schema documents with a Gradle plugin, stores kept on disk that recover after a crash, queries with aggregation, and purges for legal erasure; a key-value store is not. The core design is recorded in accepted decision records.
 
 ## Ideas in one page
 
@@ -18,7 +18,7 @@ The API hides the storage implementation: the same behavior in memory or in a ke
 - **Views and context.** Reads go through immutable views bound to a context: time coordinates, caller, limits and feature flags resolved by a gateway. [ADR-0013](docs/decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md)
 - **Storage behind a narrow interface.** An ordered key-value store and a commit log; the in-memory implementation is the reference, and every implementation passes the same conformance suite. [ADR-0011](docs/decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md)
 - **Types in schema documents.** YAML 1.2, which tools can also send as JSON, checked against a published JSON Schema and registered in a running store; Java types are generated from them. [ADR-0012](docs/decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)
-- **Logic in Java.** Documents declare constraints; anything more is a Java rule that documents name and the engine runs at commit. [ADR-0018](docs/decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)
+- **Logic in Java.** Documents declare constraints; anything more is a Java rule that documents name and the engine runs at commit, and again whenever a transaction changes what the rule read. [ADR-0018](docs/decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md), [ADR-0025](docs/decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)
 - **Built for AI agents.** Agents read the schema, preview changes, get problems they can act on, and work through tools over the same API; people approve what can lose data. [ADR-0017](docs/decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md)
 
 The reasoning behind all of this is in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](docs/research/2026-10-13-ai-native-schema-and-rules.md).

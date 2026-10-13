@@ -75,7 +75,7 @@ Dates are in 2026. Each story has a test whose display name starts with its ID; 
 | HR-2 | Recorded 2 January: the seven people of the table are hired, and the four managers manage their units, from 1 January. | Generated builders, multiplicities |
 | HR-3 | Recorded 10 March: Eli moves to Milan and to Brightwater S.r.l. from 1 July. Effective 30 June Eli works in Berlin; effective 1 July, in Milan. | Future-dated changes |
 | HR-4 | Recorded 15 April: correction, Dev's salary was 72,000 from 1 January. Effective 1 February, as known on 1 April it is 70,000; as known now, 72,000. | Corrections, two time axes |
-| HR-5 | Recorded 1 March: Dev requests vacation from 16 to 20 March, 5 days. Recorded 2 March: Cleo approves it. | Leave requests, approval by the manager |
+| HR-5 | Recorded 1 March: Dev requests vacation from 16 to 20 March, 5 days. Recorded 2 March: Cleo approves it. Afterwards, ending Cleo's `ManagedBy` of `PLT` from 10 March is rejected, because she would no longer manage Dev's unit on the first day of the vacation she approved (`decided-by-manager/not-a-manager`, about her decision). | Leave requests, approval by the manager, re-checks |
 | HR-6 | Recorded 3 March: Eli's vacation request for 20 to 24 April, 5 days, decided by Gus, is rejected, because Gus manages none of Eli's units (`decided-by-manager/not-a-manager`). | Rules on relationships, routing along the hierarchy |
 | HR-7 | Recorded 4 March: Dev's approved vacation from 3 to 31 August, 21 days, is rejected, because with HR-5 it makes 26 days in 2026 (`vacation-within-entitlement/over-entitlement`). | Rules that query |
 | HR-8 | Recorded 5 March: making Brightwater part of Platform is rejected (`no-unit-cycles/cycle`). | Rules that traverse |
@@ -89,10 +89,10 @@ Dates are in 2026. Each story has a test whose display name starts with its ID; 
 ## Gaps
 
 What the example could not express directly, found while building it. Each is a candidate for a later change.
+The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows.
 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |
-| A rule runs only when a type that names it is written, and the types that name one rule need a common supertype | Ending Cleo's `ManagedBy` of `PLT` after she approved Dev's vacation would commit, though the decision no longer meets `decided-by-manager` (the HR-5 test shows it); `DecidedBy`, `ManagedBy` and `LeaveRequest` share no supertype, and an entity type and a relationship type never do, so they cannot all name the rule | Rules that apply to several unrelated types, so that every type a rule reads can name it, as [ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md) intends; or re-checking the rules of what depends on a change |
 | Ending an entity does not end the relationships of the targets that its compositions end | Gus leaving (HR-11) must end his sick leave's `DecidedBy` by ID, or the commit is rejected | Cascades that end every relationship of the entities they end, or a way to list all of an entity's relationships |
 | No lookup by a unique attribute | The stories keep IDs from receipts; the agent in HR-13 resolves four codes and names to IDs with `cairn_query` before writing its payload; erasure requests start from a name or number | Reads and payload references by unique key |
 | "At every point in effective time" is the rule author's work | `vacation-within-entitlement` and `no-unit-cycles` collect the instants at which what they read changes, and query or traverse at each | A rule context that lists those instants, or queries over a period |

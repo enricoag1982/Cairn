@@ -65,7 +65,13 @@ Rules ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-na
 | `lei-checksum` | 1 | `Organization` | The LEI's check digits are valid (ISO 17442, ISO 7064 MOD 97-10). | `invalid-check-digits` |
 | `total-ownership-at-most-100` | 1 | `Owns` | The owners of a party hold at most 100% of it together, at every point in effective time. | `over-100-percent` |
 
-Scenarios that validate or register the reference model assume a registry with these rules available. In the test fixtures, both rules have code. Scenarios also use a test-only rule, `name-not-blank` for Party.
+Scenarios that validate or register the reference model assume a registry with these rules available. In the test fixtures, both rules have code. Scenarios also use test-only rules, which the reference model does not name; each scenario that needs one names it:
+
+- `name-not-blank` version 1, for Party: the name is not empty or only white space (`blank-name`).
+- `employer-holds-account` version 1, for Employs: an organization holds at least one account, through `HeldBy`, whenever it employs someone (`no-account`).
+- `controlling-owner-has-lei` version 1, for Owns: an organization that owns more than 50% of a party has an LEI (`no-lei`).
+
+The last two read other entities and relationships, so writes to those run them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)).
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 

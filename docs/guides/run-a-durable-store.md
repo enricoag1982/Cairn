@@ -27,6 +27,7 @@ Closing writes a *snapshot file* and releases the directory. A closed store refu
 One open store holds a directory at a time, in any process: opening a second one on the same directory throws `IllegalStateException`.
 
 The settings are those of an in-memory store. Keep an ID generator of the same format: opening a store with a generator that does not accept the IDs it holds fails ([ADR-0019](../decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md)). A store can be opened with other rules than it was written with: recovery does not run rules, and a rule that the schema names but the store has no code for makes writes to the affected types fail, as for any store ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
+After recovery, the store runs each rule it has code for once over the data, without judging the results, to learn what the rules read, so that a later change to that data runs them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)). A store without a rule's code cannot learn what it reads, so writes to other types can break that rule unnoticed.
 
 ## What a commit guarantees
 
@@ -40,7 +41,7 @@ Forcing every commit to disk costs time: a durable store commits as fast as its 
 
 ## Snapshot files
 
-Recovery reads the newest snapshot file and then the log after it, so the longer the log since the last snapshot, the longer opening takes.
+Recovery reads the newest snapshot file and then the log after it, so the longer the log since the last snapshot, the longer opening takes. Running the rules once afterwards takes time in proportion to the data their types hold.
 The store writes a snapshot file when it is closed. A long-running application should also call `writeSnapshot()` now and then, for example once an hour or after every few thousand commits; commits go on while it writes.
 
 The store keeps its two newest snapshot files and the log needed to recover from the older one, and deletes the rest. If the newest snapshot file is damaged, recovery uses the older one. Right after a purge there is only one (see [Purges](#purges)).
