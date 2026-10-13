@@ -31,5 +31,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0016](0016-name-the-project-cairn.md) | Name the project Cairn | accepted | 2026-10-13 |
 | [ADR-0017](0017-design-cairn-so-that-ai-agents-are-first-class-users.md) | Design Cairn so that AI agents are first-class users | accepted | 2026-10-13 |
 | [ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md) | Validate with declarative constraints and named Java rules | accepted | 2026-10-13 |
+| [ADR-0019](0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md) | Identify entities by opaque IDs from one generator per store | accepted | 2026-10-13 |
 
 <!-- decision-log:end -->
