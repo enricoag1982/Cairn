@@ -11,7 +11,7 @@ import java.util.Optional;
 
 /**
  * Reads the values of an {@link EntityState} or a {@link RelationshipState} as Java values (ADR-0021, capability
- * {@code java-types}). The code that the generator writes uses it to fill the snapshot of a type; writing uses
+ * {@code java-types}). The code that the generator writes uses it to fill the snapshot record of a type; writing uses
  * {@link Value#of(String)} and its overloads.
  *
  * <p>The values of a state are keyed by attribute name, and an attribute without a value is absent. A method for a

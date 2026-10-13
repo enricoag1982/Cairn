@@ -184,6 +184,24 @@ class CairnTypesPluginScenariosTest {
         assertThat(result.task(":compileJava")).as("Java is not compiled").isNull();
     }
 
+    @Test
+    @DisplayName("Scenario: Gradle on an older Java")
+    void gradleOnAnOlderJava() throws IOException {
+        Path older = olderJava();
+        assumeTrue(older != null, "A Java 17 to 24 under /usr/lib/jvm to run Gradle with");
+        createProject("");
+        write("gradle.properties", gradleProperties("org.gradle.java.home=" + path(older)));
+
+        BuildResult result = gradle("gradleJava", "compileJava").build();
+
+        assertThat(result.getOutput()).contains("Gradle runs on Java " + olderVersion(older))
+                .doesNotContain("Gradle runs on Java 25");
+        assertThat(result.task(":generateCairnTypes").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
+        assertThat(result.task(":compileJava").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
+        assertThat(generated("Person")).exists();
+        assertThat(project.resolve("build/classes/java/main/com/example/Hiring.class")).exists();
+    }
+
     // ------------------------------------------------------------------ what else the design promises
 
     @Test
@@ -208,18 +226,13 @@ class CairnTypesPluginScenariosTest {
     }
 
     @Test
-    void theGenerationIsCachedAndRunsWhateverJavaRunsGradle() throws IOException {
-        Path older = olderJava();
-        assumeTrue(older != null, "A Java 17 to 24 under /usr/lib/jvm to run Gradle with");
+    void theGenerationIsCached() throws IOException {
         createProject("buildCache { local { directory = file('cache') } }\n");
-        write("gradle.properties", gradleProperties("org.gradle.java.home=" + path(older)));
 
-        BuildResult first = gradle("gradleJava", "compileJava", "--build-cache").build();
+        BuildResult first = gradle("compileJava", "--build-cache").build();
         deleteRecursively(project.resolve("build"));
         BuildResult second = gradle("compileJava", "--build-cache").build();
 
-        assertThat(first.getOutput()).contains("Gradle runs on Java " + olderVersion(older))
-                .doesNotContain("Gradle runs on Java 25");
         assertThat(first.task(":generateCairnTypes").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
         assertThat(second.task(":generateCairnTypes").getOutcome()).isEqualTo(TaskOutcome.FROM_CACHE);
         assertThat(generated("Person")).exists();

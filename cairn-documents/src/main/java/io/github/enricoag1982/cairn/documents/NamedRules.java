@@ -15,10 +15,11 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * The rules that schema documents name, and the type each rule is for (capability {@code schema-documents}; design D5
- * of {@code add-java-type-generation} and D7 of {@code add-agent-tools}). Tools that read documents without having the
- * code of their rules, such as the agent server and the generator of Java types, declare each rule from what the
- * documents say about it, and use this class to find the type it is for.
+ * The rules that schema documents name, and the type each rule is for. Tools that read documents without having the
+ * code of their rules declare each rule from what the documents say about it, and use this class to find the type it is
+ * for: the generator of Java types, which writes a base class for each rule for that type (capability
+ * {@code java-types}), and the agent server, which declares the rules it has no code for (capability
+ * {@code agent-tools}).
  *
  * <p>A rule is for one type, and a type may name it if it is that type or one of its subtypes. When several types name
  * the same rule, the rule is for their closest common supertype, found through the {@code supertype} of the types in

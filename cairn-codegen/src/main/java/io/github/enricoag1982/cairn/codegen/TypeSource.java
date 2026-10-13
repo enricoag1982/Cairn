@@ -232,9 +232,9 @@ final class TypeSource {
     private void writeFrom() {
         member();
         String self = type(element);
-        out.javadoc(doc("Reads a state as " + Docs.code(element.name()) + ": as the snapshot of the state's own type "
+        out.javadoc(doc("Reads a state as " + Docs.code(element.name()) + ": as the snapshot record of the state's own type "
                         + "if that is " + Docs.code(element.name()) + " or a generated subtype of it, and as the "
-                        + "snapshot of " + Docs.code(element.name()) + " if the state's type is one that the "
+                        + "snapshot record of " + Docs.code(element.name()) + " if the state's type is one that the "
                         + "generated code does not know, such as a subtype that was registered later.",
                 "@param state the state of " + (relationship ? "a relationship" : "an entity"),
                 "@return the " + thing() + " as " + a(element.name()),
@@ -340,16 +340,16 @@ final class TypeSource {
         return ("AEIOUaeiou".indexOf(name.charAt(0)) >= 0 ? "an " : "a ") + Docs.code(name);
     }
 
-    // ------------------------------------------------------------------ the snapshot
+    // ------------------------------------------------------------------ the snapshot record
 
     private void writeSnapshot() {
         String snapshot = nested(element, "Snapshot");
         member();
         List<String> lines = new ArrayList<>();
-        lines.add("A snapshot of " + a(element.name()) + ": the " + (relationship ? "relationship's" : "entity's")
-                + " generic state and the value of every attribute, read when the snapshot was made.");
+        lines.add("A snapshot record of " + a(element.name()) + ": the " + (relationship ? "relationship's" : "entity's")
+                + " generic state and the value of every attribute, read when the record was made.");
         lines.add("");
-        lines.add("@param " + stateMethod() + " the generic state that this snapshot was read from");
+        lines.add("@param " + stateMethod() + " the generic state that this record was read from");
         for (Attribute attribute : element.attributes()) {
             lines.add("@param " + attribute(attribute) + " the value of " + Docs.code(attribute.name()));
         }
