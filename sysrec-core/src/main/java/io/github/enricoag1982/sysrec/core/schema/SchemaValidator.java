@@ -83,7 +83,7 @@ final class SchemaValidator {
         for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
             nameAndAliases(type.name(), type.aliases(), Kind.RELATIONSHIP_TYPE, typeNames);
             type.attributes().forEach(attribute -> attributeNames(type.name(), attribute));
-            String inversePath = Names.path(type.name(), type.inverseName());
+            String inversePath = type.inverseName().isEmpty() ? type.name() : Names.path(type.name(), type.inverseName());
             if (!Names.isValid(type.inverseName())) {
                 invalidName(inversePath, "inverse name", type.inverseName());
             }
@@ -286,21 +286,17 @@ final class SchemaValidator {
 
     private void checkAttributes() {
         for (TraitDefinition trait : definition.traits()) {
-            Map<String, Declared> seen = new LinkedHashMap<>();
-            for (AttributeDefinition attribute : trait.attributes()) {
-                add(seen, new Declared(trait.name(), "trait " + trait.name(), attribute), trait.name());
-                checkRange(trait.name(), attribute);
-            }
+            checkOwnAttributes(trait.name(), "trait " + trait.name(), trait.attributes());
         }
         for (EntityTypeDefinition type : definition.entityTypes()) {
-            type.attributes().forEach(attribute -> checkRange(type.name(), attribute));
+            checkOwnAttributes(type.name(), "entity type " + type.name(), type.attributes());
             String key = Names.key(type.name());
             if (!isBroken(key, entitySupertype)) {
                 entityAttributes(key);
             }
         }
         for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
-            type.attributes().forEach(attribute -> checkRange(type.name(), attribute));
+            checkOwnAttributes(type.name(), "relationship type " + type.name(), type.attributes());
             String key = Names.key(type.name());
             if (!isBroken(key, relationshipSupertype)) {
                 relationshipAttributes(key);
@@ -347,14 +343,39 @@ final class SchemaValidator {
         return result;
     }
 
-    /** Adds an attribute to an attribute set, reporting a clash with a different declaration once. */
+    /** Reports attributes that one element declares twice, by name or alias, and checks their ranges. */
+    private void checkOwnAttributes(String owner, String label, List<AttributeDefinition> attributes) {
+        Map<String, Integer> seen = new HashMap<>();
+        for (int index = 0; index < attributes.size(); index++) {
+            AttributeDefinition attribute = attributes.get(index);
+            List<String> names = new ArrayList<>();
+            names.add(attribute.name());
+            names.addAll(attribute.aliases());
+            for (String name : names) {
+                Integer first = seen.putIfAbsent(Names.key(name), index);
+                if (first != null && first != index) {
+                    problems.add(new Problem(ProblemCode.DUPLICATE_ATTRIBUTE, Names.path(owner, name),
+                            "The attribute name '" + name + "' is declared twice by " + label + "."));
+                }
+            }
+            checkRange(owner, attribute);
+        }
+    }
+
+    /**
+     * Adds an attribute to an attribute set, reporting a clash with another element's declaration once. Clashes
+     * within one element are reported by {@link #checkOwnAttributes}.
+     */
     private void add(Map<String, Declared> attributes, Declared declared, String owner) {
         List<String> names = new ArrayList<>();
         names.add(declared.attribute().name());
         names.addAll(declared.attribute().aliases());
         for (String name : names) {
             Declared existing = attributes.get(Names.key(name));
-            if (existing != null && existing != declared && !sameDeclaration(existing, declared)) {
+            if (existing != null && Names.same(existing.declarer(), declared.declarer())) {
+                return;
+            }
+            if (existing != null) {
                 String pair = List.of(describe(existing), describe(declared)).stream().sorted()
                         .collect(Collectors.joining("|"));
                 if (reportedConflicts.add(pair)) {
@@ -368,10 +389,6 @@ final class SchemaValidator {
         for (String name : names) {
             attributes.putIfAbsent(Names.key(name), declared);
         }
-    }
-
-    private static boolean sameDeclaration(Declared first, Declared second) {
-        return Names.same(first.declarer(), second.declarer()) && first.attribute().equals(second.attribute());
     }
 
     private static String describe(Declared declared) {

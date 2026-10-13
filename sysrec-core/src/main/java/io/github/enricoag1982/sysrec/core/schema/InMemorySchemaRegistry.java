@@ -138,9 +138,6 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     /** Origin rules, ownership of types, and validation of the definition together with the other origins. */
     private static List<Problem> check(State current, Origin origin, SchemaDefinition definition) {
         List<Problem> problems = new ArrayList<>(OriginRules.validate(origin));
-        if (!problems.isEmpty()) {
-            return problems;
-        }
         Set<String> conflicts = new HashSet<>();
         for (OriginState other : current.origins().values()) {
             if (other.origin().name().equals(origin.name())) {

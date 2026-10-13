@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 /** Rules for origins: well-formed names and versions, and version order (capability {@code schema-evolution}). */
 final class OriginRules {
 
-    static final String PATH = "origin";
+    static final String PATH = "@origin";
 
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9._-]+");
     private static final Pattern VERSION = Pattern.compile("\\d+(\\.\\d+)*");

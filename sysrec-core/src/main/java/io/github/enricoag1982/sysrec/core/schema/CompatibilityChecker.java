@@ -87,8 +87,8 @@ final class CompatibilityChecker {
     /** Tells whether entities of a type, or of any of its subtypes, could already exist. */
     private boolean existedBefore(String entityType) {
         TypeId id = newSchema.lookup(Kind.ENTITY_TYPE, entityType).orElseThrow().id();
-        return oldSchema.entry(id).isPresent()
-                || newSchema.subtypeIds(id).stream().anyMatch(subtype -> oldSchema.entry(subtype).isPresent());
+        return oldSchema.isConcreteEntityType(id)
+                || newSchema.subtypeIds(id).stream().anyMatch(oldSchema::isConcreteEntityType);
     }
 
     private void compareAttributes() {

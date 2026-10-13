@@ -38,12 +38,17 @@ An entity type SHALL have the attributes it declares, the attributes of the trai
 
 ### Requirement: Traits
 
-The system SHALL support traits that declare attributes for entity types to include. A trait MUST NOT be used as a supertype or as the source or target of a relationship type.
+The system SHALL support traits that declare attributes for entity types to include. A trait MUST NOT be used as a supertype or as the source or target of a relationship type. A trait that reaches a type more than once, through the type's supertypes and the type itself, SHALL contribute its attributes once.
 
 #### Scenario: Attributes come from a trait
 
 - **WHEN** the trait Named declares the attribute `name` and the entity type Party includes Named
 - **THEN** Party and all its subtypes have the attribute `name`
+
+#### Scenario: Trait reached twice
+
+- **WHEN** Party includes the trait Named and its subtype Person also includes Named
+- **THEN** validation succeeds, and Person has the attribute `name` once
 
 #### Scenario: Trait as a relationship end
 
@@ -54,12 +59,17 @@ The system SHALL support traits that declare attributes for entity types to incl
 
 Every attribute SHALL have a name and exactly one value type from: string, boolean, int (32-bit), long (64-bit), decimal, date and instant.
 An attribute MAY be marked required or unique. Attributes of type int, long, decimal, date or instant MAY declare a range, with a lower and an upper bound, each optional and each inclusive or exclusive.
-Attribute names MUST be unique across an entity type, its supertypes and the traits they include. A range MUST NOT be declared on a string or boolean attribute. Its bounds MUST fit the attribute's value type, where an int fits a long or decimal attribute and a long fits a decimal attribute. At least one value MUST fit the range: the lower bound is below the upper bound, or equal to it with both bounds inclusive.
+Attribute names MUST be unique across an entity type, its supertypes and the traits they include, and no element may declare the same name twice. A range MUST NOT be declared on a string or boolean attribute. Its bounds MUST fit the attribute's value type, where an int fits a long or decimal attribute and a long fits a decimal attribute. At least one value MUST fit the range: the lower bound is below the upper bound, or equal to it with both bounds inclusive.
 
 #### Scenario: Name declared twice in a hierarchy
 
 - **WHEN** the entity type Organization declares the attribute `name`, and Organization's supertype Party already has `name` through the trait Named
 - **THEN** validation fails with a problem that names both declarations
+
+#### Scenario: Attribute declared twice by one type
+
+- **WHEN** the entity type Account declares the attribute `currency` twice, with the same definition
+- **THEN** validation fails with a problem located at `Account.currency`
 
 #### Scenario: Same name from two traits
 

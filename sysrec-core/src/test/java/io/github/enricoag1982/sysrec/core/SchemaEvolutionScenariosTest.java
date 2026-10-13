@@ -91,15 +91,37 @@ class SchemaEvolutionScenariosTest {
     void malformedOrigin() {
         List<Problem> problems = rejected(registry.register(new Origin("reference-model", "1.x"), ReferenceModel.definition()));
 
-        assertSingleProblem(problems, ProblemCode.INVALID_ORIGIN, "origin");
+        assertSingleProblem(problems, ProblemCode.INVALID_ORIGIN, "@origin");
         assertThat(registry.history()).isEmpty();
+    }
+
+    @Test
+    void aMalformedOriginIsReportedTogetherWithTheDefinitionsProblems() {
+        SchemaDefinition broken = plus(ReferenceModel.definition(),
+                SchemaDefinition.builder().entityType("Lead", e -> e.supertype("Prospect")).build());
+
+        List<Problem> problems = rejected(registry.register(new Origin("reference-model", "1.x"), broken));
+
+        assertThat(problems).map(Problem::code)
+                .containsExactlyInAnyOrder(ProblemCode.INVALID_ORIGIN, ProblemCode.UNKNOWN_REFERENCE);
+    }
+
+    @Test
+    void anEntityTypeNamedOriginIsNotMistakenForTheOrigin() {
+        SchemaDefinition broken = plus(ReferenceModel.definition(),
+                SchemaDefinition.builder().entityType("origin", e -> e.supertype("Prospect")).build());
+
+        List<Problem> problems = rejected(register("1.0.0", broken));
+
+        assertThat(problems).singleElement().satisfies(problem -> assertThat(problem.path()).isEqualTo("origin"));
+        assertThat(problems.getFirst().code()).isEqualTo(ProblemCode.UNKNOWN_REFERENCE);
     }
 
     @Test
     void malformedOriginName() {
         List<Problem> problems = rejected(registry.register(new Origin("reference model", "1.0.0"), ReferenceModel.definition()));
 
-        assertSingleProblem(problems, ProblemCode.INVALID_ORIGIN, "origin");
+        assertSingleProblem(problems, ProblemCode.INVALID_ORIGIN, "@origin");
     }
 
     @Test
@@ -250,8 +272,34 @@ class SchemaEvolutionScenariosTest {
 
         List<Problem> problems = rejected(register("1.0.0", withEmail()));
 
-        assertSingleProblem(problems, ProblemCode.VERSION_NOT_INCREASED, "origin");
+        assertSingleProblem(problems, ProblemCode.VERSION_NOT_INCREASED, "@origin");
         assertThat(problems.getFirst().message()).contains("reference-model", "1.0.0");
+    }
+
+    @Test
+    void aVersionWithFewerNumbersIsTheSameVersion() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+
+        assertSingleProblem(rejected(register("1.0", withEmail())), ProblemCode.VERSION_NOT_INCREASED, "@origin");
+    }
+
+    @Test
+    void decimalBoundsCompareByValue() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition sameShare = changeRelationshipType(ReferenceModel.definition(), "Owns", type ->
+                new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
+                        type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
+                        type.supertype(), List.of(AttributeDefinition.builder("share", ValueType.DECIMAL).required()
+                                .range(io.github.enricoag1982.sysrec.schema.Range.between(
+                                        io.github.enricoag1982.sysrec.schema.Bound.exclusive(
+                                                io.github.enricoag1982.sysrec.schema.Literal.of(java.math.BigDecimal.ZERO)),
+                                        io.github.enricoag1982.sysrec.schema.Bound.inclusive(
+                                                io.github.enricoag1982.sysrec.schema.Literal.of(new java.math.BigDecimal("100.00")))))
+                                .build()),
+                        type.aliases(), type.deprecated()));
+
+        assertThat(registry.register(ReferenceModel.origin("1.0.0"), sameShare))
+                .isInstanceOf(RegistrationResult.Unchanged.class);
     }
 
     // ------------------------------------------------------------------ compatible changes
@@ -335,6 +383,40 @@ class SchemaEvolutionScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Including a trait with a unique attribute")
+    void includingATraitWithAUniqueAttribute() {
+        SchemaDefinition withCoded = changeEntityType(plus(ReferenceModel.definition(), SchemaDefinition.builder()
+                .trait("Coded", t -> t.attribute("code", ValueType.STRING, a -> a.unique())).build()),
+                "Account", type -> includes(type, "Coded"));
+        applied(register("1.0.0", withCoded));
+
+        List<Problem> problems = rejected(register("1.1.0", changeEntityType(withCoded, "CustomerRole",
+                type -> includes(type, "Coded"))));
+
+        assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Coded");
+        assertThat(problems.getFirst().path()).isEqualTo("Coded.code");
+    }
+
+    @Test
+    @DisplayName("Scenario: Widening a required relationship end")
+    void wideningARequiredRelationshipEnd() {
+        SchemaDefinition withManages = plus(ReferenceModel.definition(), SchemaDefinition.builder()
+                .relationshipType("Manages", r -> r.from("Person").to("Organization")
+                        .targetsPerSource(Multiplicity.EXACTLY_ONE).inverse("managedBy"))
+                .build());
+        applied(register("1.0.0", withManages));
+        SchemaDefinition widened = changeRelationshipType(withManages, "Manages", type ->
+                new RelationshipTypeDefinition(type.name(), "Party", type.target(), type.targetsPerSource(),
+                        type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
+                        type.supertype(), type.attributes(), type.aliases(), type.deprecated()));
+
+        List<Problem> problems = rejected(register("1.1.0", widened));
+
+        assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Manages");
+        assertThat(problems.getFirst().message()).contains("Organization");
+    }
+
+    @Test
     @DisplayName("Scenario: Several breaking changes")
     void severalBreakingChanges() {
         Schema before = applied(register("1.0.0", ReferenceModel.definition())).schema();
@@ -387,6 +469,13 @@ class SchemaEvolutionScenariosTest {
         schema.relationshipTypes().forEach(type -> all.addAll(type.attributes()));
         all.forEach(attribute -> ids.put(attribute.declaredBy() + "." + attribute.name(), attribute.id()));
         return ids;
+    }
+
+    static EntityTypeDefinition includes(EntityTypeDefinition type, String trait) {
+        List<String> traits = new ArrayList<>(type.traits());
+        traits.add(trait);
+        return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), traits, type.attributes(),
+                type.aliases(), type.deprecated());
     }
 
     static RelationshipTypeDefinition withTargetsPerSource(RelationshipTypeDefinition type, Multiplicity value) {

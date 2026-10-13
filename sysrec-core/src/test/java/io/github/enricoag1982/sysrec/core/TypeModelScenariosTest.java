@@ -109,6 +109,18 @@ class TypeModelScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Trait reached twice")
+    void traitReachedTwice() {
+        SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Person", type ->
+                new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), List.of("Named"),
+                        type.attributes(), type.aliases(), type.deprecated()));
+
+        assertThat(validate(definition)).isEmpty();
+        assertThat(register(definition).entityType("Person").orElseThrow().attributes())
+                .filteredOn(attribute -> attribute.name().equals("name")).hasSize(1);
+    }
+
+    @Test
     @DisplayName("Scenario: Trait as a relationship end")
     void traitAsARelationshipEnd() {
         SchemaDefinition definition = plus(ReferenceModel.definition(), SchemaDefinition.builder()
@@ -129,6 +141,36 @@ class TypeModelScenariosTest {
         List<Problem> problems = validate(definition);
         assertSingleProblem(problems, ProblemCode.DUPLICATE_ATTRIBUTE, "Organization");
         assertThat(problems.getFirst().message()).contains("trait Named", "entity type Organization");
+    }
+
+    @Test
+    @DisplayName("Scenario: Attribute declared twice by one type")
+    void attributeDeclaredTwiceByOneType() {
+        SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Account", type ->
+                withAttribute(type, type.attributes().get(1)));
+
+        List<Problem> problems = validate(definition);
+        assertSingleProblem(problems, ProblemCode.DUPLICATE_ATTRIBUTE, "Account");
+        assertThat(problems.getFirst().path()).isEqualTo("Account.currency");
+    }
+
+    @Test
+    void anAliasMayNotRepeatAnotherAttributeOfTheSameType() {
+        SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Account", type ->
+                withAttribute(type, AttributeDefinition.builder("code", ValueType.STRING).aliases("number").build()));
+
+        assertSingleProblem(validate(definition), ProblemCode.DUPLICATE_ATTRIBUTE, "Account");
+    }
+
+    @Test
+    void aMissingInverseNameIsReportedAtTheRelationshipType() {
+        SchemaDefinition definition = plus(ReferenceModel.definition(), SchemaDefinition.builder()
+                .relationshipType("Advises", r -> r.from("Person").to("Organization"))
+                .build());
+
+        List<Problem> problems = validate(definition);
+        assertSingleProblem(problems, ProblemCode.INVALID_NAME, "Advises");
+        assertThat(problems.getFirst().path()).isEqualTo("Advises");
     }
 
     @Test

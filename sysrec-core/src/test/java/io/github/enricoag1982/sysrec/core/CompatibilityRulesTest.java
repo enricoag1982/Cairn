@@ -111,6 +111,40 @@ class CompatibilityRulesTest {
         }
 
         @Test
+        void includingANewTraitWithAnOptionalUniqueAttribute() {
+            SchemaDefinition withTrait = plus(BASE, SchemaDefinition.builder()
+                    .trait("Coded", t -> t.attribute("code", ValueType.STRING, a -> a.unique()))
+                    .build());
+
+            accepted(entity(withTrait, "Account", type -> SchemaEvolutionScenariosTest.includes(type, "Coded")));
+        }
+
+        @Test
+        void wideningARequiredEndThatReachesNoOtherConcreteType() {
+            SchemaRegistry fresh = SchemaRegistries.inMemory(new TestClock());
+            SchemaDefinition parking = SchemaDefinition.builder()
+                    .entityType("Vehicle", e -> e.abstractType())
+                    .entityType("Car", e -> e.supertype("Vehicle"))
+                    .entityType("Garage")
+                    .relationshipType("ParkedIn", r -> r.from("Car").to("Garage")
+                            .targetsPerSource(Multiplicity.EXACTLY_ONE).inverse("parked"))
+                    .build();
+            applied(fresh.register(ReferenceModel.origin("1.0.0"), parking));
+
+            applied(fresh.register(ReferenceModel.origin("1.1.0"),
+                    relationship(parking, "ParkedIn", type -> withEnds(type, "Vehicle", type.target()))));
+        }
+
+        @Test
+        void addingARequiredRelationshipTypeForAnAbstractTypeWithoutSubtypes() {
+            accepted(plus(BASE, SchemaDefinition.builder()
+                    .entityType("Asset", e -> e.abstractType())
+                    .relationshipType("Insures", r -> r.from("Asset").to("Organization")
+                            .targetsPerSource(Multiplicity.EXACTLY_ONE).inverse("insuredBy"))
+                    .build()));
+        }
+
+        @Test
         void renamingATypeWithAnAlias() {
             Schema after = accepted(entity(BASE, "Branch", type -> new EntityTypeDefinition("Office", type.isAbstract(),
                     type.supertype(), type.traits(), type.attributes(), List.of("Branch"), type.deprecated())));
@@ -292,6 +326,25 @@ class CompatibilityRulesTest {
             breaking(plus(entity(BASE, "Organization", type -> withSupertype(type, Optional.of("LegalSubject"))),
                     SchemaDefinition.builder().entityType("LegalSubject", e -> e.abstractType().includes("Named")).build()),
                     "Organization");
+        }
+
+        @Test
+        void movingARequiredAttributeToASupertype() {
+            SchemaDefinition moved = entity(entity(BASE, "Account", type -> withAttributes(type,
+                    type.attributes().stream().filter(a -> !a.name().equals("balance")).toList())),
+                    "Party", type -> withExtra(type, AttributeDefinition.builder("balance", ValueType.DECIMAL).required().build()));
+
+            breaking(moved, "Party.balance");
+        }
+
+        @Test
+        void addingARelationshipSupertype() {
+            breaking(plus(relationship(BASE, "Employs", type -> new RelationshipTypeDefinition(type.name(), type.source(),
+                    type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
+                    type.inverseAliases(), type.kind(), type.symmetric(), Optional.of("Affiliated"), type.attributes(),
+                    type.aliases(), type.deprecated())), SchemaDefinition.builder()
+                    .relationshipType("Affiliated", r -> r.from("Organization").to("Party").inverse("affiliatedWith"))
+                    .build()), "Employs");
         }
 
         @Test

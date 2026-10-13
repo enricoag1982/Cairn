@@ -196,11 +196,34 @@ final class PropertyRules {
             return Optional.empty();
         }
         if (context.newSchema().entry(oldEnd).isPresent() && context.newSchema().isSameOrSubtype(oldEnd, newEnd)) {
+            String multiplicity = context.property().equals("source") ? "targetsPerSource" : "sourcesPerTarget";
+            if (((Multiplicity) property(context.newElement(), multiplicity)).minimum() == 1) {
+                List<String> extended = extendedExistingTypes(context, oldEnd, newEnd);
+                if (!extended.isEmpty()) {
+                    return Optional.of(Change.breaking(context.path(), "widened the " + context.property() + " from "
+                            + context.oldValue() + " to " + context.newValue() + ", which requires a relationship for "
+                            + "the existing types " + extended));
+                }
+            }
             return Optional.of(Change.compatible(context.path(), "widened the " + context.property() + " from "
                     + context.oldValue() + " to " + context.newValue()));
         }
         return Optional.of(Change.breaking(context.path(), "changed the " + context.property() + " from "
                 + context.oldValue() + " to " + context.newValue() + ", which is not one of its supertypes"));
+    }
+
+    /** Concrete entity types under the new end, but not under the old one, that existed before. */
+    private static List<String> extendedExistingTypes(Context context, TypeId oldEnd, TypeId newEnd) {
+        CompiledSchema schema = context.newSchema();
+        List<TypeId> before = new ArrayList<>(schema.subtypeIds(oldEnd));
+        before.add(oldEnd);
+        List<TypeId> after = new ArrayList<>(schema.subtypeIds(newEnd));
+        after.add(newEnd);
+        return after.stream()
+                .filter(id -> !before.contains(id) && context.oldSchema().isConcreteEntityType(id))
+                .map(id -> schema.entry(id).orElseThrow().name())
+                .sorted()
+                .toList();
     }
 
     private static Optional<Change> relaxedMultiplicity(Context context) {

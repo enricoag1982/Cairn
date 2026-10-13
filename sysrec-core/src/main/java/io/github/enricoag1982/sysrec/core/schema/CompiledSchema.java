@@ -179,6 +179,11 @@ final class CompiledSchema implements Schema {
                 .toList();
     }
 
+    /** Tells whether a type is a concrete entity type, so that entities of it can exist. */
+    boolean isConcreteEntityType(TypeId id) {
+        return entityTypes.stream().anyMatch(type -> type.id().equals(id) && !type.isAbstract());
+    }
+
     boolean isSameOrSubtype(TypeId type, TypeId ancestor) {
         return type.equals(ancestor) || entries.containsKey(ancestor) && subtypeIds(ancestor).contains(type);
     }

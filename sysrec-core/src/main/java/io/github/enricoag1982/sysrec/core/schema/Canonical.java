@@ -1,10 +1,15 @@
 package io.github.enricoag1982.sysrec.core.schema;
 
 import io.github.enricoag1982.sysrec.schema.AttributeDefinition;
+import io.github.enricoag1982.sysrec.schema.Bound;
 import io.github.enricoag1982.sysrec.schema.EntityTypeDefinition;
+import io.github.enricoag1982.sysrec.schema.Literal;
+import io.github.enricoag1982.sysrec.schema.Range;
 import io.github.enricoag1982.sysrec.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.sysrec.schema.SchemaDefinition;
 import io.github.enricoag1982.sysrec.schema.TraitDefinition;
+import io.github.enricoag1982.sysrec.schema.ValueType;
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 
@@ -46,9 +51,33 @@ final class Canonical {
     private static List<AttributeDefinition> attributes(List<AttributeDefinition> attributes) {
         return attributes.stream()
                 .map(attribute -> new AttributeDefinition(attribute.name(), attribute.valueType(), attribute.required(),
-                        attribute.unique(), attribute.range(), sorted(attribute.aliases()), attribute.deprecated()))
+                        attribute.unique(), attribute.range().map(range -> of(range, attribute.valueType())),
+                        sorted(attribute.aliases()), attribute.deprecated()))
                 .sorted(Comparator.comparing(AttributeDefinition::name))
                 .toList();
+    }
+
+    /**
+     * Numeric bounds compare by value in the attribute's value type, so for a decimal attribute 100, 100L and 100.0
+     * are the same bound.
+     */
+    private static Range of(Range range, ValueType type) {
+        return new Range(range.lower().map(bound -> of(bound, type)), range.upper().map(bound -> of(bound, type)));
+    }
+
+    private static Bound of(Bound bound, ValueType type) {
+        Literal value = bound.value();
+        Literal normalized = switch (type) {
+            case DECIMAL -> switch (value) {
+                case Literal.IntLiteral(int number) -> Literal.of(BigDecimal.valueOf(number).stripTrailingZeros());
+                case Literal.LongLiteral(long number) -> Literal.of(BigDecimal.valueOf(number).stripTrailingZeros());
+                case Literal.DecimalLiteral(BigDecimal number) -> Literal.of(number.stripTrailingZeros());
+                default -> value;
+            };
+            case LONG -> value instanceof Literal.IntLiteral(int number) ? Literal.of((long) number) : value;
+            default -> value;
+        };
+        return new Bound(normalized, bound.inclusive());
     }
 
     private static List<String> sorted(List<String> names) {
