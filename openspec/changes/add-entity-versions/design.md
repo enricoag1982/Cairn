@@ -45,11 +45,11 @@ Constraints that shape the approach:
   - `Patch(Ref target, EffectivePeriod period, Map<String, Value> set, Set<String> clear, ConflictCheck check)`
   - `Replace(Ref target, EffectivePeriod period, Map<String, Value> values, ConflictCheck check)`
   - `EndDate(Ref target, Instant from, ConflictCheck check)`
-- `Ref` is sealed: `EntityId(String value)` or `TemporaryId(String name)`. `add-relationships` adds `RelationshipId`, so writes that patch, replace or end-date take any of them.
+- `Ref` is sealed: an `Id` or a `TemporaryId(String name)`. Writes that patch, replace or end-date take any `Ref`.
 - `EffectivePeriod(Instant from, Optional<Instant> until)`, truncated to microseconds by its constructor; `EffectivePeriod.from(Instant)` and `between(Instant, Instant)`.
 - `ConflictCheck` is sealed: `none()`, `perEntity(Basis readAt)`, `perAttribute(Basis readAt)`.
 - `CommitResult` is sealed: `Committed(Receipt receipt)` or `Rejected(List<Problem> problems)`. `DryRunResult` is sealed: `WouldCommit()` or `Rejected(List<Problem> problems)`.
-- `Id` is sealed and extends `Ref`: `EntityId` now, and `RelationshipId` with `add-relationships`.
+- `Id` is sealed and extends `Ref`: `EntityId(String value)` now, and `RelationshipId` with `add-relationships`.
 - `Receipt(Basis basis, Instant transactionTime, Map<TemporaryId, Id> temporaryIds, List<Id> created, String principal, Optional<String> onBehalfOf, Optional<String> reason, Optional<String> idempotencyKey)`.
 - `TransactionRecord(Basis basis, Instant transactionTime, String principal, Optional<String> onBehalfOf, Optional<String> reason)`.
 - `Coordinates`: an effective instant and a sealed `KnownAt` (`latest()`, `basis(Basis)`, `transactionTime(Instant)`), built with `Coordinates.effectiveAt(instant)`, optionally `.knownAt(...)`.
