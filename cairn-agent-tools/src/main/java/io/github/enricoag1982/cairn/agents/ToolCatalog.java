@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.agents;
 
+import io.github.enricoag1982.cairn.documents.Instants;
 import java.util.ArrayList;
 import java.util.List;
 import tools.jackson.databind.node.ArrayNode;
@@ -157,8 +158,8 @@ final class ToolCatalog {
         Object[] all = new Object[properties.length + 4];
         System.arraycopy(properties, 0, all, 0, properties.length);
         all[properties.length] = "effectiveAt";
-        all[properties.length + 1] = string("The effective time to read at: an ISO 8601 instant with Z or an offset, "
-                + "such as 2026-03-01T00:00:00Z.").put("format", "date-time");
+        all[properties.length + 1] = instant("The effective time to read at: an ISO 8601 instant with seconds, and Z or "
+                + "an offset with a colon, such as 2026-03-01T00:00:00Z.");
         all[properties.length + 2] = "knownAt";
         all[properties.length + 3] = knownAt();
         return object(required, all);
@@ -170,13 +171,19 @@ final class ToolCatalog {
                         + "{\"transactionTime\": \"2026-04-05T00:00:00Z\"}. Give exactly one. The default is now.");
         ObjectNode properties = schema.putObject("properties");
         properties.putObject("basis").put("type", "integer").put("minimum", 0);
-        properties.putObject("transactionTime").put("type", "string").put("format", "date-time");
+        properties.putObject("transactionTime").put("type", "string").put("format", "date-time")
+                .put("pattern", Instants.PATTERN);
         schema.put("minProperties", 1).put("maxProperties", 1).put("additionalProperties", false);
         return schema;
     }
 
     private static ObjectNode string(String description) {
         return Json.object().put("type", "string").put("description", description);
+    }
+
+    /** An instant, in the form that payloads use: the pattern of the generated JSON Schemas as well as the format. */
+    private static ObjectNode instant(String description) {
+        return string(description).put("format", "date-time").put("pattern", Instants.PATTERN);
     }
 
     private static ObjectNode integer(String description) {

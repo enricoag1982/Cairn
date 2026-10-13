@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
+import io.github.enricoag1982.cairn.documents.Instants;
 import io.github.enricoag1982.cairn.documents.JsonSchemas;
 import io.github.enricoag1982.cairn.documents.SchemaDocuments;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
@@ -564,6 +565,51 @@ class AgentToolsTest {
         assertThat(problem.get("path").stringValue()).isEqualTo("@arguments.effectiveAt");
         assertThat(problem.get("found").stringValue()).isEqualTo("1 March");
         assertThat(problem.get("expected").stringValue()).contains("2026-03-01T00:00:00Z");
+    }
+
+    @Test
+    void instantArgumentsHaveTheOneFormOfPayloads() {
+        Ownership data = recordOwnership();
+
+        for (String instant : new String[] {"2026-03-01T00:00:00+0100", "2026-03-01T00:00:00+01", "2026-03-01T00:00Z",
+                "2026-03-01"}) {
+            JsonNode effective = fixture.call("cairn_read_entity",
+                    args("id", data.acme.value(), "effectiveAt", instant));
+            ObjectNode atTime = args("id", data.acme.value(), "effectiveAt", MARCH_1);
+            atTime.putObject("knownAt").put("transactionTime", instant);
+
+            JsonNode problem = problem(effective, "INVALID_VALUE");
+            assertThat(problem.get("path").stringValue()).as(instant).isEqualTo("@arguments.effectiveAt");
+            assertThat(problem.get("found").stringValue()).isEqualTo(instant);
+            assertThat(problem.get("expected").stringValue()).contains("2026-03-01T00:00:00Z");
+            assertThat(problem.get("hint").stringValue()).contains("2026-03-01T00:00:00+01:00");
+            assertThat(problem(fixture.call("cairn_read_entity", atTime), "INVALID_VALUE").get("path")
+                    .stringValue()).as(instant).isEqualTo("@arguments.knownAt.transactionTime");
+        }
+
+        JsonNode read = fixture.call("cairn_read_entity",
+                args("id", data.acme.value(), "effectiveAt", "2026-03-01T00:00:00+01:00"));
+
+        assertThat(read.has("problems")).isFalse();
+        assertThat(read.get("effectiveAt").stringValue()).isEqualTo("2026-02-28T23:00:00Z");
+    }
+
+    @Test
+    void theInputSchemasGiveInstantsThePatternOfPayloads() {
+        int instants = 0;
+        for (AgentTools.ToolDescription tool : AgentTools.toolDescriptions()) {
+            JsonNode properties = Json.parse(tool.inputSchema()).get("properties");
+            if (properties.has("effectiveAt")) {
+                JsonNode effectiveAt = properties.get("effectiveAt");
+                JsonNode transactionTime = properties.get("knownAt").get("properties").get("transactionTime");
+                for (JsonNode instant : new JsonNode[] {effectiveAt, transactionTime}) {
+                    assertThat(instant.get("format").stringValue()).as(tool.name()).isEqualTo("date-time");
+                    assertThat(instant.get("pattern").stringValue()).as(tool.name()).isEqualTo(Instants.PATTERN);
+                    instants++;
+                }
+            }
+        }
+        assertThat(instants).as("the read tools").isGreaterThanOrEqualTo(2 * 5);
     }
 
     @Test

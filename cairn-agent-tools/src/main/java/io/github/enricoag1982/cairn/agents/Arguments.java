@@ -1,12 +1,11 @@
 package io.github.enricoag1982.cairn.agents;
 
 import io.github.enricoag1982.cairn.data.KnownAt;
+import io.github.enricoag1982.cairn.documents.Instants;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -24,6 +23,7 @@ import tools.jackson.databind.node.ObjectNode;
 final class Arguments {
 
     private static final String EXAMPLE_INSTANT = "2026-03-01T00:00:00Z";
+    private static final String EXAMPLE_OFFSET_INSTANT = "2026-03-01T00:00:00+01:00";
 
     private final ObjectNode values;
     private final List<Problem> problems = new ArrayList<>();
@@ -124,7 +124,10 @@ final class Arguments {
         return node.intValue();
     }
 
-    /** A required argument that is an ISO 8601 instant; null, with a problem, if it is missing or not one. */
+    /**
+     * A required argument that is an instant, in the form that payloads use ({@link Instants}); null, with a problem, if
+     * it is missing or not one.
+     */
     Instant instant(String name) {
         JsonNode node = values.get(name);
         if (node == null || node.isNull()) {
@@ -180,15 +183,16 @@ final class Arguments {
                     Optional.of(expected), Optional.of(describe(node)), Optional.empty()));
             return null;
         }
-        try {
-            return OffsetDateTime.parse(node.stringValue()).toInstant();
-        } catch (DateTimeParseException e) {
-            problems.add(new Problem(ProblemCode.INVALID_VALUE, path,
-                    "The value is not an ISO 8601 instant with Z or an offset.", Optional.of(expected),
-                    Optional.of(node.stringValue()),
-                    Optional.of("Write the date and the time, with Z or an offset, such as " + EXAMPLE_INSTANT + ".")));
-            return null;
+        Optional<Instant> instant = Instants.read(node.stringValue());
+        if (instant.isPresent()) {
+            return instant.get();
         }
+        problems.add(new Problem(ProblemCode.INVALID_VALUE, path,
+                "The value is not an instant in ISO 8601 form, with seconds, and with Z or an offset with a colon.",
+                Optional.of(expected), Optional.of(node.stringValue()),
+                Optional.of("Write the date, T, the time with seconds, and Z or an offset with a colon, such as "
+                        + EXAMPLE_INSTANT + " or " + EXAMPLE_OFFSET_INSTANT + ".")));
+        return null;
     }
 
     private static Problem missing(String name, String expected) {
