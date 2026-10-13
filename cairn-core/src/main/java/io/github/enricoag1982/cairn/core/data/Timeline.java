@@ -214,6 +214,36 @@ final class Timeline {
     }
 
     /**
+     * The segments of this timeline in which the entity has other values than in a previous timeline at some instant,
+     * including an instant at which it did not exist before. A segment that only has a different period, because the
+     * entity was cut off or because an equal change split it, is not changed.
+     *
+     * @param previous the timeline to compare with
+     * @return the changed segments, in order
+     */
+    List<Segment> changedSince(Timeline previous) {
+        return segments.stream().filter(segment -> !previous.hasValuesThroughout(segment)).toList();
+    }
+
+    /** Tells whether the entity has the values of a segment at every instant of the segment's period. */
+    private boolean hasValuesThroughout(Segment wanted) {
+        Instant cursor = wanted.from();
+        for (Segment segment : segments) {
+            if (!segment.end().isAfter(cursor)) {
+                continue;
+            }
+            if (segment.from().isAfter(cursor) || !segment.values().equals(wanted.values())) {
+                return false;
+            }
+            cursor = segment.end();
+            if (!cursor.isBefore(wanted.end())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Tells whether two timelines give an attribute the same value at every instant. An entity that does not exist, and
      * an entity without a value for the attribute, are the same here.
      */

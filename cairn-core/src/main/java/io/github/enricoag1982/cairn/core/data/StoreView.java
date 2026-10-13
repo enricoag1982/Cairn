@@ -3,17 +3,13 @@ package io.github.enricoag1982.cairn.core.data;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.View;
-import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.TypeId;
-import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
@@ -93,23 +89,7 @@ final class StoreView implements View {
         return List.copyOf(states);
     }
 
-    /**
-     * The state of an entity in one of its segments: values under the attribute names of the view's schema, in the
-     * order of its attributes, each in the attribute's value type in that schema.
-     */
     private Optional<EntityState> state(StoredEntity entity, Segment segment) {
-        Optional<EntityType> type = index.entityType(entity.type());
-        if (type.isEmpty()) {
-            return Optional.empty();
-        }
-        Map<String, Value> values = new LinkedHashMap<>();
-        for (Attribute attribute : type.get().attributes()) {
-            Value value = segment.values().get(attribute.id());
-            if (value != null) {
-                values.put(attribute.name(), Conversions.convert(value, attribute.valueType()));
-            }
-        }
-        return Optional.of(new EntityState(entity.id(), type.get().name(), values, segment.period(),
-                segment.recordedAt(), segment.recordedBasis()));
+        return EntityStates.of(index, entity.id(), entity.type(), segment);
     }
 }

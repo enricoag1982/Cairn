@@ -7,6 +7,7 @@ import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
@@ -16,13 +17,16 @@ import io.github.enricoag1982.cairn.fixtures.TestClock;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
+import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import java.time.Instant;
 import java.util.List;
 
 /**
  * An in-memory store with the reference model registered and a clock that the test moves, with shortcuts to commit,
- * to reject and to replay the {@linkplain ReferenceStories stories of the reference domain}. The deterministic ID
+ * to reject and to replay the {@linkplain ReferenceStories stories of the reference domain}. It is created with the
+ * rules of the reference domain: {@code lei-checksum} runs, and {@code total-ownership-at-most-100} is declared without
+ * code until relationships exist. The deterministic ID
  * generator makes IDs predictable: {@link #id(int)}. It lives in the tests of {@code cairn-core}, because the test
  * fixtures of {@code cairn-api} cannot create a store; the stories, dates and values are in {@link ReferenceStories}.
  */
@@ -41,10 +45,16 @@ final class ReferenceStore {
     }
 
     private ReferenceStore(IdGenerator generator, SchemaDefinition definition) {
+        this(generator, definition, ReferenceModel.executableRules(), ReferenceModel.declaredRules());
+    }
+
+    private ReferenceStore(IdGenerator generator, SchemaDefinition definition, List<Rule> rules,
+            List<RuleDescriptor> declaredRules) {
         store = Stores.inMemory(StoreSettings.builder()
                 .clock(clock)
                 .idGenerator(generator)
-                .availableRules(ReferenceModel.rules())
+                .rules(rules)
+                .availableRules(declaredRules)
                 .build());
         assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), definition))
                 .isInstanceOf(RegistrationResult.Applied.class);
@@ -53,6 +63,27 @@ final class ReferenceStore {
     /** A store with deterministic IDs in which another schema than the reference model was registered. */
     static ReferenceStore with(SchemaDefinition definition) {
         return new ReferenceStore(IdGenerators.deterministic(), definition);
+    }
+
+    /**
+     * A store with deterministic IDs and exactly the given rules, in which a schema was registered. The reference model
+     * names {@code total-ownership-at-most-100}, so a schema derived from it needs that rule declared.
+     *
+     * @param definition    the schema to register
+     * @param rules         the rules with code
+     * @param declaredRules the rules declared without code
+     */
+    static ReferenceStore withRules(SchemaDefinition definition, List<Rule> rules, List<RuleDescriptor> declaredRules) {
+        return new ReferenceStore(IdGenerators.deterministic(), definition, rules, declaredRules);
+    }
+
+    /**
+     * Store settings with the rules of the reference domain: {@code lei-checksum} with its code, and
+     * {@code total-ownership-at-most-100} declared without it. Chain the clock and the ID generator.
+     */
+    static StoreSettings.Builder referenceSettings() {
+        return StoreSettings.builder().rules(ReferenceModel.executableRules())
+                .availableRules(ReferenceModel.declaredRules());
     }
 
     /** The deterministic generator's n-th ID. */

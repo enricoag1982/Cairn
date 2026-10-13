@@ -122,7 +122,7 @@ class StoresTest {
     @Test
     void theStoresHaveSequencesOfTheirOwn() {
         TestClock clock = new TestClock();
-        StoreSettings settings = StoreSettings.builder().clock(clock).availableRules(ReferenceModel.rules()).build();
+        StoreSettings settings = ReferenceStore.referenceSettings().clock(clock).build();
         Store first = Stores.inMemory(settings);
         Store second = Stores.inMemory(settings);
 
@@ -137,8 +137,7 @@ class StoresTest {
     void storesMadeFromTheSameSettingsDoNotShareTheirGenerator() {
         IdGenerator generator = IdGenerators.deterministic();
         TestClock clock = new TestClock();
-        StoreSettings settings = StoreSettings.builder().clock(clock).idGenerator(generator)
-                .availableRules(ReferenceModel.rules()).build();
+        StoreSettings settings = ReferenceStore.referenceSettings().clock(clock).idGenerator(generator).build();
         Transaction transaction = Transaction.by("tester").create(ACME, "Organization", from(1, 1),
                 values("name", "ACME")).build();
 

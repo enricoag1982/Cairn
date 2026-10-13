@@ -5,7 +5,8 @@ import java.util.Optional;
 
 /**
  * One reason a schema definition or registration is rejected (capabilities {@code type-model} and {@code schema-evolution}),
- * or a schema document cannot be read (capability {@code schema-documents}).
+ * a schema document cannot be read (capability {@code schema-documents}), or a data transaction is rejected
+ * (capabilities {@code transactions}, {@code entity-versions} and {@code entity-rules}).
  *
  * <p>The code, path and message are always present. A problem can also say what was expected, what was found and how
  * to fix it. These details are text for people and agents to read: anything a program needs to act on is in the
@@ -14,6 +15,9 @@ import java.util.Optional;
  * <p>The engine does not know about documents, so the problems it reports have no location. A problem about a schema
  * document, and a problem about the definition read from one after
  * {@linkplain #at(DocumentLocation) it has been located}, carry the place in the document.
+ *
+ * <p>A problem that a rule reports ({@link ProblemCode#RULE_VIOLATION}) also carries the rule's own code, qualified by
+ * the rule's name, such as {@code lei-checksum/invalid-check-digits}.
  *
  * @param code     a stable code
  * @param path     the element concerned: a type name, or a type name and an attribute, inverse name or rule name joined by a
@@ -24,6 +28,8 @@ import java.util.Optional;
  * @param found    what the definition contains instead, for example the offending name
  * @param hint     how to fix the problem, for example the closest name that exists
  * @param location where the problem is in the schema document it came from, if it is located
+ * @param ruleCode the code a rule reported, qualified by the rule's name and separated from it by a slash, for example
+ *                 {@code lei-checksum/invalid-check-digits}; empty unless the problem comes from a rule
  */
 public record Problem(
         ProblemCode code,
@@ -32,7 +38,8 @@ public record Problem(
         Optional<String> expected,
         Optional<String> found,
         Optional<String> hint,
-        Optional<DocumentLocation> location) {
+        Optional<DocumentLocation> location,
+        Optional<String> ruleCode) {
 
     /**
      * Rejects null components.
@@ -45,6 +52,29 @@ public record Problem(
         Objects.requireNonNull(found, "found");
         Objects.requireNonNull(hint, "hint");
         Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(ruleCode, "ruleCode");
+    }
+
+    /**
+     * Creates a problem that does not come from a rule.
+     *
+     * @param code     a stable code
+     * @param path     the element concerned
+     * @param message  a readable explanation
+     * @param expected what would have been accepted
+     * @param found    what the definition contains instead
+     * @param hint     how to fix the problem
+     * @param location where the problem is in the schema document it came from, if it is located
+     */
+    public Problem(
+            ProblemCode code,
+            String path,
+            String message,
+            Optional<String> expected,
+            Optional<String> found,
+            Optional<String> hint,
+            Optional<DocumentLocation> location) {
+        this(code, path, message, expected, found, hint, location, Optional.empty());
     }
 
     /**
@@ -64,7 +94,7 @@ public record Problem(
             Optional<String> expected,
             Optional<String> found,
             Optional<String> hint) {
-        this(code, path, message, expected, found, hint, Optional.empty());
+        this(code, path, message, expected, found, hint, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -75,7 +105,8 @@ public record Problem(
      * @param message a readable explanation
      */
     public Problem(ProblemCode code, String path, String message) {
-        this(code, path, message, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        this(code, path, message, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty());
     }
 
     /**
@@ -85,11 +116,12 @@ public record Problem(
      * @return the located copy
      */
     public Problem at(DocumentLocation location) {
-        return new Problem(code, path, message, expected, found, hint, Optional.of(Objects.requireNonNull(location, "location")));
+        return new Problem(code, path, message, expected, found, hint,
+                Optional.of(Objects.requireNonNull(location, "location")), ruleCode);
     }
 
     @Override
     public String toString() {
-        return code + " at " + path + ": " + message;
+        return code + ruleCode.map(rule -> " (" + rule + ")").orElse("") + " at " + path + ": " + message;
     }
 }

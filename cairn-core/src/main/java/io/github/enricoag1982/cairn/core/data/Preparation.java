@@ -34,15 +34,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Applies the writes of one transaction to working copies of the timelines it touches, and validates the state that
- * results (design D5 and D6 of {@code add-entity-versions}). Nothing in the store changes: a commit appends
- * {@link #changes()} afterwards, and a dry run drops them.
+ * Applies the writes of one transaction to working copies of the timelines it touches, validates the state that
+ * results (design D5 and D6 of {@code add-entity-versions}), and runs the rules that apply to it (design D3 of
+ * {@code add-entity-rules}). Nothing in the store changes: a commit appends {@link #changes()} afterwards, and a dry
+ * run drops them.
  *
  * <p>Writes are applied in order. A write with problems is applied as far as it can be, so that the problems of the
  * resulting state are found too: every problem of the transaction is reported, not only the first. Problems come in a
  * fixed order: those of the transaction itself, then those of each write in the order of the writes, then those of
- * each entity in the order in which the writes first touched it. Within an entity they follow the order of the
- * attributes in the schema.
+ * each entity in the order in which the writes first touched it, and last those of the rules. Within an entity they
+ * follow the order of the attributes in the schema.
  *
  * <p>A Preparation is used once and by one thread: the one holding the store's writer lock.
  */
@@ -101,6 +102,7 @@ final class Preparation {
     private final IdGenerator generator;
     private final CommitSequence.Commit commit;
     private final ValueChecks checks;
+    private final Rules rules;
 
     private final List<Problem> problems = new ArrayList<>();
     private final Map<EntityId, Working> working = new LinkedHashMap<>();
@@ -117,15 +119,17 @@ final class Preparation {
      * @param generator   a copy of the store's ID generator, which this preparation advances
      * @param commit      the basis and transaction time the transaction would get
      * @param checks      the value checks
+     * @param rules       the rules with code that run once the declarative checks have passed
      */
     Preparation(Transaction transaction, SchemaIndex index, Map<EntityId, StoredEntity> stored,
-            IdGenerator generator, CommitSequence.Commit commit, ValueChecks checks) {
+            IdGenerator generator, CommitSequence.Commit commit, ValueChecks checks, Rules rules) {
         this.transaction = transaction;
         this.index = index;
         this.stored = stored;
         this.generator = generator;
         this.commit = commit;
         this.checks = checks;
+        this.rules = rules;
     }
 
     /** Applies and validates the transaction; returns this. */
@@ -150,6 +154,7 @@ final class Preparation {
                 validate(entity);
             }
         }
+        runRules();
         return this;
     }
 
@@ -526,6 +531,52 @@ final class Preparation {
         return Problems.of(ProblemCode.CONFLICT, path, message, "no change since basis " + readAt.value(),
                 "a change recorded at basis " + entity.latestBasis().value(),
                 "Read the entity again, and decide whether the write still applies.");
+    }
+
+    // ------------------------------------------------------------------ rules
+
+    /**
+     * Runs the rules of the entities the transaction changes (design D3 of {@code add-entity-rules}), after the
+     * declarative checks of every entity. An entity takes part if it has no problem so far and its new timeline has
+     * segments that differ from its previous timeline. The rules read a provisional view of the state the transaction
+     * would produce, which is built once and only if some rule runs.
+     */
+    private void runRules() {
+        List<RuleRunner.Subject> subjects = new ArrayList<>();
+        for (Working entity : working.values()) {
+            if (entity.failed() || entity.entityType.effectiveRules().isEmpty() || hasProblems(entity)) {
+                continue;
+            }
+            List<Segment> changed = entity.timeline.changedSince(entity.before);
+            if (!changed.isEmpty()) {
+                subjects.add(new RuleRunner.Subject(entity.id, entity.path, entity.entityType, changed));
+            }
+        }
+        if (subjects.isEmpty()) {
+            return;
+        }
+        Map<EntityId, ProvisionalView.Overlaid> overlay = new HashMap<>();
+        for (Working entity : working.values()) {
+            if (!entity.failed()) {
+                overlay.put(entity.id, new ProvisionalView.Overlaid(entity.entityType.id(), entity.timeline));
+            }
+        }
+        problems.addAll(new RuleRunner(rules, new ProvisionalView.Source(commit.basis(), index, stored, overlay))
+                .run(subjects));
+    }
+
+    /** Tells whether a problem found so far is about the entity or one of its attributes. */
+    private boolean hasProblems(Working entity) {
+        for (Problem problem : problems) {
+            if (isAbout(problem.path(), entity.path) || isAbout(problem.path(), entity.id.value())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isAbout(String problemPath, String entityPath) {
+        return problemPath.equals(entityPath) || problemPath.startsWith(entityPath + ".");
     }
 
     // ------------------------------------------------------------------ validation of the resulting state

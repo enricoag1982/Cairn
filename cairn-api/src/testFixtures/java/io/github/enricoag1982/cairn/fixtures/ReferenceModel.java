@@ -6,6 +6,7 @@ import static io.github.enricoag1982.cairn.schema.ValueType.DATE;
 import static io.github.enricoag1982.cairn.schema.ValueType.DECIMAL;
 import static io.github.enricoag1982.cairn.schema.ValueType.STRING;
 
+import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Range;
@@ -96,21 +97,41 @@ public final class ReferenceModel {
      * Describes the two rules of the reference domain, which the reference model names. Create a registry with them
      * wherever the reference model is registered.
      *
+     * <p>A store also needs the code of the rules it should run: {@link #executableRules()} and
+     * {@link #declaredRules()} split these descriptors into the rules that have code and those that do not.
+     *
      * @return the rules {@code lei-checksum} and {@code total-ownership-at-most-100}, both in version 1
      */
     public static List<RuleDescriptor> rules() {
         return List.of(
-                new RuleDescriptor("lei-checksum", 1,
-                        "The LEI's check digits are valid (ISO 17442, ISO 7064 MOD 97-10).",
-                        "Organization",
-                        List.of(new RuleCode("invalid-check-digits",
-                                "The two check digits of the LEI do not match its other characters. "
-                                        + "Correct the LEI."))),
+                LeiChecksumRule.DESCRIPTOR,
                 new RuleDescriptor("total-ownership-at-most-100", 1,
                         "The owners of a party hold at most 100% of it together, at every point in effective time.",
                         "Owns",
                         List.of(new RuleCode("over-100-percent",
                                 "The shares of a party's owners add up to more than 100% at some point in effective "
                                         + "time. Lower a share, or end an ownership."))));
+    }
+
+    /**
+     * The rules of the reference domain that have code: {@code lei-checksum}, as {@link LeiChecksumRule}. Give them to
+     * a store together with {@link #declaredRules()}, so that the store can register the reference model and runs the
+     * rules at commit. {@code total-ownership-at-most-100} has no code until relationships exist.
+     *
+     * @return new instances of the executable rules
+     */
+    public static List<Rule> executableRules() {
+        return List.of(new LeiChecksumRule());
+    }
+
+    /**
+     * The descriptors of the rules of the reference domain that have no code yet: {@code total-ownership-at-most-100}.
+     * A store declares them, so that the reference model can name them, and rejects writes that would need to run them.
+     *
+     * @return the descriptors among {@link #rules()} that no {@linkplain #executableRules() executable rule} describes
+     */
+    public static List<RuleDescriptor> declaredRules() {
+        List<RuleDescriptor> withCode = executableRules().stream().map(Rule::descriptor).toList();
+        return rules().stream().filter(rule -> !withCode.contains(rule)).toList();
     }
 }

@@ -5,7 +5,7 @@ import io.github.enricoag1982.cairn.data.Store;
 import java.util.Objects;
 
 /**
- * Creates stores (capabilities {@code transactions}, {@code entity-versions} and {@code views}).
+ * Creates stores (capabilities {@code transactions}, {@code entity-versions}, {@code views} and {@code entity-rules}).
  */
 public final class Stores {
 
@@ -14,7 +14,7 @@ public final class Stores {
 
     /**
      * Creates an empty in-memory store with the default {@linkplain StoreSettings settings}: the system clock, UUIDv7
-     * IDs and no available rules.
+     * IDs and no rules.
      *
      * @return the store
      */
@@ -24,16 +24,19 @@ public final class Stores {
 
     /**
      * Creates an empty in-memory store. The store's schema registry shares its sequence of bases and transaction times
-     * with its data transactions.
+     * with its data transactions. The descriptions of the settings' rules, with the rules the settings declare, are the
+     * rules available to the registry; the store runs the rules at commit (capability {@code entity-rules}).
      *
-     * @param settings the clock, ID generator and available rules; the store works on a copy of the generator
+     * @param settings the clock, ID generator and rules; the store works on a copy of the generator
      * @return the store
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references (requirement
-     *                                  "Rule references" of the {@code type-model} spec), or if two rules have the same
-     *                                  name and version
+     *                                  "Rule references" of the {@code type-model} spec), or if two rules, whether
+     *                                  they have code or are declared, have the same name and version
+     * @throws NullPointerException     if a rule has no descriptor
      */
     public static Store inMemory(StoreSettings settings) {
         Objects.requireNonNull(settings, "settings");
-        return new InMemoryStore(settings.clock(), settings.idGenerator().copy(), settings.availableRules());
+        return new InMemoryStore(settings.clock(), settings.idGenerator().copy(), settings.rules(),
+                settings.availableRules());
     }
 }

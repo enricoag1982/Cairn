@@ -9,4 +9,7 @@ module io.github.enricoag1982.cairn.core {
     requires re2j;
 
     exports io.github.enricoag1982.cairn.core;
+
+    // StoreSettings.Builder.discoverRules() loads the rules that other modules or jars provide.
+    uses io.github.enricoag1982.cairn.data.Rule;
 }

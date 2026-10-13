@@ -28,8 +28,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Checks that {@link ReferenceStories} tells the stories of the table in {@code docs/reference/reference-domain.md}:
- * for each story the fixture builds (RD-1, RD-5, RD-7 and RD-9), the page's row names the recording dates in the order
- * of the fixture's transactions, and states every effective date and value that the fixture writes, such as
+ * for each story the fixture builds (RD-1, RD-5, RD-7, RD-9 and RD-12), the page's row names the recording dates in
+ * the order of the fixture's transactions, and states every effective date and value that the fixture writes, such as
  * "Recorded 16 March", "15 March", "1,500" and the LEI.
  */
 class ReferenceStoriesTest {
@@ -79,6 +79,11 @@ class ReferenceStoriesTest {
     }
 
     @Test
+    void rd12MatchesThePage() {
+        assertTold("RD-12", ReferenceStories.rd12GammaWrongCheckDigits());
+    }
+
+    @Test
     void theFactsOfAStoryAreWhatTheFixtureWrites() {
         assertThat(facts(ReferenceStories.rd1Parties())).containsExactly("1 January", "ACME", "Beta", "Alice");
         assertThat(facts(ReferenceStories.rd5Accounts())).containsExactly("1 January", "A-1", "EUR", "1,000", "A-2",
@@ -91,8 +96,11 @@ class ReferenceStoriesTest {
         assertThat(facts(ReferenceStories.rd9AcmeLei(ReferenceStories.ACME)))
                 .containsExactly("1 January", ReferenceStories.LEI);
         assertThat(facts(ReferenceStories.rd9Gamma())).containsExactly("1 March", "Gamma", ReferenceStories.LEI);
+        assertThat(facts(ReferenceStories.rd12GammaWrongCheckDigits()))
+                .containsExactly("1 March", "Gamma", ReferenceStories.LEI_WRONG_CHECK_DIGITS);
         assertThat(recordedDate(ReferenceStories.rd5BalancePatch(ReferenceStories.A1))).isEqualTo("16 March");
         assertThat(recordedDate(ReferenceStories.rd7Rename(ReferenceStories.ACME))).isEqualTo("12 October");
+        assertThat(recordedDate(ReferenceStories.rd12GammaWrongCheckDigits())).isEqualTo("1 March");
     }
 
     @Test

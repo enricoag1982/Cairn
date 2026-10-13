@@ -479,6 +479,76 @@ class TimelineTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    // ------------------------------------------------------------------ changed segments (add-entity-rules, D3)
+
+    @Test
+    void everySegmentOfANewEntityIsChanged() {
+        Timeline timeline = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
+
+        assertThat(timeline.changedSince(Timeline.EMPTY)).isEqualTo(timeline.segments());
+    }
+
+    @Test
+    void aTimelineThatIsTheSameHasNoChangedSegments() {
+        Timeline timeline = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
+
+        assertThat(timeline.changedSince(timeline)).isEmpty();
+        assertThat(Timeline.EMPTY.changedSince(timeline)).isEmpty();
+    }
+
+    @Test
+    void onlyTheSegmentWithOtherValuesIsChanged() {
+        Timeline before = acme();
+        Timeline after = set(before, MAR, JUN, BALANCE, Value.of(1500));
+
+        assertThat(after.changedSince(before)).singleElement().satisfies(segment -> {
+            assertThat(segment.from()).isEqualTo(MAR);
+            assertThat(segment.end()).isEqualTo(JUN);
+        });
+    }
+
+    @Test
+    void aChangeThatLeavesTheValuesAsTheyAreChangesNothing() {
+        Timeline before = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
+        Timeline after = set(before, JUN, SEP, BALANCE, Value.of(1500), RECORDED_3, new Basis(3));
+
+        assertThat(after.changedSince(before)).isEmpty();
+    }
+
+    @Test
+    void aChangeBackToTheOldValuesCountsAsNoChangeEvenIfItSplitsTheTimeline() {
+        Timeline before = acme();
+        Timeline changedAndBack = set(set(before, MAR, JUN, BALANCE, Value.of(1500), RECORDED_3, new Basis(3)),
+                MAR, JUN, BALANCE, Value.of(1000), RECORDED_3, new Basis(3));
+
+        assertThat(changedAndBack.segments()).as("split by the recording").hasSizeGreaterThan(1);
+        assertThat(changedAndBack.changedSince(before)).isEmpty();
+    }
+
+    @Test
+    void cuttingAnEntityOffChangesNoSegment() {
+        Timeline before = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
+
+        assertThat(before.endAt(SEP).changedSince(before)).isEmpty();
+        assertThat(before.endAt(JUN).changedSince(before)).isEmpty();
+    }
+
+    @Test
+    void aSegmentIsChangedWhereThePreviousTimelineHadAGapOrOtherValuesInPartOfIt() {
+        Timeline before = Timeline.of(List.of(
+                new Segment(JAN, MAR, values("ACME", 1000), RECORDED_1, new Basis(1)),
+                new Segment(JUN, Segment.OPEN, values("ACME", 1000), RECORDED_1, new Basis(1))));
+        Timeline filled = Timeline.of(List.of(
+                new Segment(JAN, Segment.OPEN, values("ACME", 1000), RECORDED_2, new Basis(2))));
+        Timeline partlyOther = Timeline.of(List.of(
+                new Segment(JAN, MAR, values("ACME", 1000), RECORDED_1, new Basis(1)),
+                new Segment(MAR, Segment.OPEN, values("ACME", 7), RECORDED_1, new Basis(1))));
+
+        assertThat(filled.changedSince(before)).as("the gap in the middle").hasSize(1);
+        assertThat(filled.changedSince(partlyOther)).as("a part with other values").hasSize(1);
+        assertThat(before.changedSince(filled)).isEmpty();
+    }
+
     @Test
     void anEntityAppendsOneTimelinePerBasisAndNeverChangesAnEarlierOne() {
         StoredEntity entity = new StoredEntity(new io.github.enricoag1982.cairn.data.EntityId("e1"),

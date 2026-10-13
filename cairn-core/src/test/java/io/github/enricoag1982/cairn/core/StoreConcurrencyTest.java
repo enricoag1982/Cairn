@@ -136,8 +136,8 @@ class StoreConcurrencyTest {
     @Test
     void readersDoNotWaitForAWriterThatHoldsTheLock() throws Exception {
         BlockingClock clock = new BlockingClock();
-        Store store = Stores.inMemory(StoreSettings.builder().clock(clock).idGenerator(IdGenerators.deterministic())
-                .availableRules(ReferenceModel.rules()).build());
+        Store store = Stores.inMemory(ReferenceStore.referenceSettings().clock(clock)
+                .idGenerator(IdGenerators.deterministic()).build());
         store.schema().register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition());
         store.commit(pair(0));
         ExecutorService executor = Executors.newSingleThreadExecutor();

@@ -17,8 +17,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The stories of the reference domain ({@code docs/reference/reference-domain.md}) that need no relationships, as the
- * transactions that tell them, with the dates at which they are recorded.
+ * The stories of the reference domain ({@code docs/reference/reference-domain.md}) that need no relationships or queries,
+ * as the transactions that tell them, with the dates at which they are recorded.
  *
  * <p>Stories are in 2026 unless they say otherwise. "Recorded" is the transaction time: a {@link Recording} is
  * replayed on a store with a {@link TestClock} moved to its recording date, at midnight UTC. Effective dates are at
@@ -58,6 +58,9 @@ public final class ReferenceStories {
 
     /** ACME's Legal Entity Identifier in the story RD-9. */
     public static final String LEI = "5493001KJTIIGC8Y1R12";
+
+    /** Gamma's Legal Entity Identifier in the story RD-12, whose check digits are wrong. */
+    public static final String LEI_WRONG_CHECK_DIGITS = "5493001KJTIIGC8Y1R13";
 
     private ReferenceStories() {
     }
@@ -161,6 +164,19 @@ public final class ReferenceStories {
     public static Recording rd9Gamma() {
         return new Recording(on(2, 1), Transaction.by(PRINCIPAL)
                 .create(GAMMA, "Organization", from(3, 1), values("name", "Gamma", "lei", LEI)).build());
+    }
+
+    /**
+     * RD-12. Recorded 1 March: creating Gamma, an organization with the LEI {@link #LEI_WRONG_CHECK_DIGITS}, is
+     * rejected, because its check digits are wrong. Gamma is named by {@link #GAMMA}. The story gives no effective
+     * date, so Gamma is effective from the day it is recorded.
+     *
+     * @return the recording
+     */
+    public static Recording rd12GammaWrongCheckDigits() {
+        return new Recording(on(3, 1), Transaction.by(PRINCIPAL)
+                .create(GAMMA, "Organization", from(3, 1), values("name", "Gamma", "lei", LEI_WRONG_CHECK_DIGITS))
+                .build());
     }
 
     // ------------------------------------------------------------------ replaying

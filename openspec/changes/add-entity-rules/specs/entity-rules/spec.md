@@ -22,7 +22,7 @@ A rule SHALL be a Java object that describes itself, with the name, version, des
 
 ### Requirement: Rules run at commit
 
-WHEN a transaction would produce versions of an entity whose type, or one of whose supertypes, names a rule, THE SYSTEM SHALL run the rule for every such version, after the declarative constraints have passed for that entity. The rule SHALL see the version's values and effective period, and SHALL be able to read other entities through a rule context, as they would be after the transaction, at the start of the version's effective period. A rule MUST NOT be able to write.
+WHEN a transaction would change the values of an entity whose type, or one of whose supertypes, names a rule, THE SYSTEM SHALL run the rule for every version whose values the transaction changes, after the declarative constraints have passed for that entity. A write that only ends an entity changes no values, so it runs no rules. The rule SHALL see the version's values and effective period, and SHALL be able to read other entities through a rule context, as they would be after the transaction, at the start of the version's effective period. A rule MUST NOT be able to write.
 WHEN a rule reports a problem, THE SYSTEM SHALL reject the transaction. Dry runs SHALL run rules as commits do.
 
 #### Scenario: Invalid LEI check digits

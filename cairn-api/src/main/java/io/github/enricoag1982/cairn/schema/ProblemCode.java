@@ -5,7 +5,8 @@ import java.util.Objects;
 /**
  * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and
  * {@code schema-evolution}), for the reasons a schema document cannot be read (capability {@code schema-documents}),
- * and for the reasons a data transaction is rejected (capabilities {@code transactions} and {@code entity-versions}).
+ * and for the reasons a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions} and
+ * {@code entity-rules}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -195,7 +196,20 @@ public enum ProblemCode {
     /** An idempotency key was used before by a transaction with other content. */
     IDEMPOTENCY_KEY_REUSED("An idempotency key identifies one transaction: a transaction with the same writes, "
             + "principal, party and reason is a retry and gets the first receipt, any other is rejected. Use a new key "
-            + "for a new transaction.");
+            + "for a new transaction."),
+    /** A rule found that a version of an entity breaks it. */
+    RULE_VIOLATION("A rule that the entity's type, or one of its supertypes, names found that a version of the entity "
+            + "breaks it. The problem's rule code, qualified by the rule's name, says which check failed, and the "
+            + "schema registry lists the codes of every rule with an explanation. Change the values, or the other "
+            + "entities that the rule reads, as the message says."),
+    /** A rule threw an exception, reported a code it does not declare, or cannot check entities. */
+    RULE_FAILED("A rule gave no result: it threw an exception, reported a code that its description does not declare, "
+            + "or is not a rule for entities. The found details give the exception's message or the code. The fault "
+            + "is in the rule, not in the transaction: whoever maintains the rule has to correct it."),
+    /** A type names a rule whose code the store does not have. */
+    RULE_UNAVAILABLE("A type names a rule that the store declares but has no code for, so a write that would need to "
+            + "run the rule is rejected. Create the store with the rule's code, or register a schema in which the "
+            + "type no longer names the rule.");
 
     private final String explanation;
 

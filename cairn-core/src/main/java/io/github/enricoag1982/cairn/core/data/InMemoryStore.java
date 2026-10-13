@@ -10,6 +10,7 @@ import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.KnownAt;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
@@ -22,6 +23,7 @@ import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.SchemaTransaction;
 import java.time.Instant;
 import java.time.InstantSource;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -31,14 +33,14 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * A store that keeps everything in memory (design D3 to D7 of {@code add-entity-versions}, ADR-0007, ADR-0008). Use
- * {@code Stores.inMemory} to create one.
+ * A store that keeps everything in memory (design D3 to D7 of {@code add-entity-versions}, D2 and D3 of
+ * {@code add-entity-rules}, ADR-0007, ADR-0008). Use {@code Stores.inMemory} to create one.
  *
  * <p>One writer commits at a time, holding the writer lock of the store's {@link CommitSequence}, which the schema
- * registry shares. A commit applies the writes to working copies, validates the result, and only then appends the new
- * timelines, records the transaction, and publishes its basis. A dry run does the same up to the append and then
- * throws everything away. Readers take no lock: they read through {@linkplain StoreView views}, which see only data at
- * or below the basis that was published when they were created.
+ * registry shares. A commit applies the writes to working copies, validates the result, runs the rules, and only then
+ * appends the new timelines, records the transaction, and publishes its basis. A dry run does the same up to the append
+ * and then throws everything away. Readers take no lock: they read through {@linkplain StoreView views}, which see only
+ * data at or below the basis that was published when they were created.
  */
 public final class InMemoryStore implements Store {
 
@@ -51,6 +53,7 @@ public final class InMemoryStore implements Store {
     private final ConcurrentSkipListMap<EntityId, StoredEntity> entities = new ConcurrentSkipListMap<>();
     private final CopyOnWriteArrayList<TransactionRecord> records = new CopyOnWriteArrayList<>();
     private final ValueChecks checks = new ValueChecks();
+    private final Rules rules;
     /** The idempotency keys of committed transactions; guarded by the writer lock. */
     private final Map<String, Keyed> keys = new HashMap<>();
     /** The ID generator of the store; guarded by the writer lock. */
@@ -59,16 +62,23 @@ public final class InMemoryStore implements Store {
     /**
      * Creates an empty store.
      *
-     * @param clock     the source of transaction times
-     * @param generator the ID generator of the store, which the store owns from now on
-     * @param rules     the rules that types of the schema may name
+     * @param clock         the source of transaction times
+     * @param generator     the ID generator of the store, which the store owns from now on
+     * @param rules         the rules with code, which the store runs at commit; their descriptions are available rules
+     * @param declaredRules the descriptions of rules that the store does not have the code of; types of the schema may
+     *                      name them, but a write that would need to run one is rejected
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two
-     *                                  rules have the same name and version
+     *                                  rules, with code or declared, have the same name and version
+     * @throws NullPointerException     if a rule has no descriptor
      */
-    public InMemoryStore(InstantSource clock, IdGenerator generator, Collection<RuleDescriptor> rules) {
+    public InMemoryStore(InstantSource clock, IdGenerator generator, Collection<? extends Rule> rules,
+            Collection<RuleDescriptor> declaredRules) {
         this.sequence = new CommitSequence(Objects.requireNonNull(clock, "clock"));
         this.generator = Objects.requireNonNull(generator, "generator");
-        this.registry = new InMemorySchemaRegistry(sequence, rules);
+        this.rules = new Rules(rules);
+        List<RuleDescriptor> available = new ArrayList<>(this.rules.descriptors());
+        available.addAll(declaredRules);
+        this.registry = new InMemorySchemaRegistry(sequence, available);
     }
 
     @Override
@@ -155,7 +165,7 @@ public final class InMemoryStore implements Store {
      */
     private Preparation prepare(Transaction transaction) {
         return new Preparation(transaction, new SchemaIndex(registry.current()), entities, generator.copy(),
-                sequence.next(), checks).run();
+                sequence.next(), checks, rules).run();
     }
 
     /**
