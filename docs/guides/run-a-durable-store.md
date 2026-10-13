@@ -55,6 +55,13 @@ snapshots/00000000000000000042.snapshot
 
 Do not change the files. To back a store up, close it and copy the directory. Copying the files of an open store is not supported yet.
 
+## Purges
+
+`store.purge(Purge.by("dpo").reason("Erasure request").entity(aliceId).build())` removes Alice from all of history ([ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md)): every version of her at every basis, her relationships, and the targets of her compositions.
+A durable store writes the purge to its log, then a snapshot file without the purged data, and deletes every older snapshot file and log segment before `purge` returns, so no file of the store holds the data any more. Commits wait while it rewrites the files.
+If the store stops during a purge, opening it completes the purge. The store lists its purges with `purges()`.
+Backups and other copies keep the data: purge them yourself.
+
 ## After a crash
 
 Opening the directory recovers every committed transaction.
@@ -65,4 +72,4 @@ Damage anywhere else in the log stops the store from opening with an `IllegalSta
 
 - All data is held in memory as well. A durable store suits data that fits in the heap; a key-value store comes later ([ADR-0011](../decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md)).
 - The log and snapshot files keep each entity's whole timeline at every basis, so entities with very many versions make them large.
-- Purging (RD-11 in the [reference domain](../reference/reference-domain.md)) is not built yet.
+- Copying the files of an open store is not supported.

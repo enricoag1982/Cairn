@@ -27,10 +27,12 @@ RD-11 of the reference domain asks for it, and it is the last story that Cairn c
 
 ### Modified Capabilities
 
-None. Every other capability keeps its behavior for stores that never purge.
+- `views`: a purge is the one thing that changes what an existing view returns.
+
+Every other capability keeps its behavior, and stores that never purge behave as before.
 
 ## Impact
 
-- **Decisions:** ADR-0024 (purge), accepted under the standing approval with this proposal; it makes the one exception to the immutability of ADR-0008, and relies on ADR-0022 (durable stores) and ADR-0010 (relationships and compositions).
+- **Decisions:** ADR-0024 (purge), accepted under the standing approval with this proposal; it makes the one exception to the immutability of ADR-0008 and ADR-0013, which both now refer to it, and relies on ADR-0022 (durable stores) and ADR-0010 (relationships and compositions).
 - **Code:** `cairn-api` gains `Purge`, `PurgeResult` and `PurgeRecord`, and `Store.purge` and `Store.purges`; `cairn-core` removes data from the in-memory store, and durable stores log purges, rewrite their files and complete purges at recovery. No new dependencies.
 - **Docs:** the glossary (purge, purge record), the guide for durable stores, the architecture page, the reference domain.

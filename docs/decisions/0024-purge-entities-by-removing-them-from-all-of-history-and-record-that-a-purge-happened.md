@@ -76,3 +76,4 @@ Chosen option: "Remove the entities from all of history, rewrite the files, and 
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, with the proposal of `add-purge`.
 - A purge tool for agents, behind the approval policy, can follow later.
+- This decision is an exception to [ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md) and [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md), which stay in force for everything else and refer to it.

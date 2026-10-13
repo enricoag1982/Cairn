@@ -78,3 +78,4 @@ Conformance scenarios cover reads at past and future effective times, reads as k
 
 - Prior art: SQL:2011 temporal tables, XTDB, Reladomo, Martin Fowler's "Bitemporal History", and Snodgrass's "Developing Time-Oriented Database Applications in SQL". Links are in the research note.
 - [ADR-0009](0009-version-whole-entities-rather-than-single-attributes.md) decides how versions are stored on these two axes.
+- A purge is the one exception to this decision: it removes entities from all of history, and from views already open. See [ADR-0024](0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md).
