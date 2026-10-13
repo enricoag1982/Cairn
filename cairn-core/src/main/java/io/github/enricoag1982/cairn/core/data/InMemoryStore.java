@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.core.data;
 import io.github.enricoag1982.cairn.core.commit.CommitSequence;
 import io.github.enricoag1982.cairn.core.schema.InMemorySchemaRegistry;
 import io.github.enricoag1982.cairn.core.schema.Problems;
+import io.github.enricoag1982.cairn.core.storage.Journal;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -27,12 +28,13 @@ import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
 /**
  * A store that keeps everything in memory (design D3 to D7 of {@code add-entity-versions}, D2 and D3 of
@@ -47,11 +49,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *
  * <p>While the store runs rules, in a commit or a dry run, it refuses writes: a rule that commits, runs dry or
  * registers a schema in the store gets an {@code IllegalStateException}, and its transaction is rejected.
+ *
+ * <p>A store can have a {@linkplain Journal journal}, as a durable store does (ADR-0022, design D5 of
+ * {@code add-durable-commit-log}): a commit then writes what it did to the journal after it has prepared the
+ * transaction and before it records it and publishes its basis, and a commit that cannot be written is not applied. The
+ * package's other classes restore a store from what a log and a snapshot file hold, and read it for a snapshot file.
+ * Without a journal the store behaves as it always did.
  */
 public final class InMemoryStore implements Store {
 
     /** A committed transaction with an idempotency key, and the receipt it was given. */
-    private record Keyed(Transaction transaction, Receipt receipt) {
+    record Keyed(Transaction transaction, Receipt receipt) {
     }
 
     private final CommitSequence sequence;
@@ -63,10 +71,15 @@ public final class InMemoryStore implements Store {
     private final ValueChecks checks = new ValueChecks();
     private final Rules rules;
     private final List<RuleDescriptor> declaredRules;
-    /** The idempotency keys of committed transactions; guarded by the writer lock. */
-    private final Map<String, Keyed> keys = new HashMap<>();
+    /**
+     * The idempotency keys of committed transactions. Only the writer, holding the writer lock, changes them; a snapshot
+     * file is written from them without the lock, so the map is a concurrent one.
+     */
+    private final Map<String, Keyed> keys = new ConcurrentHashMap<>();
     /** The ID generator of the store, for entities and relationships alike; guarded by the writer lock. */
     private IdGenerator generator;
+    /** Where commits are written before they are recorded; null for a store that is not durable. */
+    private volatile Journal journal;
 
     /**
      * Creates an empty store.
@@ -107,6 +120,7 @@ public final class InMemoryStore implements Store {
     public CommitResult commit(Transaction transaction) {
         Objects.requireNonNull(transaction, "transaction");
         return sequence.underWriterLock(() -> {
+            requireWritable();
             Keyed known = known(transaction);
             if (known != null) {
                 return known.transaction().equals(transaction)
@@ -163,6 +177,14 @@ public final class InMemoryStore implements Store {
         return records.stream().filter(record -> record.basis().compareTo(latest) <= 0).toList();
     }
 
+    /** Refuses a commit if the journal does: an earlier write failed, or the store is closed. Called with the lock held. */
+    private void requireWritable() {
+        Journal written = journal;
+        if (written != null) {
+            written.requireWritable();
+        }
+    }
+
     /** The committed transaction that used the transaction's idempotency key, if any. Called with the lock held. */
     private Keyed known(Transaction transaction) {
         return transaction.idempotencyKey().map(keys::get).orElse(null);
@@ -187,13 +209,22 @@ public final class InMemoryStore implements Store {
     }
 
     /**
-     * Makes a valid preparation the store's latest state: appends the new timelines of entities and relationships,
-     * records the transaction and its idempotency key, keeps the ID generator's advanced copy, and publishes the basis
-     * last, so that a reader that learns of the basis finds all of it. Called with the lock held.
+     * Makes a valid preparation the store's latest state. A durable store first writes the commit to its journal, so that
+     * nothing is applied if that fails; then the new timelines of entities and relationships are appended, the
+     * transaction and its idempotency key are recorded, the ID generator's advanced copy is kept, and the basis is
+     * published last, so that a reader that learns of the basis finds all of it. Called with the lock held.
      */
     private Receipt record(Transaction transaction, Preparation preparation) {
         CommitSequence.Commit commit = preparation.commit();
-        for (Preparation.Change change : preparation.changes()) {
+        Receipt receipt = new Receipt(commit.basis(), commit.transactionTime(), preparation.temporaryIds(),
+                preparation.created(), preparation.ended(), transaction.principal(), transaction.onBehalfOf(),
+                transaction.reason(), transaction.idempotencyKey());
+        List<Preparation.Change> changes = preparation.changes();
+        Journal written = journal;
+        if (written != null) {
+            written.append(LogRecords.dataRecord(transaction, receipt, changes));
+        }
+        for (Preparation.Change change : changes) {
             switch (change.id()) {
                 case EntityId id -> {
                     StoredEntity entity = change.created() ? new StoredEntity(id, change.type()) : entities.get(id);
@@ -213,15 +244,52 @@ public final class InMemoryStore implements Store {
                 }
             }
         }
-        Receipt receipt = new Receipt(commit.basis(), commit.transactionTime(), preparation.temporaryIds(),
-                preparation.created(), preparation.ended(), transaction.principal(), transaction.onBehalfOf(), transaction.reason(),
-                transaction.idempotencyKey());
         records.add(new TransactionRecord(commit.basis(), commit.transactionTime(), transaction.principal(),
                 transaction.onBehalfOf(), transaction.reason()));
         transaction.idempotencyKey().ifPresent(key -> keys.put(key, new Keyed(transaction, receipt)));
         generator = preparation.generator();
         sequence.publish(commit);
         return receipt;
+    }
+
+    // ------------------------------------------------------------------ durability
+
+    /**
+     * Makes the store write every commit and schema registration to a journal before it publishes it, and refuse them
+     * while the journal refuses writes. Call it once, after recovery and before the store is used by other threads.
+     */
+    void attach(Journal journal) {
+        this.journal = Objects.requireNonNull(journal, "journal");
+        registry.attach(journal);
+    }
+
+    /** Runs an action holding the writer lock, which no commit or registration holds while it runs. */
+    <T> T underWriterLock(Supplier<? extends T> action) {
+        return sequence.underWriterLock(action);
+    }
+
+    CommitSequence sequence() {
+        return sequence;
+    }
+
+    InMemorySchemaRegistry registry() {
+        return registry;
+    }
+
+    ConcurrentSkipListMap<EntityId, StoredEntity> entities() {
+        return entities;
+    }
+
+    ConcurrentSkipListMap<RelationshipId, StoredRelationship> relationships() {
+        return relationships;
+    }
+
+    CopyOnWriteArrayList<TransactionRecord> records() {
+        return records;
+    }
+
+    Map<String, Keyed> keys() {
+        return keys;
     }
 
     /**

@@ -1,6 +1,9 @@
 package io.github.enricoag1982.cairn.core.schema;
 
 import io.github.enricoag1982.cairn.core.commit.CommitSequence;
+import io.github.enricoag1982.cairn.core.storage.Journal;
+import io.github.enricoag1982.cairn.core.storage.SchemaIdentifiers;
+import io.github.enricoag1982.cairn.core.storage.SchemaRecord;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -42,6 +45,11 @@ import java.util.Set;
  * {@link CommitSequence}, and holds that sequence's writer lock while it registers. A stand-alone registry has a
  * sequence of its own; the registry of a store shares the store's sequence, so schema transactions and data
  * transactions are ordered together and the bases of the schema history are not consecutive.
+ *
+ * <p>The registry of a durable store has a {@linkplain Journal journal}: an applied registration is written to it, as a
+ * {@link SchemaRecord}, after it is compiled and before its new state is published, and a registration is refused while
+ * the journal refuses writes. {@link #restore(SchemaRecord)} applies a registration that a log or snapshot recorded,
+ * without validating it and without the sequence.
  */
 public final class InMemorySchemaRegistry implements SchemaRegistry {
 
@@ -52,6 +60,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
             CompiledSchema schema,
             Map<String, OriginState> origins,
             List<SchemaTransaction> history,
+            List<SchemaRecord> records,
             long nextId) {
     }
 
@@ -66,7 +75,9 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
 
     private final CommitSequence sequence;
     private final List<RuleDescriptor> rules;
-    private volatile State state = new State(CompiledSchema.EMPTY, Map.of(), List.of(), 1);
+    private volatile State state = new State(CompiledSchema.EMPTY, Map.of(), List.of(), List.of(), 1);
+    /** Where applied registrations are written before they are published; null if the registry is not durable. */
+    private volatile Journal journal;
 
     /**
      * Creates an empty registry without available rules.
@@ -130,6 +141,10 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         Objects.requireNonNull(definition, "definition");
         Objects.requireNonNull(submission, "submission");
         return sequence.underWriterLock(() -> {
+            Journal written = journal;
+            if (written != null) {
+                written.requireWritable();
+            }
             State current = state;
             Planned planned = plan(current, origin, definition);
             return switch (planned.plan().outcome()) {
@@ -147,20 +162,100 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     }
 
     /**
-     * Records an accepted registration as a schema transaction. Called with the writer lock held. The new state is
-     * in place before the commit is published, so whoever learns of the basis finds the schema.
+     * Records an accepted registration as a schema transaction. Called with the writer lock held. A durable registry
+     * writes the registration to its journal first, so that nothing is applied if that fails. The new state is in place
+     * before the commit is published, so whoever learns of the basis finds the schema.
      */
     private RegistrationResult apply(State current, Origin origin, Submission submission, Planned planned) {
         SchemaCompiler.Result compiled = planned.compiled();
         CommitSequence.Commit commit = sequence.next();
         Basis basis = commit.basis();
         Instant time = commit.transactionTime();
-        List<SchemaTransaction> history = new ArrayList<>(current.history());
-        history.add(new SchemaTransaction(basis, time, origin, compiled.schema(), submission.principal(),
-                submission.onBehalfOf(), submission.reason()));
-        state = new State(compiled.schema(), Map.copyOf(planned.origins()), List.copyOf(history), compiled.nextId());
+        SchemaRecord record = new SchemaRecord(basis, time, submission, origin,
+                planned.origins().get(origin.name()).definition(),
+                assigned(compiled.schema(), current.nextId(), compiled.nextId()));
+        Journal written = journal;
+        if (written != null) {
+            written.append(record);
+        }
+        state = next(current, planned.origins(), compiled, record);
         sequence.publish(commit);
         return new RegistrationResult.Applied(time, basis, compiled.schema());
+    }
+
+    /** The state after a registration: its schema transaction and its record are added to the history. */
+    private static State next(State current, Map<String, OriginState> origins, SchemaCompiler.Result compiled,
+            SchemaRecord record) {
+        List<SchemaTransaction> history = new ArrayList<>(current.history());
+        history.add(new SchemaTransaction(record.basis(), record.transactionTime(), record.origin(),
+                compiled.schema(), record.submission().principal(), record.submission().onBehalfOf(),
+                record.submission().reason()));
+        List<SchemaRecord> records = new ArrayList<>(current.records());
+        records.add(record);
+        return new State(compiled.schema(), Map.copyOf(origins), List.copyOf(history), List.copyOf(records),
+                compiled.nextId());
+    }
+
+    /**
+     * The identifiers that a registration assigned: those of the types and attributes of the schema that did not exist
+     * before, which are the ones numbered from the first free identifier on.
+     */
+    private static SchemaIdentifiers assigned(CompiledSchema schema, long firstNew, long nextId) {
+        List<SchemaIdentifiers.TypeAssignment> types = schema.entries().stream()
+                .filter(entry -> entry.id().value() >= firstNew)
+                .sorted(Comparator.comparingLong(entry -> entry.id().value()))
+                .map(entry -> new SchemaIdentifiers.TypeAssignment(entry.name(), entry.id()))
+                .toList();
+        List<SchemaIdentifiers.AttributeAssignment> attributes = schema.declarations().values().stream()
+                .map(CompiledSchema.Declaration::attribute)
+                .filter(attribute -> attribute.id().value() >= firstNew)
+                .sorted(Comparator.comparingLong(attribute -> attribute.id().value()))
+                .map(attribute -> new SchemaIdentifiers.AttributeAssignment(attribute.declaredBy(), attribute.name(),
+                        attribute.id()))
+                .toList();
+        return new SchemaIdentifiers(types, attributes, nextId);
+    }
+
+    /**
+     * Makes the registry write every registration it applies to a journal before it publishes it, and refuse
+     * registrations while the journal refuses writes. Call it once, before the registry is used by other threads.
+     *
+     * @param journal where applied registrations are written
+     */
+    public void attach(Journal journal) {
+        this.journal = Objects.requireNonNull(journal, "journal");
+    }
+
+    /**
+     * Applies a registration that a log or snapshot file recorded, as recovery does (design D4 of
+     * {@code add-durable-commit-log}): the definition is compiled, with the identifiers that the registration assigned,
+     * and added to the history. Nothing is validated or planned, the sequence is not touched, and nothing is written to
+     * the journal. Registrations are restored in the order of their bases, before the registry is used.
+     *
+     * @param record the registration
+     * @throws IllegalStateException if the record has no identifier for an element that needs one
+     */
+    public void restore(SchemaRecord record) {
+        Objects.requireNonNull(record, "record");
+        State current = state;
+        Map<String, OriginState> origins = new HashMap<>(current.origins());
+        origins.put(record.origin().name(), new OriginState(record.origin(), record.definition()));
+        Map<String, Origin> originOfType = new HashMap<>();
+        origins.values().forEach(origin -> typeNames(origin.definition())
+                .forEach(name -> originOfType.put(name, origin.origin())));
+        List<Origin> list = origins.values().stream().map(OriginState::origin).toList();
+        SchemaCompiler.Result compiled = SchemaCompiler.restore(combined(origins),
+                name -> originOfType.get(Names.key(name)), list, current.schema(), record.identifiers());
+        state = next(current, origins, compiled, record);
+    }
+
+    /**
+     * The registrations that were applied, as the log records them, oldest first.
+     *
+     * @return the records of the schema history, with the definition and the identifiers of each
+     */
+    public List<SchemaRecord> records() {
+        return state.records();
     }
 
     @Override

@@ -73,6 +73,14 @@ final class Timeline {
         return new Timeline(List.copyOf(merged));
     }
 
+    /**
+     * The timeline that recovery reads back: the segments of a timeline that an earlier commit built, in order. They are
+     * taken as they are, without merging or checking, because they are what the commit recorded.
+     */
+    static Timeline restored(List<Segment> segments) {
+        return new Timeline(List.copyOf(segments));
+    }
+
     /** A timeline of one segment: an entity that is created. */
     static Timeline created(Instant from, Instant end, Map<AttributeId, Value> values, Instant recordedAt,
             Basis recordedBasis) {

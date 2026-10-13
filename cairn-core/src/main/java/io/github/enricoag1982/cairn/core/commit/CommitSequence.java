@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -167,6 +168,32 @@ public final class CommitSequence {
         }
         lastTime = commit.transactionTime();
         latest = commit.basis();
+    }
+
+    /**
+     * Makes a sequence that recovery rebuilt continue after the latest commit that was recovered: the next basis is the
+     * one above it, and the next transaction time is later than the one given, even if the clock went back since. It
+     * publishes nothing. Call it once, on a sequence that has published nothing, before the store is used.
+     *
+     * @param latest              the basis of the latest recovered commit
+     * @param lastTransactionTime the transaction time of that commit; empty if there is none
+     * @throws IllegalStateException    if the caller does not hold the writer lock, or if the sequence has published a
+     *                                  commit already
+     * @throws IllegalArgumentException if the basis is negative
+     */
+    public void resume(Basis latest, Optional<Instant> lastTransactionTime) {
+        requireWriterLock();
+        Objects.requireNonNull(latest, "latest");
+        Objects.requireNonNull(lastTransactionTime, "lastTransactionTime");
+        if (this.latest.value() != Basis.NONE.value() || lastTime != null) {
+            throw new IllegalStateException("The sequence has published commits already: basis " + this.latest.value()
+                    + ".");
+        }
+        if (latest.value() < 0) {
+            throw new IllegalArgumentException("A basis is not negative: " + latest.value() + ".");
+        }
+        this.lastTime = lastTransactionTime.orElse(null);
+        this.latest = latest;
     }
 
     /**

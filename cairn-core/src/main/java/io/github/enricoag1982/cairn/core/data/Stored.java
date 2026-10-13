@@ -4,6 +4,7 @@ import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -43,6 +44,14 @@ abstract class Stored<I extends Id> {
             throw new IllegalArgumentException("Basis " + basis.value() + " does not follow " + last.getKey() + ".");
         }
         timelines.put(basis.value(), timeline);
+    }
+
+    /**
+     * The timelines recorded at or below a basis, by the basis of the transaction that recorded them, in order. The
+     * view moves on with the writer, but the entries at or below a basis that was published never change.
+     */
+    NavigableMap<Long, Timeline> versionsUpTo(Basis basis) {
+        return timelines.headMap(basis.value(), true);
     }
 
     /** The timeline known after the latest transaction that touched this, or empty if there is none. */
