@@ -65,7 +65,7 @@ Rules ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-na
 | `lei-checksum` | 1 | `Organization` | The LEI's check digits are valid (ISO 17442, ISO 7064 MOD 97-10). | `invalid-check-digits` |
 | `total-ownership-at-most-100` | 1 | `Owns` | The owners of a party hold at most 100% of it together, at every point in effective time. | `over-100-percent` |
 
-Scenarios that validate or register the reference model assume a registry with these rules available.
+Scenarios that validate or register the reference model assume a registry with these rules available. In the test fixtures, `lei-checksum` has code, and `total-ownership-at-most-100` is a declared rule without code until relationships exist. Scenarios also use a test-only rule, `name-not-blank` for Party.
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 

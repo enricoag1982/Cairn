@@ -49,8 +49,10 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 ### D5. Rules on relationships
 
 - Effective rules of a relationship type include those of its relationship supertypes.
+- `RuleRunner` and `Preparation` generalize from entities to subjects (entities and relationships): `RuleRunner.Subject` gains relationship types, the check that a rule fits its type works in both directions (an `EntityRule` named by a relationship type, or a `RelationshipRule` named by an entity type, is `RULE_FAILED`), and the explanations of `RULE_VIOLATION` and `RULE_FAILED` and the `RuleContext.problem` Javadoc stop saying "entity".
+- Rules are skipped for a subject that already has a declarative problem. The matching by path learns relationship paths and the multiplicity paths of D3 (`$a3[HeldBy]`), which concern the entity `$a3`.
 - `RuleContext.viewAt` lets `total-ownership-at-most-100` collect every boundary within the version's period where an `Owns` relationship to the same target starts or ends, and check the sum at each.
-- The rule moves from a descriptor to an implementation in the test fixtures.
+- The rule moves from a declared rule to an implementation in the test fixtures: `ReferenceModel.executableRules()` gains `TotalOwnershipRule`, `ReferenceModel.declaredRules()` becomes empty, and `ReferenceStore.referenceSettings()` follows.
 
 ### D6. Reference domain
 

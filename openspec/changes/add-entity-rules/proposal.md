@@ -8,7 +8,7 @@ This change runs rules at commit, so that the integrity they express holds for e
 
 ## What Changes
 
-- A `Rule` interface in Java: a rule describes itself (name, version, description, type, problem codes) and checks one entity version through a read-only rule context.
+- `Rule`, `EntityRule` and `RuleContext` in Java: a rule describes itself (name, version, description, type, problem codes), and an entity rule checks one entity version through a read-only rule context.
 - Stores are created with rules. Their descriptions become the rules available to the store's schema registry. Rules can also be found through Java's `ServiceLoader`.
 - At commit, after the declarative checks, every rule that applies to a touched entity runs for every version the transaction would produce, against the state it would produce. Rules named by a supertype apply to its subtypes.
 - A rule reports problems with the generic code for rule violations and its own code, qualified by its name. A rule that throws an exception rejects the transaction with a problem instead of failing the commit.
@@ -30,11 +30,11 @@ This change runs rules at commit, so that the integrity they express holds for e
 
 ### Modified Capabilities
 
-None. The schema side of rule references is in `type-model`.
+- `transactions`: the order of problems places rule problems after declarative ones
 
 ## Impact
 
 - **Decisions:** implements ADR-0018 for entities. Accepted.
-- **Code:** `cairn-api` gains `Rule`, `RuleContext` and the problem component for rule codes; `cairn-core` runs rules in the commit path.
+- **Code:** `cairn-api` gains `Rule`, `EntityRule`, `RuleContext` and the problem component for rule codes; `cairn-core` runs rules in the commit path.
 - **Dependencies:** none.
 - **Docs:** glossary (rule context), the reference domain (story RD-12), the architecture page.

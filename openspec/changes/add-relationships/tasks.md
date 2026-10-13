@@ -12,7 +12,7 @@
 - [ ] 2.2 Add composition cascades (D4)
 - [ ] 2.3 Check ends, lifetimes, multiplicities and duplicates (D3)
 - [ ] 2.4 Navigation, symmetric types and traversal in views (D2)
-- [ ] 2.5 Run rules on relationships (D5)
+- [ ] 2.5 Run rules on relationships, generalizing the rule runner, its fit check, the matching of problems to subjects, and the rule problem explanations (D5)
 
 ## 3. Reference domain and tests
 
