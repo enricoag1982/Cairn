@@ -1,15 +1,20 @@
 package io.github.enricoag1982.cairn.documents;
 
+import static io.github.enricoag1982.cairn.documents.PayloadFixtures.createOrganization;
 import static io.github.enricoag1982.cairn.documents.PayloadFixtures.locationOf;
+import static io.github.enricoag1982.cairn.documents.PayloadFixtures.payload;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.documents.PayloadFixtures.ReferenceDomainStore;
+import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
+import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Value;
@@ -20,8 +25,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The scenarios of the {@code json-payloads} spec that concern reading transaction payloads and locating their
- * problems, one test each, in the reference domain.
+ * The scenarios of the {@code json-payloads} spec, one test each, in the reference domain: reading transaction payloads,
+ * locating their problems, the JSON forms of results, and the generated JSON Schemas.
  */
 class JsonPayloadScenariosTest {
 
@@ -138,5 +143,97 @@ class JsonPayloadScenariosTest {
             assertThat(problem.location()).contains(locationOf(payload, "\"currency\"",
                     "/writes/1/create/values/currency"));
         });
+    }
+
+    // ------------------------------------------------------------------ results as JSON
+
+    @Test
+    @DisplayName("Scenario: Reading back what was written")
+    void readingBackWhatWasWritten() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        EntityId acme = (EntityId) parties.temporaryIds().get(ReferenceStories.ACME);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        EntityState state = reference.latest().entity(acme).orElseThrow();
+        assertThat(state.values()).containsOnlyKeys("name", "lei");
+
+        Object written = DocumentTrees.load(Payloads.toJson(state));
+        String values = DocumentTrees.toJson(DocumentTrees.at(written, "values"));
+        String replacePayload = """
+                {
+                  "cairn": 1,
+                  "principal": "agent:onboarding",
+                  "writes": [
+                    { "replace": { "target": "%s", "from": "2026-02-01T00:00:00Z", "values": %s } }
+                  ]
+                }
+                """.formatted(acme.value(), values);
+        TransactionPayload read = PayloadFixtures.read(replacePayload, reference.schema(), reference.lookup());
+
+        assertThat(read.transaction().writes()).singleElement().isInstanceOfSatisfying(Write.Replace.class,
+                replace -> {
+                    assertThat(replace.target()).isEqualTo(acme);
+                    assertThat(replace.values()).isEqualTo(state.values());
+                });
+    }
+
+    @Test
+    @DisplayName("Scenario: Problems as JSON")
+    void problemsAsJson() {
+        String payload = payload("{ \"create\": { \"temporaryId\": \"acme\", \"entityType\": \"Organization\", "
+                + "\"from\": \"2026-01-01T00:00:00Z\", \"values\": { \"name\": \"ACME\", \"nmae\": \"ACME\" } } }");
+        TransactionPayload read = PayloadFixtures.read(payload, reference.schema(), reference.lookup());
+        List<Problem> rejected = reference.rejectedProblems(read.transaction());
+        Problem located = read.locate(rejected).stream()
+                .filter(problem -> problem.code() == ProblemCode.UNKNOWN_ATTRIBUTE).findFirst().orElseThrow();
+        assertThat(located.hint()).isPresent();
+        assertThat(located.location()).isPresent();
+
+        Object json = DocumentTrees.load(Payloads.toJson(located));
+
+        DocumentLocation at = located.location().orElseThrow();
+        assertThat(DocumentTrees.at(json, "code")).isEqualTo("UNKNOWN_ATTRIBUTE");
+        assertThat(DocumentTrees.at(json, "path")).isEqualTo("$acme.nmae");
+        assertThat(DocumentTrees.at(json, "message")).isEqualTo(located.message());
+        assertThat(DocumentTrees.at(json, "expected")).isEqualTo(located.expected().orElseThrow());
+        assertThat(DocumentTrees.at(json, "found")).isEqualTo(located.found().orElseThrow());
+        assertThat(DocumentTrees.at(json, "hint")).isEqualTo(located.hint().orElseThrow());
+        assertThat(DocumentTrees.at(json, "location", "pointer")).isEqualTo("/writes/0/create/values/nmae");
+        assertThat(DocumentTrees.at(json, "location", "pointer")).isEqualTo(at.pointer());
+        assertThat(DocumentTrees.at(json, "location", "line")).isEqualTo(at.line());
+        assertThat(DocumentTrees.at(json, "location", "column")).isEqualTo(at.column());
+    }
+
+    // ------------------------------------------------------------------ generated JSON Schemas
+
+    @Test
+    @DisplayName("Scenario: Values of Organization")
+    void valuesOfOrganization() {
+        String schema = JsonSchemas.values(reference.schema(), "Organization");
+
+        Object json = DocumentTrees.load(schema);
+
+        assertThat(DocumentTrees.at(json, "$schema")).isEqualTo("https://json-schema.org/draft/2020-12/schema");
+        assertThat(DocumentTrees.at(json, "required")).isEqualTo(List.of("name"));
+        assertThat(DocumentTrees.at(json, "properties", "lei", "type")).isEqualTo("string");
+        assertThat(DocumentTrees.at(json, "properties", "lei", "pattern")).isEqualTo("^(?:[A-Z0-9]{18}[0-9]{2})$");
+        assertThat(DocumentTrees.at(json, "additionalProperties")).isEqualTo(false);
+        assertThat(DocumentTrees.keysAt(json, "properties")).containsExactlyInAnyOrder("name", "lei");
+        assertThat(GeneratedSchemaCheck.isValid(schema, "{\"name\": \"ACME\", \"lei\": \"5493001KJTIIGC8Y1R12\"}"))
+                .isTrue();
+        assertThat(GeneratedSchemaCheck.isValid(schema, "{\"name\": \"ACME\", \"lei\": \"5493001kjtiigc8y1r12\"}"))
+                .isFalse();
+        assertThat(GeneratedSchemaCheck.isValid(schema, "{\"lei\": \"5493001KJTIIGC8Y1R12\"}")).isFalse();
+        assertThat(GeneratedSchemaCheck.isValid(schema, "{\"name\": \"ACME\", \"nmae\": \"ACME\"}")).isFalse();
+    }
+
+    @Test
+    @DisplayName("Scenario: A payload that breaks the schema")
+    void aPayloadThatBreaksTheSchema() {
+        String schema = JsonSchemas.transactions(reference.schema());
+        String broken = payload("{ \"create\": { \"temporaryId\": \"acme\", \"entityType\": \"Organization\", "
+                + "\"from\": \"2026-01-01T00:00:00Z\", \"values\": { \"nmae\": \"ACME\" } } }");
+
+        assertThat(GeneratedSchemaCheck.errors(schema, broken)).isNotEmpty();
+        assertThat(GeneratedSchemaCheck.errors(schema, payload(createOrganization("acme", "ACME")))).isEmpty();
     }
 }

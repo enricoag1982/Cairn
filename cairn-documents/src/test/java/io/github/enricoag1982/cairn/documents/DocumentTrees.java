@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.documents;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.snakeyaml.engine.v2.api.Load;
@@ -41,6 +42,19 @@ final class DocumentTrees {
             return entries.keySet().stream().map(String::valueOf).toList();
         }
         throw new AssertionError("Not a mapping: " + map);
+    }
+
+    /** The list at the end of a path of keys. */
+    static List<Object> listAt(Object tree, String... path) {
+        return listOf(at(tree, path));
+    }
+
+    /** A node that must be a list. */
+    static List<Object> listOf(Object node) {
+        if (node instanceof List<?> list) {
+            return new ArrayList<>(list);
+        }
+        throw new AssertionError("Not a list: " + node);
     }
 
     /** The node at the end of a path of keys. */

@@ -24,5 +24,14 @@
  * {@linkplain io.github.enricoag1982.cairn.documents.TransactionPayload#locate(java.util.List) locate} the problems
  * that a dry run or a commit of its transaction reports: at the last write that concerns the entity, relationship or
  * attribute, at the attribute's key where there is one.
+ *
+ * <p>{@link io.github.enricoag1982.cairn.documents.Payloads#toJson(io.github.enricoag1982.cairn.data.Receipt)} and its
+ * overloads write receipts, entity and relationship states, links, steps and problems as JSON, with the field names of
+ * the Java records, so that the values of an entity state can be used as the values of a {@code replace} write.
+ * {@link io.github.enricoag1982.cairn.documents.JsonSchemas#values(io.github.enricoag1982.cairn.schema.Schema, String)}
+ * generates the JSON Schema (draft 2020-12) for the values of an entity type or relationship type, and
+ * {@link io.github.enricoag1982.cairn.documents.JsonSchemas#transactions(io.github.enricoag1982.cairn.schema.Schema)}
+ * the one for transaction payloads, which checks the values of {@code create} and {@code relate} writes against the
+ * types they name.
  */
 package io.github.enricoag1982.cairn.documents;

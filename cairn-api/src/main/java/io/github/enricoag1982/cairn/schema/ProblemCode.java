@@ -4,9 +4,9 @@ import java.util.Objects;
 
 /**
  * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and
- * {@code schema-evolution}), for the reasons a schema document cannot be read (capability {@code schema-documents}),
- * and for the reasons a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions},
- * {@code entity-rules} and {@code relationships}).
+ * {@code schema-evolution}), for the reasons a schema document (capability {@code schema-documents}) or a transaction
+ * payload (capability {@code json-payloads}) cannot be read, and for the reasons a data transaction is rejected
+ * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -98,30 +98,36 @@ public enum ProblemCode {
     /** A type names a rule that it or one of its supertypes already names. */
     DUPLICATE_RULE("A rule that a type names also applies to its subtypes, so a type and its supertypes cannot name "
             + "the same rule twice. Remove the repeated reference."),
-    /** A schema document is not valid YAML 1.2, or JSON. */
-    DOCUMENT_SYNTAX("The text is not valid YAML 1.2 or JSON, so it cannot be read at all. Reading stops at the first "
-            + "syntax error; fix the syntax at the given line and column, and read the document again."),
-    /** A schema document declares a format version that this reader does not know. */
-    UNSUPPORTED_FORMAT_VERSION("This reader knows schema documents of format version 1, written as 'cairn: 1'. Set "
-            + "the key cairn to 1, or use a reader for the version that the document declares."),
-    /** A schema document uses a YAML feature outside the supported subset. */
-    UNSUPPORTED_YAML_FEATURE("Schema documents use a safe subset of YAML 1.2, without anchors, aliases, merge keys "
-            + "and explicit tags, and with one document in a stream. Write the value out in full, and remove the tag "
-            + "or the extra document."),
-    /** A mapping in a schema document has the same key twice. */
-    DUPLICATE_KEY("A mapping in a schema document has the same key twice, for example a type that is defined twice. "
-            + "Remove one of them, or rename it."),
-    /** A key in a schema document is not one that is known at that position. */
-    UNKNOWN_KEY("A key is not one of the keys that a schema document knows at that position. The expected details "
-            + "list the known keys, and the hint names the closest one. Correct the key, or remove it."),
-    /** A key that a schema document requires at a position is missing. */
+    /** A schema document or a transaction payload is not valid YAML 1.2, or JSON. */
+    DOCUMENT_SYNTAX("The text of a schema document or of a transaction payload is not valid YAML 1.2 or JSON, so it "
+            + "cannot be read at all. Reading stops at the first syntax error; fix the syntax at the given line and "
+            + "column, and read the text again."),
+    /** A schema document or a transaction payload declares a format version that this reader does not know. */
+    UNSUPPORTED_FORMAT_VERSION("This reader knows schema documents and transaction payloads of format version 1, "
+            + "written as 'cairn: 1'. Set the key cairn to 1, or use a reader for the version that the text "
+            + "declares."),
+    /** A schema document or a transaction payload uses a YAML feature outside the supported subset. */
+    UNSUPPORTED_YAML_FEATURE("Schema documents and transaction payloads use a safe subset of YAML 1.2, without "
+            + "anchors, aliases, merge keys and explicit tags, and with one document in a stream. Write the value out "
+            + "in full, and remove the tag or the extra document."),
+    /** A mapping in a schema document or a transaction payload has the same key twice. */
+    DUPLICATE_KEY("A mapping in a schema document or a transaction payload has the same key twice, for example a type "
+            + "that is defined twice, or an attribute that is given twice in the values of a write. Remove one of "
+            + "them, or rename it."),
+    /** A key in a schema document or a transaction payload is not one that is known at that position. */
+    UNKNOWN_KEY("A key is not one of the keys that a schema document or a transaction payload knows at that "
+            + "position, for example a kind of write that does not exist. The expected details list the known keys, "
+            + "and the hint names the closest one. Correct the key, or remove it."),
+    /** A key that a schema document or a transaction payload requires at a position is missing. */
     MISSING_KEY("A key that is required at that position is missing, for example the source, the target, the inverse "
-            + "name and both multiplicities of a relationship type. Add the key."),
-    /** A value in a schema document has the wrong kind, or is written in a form that is not allowed. */
-    INVALID_VALUE("A value in a schema document has the wrong kind, for example a number where text is expected, or "
-            + "is written in a form that is not allowed, for example a multiplicity other than 0..1, 1..1, 0..* or "
-            + "1..*. The expected and found details say which. Correct the value; put text that YAML would read as "
-            + "another kind, such as \"1.10\" or \"true\", in quotes."),
+            + "name and both multiplicities of a relationship type, or the principal and the writes of a transaction "
+            + "payload. Add the key."),
+    /** A value in a schema document or a transaction payload has the wrong kind, or is written in a form that is not allowed. */
+    INVALID_VALUE("A value in a schema document or a transaction payload has the wrong kind, for example a number "
+            + "where text is expected, or is written in a form that is not allowed, for example a multiplicity other "
+            + "than 0..1, 1..1, 0..* or 1..*, or an instant that is not ISO 8601 in UTC. The expected and found "
+            + "details say which. Correct the value; put text that YAML would read as another kind, such as "
+            + "\"1.10\" or \"true\", in quotes."),
     /** A write creates an entity of a name that is not an entity type. */
     UNKNOWN_ENTITY_TYPE("A write creates an entity of a type name that the schema does not have as an entity type. "
             + "Type names and aliases are compared without regard to case. Correct the name, which the hint suggests, "

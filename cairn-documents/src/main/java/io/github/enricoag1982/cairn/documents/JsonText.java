@@ -8,8 +8,9 @@ import io.github.enricoag1982.cairn.documents.WrittenNode.Text;
 import java.util.List;
 
 /**
- * Renders a {@linkplain WrittenNode tree} as JSON with two-space indentation, one member or item per line (design D7).
- * Strings are always in quotes. JSON is valid YAML 1.2, so the reader reads the result like any other document.
+ * Renders a {@linkplain WrittenNode tree} as JSON with two-space indentation, one member or item per line (design D7
+ * of {@code add-schema-documents}). Strings are always in quotes. JSON is valid YAML 1.2, so the reader reads the result
+ * like any other document. It writes schema documents, the JSON forms of results and generated JSON Schemas.
  */
 final class JsonText {
 
@@ -19,12 +20,12 @@ final class JsonText {
     }
 
     /**
-     * Renders a document.
+     * Renders a tree.
      *
-     * @param root the document's mapping
+     * @param root the root of the tree: a mapping or a sequence
      * @return the JSON text, ending in a line break
      */
-    static String render(Mapping root) {
+    static String render(WrittenNode root) {
         StringBuilder out = new StringBuilder();
         node(out, root, 0);
         return out.append('\n').toString();

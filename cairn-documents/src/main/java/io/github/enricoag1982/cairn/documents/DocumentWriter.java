@@ -156,9 +156,10 @@ final class DocumentWriter {
     /**
      * A literal, by its value type: numbers as numbers, a decimal with its scale, booleans as {@code true} or
      * {@code false}, and strings, dates and instants as strings. A literal is written as its own type, whatever the
-     * attribute's value type is; the reader gives a literal the value type of its attribute if its text fits.
+     * attribute's value type is; the reader gives a literal the value type of its attribute if its text fits. Payloads
+     * and the JSON forms of results write values the same way, so this is their way too.
      */
-    private static WrittenNode literal(Value value) {
+    static WrittenNode literal(Value value) {
         return switch (value) {
             case Value.StringValue string -> new Text(string.value());
             case Value.BooleanValue bool -> new Plain(Boolean.toString(bool.value()));
