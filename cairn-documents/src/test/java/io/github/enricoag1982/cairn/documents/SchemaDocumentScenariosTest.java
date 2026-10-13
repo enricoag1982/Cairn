@@ -17,17 +17,20 @@ import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
+import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.ValueType;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.InstantSource;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The scenarios of the {@code schema-documents} spec that concern reading a document and locating its problems, one
- * test each.
+ * The scenarios of the {@code schema-documents} spec, one test each: reading, strict reading, locating problems,
+ * writing and the published JSON Schema.
  */
 class SchemaDocumentScenariosTest {
 
@@ -42,6 +45,19 @@ class SchemaDocumentScenariosTest {
 
         assertThat(document.origin()).isEqualTo(new Origin("reference-model", "1.0.0"));
         assertThat(document.definition()).isEqualTo(ReferenceModel.definition());
+    }
+
+    @Test
+    @DisplayName("Scenario: Reading a document written as JSON")
+    void readingADocumentWrittenAsJson() throws IOException {
+        SchemaDocument fromYaml = valid(Documents.referenceModelText());
+        String json = SchemaDocuments.writeJson(fromYaml.origin(), fromYaml.definition());
+
+        SchemaDocument fromJson = valid(json);
+
+        assertThat(json).startsWith("{\n  \"cairn\": 1,\n");
+        assertThat(fromJson.origin()).isEqualTo(fromYaml.origin());
+        assertThat(fromJson.definition()).isEqualTo(fromYaml.definition());
     }
 
     @Test
@@ -168,5 +184,67 @@ class SchemaDocumentScenariosTest {
 
         assertThat(problems).singleElement().satisfies(problem ->
                 assertThat(problem.location().orElseThrow().pointer()).isEqualTo("/entityTypes/Account/attributes/balance"));
+    }
+
+    // ------------------------------------------------------------------ writing
+
+    @Test
+    @DisplayName("Scenario: Round trip of the reference model")
+    void roundTripOfTheReferenceModel() {
+        Origin origin = ReferenceModel.origin("1.0.0");
+        SchemaDefinition definition = ReferenceModel.definition();
+
+        SchemaDocument fromYaml = valid(SchemaDocuments.writeYaml(origin, definition));
+        SchemaDocument fromJson = valid(SchemaDocuments.writeJson(origin, definition));
+
+        assertThat(fromYaml.origin()).isEqualTo(origin);
+        assertThat(fromYaml.definition()).isEqualTo(definition);
+        assertThat(fromJson.origin()).isEqualTo(origin);
+        assertThat(fromJson.definition()).isEqualTo(definition);
+    }
+
+    @Test
+    @DisplayName("Scenario: Defaults are left out")
+    void defaultsAreLeftOut() {
+        Origin origin = new Origin("test-model", "1.0.0");
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Thing", e -> e.attribute("note", ValueType.STRING))
+                .build();
+
+        String yaml = SchemaDocuments.writeYaml(origin, definition);
+        String json = SchemaDocuments.writeJson(origin, definition);
+
+        assertThat(yaml).isEqualTo("""
+                cairn: 1
+                origin:
+                  name: test-model
+                  version: "1.0.0"
+                entityTypes:
+                  Thing:
+                    attributes:
+                      note:
+                        type: string
+                """);
+        assertThat(DocumentTrees.at(DocumentTrees.load(json), "entityTypes", "Thing", "attributes", "note"))
+                .isEqualTo(Map.of("type", "string"));
+        assertThat(DocumentTrees.keysAt(DocumentTrees.load(json), "entityTypes", "Thing")).containsExactly("attributes");
+    }
+
+    // ------------------------------------------------------------------ published JSON Schema
+
+    @Test
+    @DisplayName("Scenario: The reference document is valid")
+    void theReferenceDocumentIsValid() throws IOException {
+        assertThat(JsonSchemas.errors(Documents.referenceModelText())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Scenario: A misspelled key is invalid")
+    void aMisspelledKeyIsInvalid() throws IOException {
+        String text = Documents.referenceModelText().replace("number: { type: string, required: true, unique: true }",
+                "number: { type: string, requird: true, unique: true }");
+
+        assertThat(JsonSchemas.errors(text)).isNotEmpty()
+                .anySatisfy(error -> assertThat(error.getMessage()).contains("requird"));
     }
 }

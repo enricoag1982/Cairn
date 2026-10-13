@@ -83,7 +83,7 @@ THE SYSTEM SHALL write an origin and a schema definition as a schema document, e
 
 ### Requirement: Published JSON Schema
 
-THE SYSTEM SHALL publish a JSON Schema (draft 2020-12) that describes schema documents of format version 1. Every document that the system reads without problems SHALL be valid against it, and a document with an unknown key, a missing required key or a value of the wrong kind SHALL be invalid against it.
+THE SYSTEM SHALL publish a JSON Schema (draft 2020-12) that describes schema documents of format version 1. Every document that the system reads without problems SHALL be valid against it, and a document with an unknown key, a missing required key or a value of the wrong kind SHALL be invalid against it. The one exception follows from JSON Schema itself: a number with a zero fraction, such as `1.0`, counts as an integer there, while the reader rejects it where an integer is expected.
 
 #### Scenario: The reference document is valid
 

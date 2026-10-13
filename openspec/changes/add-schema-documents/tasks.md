@@ -16,15 +16,15 @@
 - [x] 3.1 Read documents with SnakeYAML Engine's node tree: format version, origin, traits, entity types, relationship types, every property, defaults, literals and ranges (D2, D6)
 - [x] 3.2 Report document problems with locations and hints, and reject anchors, aliases, explicit tags, duplicate keys and multi-document streams (D5)
 - [x] 3.3 Build `DocumentLocations` and `SchemaDocument.locate` (D4)
-- [ ] 3.4 Write documents as YAML and as JSON (D7)
-- [ ] 3.5 Write the JSON Schema resource and `SchemaDocuments.jsonSchema()` (D8)
+- [x] 3.4 Write documents as YAML and as JSON (D7)
+- [x] 3.5 Write the JSON Schema resource and `SchemaDocuments.jsonSchema()` (D8)
 
 ## 4. Reference model and tests
 
 - [x] 4.1 Write `docs/reference/reference-model.cairn.yaml` and link it from the reference domain page (D10)
-- [ ] 4.2 One test per scenario of `schema-documents` and of the new `schema-evolution` requirement, named `Scenario: <name>`
-- [ ] 4.3 Round-trip tests over generated definitions, and the test that compares the JSON Schema's keys with the reader's (D7, D8)
-- [ ] 4.4 Verify `./gradlew build` passes
+- [x] 4.2 One test per scenario of `schema-documents` and of the new `schema-evolution` requirement, named `Scenario: <name>`
+- [x] 4.3 Round-trip tests over generated definitions, and the test that compares the JSON Schema's keys with the reader's (D7, D8)
+- [x] 4.4 Verify `./gradlew build` passes
 
 ## 5. Documentation
 

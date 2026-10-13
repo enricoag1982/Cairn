@@ -3,7 +3,7 @@ plugins {
     id("cairn.reference-domain-tests")
 }
 
-description = "Cairn schema documents: reading YAML and JSON documents into schema definitions, with locations for problems"
+description = "Cairn schema documents: reading and writing YAML and JSON documents, with locations for problems, and the published JSON Schema"
 
 dependencies {
     api(project(":cairn-api"))

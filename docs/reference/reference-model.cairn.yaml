@@ -1,5 +1,5 @@
 # The reference domain model as a schema document (ADR-0012).
-# The reference domain page (reference-domain.md) is canonical; the tests of add-schema-documents will check this document against it.
+# The reference domain page (reference-domain.md) is canonical; a test checks this document against it.
 cairn: 1
 origin:
   name: reference-model
