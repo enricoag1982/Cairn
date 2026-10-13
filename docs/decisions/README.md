@@ -34,5 +34,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0019](0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md) | Identify entities by opaque IDs from one generator per store | accepted | 2026-10-13 |
 | [ADR-0020](0020-write-attribute-patterns-as-i-regexp-and-match-them-in-linear-time.md) | Write attribute patterns as I-Regexp and match them in linear time | accepted | 2026-10-13 |
 | [ADR-0021](0021-generate-java-types-as-interfaces-with-snapshot-records-builders-of-writes-and-rule-base-classes.md) | Generate Java types as interfaces with snapshot records, builders of writes and rule base classes | accepted | 2026-10-13 |
+| [ADR-0022](0022-make-stores-durable-with-a-commit-log-of-effects-and-snapshots.md) | Make stores durable with a commit log of effects and snapshots | accepted | 2026-10-13 |
 
 <!-- decision-log:end -->
