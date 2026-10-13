@@ -55,7 +55,7 @@ class CompatibilityRulesTest {
 
     @BeforeEach
     void registerBase() {
-        registry = SchemaRegistries.inMemory(new TestClock());
+        registry = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules());
         before = applied(registry.register(ReferenceModel.origin("1.0.0"), BASE)).schema();
     }
 
@@ -381,7 +381,7 @@ class CompatibilityRulesTest {
 
         @Test
         void removingAnAliasIsAnotherPropertyChange() {
-            SchemaRegistry withAlias = SchemaRegistries.inMemory(new TestClock());
+            SchemaRegistry withAlias = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules());
             SchemaDefinition aliased = entity(BASE, "Branch", type -> new EntityTypeDefinition(type.name(),
                     type.isAbstract(), type.supertype(), type.traits(), type.attributes(), List.of("Office"), false,
                     type.description(), type.rules()));
@@ -394,7 +394,7 @@ class CompatibilityRulesTest {
 
         @Test
         void undeprecatingIsAnotherPropertyChange() {
-            SchemaRegistry withDeprecation = SchemaRegistries.inMemory(new TestClock());
+            SchemaRegistry withDeprecation = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules());
             SchemaDefinition deprecated = entity(BASE, "Branch", type -> new EntityTypeDefinition(type.name(),
                     type.isAbstract(), type.supertype(), type.traits(), type.attributes(), type.aliases(), true,
                     type.description(), type.rules()));

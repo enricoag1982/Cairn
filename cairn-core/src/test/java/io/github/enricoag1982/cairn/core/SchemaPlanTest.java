@@ -34,7 +34,7 @@ class SchemaPlanTest {
     @BeforeEach
     void createRegistry() {
         clock = new TestClock();
-        registry = SchemaRegistries.inMemory(clock);
+        registry = SchemaRegistries.inMemory(clock, ReferenceModel.rules());
     }
 
     private static SchemaDefinition withEmail() {
@@ -238,11 +238,12 @@ class SchemaPlanTest {
 
     @Test
     void planningDoesNotUseUpIdentifiers() {
-        SchemaRegistry planned = SchemaRegistries.inMemory(new TestClock());
+        SchemaRegistry planned = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules());
         planned.plan(v("1.0.0"), BASE);
         planned.plan(v("1.0.0"), BASE);
         var withPlans = applied(planned.register(v("1.0.0"), BASE)).schema();
-        var without = applied(SchemaRegistries.inMemory(new TestClock()).register(v("1.0.0"), BASE)).schema();
+        var without = applied(SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules())
+                .register(v("1.0.0"), BASE)).schema();
 
         assertThat(withPlans.entityType("Person").orElseThrow().id()).isEqualTo(without.entityType("Person").orElseThrow().id());
         assertThat(withPlans.entityType("Person").orElseThrow().attribute("birthDate").orElseThrow().id())
@@ -252,12 +253,12 @@ class SchemaPlanTest {
     @Test
     void breakingChangesToTightenedConstraintsCarryAHint() {
         applied(registry.register(v("1.0.0"), BASE));
-        SchemaDefinition tightened = changeEntityType(BASE, "Account", type -> withAttributes(type, type.attributes().stream()
-                .map(attribute -> attribute.name().equals("currency")
+        SchemaDefinition tightened = changeEntityType(BASE, "Address", type -> withAttributes(type, type.attributes().stream()
+                .map(attribute -> attribute.name().equals("country")
                         ? new AttributeDefinition(attribute.name(), attribute.valueType(), attribute.required(),
                                 attribute.unique(), attribute.range(), attribute.aliases(), attribute.deprecated(),
                                 attribute.description(), attribute.examples(), attribute.allowedValues(),
-                                java.util.Optional.of("[A-Z]{3}"), attribute.minLength(), attribute.maxLength())
+                                java.util.Optional.of("[A-Z]{2}"), attribute.minLength(), attribute.maxLength())
                         : attribute)
                 .toList()));
 
@@ -265,7 +266,7 @@ class SchemaPlanTest {
 
         assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.REJECT);
         assertThat(plan.problems()).singleElement().satisfies(problem -> {
-            assertThat(problem.path()).isEqualTo("Account.currency");
+            assertThat(problem.path()).isEqualTo("Address.country");
             assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("optional", "unconstrained"));
         });
         List<Problem> registered = ((RegistrationResult.Rejected) registry.register(v("1.1.0"), tightened)).problems();

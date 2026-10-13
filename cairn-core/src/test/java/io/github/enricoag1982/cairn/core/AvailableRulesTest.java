@@ -3,7 +3,6 @@ package io.github.enricoag1982.cairn.core;
 import static io.github.enricoag1982.cairn.core.Results.applied;
 import static io.github.enricoag1982.cairn.core.Results.rejected;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeEntityType;
-import static io.github.enricoag1982.cairn.fixtures.Definitions.changeRelationshipType;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -15,7 +14,6 @@ import io.github.enricoag1982.cairn.schema.Literal;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
-import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.RuleReference;
@@ -47,13 +45,6 @@ class AvailableRulesTest {
     private static EntityTypeDefinition describedAs(EntityTypeDefinition type, String description) {
         return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), type.traits(),
                 type.attributes(), type.aliases(), type.deprecated(), java.util.Optional.of(description), type.rules());
-    }
-
-    private static RelationshipTypeDefinition naming(RelationshipTypeDefinition type, RuleReference... rules) {
-        return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
-                type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
-                type.supertype(), type.attributes(), type.aliases(), type.deprecated(), type.description(),
-                List.of(rules));
     }
 
     private static SchemaRegistry registry(RuleDescriptor... rules) {
@@ -104,26 +95,25 @@ class AvailableRulesTest {
 
     @Test
     void aRegistryAcceptsAReferenceToAnAvailableRuleAndRejectsOthers() {
-        SchemaDefinition withLei = changeEntityType(ReferenceModel.definition(), "Organization",
-                type -> naming(type, new RuleReference("lei-checksum", 1)));
+        SchemaDefinition model = ReferenceModel.definition();
 
-        applied(registry(LEI).register(ReferenceModel.origin("1.0.0"), withLei));
+        applied(registry(LEI, OWNERSHIP).register(ReferenceModel.origin("1.0.0"), model));
 
-        List<Problem> problems = rejected(registry().register(ReferenceModel.origin("1.0.0"), withLei));
+        List<Problem> problems = rejected(registry(OWNERSHIP).register(ReferenceModel.origin("1.0.0"), model));
         assertThat(problems).singleElement().satisfies(problem -> {
             assertThat(problem.code()).isEqualTo(ProblemCode.UNKNOWN_RULE);
             assertThat(problem.path()).isEqualTo("Organization.lei-checksum");
         });
-        assertThat(registry().validate(ReferenceModel.origin("1.0.0"), withLei)).isEqualTo(problems);
-        assertThat(registry(LEI).validate(ReferenceModel.origin("1.0.0"), withLei)).isEmpty();
+        assertThat(registry(OWNERSHIP).validate(ReferenceModel.origin("1.0.0"), model)).isEqualTo(problems);
+        assertThat(registry(LEI, OWNERSHIP).validate(ReferenceModel.origin("1.0.0"), model)).isEmpty();
+        assertThat(rejected(registry().register(ReferenceModel.origin("1.0.0"), model))).map(Problem::path)
+                .containsExactlyInAnyOrder("Organization.lei-checksum", "Owns.total-ownership-at-most-100");
     }
 
     @Test
     void aRuleOfARelationshipTypeIsReportedWithItsInheritance() {
-        SchemaDefinition withOwnership = changeRelationshipType(ReferenceModel.definition(), "Owns",
-                type -> naming(type, new RuleReference("total-ownership-at-most-100", 1)));
-
-        Schema schema = applied(registry(OWNERSHIP).register(ReferenceModel.origin("1.0.0"), withOwnership)).schema();
+        Schema schema = applied(registry(LEI, OWNERSHIP).register(ReferenceModel.origin("1.0.0"),
+                ReferenceModel.definition())).schema();
 
         RelationshipType owns = schema.relationshipType("Owns").orElseThrow();
         assertThat(owns.rules()).containsExactly(new RuleReference("total-ownership-at-most-100", 1));
@@ -139,7 +129,7 @@ class AvailableRulesTest {
                         type -> naming(type, new RuleReference("name-not-blank", 1), new RuleReference("party-check", 1))),
                 "Organization", type -> naming(type, new RuleReference("lei-checksum", 1)));
 
-        Schema schema = applied(registry(NOT_BLANK, leiForParty, LEI)
+        Schema schema = applied(registry(NOT_BLANK, leiForParty, LEI, OWNERSHIP)
                 .register(ReferenceModel.origin("1.0.0"), definition)).schema();
 
         EntityType organization = schema.entityType("Organization").orElseThrow();
@@ -225,7 +215,7 @@ class AvailableRulesTest {
 
     @Test
     void changingOnlyADescriptionIsAppliedAndReported() {
-        SchemaRegistry registry = SchemaRegistries.inMemory(new TestClock());
+        SchemaRegistry registry = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules());
         applied(registry.register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition()));
 
         Schema after = applied(registry.register(ReferenceModel.origin("1.1.0"), changeEntityType(

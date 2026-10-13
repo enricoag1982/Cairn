@@ -34,7 +34,7 @@ class TransactionTimeTest {
     @Test
     void transactionTimesHaveMicrosecondPrecision() {
         Instant now = Instant.parse("2026-03-16T10:15:30.987654321Z");
-        SchemaRegistry registry = SchemaRegistries.inMemory(InstantSource.fixed(now));
+        SchemaRegistry registry = SchemaRegistries.inMemory(InstantSource.fixed(now), ReferenceModel.rules());
 
         Instant time = applied(registry.register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition()))
                 .transactionTime();

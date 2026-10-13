@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 /** Design D5: identifiers survive moves to a supertype and renames with an alias. */
 class IdentifierMatchingTest {
 
-    private final SchemaRegistry registry = SchemaRegistries.inMemory(new TestClock());
+    private final SchemaRegistry registry = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules());
 
     @Test
     void anAttributeMovedToASupertypeKeepsItsIdentifier() {

@@ -25,8 +25,11 @@ import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
+import io.github.enricoag1982.cairn.schema.RuleDescriptor;
+import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.SchemaPlan;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import io.github.enricoag1982.cairn.schema.ValueType;
@@ -36,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +47,7 @@ import org.junit.jupiter.api.Test;
 class SchemaEvolutionScenariosTest {
 
     private final TestClock clock = new TestClock();
-    private final SchemaRegistry registry = SchemaRegistries.inMemory(clock);
+    private final SchemaRegistry registry = SchemaRegistries.inMemory(clock, ReferenceModel.rules());
 
     /** Version 1.1.0 of the reference model: Person gets the optional attribute email. */
     static SchemaDefinition withEmail() {
@@ -339,6 +343,45 @@ class SchemaEvolutionScenariosTest {
         applied(register("1.1.0", relaxed));
     }
 
+    @Test
+    @DisplayName("Scenario: Changing a description")
+    void changingADescription() {
+        applied(register("1.0.0", changeEntityType(ReferenceModel.definition(), "Organization",
+                type -> describedAs(type, "A company"))));
+
+        Schema after = applied(register("1.1.0", changeEntityType(ReferenceModel.definition(), "Organization",
+                type -> describedAs(type, "A company or another legal entity")))).schema();
+
+        assertThat(after.entityType("Organization").orElseThrow().description())
+                .contains("A company or another legal entity");
+    }
+
+    @Test
+    @DisplayName("Scenario: Adding an allowed value")
+    void addingAnAllowedValue() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition withPrivate = changeEntityType(ReferenceModel.definition(), "CustomerRole", type ->
+                changeAttribute(type, "segment", attribute -> AttributeDefinition.builder("segment", ValueType.STRING)
+                        .required().allowedValues("Corporate", "Retail", "Private").build()));
+
+        Schema after = applied(register("1.1.0", withPrivate)).schema();
+
+        assertThat(after.entityType("CustomerRole").orElseThrow().attribute("segment").orElseThrow().allowedValues())
+                .containsExactlyInAnyOrder("Corporate", "Retail", "Private");
+    }
+
+    @Test
+    @DisplayName("Scenario: Removing a rule")
+    void removingARule() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition withoutRule = changeEntityType(ReferenceModel.definition(), "Organization",
+                type -> withRules(type, List.of()));
+
+        Schema after = applied(register("1.1.0", withoutRule)).schema();
+
+        assertThat(after.entityType("Organization").orElseThrow().rules()).isEmpty();
+    }
+
     // ------------------------------------------------------------------ breaking changes
 
     @Test
@@ -352,6 +395,8 @@ class SchemaEvolutionScenariosTest {
 
         assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Person");
         assertThat(problems.getFirst().path()).isEqualTo("Person.birthDate");
+        assertThat(problems.getFirst().hint())
+                .hasValueSatisfying(hint -> assertThat(hint).contains("deprecated", "alias"));
     }
 
     @Test
@@ -417,6 +462,38 @@ class SchemaEvolutionScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Removing an allowed value")
+    void removingAnAllowedValue() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition onlyCorporate = changeEntityType(ReferenceModel.definition(), "CustomerRole", type ->
+                changeAttribute(type, "segment", attribute -> AttributeDefinition.builder("segment", ValueType.STRING)
+                        .required().allowedValues("Corporate").build()));
+
+        List<Problem> problems = rejected(register("1.1.0", onlyCorporate));
+
+        assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "CustomerRole");
+        assertThat(problems.getFirst().path()).isEqualTo("CustomerRole.segment");
+    }
+
+    @Test
+    @DisplayName("Scenario: Adding a rule to an existing type")
+    void addingARuleToAnExistingType() {
+        RuleDescriptor birthDateInPast = new RuleDescriptor("birth-date-in-past", 1,
+                "The birth date is before today.", "Person", List.of());
+        List<RuleDescriptor> rules = new ArrayList<>(ReferenceModel.rules());
+        rules.add(birthDateInPast);
+        SchemaRegistry withRule = SchemaRegistries.inMemory(clock, rules);
+        applied(withRule.register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition()));
+        SchemaDefinition namingIt = changeEntityType(ReferenceModel.definition(), "Person", type ->
+                withRules(type, List.of(new RuleReference("birth-date-in-past", 1))));
+
+        List<Problem> problems = rejected(withRule.register(ReferenceModel.origin("1.1.0"), namingIt));
+
+        assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Person");
+        assertThat(problems.getFirst().path()).isEqualTo("Person.birth-date-in-past");
+    }
+
+    @Test
     @DisplayName("Scenario: Several breaking changes")
     void severalBreakingChanges() {
         Schema before = applied(register("1.0.0", ReferenceModel.definition())).schema();
@@ -431,6 +508,59 @@ class SchemaEvolutionScenariosTest {
         assertThat(problems).anyMatch(problem -> problem.path().equals("Person.birthDate"));
         assertThat(problems).anyMatch(problem -> locatedAt(problem, "Organization"));
         assertThat(registry.current()).isSameAs(before);
+    }
+
+    // ------------------------------------------------------------------ planning
+
+    @Test
+    @DisplayName("Scenario: Plan of a compatible change")
+    void planOfACompatibleChange() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        Schema stored = registry.current();
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.1.0"), withEmail());
+
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.APPLY);
+        assertThat(plan.changes()).singleElement().satisfies(change -> {
+            assertThat(change.path()).isEqualTo("Person.email");
+            assertThat(change.compatible()).isTrue();
+        });
+        assertThat(registry.history()).hasSize(1);
+        assertThat(registry.current()).isSameAs(stored);
+    }
+
+    @Test
+    @DisplayName("Scenario: Plan of a breaking change")
+    void planOfABreakingChange() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition withoutBirthDate = changeEntityType(ReferenceModel.definition(), "Person", type ->
+                withAttributes(type, List.of()));
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.1.0"), withoutBirthDate);
+
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.REJECT);
+        assertThat(plan.changes()).singleElement().satisfies(change -> {
+            assertThat(change.path()).isEqualTo("Person.birthDate");
+            assertThat(change.compatible()).isFalse();
+        });
+        assertThat(plan.problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.BREAKING_CHANGE);
+            assertThat(problem.path()).isEqualTo("Person.birthDate");
+        });
+        assertThat(registry.history()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: Plan of an unchanged registration")
+    void planOfAnUnchangedRegistration() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.0.0"), ReferenceModel.definition());
+
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.UNCHANGED);
+        assertThat(plan.changes()).isEmpty();
+        assertThat(plan.problems()).isEmpty();
+        assertThat(registry.history()).hasSize(1);
     }
 
     // ------------------------------------------------------------------ aliases
@@ -469,6 +599,16 @@ class SchemaEvolutionScenariosTest {
         schema.relationshipTypes().forEach(type -> all.addAll(type.attributes()));
         all.forEach(attribute -> ids.put(attribute.declaredBy() + "." + attribute.name(), attribute.id()));
         return ids;
+    }
+
+    static EntityTypeDefinition describedAs(EntityTypeDefinition type, String description) {
+        return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), type.traits(),
+                type.attributes(), type.aliases(), type.deprecated(), Optional.of(description), type.rules());
+    }
+
+    static EntityTypeDefinition withRules(EntityTypeDefinition type, List<RuleReference> rules) {
+        return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), type.traits(),
+                type.attributes(), type.aliases(), type.deprecated(), type.description(), rules);
     }
 
     static EntityTypeDefinition includes(EntityTypeDefinition type, String trait) {

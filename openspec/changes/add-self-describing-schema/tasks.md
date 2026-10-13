@@ -22,13 +22,13 @@
 ## 3. Reference domain
 
 - [x] 3.1 Add the string constraints and the rules table to `docs/reference/reference-domain.md` (D9)
-- [ ] 3.2 Update `ReferenceModel` and `ReferenceModelTest`, add `ReferenceModel.rules()`, and create registries with these rules wherever tests register the reference model
+- [x] 3.2 Update `ReferenceModel` and `ReferenceModelTest`, add `ReferenceModel.rules()`, and create registries with these rules wherever tests register the reference model
 
 ## 4. Scenario tests
 
-- [ ] 4.1 One test per new or changed scenario of `type-model`, named `Scenario: <name>`
-- [ ] 4.2 One test per new or changed scenario of `schema-evolution`, named `Scenario: <name>`
-- [ ] 4.3 Tests that every `ProblemCode` has an explanation, and for each new problem code; verify `./gradlew build` passes
+- [x] 4.1 One test per new or changed scenario of `type-model`, named `Scenario: <name>`
+- [x] 4.2 One test per new or changed scenario of `schema-evolution`, named `Scenario: <name>`
+- [x] 4.3 Tests that every `ProblemCode` has an explanation, and for each new problem code; verify `./gradlew build` passes
 
 ## 5. Documentation
 
