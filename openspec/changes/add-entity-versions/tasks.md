@@ -6,7 +6,7 @@
 
 ## 2. API (`cairn-api`, package `io.github.enricoag1982.cairn.data`)
 
-- [ ] 2.1 Add `EntityId`, `TemporaryId`, `EntityRef`, `EffectivePeriod`, `ConflictCheck` and `IdGenerator` (D2)
+- [ ] 2.1 Add `EntityId`, `TemporaryId`, `Ref`, `EffectivePeriod`, `ConflictCheck` and `IdGenerator` (D2)
 - [ ] 2.2 Add `Transaction` with its builder, and the writes `Create`, `Patch`, `Replace` and `EndDate` (D2)
 - [ ] 2.3 Add `CommitResult`, `DryRunResult`, `Receipt` and `TransactionRecord` (D2)
 - [ ] 2.4 Add `Coordinates`, `KnownAt`, `View`, `EntityState` and `Store` (D2)

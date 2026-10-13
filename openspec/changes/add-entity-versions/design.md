@@ -42,10 +42,10 @@ Constraints that shape the approach:
 - `Transaction(String principal, Optional<String> onBehalfOf, Optional<String> reason, Optional<String> idempotencyKey, List<Write> writes)`, built with `Transaction.by(principal)`, which offers `onBehalfOf`, `reason`, `idempotencyKey`, `create`, `patch`, `replace` and `endDate`.
 - `Write` is sealed:
   - `Create(Optional<TemporaryId> temporaryId, Optional<EntityId> id, String entityType, EffectivePeriod period, Map<String, Value> values)`
-  - `Patch(EntityRef entity, EffectivePeriod period, Map<String, Value> set, Set<String> clear, ConflictCheck check)`
-  - `Replace(EntityRef entity, EffectivePeriod period, Map<String, Value> values, ConflictCheck check)`
-  - `EndDate(EntityRef entity, Instant from, ConflictCheck check)`
-- `EntityRef` is sealed: `EntityId(String value)` or `TemporaryId(String name)`.
+  - `Patch(Ref target, EffectivePeriod period, Map<String, Value> set, Set<String> clear, ConflictCheck check)`
+  - `Replace(Ref target, EffectivePeriod period, Map<String, Value> values, ConflictCheck check)`
+  - `EndDate(Ref target, Instant from, ConflictCheck check)`
+- `Ref` is sealed: `EntityId(String value)` or `TemporaryId(String name)`. `add-relationships` adds `RelationshipId`, so writes that patch, replace or end-date take any of them.
 - `EffectivePeriod(Instant from, Optional<Instant> until)`, truncated to microseconds by its constructor; `EffectivePeriod.from(Instant)` and `between(Instant, Instant)`.
 - `ConflictCheck` is sealed: `none()`, `perEntity(Basis readAt)`, `perAttribute(Basis readAt)`.
 - `CommitResult` is sealed: `Committed(Receipt receipt)` or `Rejected(List<Problem> problems)`. `DryRunResult` is sealed: `WouldCommit()` or `Rejected(List<Problem> problems)`.
