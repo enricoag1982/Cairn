@@ -1,3 +1,9 @@
+# Spec Delta
+
+## Purpose
+
+Defines relationships between entities: relating, integrity at both ends at every point in effective time, compositions, symmetric types, navigation and traversal.
+
 ## ADDED Requirements
 
 ### Requirement: Relating entities

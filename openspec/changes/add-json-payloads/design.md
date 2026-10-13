@@ -8,7 +8,7 @@
 
 **Goals:**
 
-- One reader and writer for payloads, sharing the node-tree reading, strictness and locations of schema documents.
+- One reader and writer for payloads, sharing the node-tree reading, strictness and locations of schema documents. That needs a small refactoring first: the reader's helpers for typed properties and its element paths are specific to schema documents today.
 - Generated JSON Schemas that agents and editors use to build valid payloads.
 
 **Non-Goals:**

@@ -1,3 +1,9 @@
+# Spec Delta
+
+## Purpose
+
+Defines transaction payloads in YAML 1.2 or JSON, their reading with located problems, JSON forms of results, and JSON Schemas generated from a schema.
+
 ## ADDED Requirements
 
 ### Requirement: Transaction payloads

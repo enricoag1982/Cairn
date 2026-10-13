@@ -1,3 +1,9 @@
+# Spec Delta
+
+## Purpose
+
+Defines rules written in Java: how a store gets them, how they run at commit, and how they report problems.
+
 ## ADDED Requirements
 
 ### Requirement: Rules in Java

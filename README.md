@@ -7,7 +7,7 @@ You, or your AI agents, define typed entities and relationships, with inheritanc
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** early. The schema API (defining, validating, registering and evolving types) is built; entities, storage and queries are not. The core design is recorded in accepted decision records.
+> **Status:** early. The schema API (defining, validating, planning, registering and evolving types) and schema documents are built; entities, storage and queries are not. The core design is recorded in accepted decision records.
 
 ## Ideas in one page
 

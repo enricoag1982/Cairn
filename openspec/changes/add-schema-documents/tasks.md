@@ -31,3 +31,10 @@
 - [x] 5.1 Add `Document location` to `docs/glossary.md`, and update `Schema document`
 - [x] 5.2 Add `cairn-documents` to the building blocks in `docs/architecture/README.md` and to the repository map in `AGENTS.md`; bump `last-reviewed`
 - [ ] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+
+## 6. Drift-review fixes
+
+- [ ] 6.1 Accept a top-level `$schema` key; reject YAML-only number forms; quote YAML 1.1 boolean words when writing (D6, D7, D8)
+- [ ] 6.2 Tests for the new scenarios (problem outside every element, widened numbers come back in the attribute's type), and generated definitions with widened literals in the round-trip test
+- [ ] 6.3 Rename the test helper `JsonSchemas` so that `add-json-payloads` can use the name; fix the `DocumentReadResult.Invalid` and `Keys` Javadoc; add a test that the reader's closest-key rule agrees with the engine's closest-name rule
+

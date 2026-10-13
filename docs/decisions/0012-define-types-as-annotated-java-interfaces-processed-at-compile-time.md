@@ -111,6 +111,7 @@ The first version of this ADR proposed this option.
 
 - Revised on 2026-10-13 while still proposed, then accepted. The first version chose annotated Java interfaces processed at compile time; the AI-native requirement of [ADR-0017](0017-design-cairn-so-that-ai-agents-are-first-class-users.md) changed the outcome. The file name keeps the first title.
 - A second revision on the same day replaced two notations, YAML for people and JSON for tools, with one format: YAML 1.2, which includes JSON.
+- How the decision was built: `add-self-describing-schema` added descriptions, examples, constraints and rule references to the definitions (planned here for `add-schema-documents`), and `add-schema-documents` added the format. A round trip gives back an equal definition, except that a number written for an attribute of a wider value type comes back in that type.
 - Validation logic that a document cannot declare is written in Java: [ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md).
 - JSON Schema: <https://json-schema.org/>
 - YAML 1.2: <https://yaml.org/spec/1.2.2/>

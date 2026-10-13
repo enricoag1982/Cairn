@@ -33,7 +33,8 @@ It is a living document: update it in the same pull request that changes the arc
 ```mermaid
 flowchart LR
     app([Application on the JVM]) -->|embeds and calls| cairn[Cairn engine<br/>cairn-api + cairn-core]
-    model([Schema definition<br/>types of one origin]) -->|registered by the application| cairn
+    doc([Schema document<br/>*.cairn.yaml, one origin]) -->|read by cairn-documents| model([Schema definition<br/>types of one origin])
+    model -->|registered by the application| cairn
 ```
 
 Cairn runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)). It has no external systems yet.
@@ -61,7 +62,7 @@ Accepted, and built one change at a time:
 
 | Building block | Responsibility | Capabilities (specs) |
 | --- | --- | --- |
-| `cairn-api` | Public types: schema definitions and their builders, the resolved schema with descriptions, constraints and rule references, rule descriptors, problems with their details and explained codes, plans, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model and its rules. | `type-model`, `schema-evolution` |
+| `cairn-api` | Public types: schema definitions and their builders, the resolved schema with descriptions, constraints and rule references, rule descriptors, problems with their details, explained codes and document locations, plans, stored definitions, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model and its rules. | `type-model`, `schema-evolution`, `schema-documents` |
 | `cairn-core` | The engine. Validates definitions against each other and the available rules, compiles them into a resolved schema with schema identifiers, checks compatibility, plans registrations, checks and matches patterns (I-Regexp, with RE2/J), and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. Its only runtime dependency is RE2/J ([ADR-0020](../decisions/0020-write-attribute-patterns-as-i-regexp-and-match-them-in-linear-time.md)). | `type-model`, `schema-evolution` |
 | `cairn-documents` | Schema documents ([ADR-0012](../decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)): reads YAML 1.2 (and JSON) strictly into an origin and a schema definition, locates every problem in the document, writes definitions as YAML or JSON, and publishes the JSON Schema of the format. Depends on `cairn-api` and SnakeYAML Engine, not on `cairn-core`. | `schema-documents` |
 | `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `cairn.java-library` for every Java module, and `cairn.reference-domain-tests` for modules whose tests read the reference domain page or its schema document. Modules with a `module-info.java` get their whole compile classpath as module path, so that automatic modules such as RE2/J are found. | none |
@@ -87,10 +88,10 @@ flowchart LR
 
 <!-- Error handling, security, observability, persistence, configuration, testing strategy. -->
 
-- **Errors:** an invalid schema definition never causes an exception. Registrations and plans return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value and a hint. Exceptions mean programming errors: a missing value, a `Multiplicity` other than 0 or 1 to 1 or unbounded, or a registry given the same rule twice.
+- **Errors:** an invalid schema definition never causes an exception. Registrations, plans and document reading return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value, a hint and its location in the document. Bad input never throws. Exceptions mean programming errors: a missing value, a `Multiplicity` other than 0 or 1 to 1 or unbounded, or a registry given the same rule twice.
 - **Concurrency:** registrations are serialized (the single writer). Each one publishes a new immutable state, so reads never lock.
 - **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase.
-- **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md). Tests run with compact object headers on.
+- **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md), and `ReferenceModelDocumentTest` keeps its schema document in step with the fixture. `JsonSchemaDriftTest` keeps the published JSON Schema in step with the reader. Tests run with compact object headers on.
 
 ## 9. Architecture decisions
 

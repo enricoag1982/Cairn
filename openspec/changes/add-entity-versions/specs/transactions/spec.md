@@ -1,3 +1,9 @@
+# Spec Delta
+
+## Purpose
+
+Defines how writes are committed: atomic transactions with receipts, entity IDs, temporary and supplied IDs, who and why, dry runs and idempotency keys.
+
 ## ADDED Requirements
 
 ### Requirement: Committing a transaction

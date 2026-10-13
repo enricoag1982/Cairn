@@ -1,3 +1,9 @@
+# Spec Delta
+
+## Purpose
+
+Defines how entities are created, patched, replaced, end-dated and corrected on two time axes, and how their values are validated at commit.
+
 ## ADDED Requirements
 
 ### Requirement: Creating entities

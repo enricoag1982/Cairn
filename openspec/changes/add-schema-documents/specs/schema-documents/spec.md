@@ -1,11 +1,17 @@
+# Spec Delta
+
+## Purpose
+
+Defines the schema document format (YAML 1.2, which includes JSON): strict reading into an origin and a schema definition, problems located in the document, writing, and the published JSON Schema.
+
 ## ADDED Requirements
 
 ### Requirement: Schema document format
 
 THE SYSTEM SHALL read a schema document written in YAML 1.2 into an origin and a schema definition. Because JSON is valid YAML 1.2, a document written as JSON SHALL be read the same way.
-A document SHALL be a mapping with the key `cairn`, whose value is the format version 1, and the key `origin`, holding the origin's name and version. It MAY have the keys `traits`, `entityTypes` and `relationshipTypes`, each a mapping from type names to type definitions.
-A type definition SHALL use the names of the schema definition's properties. A property that is left out SHALL take its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, aliases, inverse aliases, constraints, examples, description or rules. A relationship type MUST state its source, target, inverse name and both multiplicities. A multiplicity SHALL be written as `0..1`, `1..1`, `0..*` or `1..*`.
-Literals SHALL be written as YAML numbers for int, long and decimal values, as `true` or `false` for boolean values, and as strings for string, date (ISO 8601 date) and instant (ISO 8601 UTC instant) values. A range SHALL be written as a mapping with at most one of `atLeast` and `greaterThan`, and at most one of `atMost` and `lessThan`.
+A document SHALL be a mapping with the key `cairn`, whose value is the format version 1, and the key `origin`, holding the origin's name and version. It MAY have the keys `traits`, `entityTypes` and `relationshipTypes`, each a mapping from type names to type definitions, and the key `$schema`, which names the published JSON Schema for editors and is otherwise ignored.
+A type definition SHALL use the names of the schema definition's properties, except `abstract` for whether an entity type is abstract and `type` for an attribute's value type. A property that is left out SHALL take its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, attributes, aliases, inverse aliases, constraints, examples, description or rules. A relationship type MUST state its source, target, inverse name and both multiplicities; an attribute MUST state its value type; a rule reference MUST state its name and version. A multiplicity SHALL be written as `0..1`, `1..1`, `0..*` or `1..*`.
+Numbers SHALL be written as JSON numbers: forms that only YAML knows, such as `0x10`, `0o17` or `+1`, are values of the wrong kind. Literals SHALL be written as numbers for int, long and decimal values, as `true` or `false` for boolean values, and as strings for string, date (ISO 8601 date) and instant (ISO 8601 UTC instant) values. A range SHALL be written as a mapping with at most one of `atLeast` and `greaterThan`, and at most one of `atMost` and `lessThan`.
 
 #### Scenario: Reading the reference model
 
@@ -55,12 +61,17 @@ A YAML syntax error, and a format version other than 1, SHALL stop reading and S
 
 ### Requirement: Problems are located in the document
 
-Every problem about a document SHALL carry its location in the document: a JSON Pointer, a line and a column, both counted from 1. For a document that was read, THE SYSTEM SHALL locate the problems that validating, planning or registering its definition reports: a problem about a type, attribute, inverse name or rule SHALL be located at that element, and a problem about the origin at the key `origin`.
+Every problem about a document SHALL carry its location in the document: a JSON Pointer, a line and a column, both counted from 1. Its path SHALL be the path of the element it is in, `@origin` inside the origin, or `@document` outside every element. For a document that was read, THE SYSTEM SHALL locate the problems that validating, planning or registering its definition reports: a problem about a type, attribute, inverse name or rule SHALL be located at that element, a problem about the origin at the key `origin`, and a problem whose path names no element of the document at the document's root.
 
 #### Scenario: Locating a registration problem
 
 - **WHEN** a document whose entity type Organization names the supertype `Prty` is read, registered, and the registration's problems are located in the document
 - **THEN** the problem about Organization is located at the JSON Pointer `/entityTypes/Organization`, with the line and column where Organization is defined
+
+#### Scenario: Problem outside every element
+
+- **WHEN** a document has the top-level key `entityType` instead of `entityTypes`
+- **THEN** reading fails with a problem whose path is `@document`, located at the key, whose hint names `entityTypes`
 
 #### Scenario: Locating an attribute problem
 
@@ -69,12 +80,17 @@ Every problem about a document SHALL carry its location in the document: a JSON 
 
 ### Requirement: Writing schema documents
 
-THE SYSTEM SHALL write an origin and a schema definition as a schema document, either in YAML block style or as JSON, leaving out every property that has its default. The order of types and attributes SHALL follow the definition. Reading a written document SHALL give back an equal origin and definition.
+THE SYSTEM SHALL write an origin and a schema definition as a schema document, either in YAML block style or as JSON, leaving out every property that has its default. The order of types and attributes SHALL follow the definition. Reading a written document SHALL give back an equal origin and definition, except that a number written for an attribute of a wider value type, such as an int bound of a decimal attribute, SHALL come back in the attribute's value type.
 
 #### Scenario: Round trip of the reference model
 
 - **WHEN** the reference domain model is written as a YAML document and as a JSON document, and both are read back
 - **THEN** both results equal the original origin and definition
+
+#### Scenario: Widened numbers come back in the attribute's type
+
+- **WHEN** a definition whose decimal attribute has a range with the int bound 0 is written and read back
+- **THEN** the range has the decimal bound 0, and the rest of the definition is equal
 
 #### Scenario: Defaults are left out
 

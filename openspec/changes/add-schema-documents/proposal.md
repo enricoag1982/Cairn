@@ -8,9 +8,9 @@ So far a schema can only be built in Java. Agents need a published format with a
 ## What Changes
 
 - A schema document format, version 1, in YAML 1.2. Because JSON is valid YAML 1.2, the same documents can be sent as JSON. A document holds one origin and its traits, entity types and relationship types, keyed by name, with every property a schema definition has (including descriptions, examples, string constraints and rule references from `add-self-describing-schema`).
-- Strict reading: unknown keys, values of the wrong kind, and YAML features outside a safe subset (anchors, aliases, explicit tags, duplicate keys, several documents in one stream) are problems, with the closest known key as a hint for misspellings.
+- Strict reading: unknown keys, values of the wrong kind, and YAML features outside a safe subset (anchors, aliases, explicit tags, merge keys, duplicate keys, several documents in one stream) are problems, with the closest known key as a hint for misspellings.
 - Locations: every problem about a document, and every problem that validating, planning or registering its definition reports, can be located in the document by a JSON Pointer, a line and a column.
-- Writing an origin and a schema definition as a document, in YAML block style or as JSON. Reading a written document gives back the same origin and definition.
+- Writing an origin and a schema definition as a document, in YAML block style or as JSON. Reading a written document gives back the same origin and definition, with numbers in the value type of their attribute.
 - A published JSON Schema for schema documents, which editors and agents use to complete and check documents.
 - Reading a stored origin's definition back from the schema registry, so that a tool can export it as a document.
 - The reference domain is also kept as a schema document, next to its page.

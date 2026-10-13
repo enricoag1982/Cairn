@@ -1,3 +1,9 @@
+# Spec Delta
+
+## Purpose
+
+Defines how data is read: through immutable views bound to an effective time and a basis or transaction time.
+
 ## ADDED Requirements
 
 ### Requirement: Views are bound to coordinates
