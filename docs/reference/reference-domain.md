@@ -89,7 +89,7 @@ Scenarios reuse these stories and cite them by ID. Dates are in 2026 unless stat
 | RD-12 | Recorded 1 March: creating Gamma, an organization with the LEI `5493001KJTIIGC8Y1R13`, is rejected, because its check digits are wrong. | Rules |
 | RD-13 | Recorded 1 April: Gamma, an organization, is created and owns 50% of Beta from 1 April. It is rejected, because together with ACME's share as known on 1 April (60%, see RD-2) the owners of Beta would hold 110%. | Rules on relationships |
 
-The test fixture `ReferenceStories` builds every story except the query RD-6, the listing RD-10 and the purge RD-11, and the scenario tests replay them in date order.
+The test fixture `ReferenceStories` builds every story that records data, and the scenario tests replay them in date order. `ReferenceQueries` holds the queries of RD-6 and RD-10. Only the purge, RD-11, needs a feature that does not exist yet.
 
 ## Datasets
 
