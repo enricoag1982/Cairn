@@ -19,8 +19,8 @@
 
 - [x] 3.1 Add `Problem`, `ProblemCode`, the path format and the phased validator skeleton (design D3); verify with the scenario test "Several problems at once"
 - [x] 3.2 Implement the name rules (syntax, uniqueness across kinds, inverse names, aliases counted as names); verify with the scenario tests "Duplicate type name", "Names that differ only in case", "Inverse name equal to a relationship type name" and "Invalid characters"
-- [x] 3.3 Implement reference resolution and the hierarchy rules (supertype kind, cycles, traits not allowed as supertypes or relationship ends); verify with the scenario tests "Abstract supertype with concrete subtypes", "Supertype that is not an entity type", "Cycle in supertypes", "Attributes come from a trait" and "Trait as a relationship end"
-- [x] 3.4 Implement the attribute rules (name conflicts across supertypes and traits, ranges); verify with the scenario tests "Name declared twice in a hierarchy", "Same name from two traits", "Range on an unordered value type", "Range bound of the wrong value type", "Empty range" and "Valid range"
+- [x] 3.3 Implement reference resolution and the hierarchy rules (supertype kind, cycles, traits not allowed as supertypes or relationship ends); verify with the scenario tests "Abstract supertype with concrete subtypes", "Supertype that is not an entity type", "Cycle in supertypes", "Attributes come from a trait", "Trait reached twice" and "Trait as a relationship end"
+- [x] 3.4 Implement the attribute rules (name conflicts across supertypes and traits, ranges); verify with the scenario tests "Name declared twice in a hierarchy", "Attribute declared twice by one type", "Same name from two traits", "Range on an unordered value type", "Range bound of the wrong value type", "Empty range" and "Valid range"
 - [x] 3.5 Implement the relationship rules (multiplicity, composition, symmetry, ends of relationship subtypes); verify with the scenario tests "Relationship to an abstract type", "Exactly one target per source", "Composition with shared targets", "Symmetric relationship between different types" and "Relationship subtype with an unrelated target"
 - [x] 3.6 Verify the reference model validates without problems with the scenario test "Defining the reference model without classes"
 
@@ -40,7 +40,7 @@
 
 - [x] 6.1 Implement the classified diff over matched elements, where an unclassified property change is breaking; verify with a unit test that an unknown property change is reported as breaking
 - [x] 6.2 Implement the compatible-change rules; verify with the scenario tests "Adding an optional attribute", "Widening a value type" and "Relaxing a multiplicity", plus one test for each other compatible change listed in the spec
-- [x] 6.3 Implement the breaking-change rules; verify with the scenario tests "Removing an attribute", "Renaming without an alias", "Making an attribute required" and "Several breaking changes", plus one test for each other breaking change listed in the spec
+- [x] 6.3 Implement the breaking-change rules; verify with the scenario tests "Removing an attribute", "Renaming without an alias", "Making an attribute required", "Including a trait with a unique attribute", "Widening a required relationship end" and "Several breaking changes", plus one test for each other breaking change listed in the spec
 - [x] 6.4 Implement version rules: a changed definition needs a higher version, and a lower version is "unchanged" when the stored definition is a compatible evolution of it; verify with the scenario tests "Rolling back to an earlier release", "Lower version that is not a predecessor" and "Changed definition with the same version"
 - [x] 6.5 Resolve aliases in schema lookups; verify with the scenario test "Looking up an old name"
 
@@ -49,4 +49,4 @@
 - [x] 7.1 Check the glossary entries that this proposal added (alias, breaking change, compatible change, deprecated, inverse name, multiplicity, origin, problem, schema definition, schema identifier, schema transaction, symmetric relationship type, value type) against the implemented behavior and correct them; verify `npm run docs:check` passes
 - [x] 7.2 Describe the `sysrec-api` and `sysrec-core` building blocks and their capabilities in `docs/architecture/README.md` and bump `last-reviewed`; verify `npm run docs:check` passes
 - [ ] 7.3 Before archiving, ask the user to accept or reject ADR-0007, ADR-0008, ADR-0010 and ADR-0012, which this change relies on; update their status and run `npm run docs:index`. If one is rejected, update the delta specs first. Verify the decision log
-- [ ] 7.4 Run `npm run check` and `./gradlew build`, then delegate a drift review to the `docs-reviewer` subagent and fix its findings; verify both commands pass and the review reports no open drift
+- [x] 7.4 Run `npm run check` and `./gradlew build`, then delegate a drift review to the `docs-reviewer` subagent and fix its findings; verify both commands pass and the review reports no open drift

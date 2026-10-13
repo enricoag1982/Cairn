@@ -111,7 +111,10 @@ final class CompatibilityChecker {
         });
     }
 
-    /** Detects types that existed before and now have more or fewer attributes. */
+    /**
+     * Detects types that existed before and now have more or fewer attributes. Only types that can have data count
+     * as existing for added attributes: concrete entity types and relationship types.
+     */
     private void compareAttributeSets() {
         Map<AttributeId, List<String>> lost = new LinkedHashMap<>();
         Map<AttributeId, List<String>> gained = new LinkedHashMap<>();
@@ -123,7 +126,8 @@ final class CompatibilityChecker {
             Set<AttributeId> after = ids(newSchema.effectiveAttributes(type.id()));
             before.stream().filter(id -> !after.contains(id) && newSchema.declarations().containsKey(id))
                     .forEach(id -> lost.computeIfAbsent(id, key -> new ArrayList<>()).add(type.name()));
-            after.stream().filter(id -> !before.contains(id))
+            boolean canHaveData = type.kind() == Kind.RELATIONSHIP_TYPE || oldSchema.isConcreteEntityType(type.id());
+            after.stream().filter(id -> !before.contains(id) && canHaveData)
                     .forEach(id -> gained.computeIfAbsent(id, key -> new ArrayList<>()).add(type.name()));
         }
         lost.forEach((id, types) -> {

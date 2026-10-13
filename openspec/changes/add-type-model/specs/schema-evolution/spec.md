@@ -41,7 +41,7 @@ The system SHALL give every entity type, trait, relationship type and attribute 
 
 ### Requirement: Unchanged registrations
 
-WHEN a registration's definition is equal to the stored definition of its origin, THE SYSTEM SHALL report the registration as unchanged and SHALL NOT record a transaction. Definitions are equal when they contain the same elements, whatever the order in which types, attributes, traits and aliases are listed.
+WHEN a registration's definition is equal to the stored definition of its origin, THE SYSTEM SHALL report the registration as unchanged and SHALL NOT record a transaction. Definitions are equal when they contain the same elements, whatever the order in which types, attributes, traits and aliases are listed. Numeric range bounds are equal when they have the same value, such as 100 and 100.0.
 
 #### Scenario: Registering the same model twice
 
@@ -135,7 +135,7 @@ The system SHALL apply a registration whose differences from the stored definiti
 
 ### Requirement: Breaking changes are rejected
 
-The system SHALL reject a registration whose differences from the stored definition of its origin include any breaking change. The rejection SHALL list every breaking change with its path and reason, and MUST NOT change the stored schema. These changes are breaking:
+The system SHALL reject a registration whose differences from the stored definition of its origin include any breaking change. The rejection SHALL list every breaking change with its path and reason, and MUST NOT change the stored schema. In these rules, an existing type is a concrete entity type or a relationship type that the stored schema already has: abstract types have no entities of their own. These changes are breaking:
 - removing a type, an attribute, or a trait from a type's included traits
 - renaming without declaring the previous name as an alias
 - narrowing a value type, a range, a relationship source or target, or a multiplicity

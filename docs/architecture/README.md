@@ -60,7 +60,7 @@ Proposed, not yet accepted:
 | --- | --- | --- |
 | `sysrec-api` | Public types: schema definitions and their builders, the resolved schema, problems, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model. | `type-model`, `schema-evolution` |
 | `sysrec-core` | The engine. Validates definitions, compiles them into a resolved schema with schema identifiers, checks compatibility, and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. | `type-model`, `schema-evolution` |
-| `build-logic` | The Gradle convention plugin shared by all Java modules ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)). | none |
+| `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `sysrec.java-library` for every Java module, and `sysrec.reference-domain-tests` for modules whose tests read the reference domain page. | none |
 
 ```mermaid
 flowchart LR

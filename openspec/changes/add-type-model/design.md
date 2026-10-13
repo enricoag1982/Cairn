@@ -36,7 +36,8 @@ Constraints that shape the approach:
 - `sysrec-api` holds the public types: definitions, the resolved schema, registration results and problems. It has no dependencies.
 - `sysrec-core` holds the validator, the compatibility checker and the in-memory schema registry. It depends on `sysrec-api`.
 - Both have a `module-info.java`. Core exports only its entry point, not its internals, so internals cannot become API by accident.
-- One convention plugin, `sysrec.java-library` in `build-logic/`, configures both subprojects: the Java 25 toolchain, JUnit 6, compact object headers for tests, and Javadoc checks. CI tests the newest Java release by overriding the toolchain version through a Gradle property.
+- The convention plugin `sysrec.java-library` in `build-logic/` configures both subprojects: the Java 25 toolchain, JUnit 6, compact object headers for tests, and Javadoc checks. CI tests the newest Java release by overriding the toolchain version through a Gradle property.
+- A second convention plugin, `sysrec.reference-domain-tests`, makes the tests of `sysrec-api` rerun when the reference domain page changes.
 - The publishing group and the base package are `io.github.enricoag1982.sysrec`, with `...sysrec.schema` for the API and `...sysrec.core` for the engine.
 - Alternatives:
   - a single module, which is simpler but lets internals leak into the API

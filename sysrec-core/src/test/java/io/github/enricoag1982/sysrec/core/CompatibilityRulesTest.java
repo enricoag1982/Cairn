@@ -136,6 +136,17 @@ class CompatibilityRulesTest {
         }
 
         @Test
+        void addingARequiredAttributeToAnAbstractTypeWithoutConcreteSubtypes() {
+            SchemaRegistry fresh = SchemaRegistries.inMemory(new TestClock());
+            SchemaDefinition lonely = SchemaDefinition.builder().entityType("Lonely", e -> e.abstractType()).build();
+            applied(fresh.register(ReferenceModel.origin("1.0.0"), lonely));
+
+            applied(fresh.register(ReferenceModel.origin("1.1.0"), SchemaDefinition.builder()
+                    .entityType("Lonely", e -> e.abstractType().attribute("x", ValueType.STRING, a -> a.required()))
+                    .build()));
+        }
+
+        @Test
         void addingARequiredRelationshipTypeForAnAbstractTypeWithoutSubtypes() {
             accepted(plus(BASE, SchemaDefinition.builder()
                     .entityType("Asset", e -> e.abstractType())

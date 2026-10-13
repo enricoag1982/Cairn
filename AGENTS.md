@@ -41,7 +41,7 @@ Application build and test (Gradle, [ADR-0015](docs/decisions/0015-build-the-jav
 
 - `./gradlew build`: compile (lint warnings are errors), run the tests, and build Javadoc (warnings are errors)
 - `./gradlew :sysrec-core:test --tests '<TestClass>'`: run one test class
-- Shared build configuration lives only in the convention plugin in `build-logic/`; versions live in `gradle/libs.versions.toml`. Module build files stay declarative.
+- Shared build configuration lives only in the convention plugins in `build-logic/`; versions live in `gradle/libs.versions.toml`. Module build files stay declarative.
 
 ## Workflow
 
@@ -86,7 +86,7 @@ docs/                    decisions, architecture, guides, reference, process, re
 .github/                 PR/issue templates, CI
 scripts/                 docs.mjs (checks, ADRs, decision log); openspec-update.mjs (agents:update)
 sysrec-api/, sysrec-core/  Java modules: public API, and the engine
-build-logic/, gradle/    Gradle convention plugin, version catalog and wrapper
+build-logic/, gradle/    Gradle convention plugins, version catalog and wrapper
 ```
 
 ## Maintaining this guidance

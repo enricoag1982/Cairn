@@ -7,7 +7,7 @@ import java.util.Objects;
  *
  * @param code    a stable code
  * @param path    the element concerned: a type name, or a type name and an attribute or inverse name joined by a
- *                dot; {@code origin} for problems with the origin itself
+ *                dot; {@code @origin} for problems with the origin itself
  * @param message a readable explanation
  */
 public record Problem(ProblemCode code, String path, String message) {
