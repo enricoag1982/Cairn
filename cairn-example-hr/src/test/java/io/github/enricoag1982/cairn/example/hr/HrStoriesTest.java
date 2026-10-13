@@ -32,6 +32,7 @@ import io.github.enricoag1982.cairn.example.hr.model.EmployedBy;
 import io.github.enricoag1982.cairn.example.hr.model.Employment;
 import io.github.enricoag1982.cairn.example.hr.model.EmploymentOf;
 import io.github.enricoag1982.cairn.example.hr.model.Fills;
+import io.github.enricoag1982.cairn.example.hr.model.HasLeaveRequest;
 import io.github.enricoag1982.cairn.example.hr.model.Job;
 import io.github.enricoag1982.cairn.example.hr.model.LeaveRequest;
 import io.github.enricoag1982.cairn.example.hr.model.LegalEntity;
@@ -52,6 +53,7 @@ import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -74,8 +76,9 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * The stories HR-1 to HR-14 of the HR domain ({@code docs/reference/hr-domain.md}), one test each: a replay of
  * Brightwater's year on one store, with a clock that moves to the recording date of each story. The store is created
- * with its rules found through the service loader, as an application's would be, and the tests use Cairn through its
- * public API only. HR-14 has stores of its own.
+ * with its rules found through the service loader, as an application's would be. The main code of the example uses
+ * Cairn's public API only; the tests use it too, and also the {@code cairn-api} test fixture {@code TestClock}, a
+ * clock that moves when told. HR-14 has stores of its own.
  *
  * <p>The stories replay in the order of their recording dates, not of their numbers, as the stories of the reference
  * domain do, so that the transaction time of each is its recording date: HR-1 and HR-2 (2 January), HR-5 to HR-8
@@ -293,6 +296,13 @@ class HrStoriesTest {
                 .currency("EUR");
     }
 
+    /** The problems of a dry run that a store rejects. */
+    private List<Problem> dryRunProblems(Transaction transaction) {
+        DryRunResult result = store.dryRun(transaction);
+        assertThat(result).as("the dry run is rejected").isInstanceOf(DryRunResult.Rejected.class);
+        return ((DryRunResult.Rejected) result).problems();
+    }
+
     /** A dry run's problem codes; empty if the transaction would be committed. */
     private Set<ProblemCode> problemCodes(Transaction transaction) {
         return switch (store.dryRun(transaction)) {
@@ -343,6 +353,37 @@ class HrStoriesTest {
                 .as("on 1 March it was still requested").isEqualTo("requested");
         assertThat(view(on(3, 2)).timeline(request)).extracting(state -> LeaveRequest.from(state).status())
                 .containsExactly("requested", "approved");
+
+        // The rule leave-dates-in-order: a request whose last day is before its first day is refused.
+        Transaction backwards = Transaction.by(Brightwater.HR_ADMIN)
+                .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 3, 23))
+                        .lastDay(LocalDate.of(2026, 3, 20)).days(new BigDecimal("1")).status("requested")
+                        .as("backwards").effectiveFrom(on(3, 2)))
+                .write(HasLeaveRequest.relate(ids.entity("e004"), new TemporaryId("backwards"))
+                        .effectiveFrom(on(3, 2)))
+                .build();
+        Problem outOfOrder = only(dryRunProblems(backwards));
+        assertThat(outOfOrder.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(outOfOrder.ruleCode()).contains("leave-dates-in-order/last-before-first");
+        assertThat(outOfOrder.path()).endsWith(".lastDay");
+
+        // The rule decided-by-manager: nobody decides their own request, even a manager of their own unit.
+        Problem ownRequest = only(dryRunProblems(Brightwater.cleoVacationDecidedBy(ids, "e003").transaction()));
+        assertThat(ownRequest.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(ownRequest.ruleCode()).contains("decided-by-manager/own-request");
+        assertThat(ownRequest.path()).isEqualTo("$cleoVacationDecision");
+        assertThat(store.dryRun(Brightwater.cleoVacationDecidedBy(ids, "e002").transaction()))
+                .as("the same request decided by Ben, who manages Engineering above Platform")
+                .isInstanceOf(DryRunResult.WouldCommit.class);
+
+        // GAP: a rule runs only when a type that names it is written, and a rule is for one type. Cleo no longer
+        // manages Platform from 10 March, so her approval of the vacation from 16 March no longer meets
+        // decided-by-manager, yet nothing refuses the change, because ManagedBy names no rule. The assertion flips
+        // when the gap is closed.
+        assertThat(store.dryRun(Transaction.by(Brightwater.HR_ADMIN)
+                .endDate(ids.relationship("managedByPLT"), on(3, 10)).build()))
+                .as("ending Cleo's ManagedBy of PLT from 10 March is accepted")
+                .isInstanceOf(DryRunResult.WouldCommit.class);
     }
 
     @Test
@@ -368,7 +409,7 @@ class HrStoriesTest {
         assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
         assertThat(problem.ruleCode()).contains("vacation-within-entitlement/over-entitlement");
         assertThat(problem.path()).isEqualTo("$devAugust.days");
-        assertThat(problem.message()).contains("E-004").contains("27");
+        assertThat(problem.message()).contains("E-004").contains("26");
         assertThat(view(on(8, 3)).entities("LeaveRequest")).as("only the 5 days of HR-5").hasSize(1);
 
         // 5 and 20 days make exactly 25, the most the rule allows.
@@ -547,10 +588,18 @@ class HrStoriesTest {
         EntityState person = august1.entities("Person").stream().filter(state -> Person.from(state).givenName()
                 .equals("Hana")).findFirst().orElseThrow();
         EntityId employment = august1.navigate(person.id(), "employment").getFirst().entity().id();
-        assertThat(label(august1.entity(employment).orElseThrow())).isEqualTo("E-008");
+        Employment hired = Employment.from(august1.entity(employment).orElseThrow());
+        assertThat(hired.employeeNumber()).isEqualTo("E-008");
+        assertThat(hired.kind()).isEqualTo("permanent");
+        assertThat(hired.annualSalary()).isEqualByComparingTo("72000");
+        assertThat(hired.currency()).isEqualTo("EUR");
+        assertThat(linked(august1, employment, "WorksAt")).containsExactly("Berlin");
+        assertThat(linked(august1, employment, "EmployedBy")).containsExactly("Brightwater GmbH");
         assertThat(linked(august1, employment, "Fills")).containsExactly("P-213");
-        assertThat(linked(august1, august1.navigate(employment, "Fills").getFirst().entity().id(), "BelongsTo"))
-                .containsExactly("PLT");
+        EntityId position = august1.navigate(employment, "Fills").getFirst().entity().id();
+        assertThat(linked(august1, position, "BelongsTo")).containsExactly("PLT");
+        assertThat(linked(august1, position, "OfJob")).containsExactly("SWE");
+        assertThat(august1.entity(position).map(state -> Position.from(state).title())).contains("Software Engineer");
         assertThat(store.transactions().getLast().principal()).isEqualTo(Brightwater.HR_ASSISTANT);
         assertRecordedAt(store.transactions().getLast().transactionTime(), on(8, 1));
     }
@@ -613,6 +662,17 @@ class HrStoriesTest {
         EntityId gus = ids.entity("gus");
         EntityId employment = ids.entity("e007");
         EntityId sickLeave = ids.entity("gusSick");
+
+        // Purging only the person is refused: the employment would be left without the EmploymentOf it requires.
+        PurgeResult refused = store.purge(Brightwater.hr12ErasureOfGusPersonOnly(ids));
+        assertThat(refused).isInstanceOf(PurgeResult.Rejected.class);
+        Problem tooFew = only(((PurgeResult.Rejected) refused).problems());
+        assertThat(tooFew.code()).isEqualTo(ProblemCode.TOO_FEW_RELATIONSHIPS);
+        assertThat(tooFew.path()).as("names his employment").isEqualTo(employment.value());
+        assertThat(tooFew.message()).contains("EmploymentOf");
+        assertThat(store.purges()).as("the refused purge recorded nothing").isEmpty();
+        assertThat(store.wasPurged(gus)).isFalse();
+        assertThat(view(MARCH_31).entity(gus)).as("Gus is still there").isPresent();
 
         PurgeResult result = store.purge(Brightwater.hr12ErasureOfGus(ids));
 

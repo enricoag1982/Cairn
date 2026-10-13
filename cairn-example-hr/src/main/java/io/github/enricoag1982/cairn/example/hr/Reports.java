@@ -1,7 +1,12 @@
 package io.github.enricoag1982.cairn.example.hr;
 
+import io.github.enricoag1982.cairn.example.hr.model.BelongsTo;
 import io.github.enricoag1982.cairn.example.hr.model.Employment;
+import io.github.enricoag1982.cairn.example.hr.model.EmploymentOf;
+import io.github.enricoag1982.cairn.example.hr.model.Fills;
+import io.github.enricoag1982.cairn.example.hr.model.ManagedBy;
 import io.github.enricoag1982.cairn.example.hr.model.OrgUnit;
+import io.github.enricoag1982.cairn.example.hr.model.PartOf;
 import io.github.enricoag1982.cairn.example.hr.model.Position;
 import io.github.enricoag1982.cairn.query.Aggregate;
 import io.github.enricoag1982.cairn.query.Column;
@@ -72,12 +77,11 @@ public final class Reports {
     public static Query managersOf(String employeeNumber) {
         return Query.from(Employment.TYPE, "employee")
                 .where(Employment.EMPLOYEE_NUMBER.of("employee").eq(employeeNumber))
-                .follow("employee", "Fills", "position")
-                .follow("position", "BelongsTo", "unit")
-                .traverse("unit", "PartOf", 0, MAX_LEVELS, "managed", Optional.empty(), Optional.of("level"),
-                        Optional.empty())
-                .follow("managed", "ManagedBy", "managerEmployment")
-                .follow("managerEmployment", "EmploymentOf", "manager")
+                .follow("employee", Fills.TYPE, "position")
+                .follow("position", BelongsTo.TYPE, "unit")
+                .traverse("unit", PartOf.TYPE, 0, MAX_LEVELS, "managed", Optional.empty(), Optional.of("level"))
+                .follow("managed", ManagedBy.TYPE, "managerEmployment")
+                .follow("managerEmployment", EmploymentOf.TYPE, "manager")
                 .select(Column.depth("level", "distance"), Column.binding("manager"))
                 .orderBy(Order.ascending(Column.depth("level")))
                 .build();

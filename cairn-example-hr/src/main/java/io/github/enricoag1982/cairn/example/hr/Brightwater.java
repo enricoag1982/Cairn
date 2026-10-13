@@ -41,8 +41,8 @@ import java.util.Locale;
  * generated builders. A story that changes what an earlier one created refers to it by name through {@link Ids}.
  *
  * <p>Stories are in 2026. Every effective date is midnight UTC. A leave request is effective from the day it is
- * filed, or from its first day if that is earlier, as for sick leave that is recorded afterwards; its decision is
- * effective from the same day.
+ * filed, or from its first day if that is earlier, as for sick leave that is recorded afterwards; a decision is
+ * effective from the day it is recorded, or from the request's first day if that is earlier.
  */
 public final class Brightwater {
 
@@ -114,7 +114,7 @@ public final class Brightwater {
     }
 
     /** One of the seven people of the table of the domain page. */
-    private record Employee(String key, String givenName, String familyName, String position, String unitCode,
+    record Employee(String key, String givenName, String familyName, String position, String unitCode,
             String location, String employer, String salary, boolean manager) {
 
         String number() {
@@ -122,7 +122,8 @@ public final class Brightwater {
         }
     }
 
-    private static final List<Employee> EMPLOYEES = List.of(
+    /** The seven people of the table of the domain page; a test keeps them in step with it. */
+    static final List<Employee> EMPLOYEES = List.of(
             new Employee("e001", "Ana", "Berg", "p100", "bw", "berlin", "gmbh", "150000", true),
             new Employee("e002", "Ben", "Ito", "p200", "eng", "berlin", "gmbh", "130000", true),
             new Employee("e003", "Cleo", "Rossi", "p210", "plt", "milan", "srl", "110000", true),
@@ -261,15 +262,15 @@ public final class Brightwater {
     }
 
     /**
-     * HR-7. Recorded 4 March: Dev's approved vacation of 22 more days, from 3 to 31 August, decided by Cleo. With the
-     * 5 days of HR-5 it makes 27 days in 2026, so the commit is rejected by the rule
+     * HR-7. Recorded 4 March: Dev's approved vacation of 21 more days, the working days from 3 to 31 August, decided
+     * by Cleo. With the 5 days of HR-5 it makes 26 days in 2026, so the commit is rejected by the rule
      * {@code vacation-within-entitlement}. The request is named {@code devAugust}.
      *
      * @param ids the IDs of HR-1 and HR-2
      * @return the recording
      */
     public static Recording hr7DevSecondVacation(Ids ids) {
-        return devAugustVacation(ids, 22);
+        return devAugustVacation(ids, 21);
     }
 
     /**
@@ -290,6 +291,28 @@ public final class Brightwater {
                         .as("devHasAugust").effectiveFrom(filed))
                 .write(DecidedBy.relate(new TemporaryId("devAugust"), ids.entity("e003"))
                         .as("devAugustDecision").effectiveFrom(filed))
+                .build());
+    }
+
+    /**
+     * Cleo's own vacation, 4 to 8 May, 5 days, decided by the employment with the key given: Cleo herself, which the
+     * rule {@code decided-by-manager} refuses, or Ben, who manages Engineering above Platform, which it accepts. The
+     * story tells nothing about it: tests only dry-run it. The request is named {@code cleoVacation}.
+     *
+     * @param ids      the IDs of HR-1 and HR-2
+     * @param deciding the key of the deciding employment: {@code e003} (Cleo) or {@code e002} (Ben)
+     * @return the recording, dated 3 March
+     */
+    public static Recording cleoVacationDecidedBy(Ids ids, String deciding) {
+        Instant filed = on(3, 3);
+        return new Recording(filed, Transaction.by(HR_ADMIN)
+                .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 5, 4))
+                        .lastDay(LocalDate.of(2026, 5, 8)).days(new BigDecimal("5")).status("approved")
+                        .as("cleoVacation").effectiveFrom(filed))
+                .write(HasLeaveRequest.relate(ids.entity("e003"), new TemporaryId("cleoVacation"))
+                        .as("cleoHasVacation").effectiveFrom(filed))
+                .write(DecidedBy.relate(new TemporaryId("cleoVacation"), ids.entity(deciding))
+                        .as("cleoVacationDecision").effectiveFrom(filed))
                 .build());
     }
 
@@ -348,6 +371,17 @@ public final class Brightwater {
                 .endDate(ids.relationship("fills007"), july1)
                 .endDate(ids.relationship("gusSickDecision"), july1)
                 .build());
+    }
+
+    /**
+     * HR-12, the refused request. The principal {@code dpo} first purges only Gus's person, which the store refuses:
+     * his employment would be left without the {@code EmploymentOf} that it requires.
+     *
+     * @param ids the IDs of HR-1 and HR-2
+     * @return the purge
+     */
+    public static Purge hr12ErasureOfGusPersonOnly(Ids ids) {
+        return Purge.by(DPO).reason(ERASURE_TICKET).entity(ids.entity("gus")).build();
     }
 
     /**

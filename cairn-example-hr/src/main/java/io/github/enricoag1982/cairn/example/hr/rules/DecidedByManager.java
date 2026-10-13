@@ -24,9 +24,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The rule {@code decided-by-manager} of the HR domain: the employment that decides a leave request manages, through
- * {@code ManagedBy}, the unit of the requester's position, or a unit above it by {@code PartOf}, on the request's first
- * day.
+ * The rule {@code decided-by-manager} of the HR domain: the employment that decides a leave request is not the
+ * requester, and manages, through {@code ManagedBy}, the unit of the requester's position, or a unit above it by
+ * {@code PartOf}, on the request's first day.
  *
  * <p>The rule reads through two views. It finds the request and its requester through {@link RuleContext#view()}, the
  * state at the start of the decision's period, which is when the request exists. Everything else it reads through
@@ -40,14 +40,20 @@ public final class DecidedByManager extends DecidedByManagerRuleV1 {
     /** The code the rule reports when the deciding employment does not manage the requester's unit or one above it. */
     public static final String NOT_A_MANAGER = "not-a-manager";
 
+    /** The code the rule reports when the deciding employment is the requester: nobody decides their own request. */
+    public static final String OWN_REQUEST = "own-request";
+
     /** The inverse name of {@code HasLeaveRequest}: from a leave request to the employment that requests it. */
     private static final String REQUESTER = "requester";
 
     private static final RuleDescriptor DESCRIPTOR = describe(
-            "The deciding employment manages the requester's unit, or a unit above it, on the request's first day.",
+            "The deciding employment is not the requester, and manages the requester's unit, or a unit above it, on "
+                    + "the request's first day.",
             new RuleCode(NOT_A_MANAGER, "The employment that decides a leave request must manage, through ManagedBy, "
                     + "the unit of the requester's position or a unit above it, on the request's first day. Let "
-                    + "the manager of the unit, or of a unit above it, decide."));
+                    + "the manager of the unit, or of a unit above it, decide."),
+            new RuleCode(OWN_REQUEST, "The employment that decides a leave request is the one that requests it, "
+                    + "even if it manages its own unit. Let the manager of a unit above it decide."));
 
     /** Creates the rule; the service loader calls it. */
     public DecidedByManager() {
@@ -67,10 +73,13 @@ public final class DecidedByManager extends DecidedByManagerRuleV1 {
             context.problem(NOT_A_MANAGER, "The leave request " + decision.source() + " has no requester.");
             return;
         }
+        EntityId requester = requesters.getFirst().entity().id();
+        if (requester.equals(decision.target())) {
+            context.problem(OWN_REQUEST, number(atDecision, requester) + " cannot decide their own leave request.");
+            return;
+        }
         Instant firstDay = LeaveRequest.from(request.get()).firstDay().atStartOfDay(ZoneOffset.UTC).toInstant();
         View onFirstDay = context.viewAt(firstDay);
-
-        EntityId requester = requesters.getFirst().entity().id();
         List<EntityId> units = unitsAbove(onFirstDay, requester);
         if (units.isEmpty()) {
             context.problem(NOT_A_MANAGER, "The requester " + number(atDecision, requester) + " has no position on "

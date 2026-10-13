@@ -50,7 +50,8 @@ public final class VacationWithinEntitlement extends VacationWithinEntitlementRu
     private static final String REQUESTER = "requester";
 
     private static final RuleDescriptor DESCRIPTOR = describe(
-            "An employment's approved vacation days in a calendar year add up to at most 25.",
+            "An employment's approved vacation days, of requests whose first days are in one calendar year, add up to "
+                    + "at most 25.",
             new RuleCode(OVER_ENTITLEMENT, "The approved vacation days of the employment, with first days in the "
                     + "same calendar year, add up to more than 25. Approve fewer days, or cancel or reject another "
                     + "request first."));
@@ -94,7 +95,7 @@ public final class VacationWithinEntitlement extends VacationWithinEntitlementRu
     private static Query approvedVacationDays(EntityId employment, int year) {
         return Query.from(Employment.TYPE, "e")
                 .where(Condition.eq(Operand.id("e"), Operand.literal(employment.value())))
-                .follow("e", "HasLeaveRequest", "l")
+                .follow("e", HasLeaveRequest.TYPE, "l")
                 .where(Condition.and(
                         LeaveRequest.KIND.of("l").eq("vacation"),
                         LeaveRequest.STATUS.of("l").eq("approved"),
