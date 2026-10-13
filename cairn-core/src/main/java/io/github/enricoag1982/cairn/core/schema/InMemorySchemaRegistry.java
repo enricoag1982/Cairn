@@ -77,7 +77,8 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
      *
      * @param clock the source of transaction times
      * @param rules the rules that types may name
-     * @throws IllegalArgumentException if two rules have the same name and version
+     * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two
+     *                                  rules have the same name and version
      */
     public InMemorySchemaRegistry(InstantSource clock, Collection<RuleDescriptor> rules) {
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -85,6 +86,16 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                 .map(rule -> Objects.requireNonNull(rule, "rule"))
                 .sorted(Comparator.comparing(RuleDescriptor::name).thenComparingInt(RuleDescriptor::version))
                 .toList();
+        for (RuleDescriptor rule : sorted) {
+            if (!Names.isValidRuleName(rule.name())) {
+                throw new IllegalArgumentException("The rule name '" + rule.name() + "' must be "
+                        + Names.RULE_NAME_FORM + ".");
+            }
+            if (rule.version() < 1) {
+                throw new IllegalArgumentException("The version " + rule.version() + " of the rule " + rule.name()
+                        + " must be a whole number of at least 1.");
+            }
+        }
         for (int i = 1; i < sorted.size(); i++) {
             RuleDescriptor previous = sorted.get(i - 1);
             RuleDescriptor rule = sorted.get(i);
@@ -201,7 +212,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                     + origin.version() + " is already registered with a different definition; a changed definition "
                     + "needs a higher version."))));
         }
-        List<Problem> breaking = breaking(changes);
+        List<Problem> breaking = breaking(changes, true);
         if (!breaking.isEmpty()) {
             return Planned.of(new SchemaPlan(SchemaPlan.Outcome.REJECT, changes, breaking));
         }
@@ -237,7 +248,9 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
 
     /**
      * Accepts an older version of an origin only if the stored definition evolved from it compatibly. The changes are
-     * those from the older version to the stored one: what the stored version adds.
+     * those from the older version to the stored one: what the stored version adds. If it did not evolve compatibly,
+     * the problems carry no hints, because the hints of the changes tell how to avoid a change going forward from the
+     * stored version, which is the wrong way here.
      */
     private static Planned rollback(State current, Origin origin, SchemaDefinition definition) {
         Map<String, OriginState> submitted = new HashMap<>(current.origins());
@@ -245,7 +258,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         SchemaCompiler.Result older = compile(submitted, CompiledSchema.EMPTY, 1);
         SchemaCompiler.Result stored = compile(current.origins(), older.schema(), older.nextId());
         List<SchemaChange> changes = CompatibilityChecker.diff(older.schema(), stored.schema(), origin.name());
-        List<Problem> breaking = breaking(changes);
+        List<Problem> breaking = breaking(changes, false);
         if (breaking.isEmpty()) {
             return Planned.of(new SchemaPlan(SchemaPlan.Outcome.UNCHANGED, changes, List.of()));
         }
@@ -256,11 +269,12 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         return Planned.of(new SchemaPlan(SchemaPlan.Outcome.REJECT, changes, problems));
     }
 
-    private static List<Problem> breaking(List<SchemaChange> changes) {
+    /** The problems for the breaking changes; the hint of a change is passed on only if {@code withHints}. */
+    private static List<Problem> breaking(List<SchemaChange> changes, boolean withHints) {
         return changes.stream()
                 .filter(change -> !change.compatible())
                 .map(change -> new Problem(ProblemCode.BREAKING_CHANGE, change.path(), change.description(),
-                        Optional.empty(), Optional.empty(), change.hint()))
+                        Optional.empty(), Optional.empty(), withHints ? change.hint() : Optional.empty()))
                 .toList();
     }
 

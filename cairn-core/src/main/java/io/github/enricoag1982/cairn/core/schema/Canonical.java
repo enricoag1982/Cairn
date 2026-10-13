@@ -15,8 +15,8 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Compares definitions without regard to the order in which types, attributes, aliases, allowed values and rules are
- * listed. Examples are compared as lists, because their order is part of how a schema describes itself.
+ * Compares definitions without regard to the order in which types, attributes, aliases, allowed values, rule references
+ * and examples are listed (design D6).
  */
 final class Canonical {
 
@@ -62,12 +62,20 @@ final class Canonical {
                 .toList();
     }
 
+    private static List<Literal> examples(List<Literal> examples) {
+        return examples.stream()
+                .distinct()
+                .sorted(Comparator.comparing(Literal::toString))
+                .toList();
+    }
+
     private static List<AttributeDefinition> attributes(List<AttributeDefinition> attributes) {
         return attributes.stream()
                 .map(attribute -> new AttributeDefinition(attribute.name(), attribute.valueType(), attribute.required(),
                         attribute.unique(), attribute.range().map(range -> of(range, attribute.valueType())),
                         sorted(attribute.aliases()), attribute.deprecated(), attribute.description(),
-                        attribute.examples(), attribute.allowedValues().stream().distinct().sorted().toList(),
+                        examples(attribute.examples()),
+                        attribute.allowedValues().stream().distinct().sorted().toList(),
                         attribute.pattern(), attribute.minLength(), attribute.maxLength()))
                 .sorted(Comparator.comparing(AttributeDefinition::name))
                 .toList();

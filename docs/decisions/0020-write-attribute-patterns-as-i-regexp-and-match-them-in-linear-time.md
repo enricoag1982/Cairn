@@ -74,5 +74,6 @@ Chosen option: "I-Regexp (RFC 9485), matched with RE2/J", because I-Regexp is de
 ## More Information
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, following a drift review of `add-self-describing-schema`.
+- RE2/J cannot take every valid I-Regexp safely, so Cairn also limits repeat counts, size, branching and nesting of patterns; the design of `add-self-describing-schema` lists the limits.
 - RFC 9485, I-Regexp: an interoperable regular expression format: <https://www.rfc-editor.org/rfc/rfc9485>
 - RE2/J: <https://github.com/google/re2j>

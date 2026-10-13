@@ -13,12 +13,12 @@ import java.util.OptionalInt;
  * @param valueType     the kind of value
  * @param required      {@code true} if a value is required
  * @param unique        {@code true} if values must be unique
- * @param range         the allowed values, if restricted
+ * @param range         the interval that values must lie in, if restricted; for ordered value types only
  * @param deprecated    {@code true} if the attribute should no longer be used
  * @param description   what the attribute means, if described
  * @param examples      typical values
  * @param allowedValues the values a string attribute may have; empty if any value is allowed
- * @param pattern       the regular expression a string value must match as a whole, if any
+ * @param pattern       the I-Regexp (RFC 9485) a string value must match as a whole, if any
  * @param minLength     the smallest length of a string value in Unicode code points, if any
  * @param maxLength     the largest length of a string value in Unicode code points, if any
  * @param declaredBy    the name of the entity type, trait or relationship type that declares the attribute

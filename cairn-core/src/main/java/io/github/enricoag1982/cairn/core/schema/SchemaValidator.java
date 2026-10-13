@@ -24,8 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 /**
@@ -48,7 +46,7 @@ final class SchemaValidator {
 
     /** The string constraints of an attribute that can be checked; a constraint that is itself invalid is left out. */
     private record TextConstraints(
-            List<String> allowedValues, Optional<Pattern> pattern, OptionalInt minLength, OptionalInt maxLength) {
+            List<String> allowedValues, Optional<IRegexp> pattern, OptionalInt minLength, OptionalInt maxLength) {
         static final TextConstraints NONE =
                 new TextConstraints(List.of(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty());
     }
@@ -527,20 +525,22 @@ final class SchemaValidator {
         return List.copyOf(seen);
     }
 
-    private Optional<Pattern> pattern(String path, AttributeDefinition attribute) {
+    /** Checks the pattern against the I-Regexp grammar (ADR-0020) and returns it if it can be used to check examples. */
+    private Optional<IRegexp> pattern(String path, AttributeDefinition attribute) {
         if (attribute.pattern().isEmpty()) {
             return Optional.empty();
         }
         String regularExpression = attribute.pattern().get();
-        try {
-            return Optional.of(Pattern.compile(regularExpression));
-        } catch (PatternSyntaxException e) {
-            problems.add(Problems.of(ProblemCode.INVALID_PATTERN, path, "The pattern '" + regularExpression + "' of "
-                    + path + " is not a valid regular expression: " + e.getDescription()
-                    + (e.getIndex() >= 0 ? " (at index " + e.getIndex() + ")" : "") + ".",
-                    "a regular expression in the syntax of java.util.regex.Pattern", regularExpression, null));
-            return Optional.empty();
-        }
+        return switch (IRegexp.parse(regularExpression)) {
+            case IRegexp.Parsed.Valid(IRegexp valid) -> Optional.of(valid);
+            case IRegexp.Parsed.Invalid(IRegexpSyntax.Violation violation) -> {
+                problems.add(Problems.of(ProblemCode.INVALID_PATTERN, path, "The pattern '" + regularExpression + "' of "
+                        + path + " is not a valid pattern (I-Regexp, RFC 9485): " + violation.reason() + " (at index "
+                        + violation.index() + ").", violation.expected(), violation.found(),
+                        violation.hint().orElse(null)));
+                yield Optional.empty();
+            }
+        };
     }
 
     /**
@@ -589,9 +589,9 @@ final class SchemaValidator {
                 invalidExample(path, shown, "is not one of the allowed values",
                         "one of " + text.allowedValues().stream().sorted().collect(Collectors.joining(", ")));
             }
-            if (text.pattern().isPresent() && !text.pattern().get().matcher(shown).matches()) {
-                invalidExample(path, shown, "does not match the pattern " + text.pattern().get().pattern(),
-                        "a value matching " + text.pattern().get().pattern());
+            if (text.pattern().isPresent() && !text.pattern().get().matches(shown)) {
+                invalidExample(path, shown, "does not match the pattern " + text.pattern().get().source(),
+                        "a value matching " + text.pattern().get().source());
             }
             if (example instanceof Literal.StringLiteral(String value)) {
                 checkLengths(path, value, text);

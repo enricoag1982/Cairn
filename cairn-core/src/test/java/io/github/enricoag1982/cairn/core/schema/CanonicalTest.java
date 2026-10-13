@@ -43,15 +43,40 @@ class CanonicalTest {
                 .isFalse();
     }
 
+    private static SchemaDefinition currencyExamples(Literal... examples) {
+        return SchemaDefinition.builder().entityType("Account", e -> e.attribute("currency", ValueType.STRING,
+                a -> a.examples(examples))).build();
+    }
+
     @Test
-    void examplesAreComparedAsAList() {
-        SchemaDefinition ab = SchemaDefinition.builder().entityType("Account", e -> e.attribute("currency",
-                ValueType.STRING, a -> a.examples(Literal.of("EUR"), Literal.of("USD")))).build();
-        SchemaDefinition ba = SchemaDefinition.builder().entityType("Account", e -> e.attribute("currency",
-                ValueType.STRING, a -> a.examples(Literal.of("USD"), Literal.of("EUR")))).build();
+    void examplesAreComparedAsASet() {
+        SchemaDefinition ab = currencyExamples(Literal.of("EUR"), Literal.of("USD"));
+        SchemaDefinition ba = currencyExamples(Literal.of("USD"), Literal.of("EUR"));
 
         assertThat(Canonical.equal(ab, ab)).isTrue();
-        assertThat(Canonical.equal(ab, ba)).isFalse();
+        assertThat(Canonical.equal(ab, ba)).isTrue();
+        assertThat(Canonical.equal(ab, currencyExamples(Literal.of("EUR")))).isFalse();
+        assertThat(Canonical.equal(ab, currencyExamples(Literal.of("EUR"), Literal.of("CHF")))).isFalse();
+        assertThat(Canonical.equal(ab, currencyExamples())).isFalse();
+    }
+
+    @Test
+    void examplesOfDifferentKindsAreDifferentExamples() {
+        SchemaDefinition number = SchemaDefinition.builder().entityType("Account", e -> e.attribute("balance",
+                ValueType.DECIMAL, a -> a.examples(Literal.of(1), Literal.of(2L)))).build();
+        SchemaDefinition reordered = SchemaDefinition.builder().entityType("Account", e -> e.attribute("balance",
+                ValueType.DECIMAL, a -> a.examples(Literal.of(2L), Literal.of(1)))).build();
+        SchemaDefinition differentKinds = SchemaDefinition.builder().entityType("Account", e -> e.attribute("balance",
+                ValueType.DECIMAL, a -> a.examples(Literal.of(1L), Literal.of(2)))).build();
+
+        assertThat(Canonical.equal(number, reordered)).isTrue();
+        assertThat(Canonical.equal(number, differentKinds)).isFalse();
+    }
+
+    @Test
+    void anExampleListedTwiceIsOneExample() {
+        assertThat(Canonical.equal(currencyExamples(Literal.of("EUR"), Literal.of("EUR")),
+                currencyExamples(Literal.of("EUR")))).isTrue();
     }
 
     @Test

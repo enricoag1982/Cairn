@@ -69,9 +69,12 @@ public enum ProblemCode {
     /** Allowed values, a pattern or a length is declared on an attribute that is not a string. */
     TEXT_CONSTRAINT_NOT_ALLOWED("Allowed values, patterns and lengths are for string attributes only. Remove the "
             + "constraint, or change the attribute's value type to string."),
-    /** A pattern is not a valid regular expression. */
-    INVALID_PATTERN("A pattern must be a regular expression in the syntax of the Java platform "
-            + "(java.util.regex.Pattern). Correct the expression."),
+    /** A pattern is not a valid I-Regexp (RFC 9485). */
+    INVALID_PATTERN("A pattern must be written in I-Regexp (RFC 9485), a portable syntax without shortcuts such as \\d, "
+            + "anchors, lookaround or back-references. To keep matching fast, repeat counts are at most 1000, a pattern "
+            + "has at most 10,000 elements once repeats are expanded and at most 500 groups, alternatives and optional "
+            + "repeats, groups nest at most 100 deep, and \\p{Cn} is not supported. Correct the pattern; the hint "
+            + "suggests a replacement where there is one."),
     /** A length is negative, or the minimum length is above the maximum length. */
     INVALID_LENGTH("A minimum or maximum length cannot be negative, and the minimum cannot exceed the maximum. "
             + "Correct the lengths."),

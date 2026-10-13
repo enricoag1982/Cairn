@@ -24,6 +24,7 @@ final class CompatibilityChecker {
     private final String origin;
     private final List<SchemaChange> changes = new ArrayList<>();
     private final Set<TypeId> removedTypes = new HashSet<>();
+    private final Set<AttributeId> listedGains = new HashSet<>();
 
     private CompatibilityChecker(CompiledSchema oldSchema, CompiledSchema newSchema, String origin) {
         this.oldSchema = oldSchema;
@@ -46,6 +47,7 @@ final class CompatibilityChecker {
         compareTypes();
         compareAttributes();
         compareAttributeSets();
+        compareNewDeclarations();
         return List.copyOf(changes);
     }
 
@@ -139,6 +141,7 @@ final class CompatibilityChecker {
                     "the attribute " + attribute.name() + " no longer applies to " + types));
         });
         gained.forEach((id, types) -> {
+            listedGains.add(id);
             Attribute attribute = newSchema.declarations().get(id).attribute();
             String path = Names.path(attribute.declaredBy(), attribute.name());
             boolean existed = oldSchema.declarations().containsKey(id);
@@ -151,6 +154,30 @@ final class CompatibilityChecker {
                         + " to the existing types " + types, Changes.KEEP_UNCONSTRAINED));
             } else {
                 changes.add(Changes.compatible(path, "the attribute " + attribute.name() + " now applies to " + types));
+            }
+        });
+    }
+
+    /**
+     * Lists attributes that an element declares for the first time although the element existed before, if
+     * {@link #compareAttributeSets} did not list them: an attribute added to a trait that no existing type with data
+     * includes, or to an abstract entity type without concrete subtypes. No data can have the attribute, so the change
+     * is compatible, and it is listed so that a plan shows every difference. An attribute that existing types gained
+     * is already listed once, by {@link #compareAttributeSets}.
+     */
+    private void compareNewDeclarations() {
+        Map<AttributeId, CompiledSchema.Declaration> before = oldSchema.declarations();
+        ownedDeclarations(newSchema).forEach((id, declaration) -> {
+            Attribute attribute = declaration.attribute();
+            if (before.containsKey(id) || listedGains.contains(id)) {
+                return;
+            }
+            boolean declarerExisted = newSchema.entries().stream()
+                    .anyMatch(entry -> Names.same(entry.name(), attribute.declaredBy())
+                            && oldSchema.entry(entry.id()).isPresent());
+            if (declarerExisted) {
+                changes.add(Changes.compatible(Names.path(attribute.declaredBy(), attribute.name()),
+                        "added the attribute " + attribute.name() + " to " + attribute.declaredBy()));
             }
         });
     }

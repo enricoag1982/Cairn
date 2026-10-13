@@ -41,7 +41,10 @@ public final class SchemaRegistries {
      * @param clock the source of transaction times
      * @param rules the rules that are available, listed by {@link SchemaRegistry#availableRules()}
      * @return the registry
-     * @throws IllegalArgumentException if two rules have the same name and version
+     * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references (lowercase
+     *                                  ASCII letters, digits and hyphens, starting with a letter, at most 128
+     *                                  characters; a version of at least 1), or if two rules have the same name and
+     *                                  version
      */
     public static SchemaRegistry inMemory(InstantSource clock, Collection<RuleDescriptor> rules) {
         return new InMemorySchemaRegistry(clock, rules);

@@ -52,9 +52,9 @@ public final class AttributeBuilder {
     }
 
     /**
-     * Restricts the attribute to a range of values.
+     * Restricts the attribute to an interval of values.
      *
-     * @param range the allowed values
+     * @param range the interval that values must lie in
      * @return this builder
      */
     public AttributeBuilder range(Range range) {
@@ -117,9 +117,9 @@ public final class AttributeBuilder {
     }
 
     /**
-     * Requires string values to match a regular expression as a whole.
+     * Requires string values to match a pattern as a whole.
      *
-     * @param regularExpression the pattern, in the syntax of {@link java.util.regex.Pattern}
+     * @param regularExpression the pattern, in I-Regexp (RFC 9485)
      * @return this builder
      */
     public AttributeBuilder pattern(String regularExpression) {

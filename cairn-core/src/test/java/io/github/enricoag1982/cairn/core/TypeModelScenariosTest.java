@@ -271,6 +271,19 @@ class TypeModelScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Pattern outside the portable syntax")
+    void patternOutsideThePortableSyntax() {
+        SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "Account", type ->
+                changeAttribute(type, "currency", attribute -> AttributeDefinition.builder("currency", ValueType.STRING)
+                        .required().pattern("\\d{3}").build()));
+
+        List<Problem> problems = validate(definition);
+        assertSingleProblem(problems, ProblemCode.INVALID_PATTERN, "Account");
+        assertThat(problems.getFirst().path()).isEqualTo("Account.currency");
+        assertThat(problems.getFirst().hint()).hasValueSatisfying(hint -> assertThat(hint).contains("[0-9]", "\\d"));
+    }
+
+    @Test
     @DisplayName("Scenario: Minimum length above maximum length")
     void minimumLengthAboveMaximumLength() {
         SchemaDefinition definition = changeEntityType(ReferenceModel.definition(), "CustomerRole", type ->
@@ -607,6 +620,23 @@ class TypeModelScenariosTest {
         assertThat(problems.getFirst().path()).isEqualTo("Organization.name-not-blank");
     }
 
+    @Test
+    @DisplayName("Scenario: Two versions of a rule in a hierarchy")
+    void twoVersionsOfARuleInAHierarchy() {
+        RuleDescriptor versionTwo = new RuleDescriptor("name-not-blank", 2, "The name has a visible character.",
+                "Party", List.of());
+        SchemaDefinition definition = changeEntityType(
+                changeEntityType(ReferenceModel.definition(), "Party", type ->
+                        withRules(type, new RuleReference("name-not-blank", 1))),
+                "Organization", type ->
+                        withRules(type, new RuleReference("lei-checksum", 1), new RuleReference("name-not-blank", 2)));
+
+        List<Problem> problems = registryWith(NAME_NOT_BLANK, versionTwo).validate(ORIGIN, definition);
+
+        assertSingleProblem(problems, ProblemCode.DUPLICATE_RULE, "Organization");
+        assertThat(problems.getFirst().path()).isEqualTo("Organization.name-not-blank");
+    }
+
     // ------------------------------------------------------------------ available rules
 
     @Test
@@ -631,6 +661,16 @@ class TypeModelScenariosTest {
         RuleDescriptor lei = ReferenceModel.rules().getFirst();
 
         assertThatThrownBy(() -> SchemaRegistries.inMemory(new TestClock(), List.of(lei, lei)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Scenario: Rule with an invalid name")
+    void ruleWithAnInvalidName() {
+        RuleDescriptor invalid = new RuleDescriptor("Lei_Checksum", 1, "The LEI's check digits are valid.",
+                "Organization", List.of());
+
+        assertThatThrownBy(() -> SchemaRegistries.inMemory(new TestClock(), List.of(invalid)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

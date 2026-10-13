@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The allowed values of an ordered attribute: an optional lower and an optional upper bound
+ * The interval that the values of an ordered attribute must lie in: an optional lower and an optional upper bound
  * (capability {@code type-model}).
  *
  * @param lower the lower bound, if any

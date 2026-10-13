@@ -88,6 +88,42 @@ class AvailableRulesTest {
     }
 
     @Test
+    void aRuleWhoseNameBreaksTheNamingRuleIsRejected() {
+        for (String name : List.of("Lei_Checksum", "lei_checksum", "LeiChecksum", "lei-Checksum", "1lei", "-lei", "",
+                "lei checksum", "lei.checksum", "lei-checks\u00fcm", "a".repeat(129))) {
+            assertThatThrownBy(() -> registry(new RuleDescriptor(name, 1, "Checks.", "Organization", List.of())))
+                    .as("rule named '" + name + "'").isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> registry(new RuleDescriptor("Lei_Checksum", 1, "Checks.", "Organization", List.of())))
+                .hasMessageContaining("Lei_Checksum").hasMessageContaining("lowercase");
+    }
+
+    @Test
+    void aRuleWhoseNameKeepsTheNamingRuleIsAccepted() {
+        for (String name : List.of("a", "lei-checksum", "lei-checksum-2", "a1-b2-", "a".repeat(128))) {
+            assertThat(registry(new RuleDescriptor(name, 1, "Checks.", "Organization", List.of())).availableRules())
+                    .as("rule named '" + name + "'").hasSize(1);
+        }
+    }
+
+    @Test
+    void aRuleWithAVersionBelowOneIsRejected() {
+        for (int version : new int[] {0, -1, Integer.MIN_VALUE}) {
+            assertThatThrownBy(() -> registry(new RuleDescriptor("lei-checksum", version, "Checks.", "Organization",
+                    List.of()))).as("version " + version).isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("lei-checksum").hasMessageContaining("at least 1");
+        }
+        assertThat(registry(new RuleDescriptor("lei-checksum", 1, "Checks.", "Organization", List.of()))
+                .availableRules()).hasSize(1);
+    }
+
+    @Test
+    void aRuleThatBreaksTheNamingRuleIsRejectedEvenAmongValidOnes() {
+        assertThatThrownBy(() -> registry(LEI, OWNERSHIP, new RuleDescriptor("Bad", 1, "Checks.", "Party", List.of())))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void twoVersionsOfARuleAreFine() {
         assertThat(registry(LEI, new RuleDescriptor("lei-checksum", 2, "Next.", "Organization", List.of()))
                 .availableRules()).hasSize(2);

@@ -8,6 +8,7 @@ import static io.github.enricoag1982.cairn.core.Results.unchanged;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeAttribute;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeEntityType;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeRelationshipType;
+import static io.github.enricoag1982.cairn.fixtures.Definitions.changeTrait;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.plus;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
@@ -30,7 +31,9 @@ import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaPlan;
+import io.github.enricoag1982.cairn.schema.SchemaChange;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.time.Duration;
@@ -181,6 +184,19 @@ class SchemaEvolutionScenariosTest {
                 ReferenceModel.definition().relationshipTypes().reversed());
 
         unchanged(register("1.0.0", reordered));
+    }
+
+    @Test
+    @DisplayName("Scenario: Same allowed values in a different order")
+    void sameAllowedValuesInADifferentOrder() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition reordered = changeEntityType(ReferenceModel.definition(), "CustomerRole", type ->
+                changeAttribute(type, "segment", attribute -> AttributeDefinition.builder("segment", ValueType.STRING)
+                        .required().allowedValues("Retail", "Corporate").build()));
+
+        unchanged(register("1.0.0", reordered));
+
+        assertThat(registry.history()).hasSize(1);
     }
 
     // ------------------------------------------------------------------ history
@@ -560,6 +576,97 @@ class SchemaEvolutionScenariosTest {
         assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.UNCHANGED);
         assertThat(plan.changes()).isEmpty();
         assertThat(plan.problems()).isEmpty();
+        assertThat(registry.history()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: Plan of a first registration")
+    void planOfAFirstRegistration() {
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.0.0"), ReferenceModel.definition());
+
+        SchemaDefinition model = ReferenceModel.definition();
+        List<String> types = new ArrayList<>();
+        model.entityTypes().forEach(type -> types.add(type.name()));
+        model.traits().forEach(trait -> types.add(trait.name()));
+        model.relationshipTypes().forEach(type -> types.add(type.name()));
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.APPLY);
+        assertThat(plan.problems()).isEmpty();
+        assertThat(plan.changes()).allMatch(SchemaChange::compatible);
+        assertThat(plan.changes()).map(SchemaChange::path).containsExactlyInAnyOrderElementsOf(types);
+        assertThat(registry.history()).isEmpty();
+        assertThat(registry.current().isEmpty()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Scenario: Plan of an invalid definition")
+    void planOfAnInvalidDefinition() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition twoParties = plus(ReferenceModel.definition(),
+                SchemaDefinition.builder().entityType("Party").build());
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.1.0"), twoParties);
+
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.REJECT);
+        assertThat(plan.problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.DUPLICATE_NAME);
+            assertThat(problem.path()).isEqualTo("Party");
+        });
+        assertThat(plan.changes()).isEmpty();
+        assertThat(registry.history()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: Plan of a rollback")
+    void planOfARollback() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        applied(register("1.1.0", withEmail()));
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.0.0"), ReferenceModel.definition());
+
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.UNCHANGED);
+        assertThat(plan.problems()).isEmpty();
+        assertThat(plan.changes()).singleElement().satisfies(change -> {
+            assertThat(change.path()).isEqualTo("Person.email");
+            assertThat(change.compatible()).isTrue();
+        });
+        assertThat(registry.history()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Scenario: Plan of a changed definition with the same version")
+    void planOfAChangedDefinitionWithTheSameVersion() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.0.0"), withEmail());
+
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.REJECT);
+        assertThat(plan.problems()).singleElement()
+                .satisfies(problem -> assertThat(problem.code()).isEqualTo(ProblemCode.VERSION_NOT_INCREASED));
+        assertThat(plan.changes()).singleElement().satisfies(change -> {
+            assertThat(change.path()).isEqualTo("Person.email");
+            assertThat(change.compatible()).isTrue();
+        });
+        assertThat(registry.history()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: Plan of an attribute added to a trait")
+    void planOfAnAttributeAddedToATrait() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition withNickname = changeTrait(ReferenceModel.definition(), "Named", trait -> {
+            List<AttributeDefinition> attributes = new ArrayList<>(trait.attributes());
+            attributes.add(AttributeDefinition.builder("nickname", ValueType.STRING).build());
+            return new TraitDefinition(trait.name(), attributes, trait.aliases(), trait.deprecated(),
+                    trait.description());
+        });
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.1.0"), withNickname);
+
+        assertThat(plan.outcome()).isEqualTo(SchemaPlan.Outcome.APPLY);
+        assertThat(plan.changes()).singleElement().satisfies(change -> {
+            assertThat(change.path()).isEqualTo("Named.nickname");
+            assertThat(change.compatible()).isTrue();
+        });
         assertThat(registry.history()).hasSize(1);
     }
 

@@ -33,6 +33,24 @@ tasks.withType<Javadoc>().configureEach {
     }
 }
 
+// Gradle puts a dependency on the module path only if it has a module descriptor or an Automatic-Module-Name. RE2/J has
+// neither (its module name, re2j, comes from its file name), so a module that requires it would not find it. Modules
+// therefore get their whole compile classpath as module path, for compiling and for Javadoc.
+if (file("src/main/java/module-info.java").exists()) {
+    tasks.named<JavaCompile>("compileJava") {
+        modularity.inferModulePath = false
+        doFirst {
+            options.compilerArgs.addAll(listOf("--module-path", classpath.asPath))
+        }
+    }
+    tasks.named<Javadoc>("javadoc") {
+        modularity.inferModulePath = false
+        doFirst {
+            (options as CoreJavadocOptions).modulePath = classpath.files.toList()
+        }
+    }
+}
+
 dependencies {
     testImplementation(platform(libs.findLibrary("junit-bom").get()))
     testImplementation(libs.findLibrary("junit-jupiter").get())

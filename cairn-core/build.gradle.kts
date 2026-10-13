@@ -6,5 +6,6 @@ description = "Cairn engine: schema validation, compatibility checks and the in-
 
 dependencies {
     api(project(":cairn-api"))
+    implementation(libs.re2j)
     testImplementation(testFixtures(project(":cairn-api")))
 }

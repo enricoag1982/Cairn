@@ -10,6 +10,7 @@ import io.github.enricoag1982.cairn.schema.AttributeBuilder;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Literal;
+import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Range;
@@ -86,8 +87,50 @@ class SchemaValidatorTest {
             List<Problem> problems = validate(withAttribute("Account", "currency", STRING, a -> a.pattern("[A-Z")));
 
             assertOnly(problems, ProblemCode.INVALID_PATTERN, "Account.currency");
-            assertThat(problems.getFirst().found()).contains("[A-Z");
-            assertThat(problems.getFirst().expected()).isPresent();
+            assertThat(problems.getFirst().message()).contains("[A-Z", "I-Regexp", "index 4");
+            assertThat(problems.getFirst().found()).hasValueSatisfying(found ->
+                    assertThat(found).contains("end of the pattern", "4"));
+            assertThat(problems.getFirst().expected()).hasValueSatisfying(expected -> assertThat(expected).contains("]"));
+        }
+
+        @Test
+        void aShortcutOfJavaRegexIsReportedWithTheReplacementFromTheRfc() {
+            List<Problem> problems = validate(withAttribute("Account", "currency", STRING, a -> a.pattern("\\d{3}")));
+
+            assertOnly(problems, ProblemCode.INVALID_PATTERN, "Account.currency");
+            assertThat(problems.getFirst().found()).contains("\\d at index 0");
+            assertThat(problems.getFirst().hint()).hasValueSatisfying(hint -> assertThat(hint).contains("[0-9]", "\\d"));
+        }
+
+        @Test
+        void aPatternOnlyJavaRegexUnderstandsIsRejected() {
+            for (String pattern : List.of("^[A-Z]{3}+", "(?i)eur", "(?<code>[A-Z]{3})", "[A-Z]{3}(?=x)", "\\bEUR\\b",
+                    "(a)\\1", "[a-z&&[^b]]", "\\p{IsLatin}")) {
+                assertThat(validate(withAttribute("Account", "currency", STRING, a -> a.pattern(pattern))))
+                        .as(pattern).singleElement().satisfies(problem -> {
+                            assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_PATTERN);
+                            assertThat(problem.path()).isEqualTo("Account.currency");
+                        });
+            }
+        }
+
+        @Test
+        void aDollarSignInAPatternIsAnOrdinaryCharacter() {
+            assertThat(validate(withAttribute("Account", "currency", STRING, a -> a.pattern("^[A-Z]{3}$")))).isEmpty();
+            assertThat(validate(withAttribute("Account", "currency", STRING, a -> a
+                    .pattern("[A-Z]{3}$").examples(Literal.of("EUR$"))))).isEmpty();
+            assertOnly(validate(withAttribute("Account", "currency", STRING, a -> a
+                    .pattern("[A-Z]{3}$").examples(Literal.of("EUR")))), ProblemCode.INVALID_EXAMPLE, "Account.currency");
+        }
+
+        @Test
+        void aPatternThatTheMatchingEngineCannotTakeIsRejected() {
+            assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.pattern("a{1001}"))),
+                    ProblemCode.INVALID_PATTERN, "Account.code");
+            assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.pattern("((a{1000}){1000}){1000}"))),
+                    ProblemCode.INVALID_PATTERN, "Account.code");
+            assertOnly(validate(withAttribute("Account", "code", STRING, a -> a.pattern("\\p{Cn}"))),
+                    ProblemCode.INVALID_PATTERN, "Account.code");
         }
 
         @Test
@@ -563,6 +606,50 @@ class SchemaValidatorTest {
                 assertThat(problem.expected()).contains(Names.NAME_FORM);
                 assertThat(problem.found()).contains("1Party");
             });
+        }
+    }
+
+    @Nested
+    class KindsOfTypes {
+
+        @Test
+        void anEntityTypeThatIncludesSomethingThatIsNotATraitIsReported() {
+            SchemaDefinition definition = SchemaDefinition.builder()
+                    .entityType("Party", e -> e.abstractType())
+                    .entityType("Person", e -> e.includes("Party"))
+                    .build();
+
+            List<Problem> problems = validate(definition);
+
+            assertOnly(problems, ProblemCode.NOT_A_TRAIT, "Person");
+            assertThat(problems.getFirst().message()).contains("Party", "entity type", "trait");
+        }
+
+        @Test
+        void aRelationshipTypeWhoseSupertypeIsNotARelationshipTypeIsReported() {
+            SchemaDefinition definition = SchemaDefinition.builder()
+                    .entityType("Person")
+                    .entityType("Organization")
+                    .relationshipType("Employs", r -> r.supertype("Person").from("Organization").to("Person")
+                            .inverse("employedBy"))
+                    .build();
+
+            List<Problem> problems = validate(definition);
+
+            assertOnly(problems, ProblemCode.SUPERTYPE_NOT_RELATIONSHIP_TYPE, "Employs");
+            assertThat(problems.getFirst().message()).contains("Person", "entity type", "relationship type");
+        }
+
+        @Test
+        void aSymmetricCompositionIsReported() {
+            SchemaDefinition definition = SchemaDefinition.builder()
+                    .entityType("Folder")
+                    .relationshipType("Contains", r -> r.from("Folder").to("Folder").composition().symmetric()
+                            .targetsPerSource(Multiplicity.EXACTLY_ONE).sourcesPerTarget(Multiplicity.EXACTLY_ONE)
+                            .inverse("containedBy"))
+                    .build();
+
+            assertOnly(validate(definition), ProblemCode.COMPOSITION_SYMMETRIC, "Contains");
         }
     }
 }
