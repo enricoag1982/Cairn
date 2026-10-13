@@ -5,5 +5,6 @@
 @SuppressWarnings("module")
 module io.github.enricoag1982.cairn {
     exports io.github.enricoag1982.cairn.data;
+    exports io.github.enricoag1982.cairn.query;
     exports io.github.enricoag1982.cairn.schema;
 }

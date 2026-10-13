@@ -1,5 +1,7 @@
 package io.github.enricoag1982.cairn.data;
 
+import io.github.enricoag1982.cairn.query.Query;
+import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Schema;
 import java.time.Instant;
@@ -134,4 +136,19 @@ public interface View {
      *                                  {@code maxDepth} is negative
      */
     List<Step> traverse(EntityId from, String name, Predicate<RelationshipState> follow, int maxDepth);
+
+    /**
+     * Runs a query against this view (ADR-0023, capability {@code queries}). The rows reflect exactly this view's
+     * coordinates: the entities and relationships that are effective at its effective time, as known at its basis. The
+     * query is checked against the view's {@linkplain #schema() schema} first; one that names a type, attribute,
+     * relationship name or binding that does not exist, binds a name twice, compares values that cannot be compared, or
+     * aggregates values that cannot be aggregated returns every problem found, and nothing is read.
+     *
+     * <p>The same query on the same data returns the same rows in the same order, whatever stores them.
+     *
+     * @param query the query
+     * @return the rows, with the coordinates they were read at, or the problems of the query; it never throws for a query
+     *         that does not fit the schema
+     */
+    QueryResult query(Query query);
 }

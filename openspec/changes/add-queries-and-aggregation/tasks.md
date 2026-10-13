@@ -2,14 +2,14 @@
 
 ## 1. API
 
-- [ ] 1.1 The query records, builder, results and `View.query` in `cairn-api`, and the new problem codes (D1, D2)
-- [ ] 1.2 Typed attribute references (D6)
+- [x] 1.1 The query records, builder, results and `View.query` in `cairn-api`, and the new problem codes (D1, D2)
+- [x] 1.2 Typed attribute references (D6)
 
 ## 2. Engine
 
-- [ ] 2.1 Checking queries against a view's schema, with paths and hints (D2)
-- [ ] 2.2 Evaluating starts, filters, follows and traversals (D2, D3)
-- [ ] 2.3 Grouping, aggregates, columns, order and limit (D2)
+- [x] 2.1 Checking queries against a view's schema, with paths and hints (D2)
+- [x] 2.2 Evaluating starts, filters, follows and traversals (D2, D3)
+- [x] 2.3 Grouping, aggregates, columns, order and limit (D2)
 
 ## 3. JSON, tools and generated types
 

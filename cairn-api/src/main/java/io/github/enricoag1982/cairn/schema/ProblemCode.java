@@ -7,7 +7,8 @@ import java.util.Objects;
  * {@code schema-evolution}), for the reasons a schema document (capability {@code schema-documents}) or a transaction
  * payload (capability {@code json-payloads}) cannot be read, for the reasons a data transaction is rejected
  * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}), and for
- * the reasons a request of an AI agent is refused (capability {@code agent-tools}).
+ * the reasons a request of an AI agent is refused (capability {@code agent-tools}), and for the reasons a query does not
+ * fit the schema of the view that runs it (capability {@code queries}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -140,14 +141,16 @@ public enum ProblemCode {
     UNKNOWN_ENTITY_TYPE("A write creates an entity of a type name that the schema does not have as an entity type. "
             + "Type names and aliases are compared without regard to case. Correct the name, which the hint suggests, "
             + "or register the type first. An agent tool reports it too when it is asked for the entities, or the "
-            + "JSON Schema of the values, of a type name that the schema does not have."),
+            + "JSON Schema of the values, of a type name that the schema does not have. A query reports it too when "
+            + "it starts from, or tests for, a type name that the schema does not have as an entity type."),
     /** A write creates an entity of an abstract entity type. */
     ABSTRACT_ENTITY_TYPE("An abstract entity type has no entities of its own: it only groups its subtypes. Create the "
             + "entity as one of the concrete subtypes."),
     /** A write sets or replaces a value for a name that is not an attribute of the entity's or relationship's type. */
     UNKNOWN_ATTRIBUTE("A value is given for a name that is not an attribute, or an alias of one, of the type of the "
             + "entity or relationship, including the attributes of its supertypes and traits. Correct the name, "
-            + "which the hint suggests."),
+            + "which the hint suggests. A query reports it too for an attribute that the type of a binding does not "
+            + "have."),
     /** A value does not have the attribute's value type. */
     VALUE_TYPE_MISMATCH("A value must have the value type of its attribute; an int fits a long or decimal attribute, "
             + "and a long fits a decimal attribute. The expected and found details name the types. Give a value of "
@@ -242,7 +245,8 @@ public enum ProblemCode {
     UNKNOWN_RELATIONSHIP_TYPE("A write relates two entities with a type name that the schema does not have as a "
             + "relationship type. Type names and aliases are compared without regard to case. Correct the name, which "
             + "the hint suggests, or register the type first. An agent tool reports it too when it navigates or "
-            + "traverses by a name that is neither the name nor the inverse name of a relationship type."),
+            + "traverses by a name that is neither the name nor the inverse name of a relationship type. A query "
+            + "reports it too when a step or a condition names such a name."),
     /** The source or the target of a relationship is not an entity of the type that the relationship type needs. */
     WRONG_END_TYPE("The source of a relationship must be an entity of the relationship type's source type, or of one of "
             + "its subtypes, and the target an entity of its target type or of one of its subtypes. For a symmetric "
@@ -285,7 +289,27 @@ public enum ProblemCode {
     PRINCIPAL_MISMATCH("An adapter records its own principal on every transaction it submits, so a payload may name "
             + "only that principal; one that names another is refused and nothing is recorded. The expected details "
             + "give the principal of the adapter. Set the principal of the payload to it, and name the party you act "
-            + "for in onBehalfOf, if there is one.");
+            + "for in onBehalfOf, if there is one."),
+    /** A query names a binding that no earlier step binds, or one of the wrong kind. */
+    UNKNOWN_BINDING("A step, condition, group key, aggregate, column or order of a query names a binding that the query "
+            + "has not bound by then, or one of the wrong kind, such as the depth of a traversal where an entity is "
+            + "needed, or a binding after grouping, when only the keys and the aggregates are left. Names of bindings "
+            + "are compared exactly. Correct the name, which the hint suggests, or bind it in an earlier step."),
+    /** A query binds a name twice, or gives two keys, aggregates or columns the same name. */
+    DUPLICATE_BINDING("A query binds a name that the start or an earlier step has bound already, or gives two group "
+            + "keys or aggregates, or two columns, the same name. Names within a query are compared exactly. Rename "
+            + "one of them."),
+    /** A condition compares values that cannot be compared. */
+    INCOMPARABLE_VALUES("A condition compares values that cannot be compared: numbers compare with numbers, strings "
+            + "with strings, dates with dates and instants with instants, and booleans compare for equality only. A "
+            + "literal takes the value type of the attribute it is compared with where it can, such as an int for a "
+            + "decimal attribute, or an ISO 8601 string for a date or an instant. The expected and found details "
+            + "name the value types. Compare values of the same kind."),
+    /** An aggregate cannot be computed from its attribute. */
+    INVALID_AGGREGATE("An aggregate needs an attribute, except a count of rows, and the values must suit the function: "
+            + "a sum or an average needs numbers, and a minimum or a maximum needs numbers, dates, instants or "
+            + "strings. The expected and found details name the value types. Aggregate another attribute, or count "
+            + "the rows.");
 
     private final String explanation;
 

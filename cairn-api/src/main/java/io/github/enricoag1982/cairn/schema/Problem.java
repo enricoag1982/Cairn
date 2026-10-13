@@ -8,7 +8,7 @@ import java.util.Optional;
  * a schema document (capability {@code schema-documents}) or a transaction payload (capability {@code json-payloads})
  * cannot be read, or a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions},
  * {@code entity-rules} and {@code relationships}), or a request of an AI agent is refused (capability
- * {@code agent-tools}).
+ * {@code agent-tools}), or a query does not fit the schema of the view that runs it (capability {@code queries}).
  *
  * <p>The code, path and message are always present. A problem can also say what was expected, what was found and how
  * to fix it. These details are text for people and agents to read: anything a program needs to act on is in the
@@ -30,7 +30,10 @@ import java.util.Optional;
  *                 with a write of one, or {@code @write.<n>.<attribute>} for problems with one of its attributes;
  *                 {@code @arguments} for problems with the arguments of an agent tool call as a whole, such as
  *                 arguments that are not a JSON object, and {@code @arguments.<name>} for problems with one
- *                 argument of the call
+ *                 argument of the call; {@code @query.from}, {@code @query.steps.<n>}, {@code @query.groupBy.<n>},
+ *                 {@code @query.aggregates.<n>}, {@code @query.columns.<n>} and {@code @query.order.<n>}, with the
+ *                 position {@code n} counted from 0, for problems with the start, a step, a group key, an aggregate, a
+ *                 column or an order of a query
  * @param message  a readable explanation
  * @param expected what would have been accepted, for example the form a name must have
  * @param found    what the definition contains instead, for example the offending name

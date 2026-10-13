@@ -1,11 +1,14 @@
 package io.github.enricoag1982.cairn.core.data;
 
+import io.github.enricoag1982.cairn.core.query.QueryRunner;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Link;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.query.Query;
+import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.TypeId;
@@ -23,6 +26,8 @@ import java.util.function.Predicate;
  * The navigation and traversal of relationships that both views of the in-memory store share (design D1 and D2 of
  * {@code add-relationships}). A view says which relationships exist at its effective time; this class turns a name into
  * the relationship types it stands for, picks the end that leads away from the entity, and walks breadth first.
+ *
+ * <p>Queries run on the evaluator of {@code core.query}, which both views share, through the reads of the view.
  *
  * <p>Navigation scans the relationships of the named type and of its subtypes that have the entity as an end. A name
  * stands for a relationship type if it is the type's name or an alias, and the direction is from source to target; or
@@ -66,6 +71,11 @@ abstract class NavigableView implements View {
     public List<RelationshipState> navigateTimeline(EntityId from, String name) {
         Objects.requireNonNull(from, "from");
         return leading(from, matches(name)).stream().map(Led::relationship).toList();
+    }
+
+    @Override
+    public QueryResult query(Query query) {
+        return QueryRunner.run(this, query);
     }
 
     @Override
