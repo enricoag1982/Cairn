@@ -7,7 +7,7 @@ Defines how data is read: through immutable views bound to an effective time and
 
 ### Requirement: Views are bound to coordinates
 
-THE SYSTEM SHALL read data only through views. A view SHALL be created with an effective time, and with a basis or a transaction time to read as of; without one, it SHALL read as of the latest basis when it is created. A view's coordinates SHALL be fixed when it is created: every read through one view SHALL return the same answer, whatever is committed later. A view SHALL report its effective time and its basis; a basis after the latest SHALL read as the latest. There is no implicit "now": the caller always gives the effective time (ADR-0013).
+THE SYSTEM SHALL read data only through views. A view SHALL be created with an effective time, and with a basis or a transaction time to read as of; without one, it SHALL read as of the latest basis when it is created. A view's coordinates SHALL be fixed when it is created: every read through one view SHALL return the same answer, whatever is committed later, except that after a purge no view returns the purged data (capability `purge`). A view SHALL report its effective time and its basis; a basis after the latest SHALL read as the latest. There is no implicit "now": the caller always gives the effective time (ADR-0013).
 
 #### Scenario: Repeatable reads
 
