@@ -1,14 +1,17 @@
 package io.github.enricoag1982.cairn.core;
 
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ACME;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ALICE;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.BETA;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.LEI;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.from;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.id;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.money;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.on;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.values;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd5BalanceCorrection;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd5BalancePatch;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd7Rename;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.Coordinates;
@@ -16,7 +19,6 @@ import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
-import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
@@ -53,12 +55,10 @@ class ViewsScenariosTest {
     @Test
     @DisplayName("Scenario: Reading as of a transaction time")
     void readingAsOfATransactionTime() {
-        EntityId a1 = (EntityId) reference.createAccounts().temporaryIds().get(new TemporaryId("a1"));
+        EntityId a1 = (EntityId) reference.createAccounts().temporaryIds().get(A1);
         Basis rd5Jan = reference.store.latestBasis();
-        Basis rd5March = reference.recordedOn(on(3, 16)).commit(Transaction.by("importer")
-                .patch(a1, from(3, 15), values("balance", money("1500"))).build()).basis();
-        Basis rd5April = reference.recordedOn(on(4, 20)).commit(Transaction.by("importer")
-                .patch(a1, from(3, 15), values("balance", money("1200"))).build()).basis();
+        Basis rd5March = reference.replay(rd5BalancePatch(a1)).basis();
+        Basis rd5April = reference.replay(rd5BalanceCorrection(a1)).basis();
 
         View known = reference.store.view(Coordinates.effectiveAt(on(3, 31)).knownAt(on(4, 5)));
 
@@ -127,8 +127,7 @@ class ViewsScenariosTest {
     @DisplayName("Scenario: Timeline with a future-dated change")
     void timelineWithAFutureDatedChange() {
         EntityId acme = (EntityId) reference.createParties().temporaryIds().get(ACME);
-        reference.recordedOn(on(10, 12)).commit(Transaction.by("importer")
-                .patch(acme, EffectivePeriod.from(on(2027, 1, 1)), values("name", "ACME Holdings")).build());
+        reference.replay(rd7Rename(acme));
 
         var timeline = reference.view(on(3, 31)).timeline(acme);
 

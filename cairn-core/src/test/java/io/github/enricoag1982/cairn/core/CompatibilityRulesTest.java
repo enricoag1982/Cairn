@@ -12,6 +12,7 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.withoutEntityTyp
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
+import io.github.enricoag1982.cairn.fixtures.TestClock;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;

@@ -1,11 +1,11 @@
 package io.github.enricoag1982.cairn.core;
 
 import static io.github.enricoag1982.cairn.core.ReferenceStore.assertProblem;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.from;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.id;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.money;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.on;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.values;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.ConflictCheck;

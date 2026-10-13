@@ -1,23 +1,29 @@
 package io.github.enricoag1982.cairn.core;
 
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ACME;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ALICE;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.BETA;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.LEI;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.assertProblem;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.from;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.money;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.on;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.values;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd5BalanceCorrection;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd5BalancePatch;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd7Rename;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd9AcmeLei;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd9Gamma;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.Coordinates;
+import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
-import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
@@ -36,9 +42,6 @@ import org.junit.jupiter.api.Test;
 
 /** The scenarios of the {@code entity-versions} spec, one test each. */
 class EntityVersionsScenariosTest {
-
-    private static final TemporaryId A1 = new TemporaryId("a1");
-    private static final TemporaryId GAMMA = new TemporaryId("gamma");
 
     private final ReferenceStore reference = new ReferenceStore();
 
@@ -134,6 +137,23 @@ class EntityVersionsScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Problem about an entity without a temporary ID")
+    void problemAboutAnEntityWithoutATemporaryId() {
+        Transaction invalid = Transaction.by("importer")
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME"))
+                .create("Organization", from(1, 1), values())
+                .build();
+
+        DryRunResult dry = reference.store.dryRun(invalid);
+        List<Problem> committing = reference.reject(invalid);
+
+        assertProblem(only(committing), ProblemCode.MISSING_REQUIRED_VALUE, "@write.1.name");
+        assertThat(dry).isInstanceOf(DryRunResult.Rejected.class);
+        assertProblem(only(((DryRunResult.Rejected) dry).problems()), ProblemCode.MISSING_REQUIRED_VALUE,
+                "@write.1.name");
+    }
+
+    @Test
     @DisplayName("Scenario: Missing required attribute")
     void missingRequiredAttribute() {
         List<Problem> problems = reference.reject(Transaction.by("importer")
@@ -164,10 +184,8 @@ class EntityVersionsScenariosTest {
     @DisplayName("Scenario: Patching a balance")
     void patchingABalance() {
         EntityId a1 = accounts();
-        reference.recordedOn(on(3, 16));
 
-        reference.commit(Transaction.by("importer")
-                .patch(a1, from(3, 15), values("balance", money("1500"))).build());
+        reference.replay(rd5BalancePatch(a1));
 
         EntityState march31 = state(a1, on(3, 31));
         assertThat(march31.values()).containsEntry("balance", Value.of(money("1500")))
@@ -179,10 +197,8 @@ class EntityVersionsScenariosTest {
     @DisplayName("Scenario: Future-dated change")
     void futureDatedChange() {
         EntityId acme = acme();
-        reference.recordedOn(on(10, 12));
 
-        reference.commit(Transaction.by("importer")
-                .patch(acme, EffectivePeriod.from(on(2027, 1, 1)), values("name", "ACME Holdings")).build());
+        reference.replay(rd7Rename(acme));
 
         assertThat(state(acme, on(2026, 12, 31)).values()).containsEntry("name", Value.of("ACME"));
         assertThat(state(acme, on(2027, 1, 1)).values()).containsEntry("name", Value.of("ACME Holdings"));
@@ -247,10 +263,8 @@ class EntityVersionsScenariosTest {
     @DisplayName("Scenario: Correcting a balance")
     void correctingABalance() {
         EntityId a1 = accounts();
-        reference.recordedOn(on(3, 16)).commit(Transaction.by("importer")
-                .patch(a1, from(3, 15), values("balance", money("1500"))).build());
-        reference.recordedOn(on(4, 20)).commit(Transaction.by("importer")
-                .patch(a1, from(3, 15), values("balance", money("1200"))).build());
+        reference.replay(rd5BalancePatch(a1));
+        reference.replay(rd5BalanceCorrection(a1));
 
         var knownApril5 = reference.store.view(Coordinates.effectiveAt(on(3, 31)).knownAt(on(4, 5)));
         var knownNow = reference.view(on(3, 31));
@@ -264,12 +278,9 @@ class EntityVersionsScenariosTest {
     @Test
     @DisplayName("Scenario: Duplicate LEI")
     void duplicateLei() {
-        reference.commit(Transaction.by("importer")
-                .create(ACME, "Organization", from(1, 1), values("name", "ACME", "lei", LEI)).build());
-        reference.recordedOn(on(2, 1));
+        reference.replay(rd9AcmeLei(acme()));
 
-        List<Problem> problems = reference.reject(Transaction.by("importer")
-                .create(GAMMA, "Organization", from(3, 1), values("name", "Gamma", "lei", LEI)).build());
+        List<Problem> problems = reference.rejectReplay(rd9Gamma());
 
         assertProblem(only(problems), ProblemCode.UNIQUE_VALUE_TAKEN, "$gamma.lei");
     }
@@ -277,14 +288,12 @@ class EntityVersionsScenariosTest {
     @Test
     @DisplayName("Scenario: Reusing a value after it ends")
     void reusingAValueAfterItEnds() {
-        EntityId acme = (EntityId) reference.commit(Transaction.by("importer")
-                .create(ACME, "Organization", from(1, 1), values("name", "ACME", "lei", LEI)).build())
-                .temporaryIds().get(ACME);
+        EntityId acme = acme();
+        reference.replay(rd9AcmeLei(acme));
         reference.commit(Transaction.by("importer")
                 .patch(acme, from(3, 1), values(), Set.of("lei"), ConflictCheck.none()).build());
 
-        Receipt receipt = reference.commit(Transaction.by("importer")
-                .create(GAMMA, "Organization", from(3, 1), values("name", "Gamma", "lei", LEI)).build());
+        Receipt receipt = reference.replay(rd9Gamma());
 
         assertThat(receipt.created()).hasSize(1);
         assertThat(state(acme, on(2, 1)).values()).containsEntry("lei", Value.of(LEI));

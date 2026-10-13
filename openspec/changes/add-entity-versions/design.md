@@ -108,7 +108,7 @@ Constraints that shape the approach:
 
 ### D9. Tests and the reference stories
 
-- The test fixtures gain `ReferenceStories`, which builds the transactions of RD-1 to RD-10 (those without relationships) with fixed recording dates, using a settable test clock that moves to the fixtures.
+- The test fixtures gain `ReferenceStories`, which builds the transactions of the stories that need no relationships and are not queries (RD-1, RD-5, RD-7 and RD-9) with fixed recording dates, and replays them on a store with a settable test clock that moves to the fixtures. Stories are replayed in date order. RD-10 is a listing over RD-1 and RD-5 in the view tests.
 - One test per scenario, named `Scenario: <name>`, in one test class per capability.
 
 ## Risks / Trade-offs

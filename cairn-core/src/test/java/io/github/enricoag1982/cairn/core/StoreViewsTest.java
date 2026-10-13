@@ -1,11 +1,12 @@
 package io.github.enricoag1982.cairn.core;
 
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ACME;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.BETA;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.from;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.id;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.on;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.values;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -179,7 +180,7 @@ class StoreViewsTest {
     @Test
     void valuesAreInTheOrderOfTheAttributesInTheSchemaWhateverTheOrderOfTheWrite() {
         EntityId acme = (EntityId) reference.commit(Transaction.by("importer").create(ACME, "Organization",
-                from(1, 1), values("lei", ReferenceStore.LEI, "name", "ACME")).build()).temporaryIds().get(ACME);
+                from(1, 1), values("lei", LEI, "name", "ACME")).build()).temporaryIds().get(ACME);
 
         EntityState state = reference.view(on(2, 1)).entity(acme).orElseThrow();
 

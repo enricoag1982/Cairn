@@ -4,38 +4,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
-import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Store;
-import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
+import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
+import io.github.enricoag1982.cairn.fixtures.TestClock;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
-import io.github.enricoag1982.cairn.schema.Value;
-import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * An in-memory store with the reference model registered and a clock that the test moves, with shortcuts for the
- * stories of the reference domain. The deterministic ID generator makes IDs predictable: {@link #id(int)}.
+ * An in-memory store with the reference model registered and a clock that the test moves, with shortcuts to commit,
+ * to reject and to replay the {@linkplain ReferenceStories stories of the reference domain}. The deterministic ID
+ * generator makes IDs predictable: {@link #id(int)}. It lives in the tests of {@code cairn-core}, because the test
+ * fixtures of {@code cairn-api} cannot create a store; the stories, dates and values are in {@link ReferenceStories}.
  */
 final class ReferenceStore {
-
-    static final TemporaryId ACME = new TemporaryId("acme");
-    static final TemporaryId BETA = new TemporaryId("beta");
-    static final TemporaryId ALICE = new TemporaryId("alice");
-    static final String LEI = "5493001KJTIIGC8Y1R12";
 
     final TestClock clock = new TestClock();
     final Store store;
@@ -64,49 +55,14 @@ final class ReferenceStore {
         return new ReferenceStore(IdGenerators.deterministic(), definition);
     }
 
-    /** Midnight UTC on a day of 2026. */
-    static Instant on(int month, int day) {
-        return on(2026, month, day);
-    }
-
-    static Instant on(int year, int month, int day) {
-        return LocalDate.of(year, month, day).atStartOfDay(ZoneOffset.UTC).toInstant();
-    }
-
     /** The deterministic generator's n-th ID. */
     static EntityId id(int n) {
         return new EntityId(String.format("00000000-0000-7000-8000-%012x", n));
     }
 
-    static EffectivePeriod from(int month, int day) {
-        return EffectivePeriod.from(on(month, day));
-    }
-
-    /** Values from alternating names and values. */
-    static Map<String, Value> values(Object... namesAndValues) {
-        Map<String, Value> values = new LinkedHashMap<>();
-        for (int i = 0; i < namesAndValues.length; i += 2) {
-            Object value = namesAndValues[i + 1];
-            values.put((String) namesAndValues[i], switch (value) {
-                case Value constant -> constant;
-                case String text -> Value.of(text);
-                case Integer number -> Value.of(number);
-                case Long number -> Value.of(number);
-                case java.math.BigDecimal number -> Value.of(number);
-                case LocalDate date -> Value.of(date);
-                default -> throw new IllegalArgumentException("Not a value: " + value);
-            });
-        }
-        return values;
-    }
-
-    static java.math.BigDecimal money(String amount) {
-        return new java.math.BigDecimal(amount);
-    }
-
     /** Moves the clock to a time; the transaction recorded next gets that transaction time. */
     ReferenceStore recordedOn(Instant time) {
-        clock.advance(Duration.between(clock.instant(), time));
+        clock.moveTo(time);
         return this;
     }
 
@@ -119,9 +75,7 @@ final class ReferenceStore {
 
     /** Commits a transaction that must be rejected, and returns its problems. */
     List<Problem> reject(Transaction transaction) {
-        CommitResult result = store.commit(transaction);
-        assertThat(result).as("commit result").isInstanceOf(CommitResult.Rejected.class);
-        return ((CommitResult.Rejected) result).problems();
+        return rejected(store.commit(transaction));
     }
 
     /** A view at an effective time, as known now. */
@@ -129,23 +83,29 @@ final class ReferenceStore {
         return store.view(Coordinates.effectiveAt(effectiveAt));
     }
 
-    /** RD-1: ACME and Beta (organizations) and Alice (a person), from 1 January, recorded now. */
-    Receipt createParties() {
-        return commit(Transaction.by("importer")
-                .create(ACME, "Organization", from(1, 1), values("name", "ACME"))
-                .create(BETA, "Organization", from(1, 1), values("name", "Beta"))
-                .create(ALICE, "Person", from(1, 1), values("name", "Alice"))
-                .build());
+    /** Replays a story: moves the clock to its recording date and commits its transaction, which must succeed. */
+    Receipt replay(ReferenceStories.Recording recording) {
+        return ReferenceStories.replay(store, clock, recording);
     }
 
-    /** RD-5: accounts A-1 and A-2 from 1 January with balances 1,000 and 2,000. */
+    /** Replays a story that the store must reject, and returns the problems. */
+    List<Problem> rejectReplay(ReferenceStories.Recording recording) {
+        return rejected(ReferenceStories.attempt(store, clock, recording));
+    }
+
+    private static List<Problem> rejected(CommitResult result) {
+        assertThat(result).as("commit result").isInstanceOf(CommitResult.Rejected.class);
+        return ((CommitResult.Rejected) result).problems();
+    }
+
+    /** RD-1: ACME and Beta (organizations) and Alice (a person), from 1 January, recorded on 5 January. */
+    Receipt createParties() {
+        return replay(ReferenceStories.rd1Parties());
+    }
+
+    /** RD-5: accounts A-1 and A-2 from 1 January with balances 1,000 and 2,000, recorded on 5 January. */
     Receipt createAccounts() {
-        return commit(Transaction.by("importer")
-                .create(new TemporaryId("a1"), "Account", from(1, 1),
-                        values("number", "A-1", "currency", "EUR", "balance", money("1000")))
-                .create(new TemporaryId("a2"), "Account", from(1, 1),
-                        values("number", "A-2", "currency", "EUR", "balance", money("2000")))
-                .build());
+        return replay(ReferenceStories.rd5Accounts());
     }
 
     static void assertProblem(Problem problem, ProblemCode code, String path) {

@@ -1,19 +1,21 @@
 package io.github.enricoag1982.cairn.core;
 
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ACME;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ALICE;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.BETA;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.LEI;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.assertProblem;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.from;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.id;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.money;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.on;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.values;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.ConflictCheck;
+import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
@@ -38,7 +40,6 @@ import org.junit.jupiter.api.Test;
 class StoreValidationTest {
 
     private static final TemporaryId G = new TemporaryId("g");
-    private static final TemporaryId GAMMA = new TemporaryId("gamma");
 
     private final ReferenceStore gadgets = ReferenceStore.with(StoreWritesTest.gadgets());
     private final ReferenceStore reference = new ReferenceStore();
@@ -491,11 +492,90 @@ class StoreValidationTest {
     }
 
     @Test
-    void theProblemOfAnEntityCreatedWithoutAnyIdIsLocatedAtItsGeneratedId() {
+    void theProblemOfAnEntityCreatedWithoutAnyIdIsLocatedAtItsWritePosition() {
         List<Problem> problems = reference.reject(Transaction.by("importer")
                 .create("Organization", from(1, 1), values()).build());
 
-        assertProblem(only(problems), ProblemCode.MISSING_REQUIRED_VALUE, id(1).value() + ".name");
+        assertProblem(only(problems), ProblemCode.MISSING_REQUIRED_VALUE, "@write.0.name");
+    }
+
+    @Test
+    void theWritePositionCountsEveryWriteOfTheTransactionFromZero() {
+        EntityId acme = (EntityId) reference.createParties().temporaryIds().get(ACME);
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(acme, from(3, 1), values("name", "ACME Holdings"))
+                .create("Organization", from(1, 1), values("name", "Valid"))
+                .endDate(acme, on(6, 1))
+                .create("Organization", from(1, 1), values("nmae", "Misspelled"))
+                .create("Organization", from(1, 1), values()).build());
+
+        assertThat(problems).extracting(Problem::code, Problem::path).containsExactly(
+                tuple(ProblemCode.UNKNOWN_ATTRIBUTE, "@write.3.nmae"),
+                tuple(ProblemCode.MISSING_REQUIRED_VALUE, "@write.4.name"));
+    }
+
+    @Test
+    void entityProblemsWithoutAnAttributeAreLocatedAtTheWritePositionToo() {
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .create("Party", from(1, 1), values("name", "Abstract"))
+                .create("Organisation", from(1, 1), values("name", "Misspelled"))
+                .create("Organization", EffectivePeriod.between(on(3, 1), on(2, 1)), values("name", "Backwards"))
+                .build());
+
+        assertThat(problems).extracting(Problem::code, Problem::path).containsExactly(
+                tuple(ProblemCode.ABSTRACT_ENTITY_TYPE, "@write.0"),
+                tuple(ProblemCode.UNKNOWN_ENTITY_TYPE, "@write.1"),
+                tuple(ProblemCode.INVALID_PERIOD, "@write.2"));
+    }
+
+    @Test
+    void aDryRunAndACommitLocateTheProblemOfAnEntityWithoutAnyIdAtTheSamePath() {
+        Transaction invalid = Transaction.by("importer")
+                .create("Organization", from(1, 1), values("name", "Valid"))
+                .create("Organization", from(1, 1), values()).build();
+
+        var dry = reference.store.dryRun(invalid);
+        List<Problem> committing = reference.reject(invalid);
+
+        assertThat(dry).isEqualTo(new DryRunResult.Rejected(committing));
+        assertProblem(only(committing), ProblemCode.MISSING_REQUIRED_VALUE, "@write.1.name");
+    }
+
+    @Test
+    void aDryRunAndACommitReportTheSamePathsEvenIfTheStoreGeneratesRandomIds() {
+        ReferenceStore random = new ReferenceStore(IdGenerators.uuidV7());
+        Transaction invalid = Transaction.by("importer")
+                .create("Organization", from(1, 1), values("name", "Valid"))
+                .create("Organization", from(1, 1), values()).build();
+
+        var dry = random.store.dryRun(invalid);
+        List<Problem> committing = random.reject(invalid);
+
+        assertThat(dry).isEqualTo(new DryRunResult.Rejected(committing));
+        assertProblem(only(committing), ProblemCode.MISSING_REQUIRED_VALUE, "@write.1.name");
+    }
+
+    @Test
+    void aSuppliedIdOrATemporaryIdStillLocatesTheProblemsOfItsEntity() {
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .create(id(7), "Organization", from(1, 1), values())
+                .create(BETA, "Organization", from(1, 1), values())
+                .create(GAMMA, id(8), "Organization", from(1, 1), values()).build());
+
+        assertThat(problems).extracting(Problem::path).containsExactly(id(7).value() + ".name", "$beta.name",
+                "$gamma.name");
+    }
+
+    @Test
+    void aUniqueValueTakenByAnEntityWithoutAnyIdNamesItsWritePosition() {
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .create("Organization", from(1, 1), values("name", "ACME", "lei", LEI))
+                .create("Organization", from(1, 1), values("name", "Gamma", "lei", LEI)).build());
+
+        Problem problem = only(problems);
+        assertProblem(problem, ProblemCode.UNIQUE_VALUE_TAKEN, "@write.1.lei");
+        assertThat(problem.message()).contains("@write.0");
     }
 
     // ------------------------------------------------------------------ periods

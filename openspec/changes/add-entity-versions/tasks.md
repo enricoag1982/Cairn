@@ -24,10 +24,10 @@
 
 ## 4. Tests
 
-- [ ] 4.1 Move the settable test clock to the test fixtures and add `ReferenceStories` (D9)
+- [x] 4.1 Move the settable test clock to the test fixtures and add `ReferenceStories` (D9)
 - [x] 4.2 One test per scenario of `transactions`, `entity-versions`, `views` and the new `schema-evolution` requirement, named `Scenario: <name>`
-- [ ] 4.3 Unit tests for timeline splitting and merging, and for the ID generators; verify `./gradlew build` passes
-- [ ] 4.4 Locate problems about entities created without a temporary or supplied ID at `@write.<n>`, with a test for the new scenario
+- [x] 4.3 Unit tests for timeline splitting and merging, and for the ID generators; verify `./gradlew build` passes
+- [x] 4.4 Locate problems about entities created without a temporary or supplied ID at `@write.<n>`, with a test for the new scenario
 
 ## 5. Documentation
 

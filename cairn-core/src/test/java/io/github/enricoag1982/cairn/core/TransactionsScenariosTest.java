@@ -1,12 +1,13 @@
 package io.github.enricoag1982.cairn.core;
 
-import static io.github.enricoag1982.cairn.core.ReferenceStore.ACME;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.BETA;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.assertProblem;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.from;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.id;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.on;
-import static io.github.enricoag1982.cairn.core.ReferenceStore.values;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
@@ -55,7 +56,7 @@ class TransactionsScenariosTest {
         assertThat(receipt.basis()).isEqualTo(new Basis(2));
         assertThat(receipt.transactionTime()).isBetween(on(1, 5), on(1, 6));
         assertThat(receipt.created()).hasSize(3).doesNotHaveDuplicates();
-        assertThat(receipt.temporaryIds()).containsOnlyKeys(ACME, BETA, ReferenceStore.ALICE);
+        assertThat(receipt.temporaryIds()).containsOnlyKeys(ACME, BETA, ALICE);
         assertThat(receipt.temporaryIds().values()).containsExactlyElementsOf(receipt.created());
         assertThat(reference.view(on(2, 1)).entities("Party")).hasSize(3);
     }

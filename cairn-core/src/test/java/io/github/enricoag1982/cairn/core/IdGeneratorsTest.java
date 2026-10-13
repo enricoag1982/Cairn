@@ -8,6 +8,7 @@ import io.github.enricoag1982.cairn.data.IdGenerator;
 import java.time.Instant;
 import java.time.InstantSource;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -138,6 +139,60 @@ class IdGeneratorsTest {
         ids.addAll(draw(generator, 3));
 
         assertStrictlyAscending(ids);
+    }
+
+    @Test
+    void uuidV7IdsAscendThroughManyMillisecondsWithManyIdsEach() {
+        MillisClock clock = new MillisClock(NOON);
+        IdGenerator generator = IdGenerators.uuidV7(clock, new Random(1));
+        List<EntityId> ids = new ArrayList<>();
+
+        for (int millisecond = 0; millisecond < 50; millisecond++) {
+            clock.set(NOON + millisecond);
+            ids.addAll(draw(generator, 100));
+        }
+
+        assertStrictlyAscending(ids);
+        assertThat(ids).extracting(id -> Fields.of(id).timestamp()).isSorted()
+                .first().isEqualTo(NOON);
+        assertThat(Fields.of(ids.getLast()).timestamp()).isEqualTo(NOON + 49);
+    }
+
+    @Test
+    void uuidV7IdsSortAsTextInTheOrderTheyWereDrawn() {
+        MillisClock clock = new MillisClock(NOON);
+        IdGenerator generator = IdGenerators.uuidV7(clock, new Random(1));
+        List<EntityId> drawn = new ArrayList<>();
+
+        for (long step : new long[] {0, 1, 1, 15, 16, 4_095, 4_096, 65_535, 65_536, 86_400_000, 31_536_000_000L}) {
+            clock.set(clock.instant().toEpochMilli() + step);
+            drawn.addAll(draw(generator, 50));
+        }
+
+        List<EntityId> sorted = new ArrayList<>(drawn);
+        Collections.sort(sorted);
+        assertThat(sorted).isEqualTo(drawn);
+        assertThat(drawn.stream().map(EntityId::value).sorted().toList())
+                .isEqualTo(drawn.stream().map(EntityId::value).toList());
+    }
+
+    @Test
+    void uuidV7IdsAscendWhenTheClockReachesTheMillisecondsThatACounterOverflowBorrowed() {
+        MillisClock clock = new MillisClock(NOON);
+        IdGenerator generator = IdGenerators.uuidV7(clock, new Random(1));
+        List<EntityId> ids = new ArrayList<>(draw(generator, 3 * 4_096));
+        long borrowed = Fields.of(ids.getLast()).timestamp();
+        assertThat(borrowed).isGreaterThan(NOON);
+
+        clock.set(NOON + 1);
+        ids.addAll(draw(generator, 5));
+        clock.set(borrowed);
+        ids.addAll(draw(generator, 5));
+        clock.set(borrowed + 1);
+        ids.addAll(draw(generator, 5));
+
+        assertStrictlyAscending(ids);
+        assertThat(Fields.of(ids.getLast()).timestamp()).isEqualTo(borrowed + 1);
     }
 
     @Test

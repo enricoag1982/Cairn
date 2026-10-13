@@ -51,6 +51,9 @@ final class Preparation {
     /** The path of problems about the transaction itself. */
     static final String TRANSACTION_PATH = "@transaction";
 
+    /** The start of the path of problems about an entity that has neither a temporary ID nor a supplied ID. */
+    private static final String WRITE_PATH = "@write.";
+
     /** What a commit records for an entity. */
     record Change(EntityId id, TypeId type, boolean created, Timeline timeline) {
     }
@@ -58,7 +61,10 @@ final class Preparation {
     /** An entity as this transaction changes it. A failed one stands for an entity that could not be created. */
     private static final class Working {
         final EntityId id;
-        /** What problems about the entity call it: its temporary ID if it was created with one, else its ID. */
+        /**
+         * What problems about the entity call it: its temporary ID if it was created with one, else its ID if the
+         * caller supplied it, else {@code @write.<n>} for the write that creates it.
+         */
         final String path;
         final EntityType entityType;
         final boolean created;
@@ -130,9 +136,10 @@ final class Preparation {
                     + "agent:onboarding", transaction.principal().isEmpty() ? "no principal" : "a blank principal",
                     null));
         }
-        for (Write write : transaction.writes()) {
-            switch (write) {
-                case Write.Create create -> create(create);
+        List<Write> writes = transaction.writes();
+        for (int position = 0; position < writes.size(); position++) {
+            switch (writes.get(position)) {
+                case Write.Create create -> create(create, position);
                 case Write.Patch patch -> patch(patch);
                 case Write.Replace replace -> replace(replace);
                 case Write.EndDate endDate -> endDate(endDate);
@@ -182,10 +189,17 @@ final class Preparation {
 
     // ------------------------------------------------------------------ create
 
-    private void create(Write.Create write) {
+    /**
+     * Applies a create. Problems about the new entity are located at its temporary ID, else at the ID the caller
+     * supplied, else at {@code @write.<position>}: an ID that the store generates differs between a dry run and a
+     * commit, so it cannot be the path of a problem that both report.
+     */
+    private void create(Write.Create write, int position) {
         Optional<TemporaryId> temporaryId = write.temporaryId();
         EntityId id = write.id().orElseGet(this::drawId);
-        String path = temporaryId.map(TemporaryId::toString).orElse(id.value());
+        String path = temporaryId.map(TemporaryId::toString)
+                .or(() -> write.id().map(EntityId::value))
+                .orElse(WRITE_PATH + position);
         boolean ok = true;
         boolean idUsable = true;
         boolean duplicateTemporaryId = temporaryId.isPresent() && temporaries.containsKey(temporaryId.get());

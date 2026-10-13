@@ -12,10 +12,12 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.changeTrait;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.plus;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
+import io.github.enricoag1982.cairn.fixtures.TestClock;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.AttributeId;
@@ -747,8 +749,8 @@ class SchemaEvolutionScenariosTest {
         Basis withEmail = applied(reference.store.schema().register(ReferenceModel.origin("1.1.0"), withEmail()))
                 .basis();
 
-        var atRd1 = reference.store.view(Coordinates.effectiveAt(ReferenceStore.on(2, 1)).knownAt(rd1));
-        var latest = reference.view(ReferenceStore.on(2, 1));
+        var atRd1 = reference.store.view(Coordinates.effectiveAt(on(2, 1)).knownAt(rd1));
+        var latest = reference.view(on(2, 1));
 
         assertThat(withEmail).isGreaterThan(rd1);
         assertThat(atRd1.basis()).isEqualTo(rd1);
