@@ -12,7 +12,10 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Design D4 and D5: timelines split at the bounds of a change and merge adjacent equal segments. */
+/**
+ * Design D4 and D5: timelines split at the bounds of a change, and merge adjacent segments only when they have equal
+ * values and the same recording.
+ */
 class TimelineTest {
 
     private static final AttributeId NAME = new AttributeId(1);
@@ -23,6 +26,7 @@ class TimelineTest {
     private static final Instant SEP = Instant.parse("2026-09-01T00:00:00Z");
     private static final Instant RECORDED_1 = Instant.parse("2026-01-05T09:00:00Z");
     private static final Instant RECORDED_2 = Instant.parse("2026-03-16T09:00:00Z");
+    private static final Instant RECORDED_3 = Instant.parse("2026-04-20T09:00:00Z");
 
     private static Map<AttributeId, Value> values(String name, int balance) {
         return Map.of(NAME, Value.of(name), BALANCE, Value.of(balance));
@@ -32,12 +36,18 @@ class TimelineTest {
         return Timeline.created(JAN, Segment.OPEN, values("ACME", 1000), RECORDED_1, new Basis(1));
     }
 
+    /** Sets an attribute, recorded by the second transaction. */
     private static Timeline set(Timeline timeline, Instant from, Instant end, AttributeId attribute, Value value) {
+        return set(timeline, from, end, attribute, value, RECORDED_2, new Basis(2));
+    }
+
+    private static Timeline set(Timeline timeline, Instant from, Instant end, AttributeId attribute, Value value,
+            Instant recordedAt, Basis recordedBasis) {
         return timeline.update(from, end, old -> {
             Map<AttributeId, Value> changed = new HashMap<>(old);
             changed.put(attribute, value);
             return changed;
-        }, RECORDED_2, new Basis(2));
+        }, recordedAt, recordedBasis);
     }
 
     @Test
@@ -140,31 +150,48 @@ class TimelineTest {
     }
 
     @Test
-    void adjacentSegmentsWithEqualValuesAreMerged() {
+    void adjacentSegmentsWithEqualValuesAndTheSameRecordingAreMerged() {
         Timeline split = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
 
-        Timeline back = set(split, MAR, Segment.OPEN, BALANCE, Value.of(1000));
+        Timeline together = set(split, JAN, MAR, BALANCE, Value.of(1500));
 
-        assertThat(back.segments()).hasSize(1);
-        assertThat(back.segments().getFirst().from()).isEqualTo(JAN);
-        assertThat(back.segments().getFirst().end()).isEqualTo(Segment.OPEN);
+        assertThat(together.segments()).hasSize(1);
+        assertThat(together.segments().getFirst().from()).isEqualTo(JAN);
+        assertThat(together.segments().getFirst().end()).isEqualTo(Segment.OPEN);
+        assertThat(together.segments().getFirst().recordedBasis()).isEqualTo(new Basis(2));
+        assertThat(together.segments().getFirst().recordedAt()).isEqualTo(RECORDED_2);
     }
 
     @Test
-    void settingAValueBackInTheMiddleMergesThreeSegmentsIntoOne() {
+    void adjacentSegmentsWithEqualValuesThatDifferentTransactionsRecordedAreNotMerged() {
+        Timeline split = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
+
+        Timeline back = set(split, MAR, Segment.OPEN, BALANCE, Value.of(1000), RECORDED_3, new Basis(3));
+
+        assertThat(back.segments()).extracting(Segment::from).containsExactly(JAN, MAR);
+        assertThat(back.segments()).extracting(Segment::end).containsExactly(MAR, Segment.OPEN);
+        assertThat(back.segments()).extracting(Segment::values).containsExactly(values("ACME", 1000),
+                values("ACME", 1000));
+        assertThat(back.segments()).extracting(Segment::recordedBasis).containsExactly(new Basis(1), new Basis(3));
+        assertThat(back.segments()).extracting(Segment::recordedAt).containsExactly(RECORDED_1, RECORDED_3);
+    }
+
+    @Test
+    void settingAValueBackInTheMiddleKeepsThreeSegmentsEachWithItsRecording() {
         Timeline split = set(acme(), MAR, JUN, BALANCE, Value.of(1500));
         assertThat(split.segments()).hasSize(3);
 
         Timeline back = set(split, MAR, JUN, BALANCE, Value.of(1000));
 
-        assertThat(back.segments()).hasSize(1);
-        assertThat(back.segments().getFirst().from()).isEqualTo(JAN);
-        assertThat(back.segments().getFirst().end()).isEqualTo(Segment.OPEN);
-        assertThat(back.segments().getFirst().recordedBasis()).isEqualTo(new Basis(1));
+        assertThat(back.segments()).extracting(Segment::from).containsExactly(JAN, MAR, JUN);
+        assertThat(back.segments()).extracting(Segment::values).containsOnly(values("ACME", 1000));
+        assertThat(back.segments()).extracting(Segment::recordedBasis).containsExactly(new Basis(1), new Basis(2),
+                new Basis(1));
+        assertThat(back.sameState(acme())).isTrue();
     }
 
     @Test
-    void clearingAValueMergesWithTheNeighbourThatNeverHadIt() {
+    void clearingAValueDoesNotMergeWithTheNeighbourThatNeverHadItAndWasRecordedEarlier() {
         Timeline named = Timeline.created(JAN, Segment.OPEN, Map.of(NAME, Value.of("ACME")), RECORDED_1, new Basis(1));
         Timeline withBalance = set(named, MAR, Segment.OPEN, BALANCE, Value.of(1500));
         assertThat(withBalance.segments()).hasSize(2);
@@ -173,24 +200,25 @@ class TimelineTest {
             Map<AttributeId, Value> changed = new HashMap<>(old);
             changed.remove(BALANCE);
             return changed;
-        }, RECORDED_2, new Basis(3));
+        }, RECORDED_3, new Basis(3));
 
-        assertThat(cleared.segments()).hasSize(1);
-        assertThat(cleared.segments().getFirst().values()).isEqualTo(Map.of(NAME, Value.of("ACME")));
-        assertThat(cleared.segments().getFirst().recordedBasis()).isEqualTo(new Basis(1));
+        assertThat(cleared.segments()).hasSize(2);
+        assertThat(cleared.segments()).extracting(Segment::values).containsOnly(Map.of(NAME, Value.of("ACME")));
+        assertThat(cleared.segments()).extracting(Segment::recordedBasis).containsExactly(new Basis(1), new Basis(3));
         assertThat(cleared.sameState(named)).isTrue();
     }
 
     @Test
-    void clearingAValueInTheMiddleAndSettingItBackLeavesOneSegment() {
+    void clearingAValueInTheMiddleAndSettingItBackKeepsThreeSegments() {
         Timeline cleared = acme().update(MAR, JUN, old -> Map.of(NAME, Value.of("ACME")), RECORDED_2, new Basis(2));
         assertThat(cleared.segments()).hasSize(3);
         assertThat(cleared.segments().get(1).values()).isEqualTo(Map.of(NAME, Value.of("ACME")));
 
         Timeline back = set(cleared, MAR, JUN, BALANCE, Value.of(1000));
 
-        assertThat(back.segments()).hasSize(1);
-        assertThat(back.segments().getFirst().values()).isEqualTo(values("ACME", 1000));
+        assertThat(back.segments()).hasSize(3);
+        assertThat(back.segments().get(1).values()).isEqualTo(values("ACME", 1000));
+        assertThat(back.segments().get(1).recordedBasis()).isEqualTo(new Basis(2));
         assertThat(back.sameState(acme())).isTrue();
     }
 
@@ -212,16 +240,6 @@ class TimelineTest {
         assertThat(both.segments()).extracting(Segment::from).containsExactly(JAN, MAR);
         assertThat(both.segments()).extracting(Segment::end).containsExactly(MAR, Segment.OPEN);
         assertThat(both.segments().get(1).values()).isEqualTo(values("ACME", 1500));
-    }
-
-    @Test
-    void aMergedSegmentKeepsTheEarlierRecording() {
-        Timeline split = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
-
-        Timeline back = set(split, MAR, Segment.OPEN, BALANCE, Value.of(1000));
-
-        assertThat(back.segments().getFirst().recordedBasis()).isEqualTo(new Basis(1));
-        assertThat(back.segments().getFirst().recordedAt()).isEqualTo(RECORDED_1);
     }
 
     @Test
@@ -356,6 +374,29 @@ class TimelineTest {
     }
 
     @Test
+    void timelinesThatDifferentRecordingsSplitAreTheSameStateAsOneThatWasNeverSplit() {
+        Timeline split = set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500));
+        Timeline restored = set(split, MAR, Segment.OPEN, BALANCE, Value.of(1000), RECORDED_3, new Basis(3));
+        assertThat(restored.segments()).hasSize(2);
+
+        assertThat(restored.sameState(acme())).isTrue();
+        assertThat(acme().sameState(restored)).isTrue();
+        assertThat(restored).isNotEqualTo(acme());
+        assertThat(restored.sameState(split)).isFalse();
+    }
+
+    @Test
+    void timelinesWithOtherLifetimesAreNotTheSameState() {
+        Timeline earlier = Timeline.of(List.of(
+                new Segment(JAN, MAR, values("ACME", 1000), RECORDED_1, new Basis(1)),
+                new Segment(MAR, Segment.OPEN, values("ACME", 1000), RECORDED_2, new Basis(2))));
+        Timeline closed = Timeline.created(JAN, JUN, values("ACME", 1000), RECORDED_1, new Basis(1));
+
+        assertThat(earlier.sameState(closed)).isFalse();
+        assertThat(closed.sameState(earlier)).isFalse();
+    }
+
+    @Test
     void anAttributeIsComparedOverTime() {
         Timeline first = acme();
         Timeline renamed = set(first, MAR, Segment.OPEN, NAME, Value.of("ACME Holdings"));
@@ -377,27 +418,43 @@ class TimelineTest {
     }
 
     @Test
-    void buildingFromSegmentsSortsThemAndMergesEqualNeighbours() {
-        Segment late = new Segment(MAR, Segment.OPEN, values("ACME", 1000), RECORDED_2, new Basis(2));
+    void buildingFromSegmentsSortsThemAndMergesNeighboursWithEqualValuesAndTheSameRecording() {
+        Segment late = new Segment(MAR, Segment.OPEN, values("ACME", 1000), RECORDED_1, new Basis(1));
         Segment early = new Segment(JAN, MAR, values("ACME", 1000), RECORDED_1, new Basis(1));
 
         Timeline timeline = Timeline.of(List.of(late, early));
 
         assertThat(timeline.segments()).hasSize(1);
         assertThat(timeline.segments().getFirst().from()).isEqualTo(JAN);
+        assertThat(timeline.segments().getFirst().end()).isEqualTo(Segment.OPEN);
         assertThat(timeline.segments().getFirst().recordedBasis()).isEqualTo(new Basis(1));
+        assertThat(timeline.segments().getFirst().recordedAt()).isEqualTo(RECORDED_1);
     }
 
     @Test
-    void ofTwoMergedSegmentsTheOneRecordedEarlierSetsTheRecording() {
+    void ofTwoSegmentsWithEqualValuesThatDifferentTransactionsRecordedNoneIsMerged() {
         Segment first = new Segment(JAN, MAR, values("ACME", 1000), RECORDED_2, new Basis(2));
         Segment second = new Segment(MAR, Segment.OPEN, values("ACME", 1000), RECORDED_1, new Basis(1));
 
         Timeline timeline = Timeline.of(List.of(first, second));
 
-        assertThat(timeline.segments()).hasSize(1);
-        assertThat(timeline.segments().getFirst().recordedBasis()).isEqualTo(new Basis(1));
-        assertThat(timeline.segments().getFirst().recordedAt()).isEqualTo(RECORDED_1);
+        assertThat(timeline.segments()).containsExactly(first, second);
+    }
+
+    @Test
+    void segmentsOfOneBasisButOtherTransactionTimesAreNotMerged() {
+        Segment first = new Segment(JAN, MAR, values("ACME", 1000), RECORDED_1, new Basis(1));
+        Segment second = new Segment(MAR, Segment.OPEN, values("ACME", 1000), RECORDED_2, new Basis(1));
+
+        assertThat(Timeline.of(List.of(first, second)).segments()).hasSize(2);
+    }
+
+    @Test
+    void segmentsWithOtherValuesAreNotMergedWhateverTheirRecording() {
+        Segment first = new Segment(JAN, MAR, values("ACME", 1000), RECORDED_1, new Basis(1));
+        Segment second = new Segment(MAR, Segment.OPEN, values("ACME", 1001), RECORDED_1, new Basis(1));
+
+        assertThat(Timeline.of(List.of(first, second)).segments()).hasSize(2);
     }
 
     @Test

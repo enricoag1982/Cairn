@@ -28,10 +28,9 @@ public final class Stores {
      *
      * @param settings the clock, ID generator and available rules; the store works on a copy of the generator
      * @return the store
-     * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references (lowercase
-     *                                  ASCII letters, digits and hyphens, starting with a letter, at most 128
-     *                                  characters; a version of at least 1), or if two rules have the same name and
-     *                                  version
+     * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references (requirement
+     *                                  "Rule references" of the {@code type-model} spec), or if two rules have the same
+     *                                  name and version
      */
     public static Store inMemory(StoreSettings settings) {
         Objects.requireNonNull(settings, "settings");

@@ -625,6 +625,23 @@ class StoreValidationTest {
     }
 
     @Test
+    void checksCompareTheStateAndNotTheTransactionsThatRecordedIt() {
+        EntityId acme = (EntityId) reference.createParties().temporaryIds().get(ACME);
+        Basis readAt = reference.store.latestBasis();
+        reference.clock.advance(Duration.ofMinutes(1));
+        reference.commit(Transaction.by("other").patch(acme, from(3, 1), values("name", "ACME Group")).build());
+        reference.commit(Transaction.by("other").patch(acme, from(3, 1), values("name", "ACME")).build());
+        assertThat(reference.view(on(4, 1)).timeline(acme)).as("two versions, recorded by different transactions")
+                .hasSize(2);
+
+        reference.commit(Transaction.by("me")
+                .patch(acme, from(4, 1), values("lei", LEI), ConflictCheck.perEntity(readAt)).build());
+        reference.commit(Transaction.by("me")
+                .patch(acme, from(5, 1), values("name", "ACME Holdings"), ConflictCheck.perAttribute(readAt))
+                .build());
+    }
+
+    @Test
     void aPerAttributeCheckLooksOnlyAtTheAttributesTheWriteSetsOrClears() {
         EntityId acme = (EntityId) reference.createParties().temporaryIds().get(ACME);
         Basis readAt = reference.store.latestBasis();

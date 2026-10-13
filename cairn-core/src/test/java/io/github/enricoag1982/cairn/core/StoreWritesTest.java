@@ -16,9 +16,11 @@ import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
+import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -182,18 +184,56 @@ class StoreWritesTest {
             assertThat(state.recordedBasis()).isLessThan(first.basis());
         });
         assertThat(reference.store.latestBasis()).as("the no-op still is a transaction").isEqualTo(first.basis());
+        assertThat(reference.store.transactions()).hasSize(2).last().extracting(TransactionRecord::basis)
+                .isEqualTo(first.basis());
     }
 
     @Test
-    void aPatchThatRestoresEarlierValuesMergesTheVersionsAgain() {
+    void aPatchThatRestoresEarlierValuesKeepsTheVersionOfEachTransactionThatRecordedThem() {
         EntityId id = gadget("code", "G-1", "level", 3);
+        Basis created = reference.store.latestBasis();
         reference.commit(Transaction.by("tester").patch(id, from(3, 1), values("level", 4)).build());
         assertThat(reference.view(on(2, 1)).timeline(id)).hasSize(2);
 
-        reference.commit(Transaction.by("tester").patch(id, from(3, 1), values("level", 3)).build());
+        Receipt restored = reference.commit(Transaction.by("tester").patch(id, from(3, 1), values("level", 3)).build());
 
-        assertThat(reference.view(on(2, 1)).timeline(id)).singleElement().satisfies(state ->
-                assertThat(state.period()).isEqualTo(EffectivePeriod.from(on(1, 1))));
+        List<EntityState> timeline = reference.view(on(2, 1)).timeline(id);
+        assertThat(timeline).extracting(EntityState::period).containsExactly(
+                EffectivePeriod.between(on(1, 1), on(3, 1)), EffectivePeriod.from(on(3, 1)));
+        assertThat(timeline).extracting(state -> state.values().get("level")).containsExactly(Value.of(3),
+                Value.of(3));
+        assertThat(timeline).extracting(EntityState::recordedBasis).containsExactly(created, restored.basis());
+        assertThat(timeline.get(1).recordedAt()).isEqualTo(restored.transactionTime());
+    }
+
+    @Test
+    void versionsThatOneTransactionRecordedWithEqualValuesAreMerged() {
+        EntityId id = gadget("code", "G-1", "level", 3);
+
+        Receipt receipt = reference.commit(Transaction.by("tester")
+                .patch(id, EffectivePeriod.between(on(3, 1), on(6, 1)), values("level", 4))
+                .patch(id, from(6, 1), values("level", 4)).build());
+
+        List<EntityState> timeline = reference.view(on(2, 1)).timeline(id);
+        assertThat(timeline).extracting(EntityState::period).containsExactly(
+                EffectivePeriod.between(on(1, 1), on(3, 1)), EffectivePeriod.from(on(3, 1)));
+        assertThat(timeline.get(1).recordedBasis()).isEqualTo(receipt.basis());
+    }
+
+    @Test
+    void aTransactionThatChangesAValueAndChangesItBackRecordsNothingForTheEntity() {
+        EntityId id = gadget("code", "G-1", "level", 3);
+        Basis created = reference.store.latestBasis();
+
+        Receipt receipt = reference.commit(Transaction.by("tester")
+                .patch(id, from(3, 1), values("level", 4))
+                .patch(id, from(3, 1), values("level", 3)).build());
+
+        assertThat(receipt.basis()).as("the transaction is recorded").isGreaterThan(created);
+        assertThat(reference.view(on(2, 1)).timeline(id)).singleElement().satisfies(state -> {
+            assertThat(state.period()).isEqualTo(EffectivePeriod.from(on(1, 1)));
+            assertThat(state.recordedBasis()).isEqualTo(created);
+        });
     }
 
     @Test

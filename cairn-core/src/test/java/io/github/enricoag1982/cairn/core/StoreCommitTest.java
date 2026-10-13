@@ -284,6 +284,20 @@ class StoreCommitTest {
     }
 
     @Test
+    void aReusedKeyIsTheOnlyProblemEvenIfTheOtherWritesAreInvalidToo() {
+        reference.commit(createsAcme().idempotencyKey("k1").build());
+        Transaction invalid = createsInvalid().idempotencyKey("k1").build();
+
+        List<Problem> committing = reference.reject(invalid);
+        DryRunResult dry = reference.store.dryRun(invalid);
+
+        assertThat(committing).singleElement().satisfies(problem ->
+                assertProblem(problem, ProblemCode.IDEMPOTENCY_KEY_REUSED, "@transaction"));
+        assertThat(dry).isInstanceOf(DryRunResult.Rejected.class);
+        assertThat(((DryRunResult.Rejected) dry).problems()).isEqualTo(committing);
+    }
+
+    @Test
     void aRejectedTransactionDoesNotClaimItsKey() {
         reference.reject(createsInvalid().idempotencyKey("k1").build());
 

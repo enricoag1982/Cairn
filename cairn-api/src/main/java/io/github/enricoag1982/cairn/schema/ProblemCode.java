@@ -161,9 +161,13 @@ public enum ProblemCode {
     /** A write refers to an ID that no entity has. */
     UNKNOWN_ENTITY("A write patches, replaces or end-dates an entity that does not exist, by an ID that no entity of "
             + "the store has. Correct the ID, or create the entity first."),
-    /** A patch or replace covers a period in which the entity does not exist. */
-    ENTITY_NOT_EFFECTIVE("A patch or replace must lie within the entity's lifetime, from its creation until its end-date. "
-            + "A write never extends a lifetime. Change the period, or create the entity for the period first."),
+    /**
+     * A patch or replace covers a period in which the entity does not exist, or an end-date is at or before the
+     * entity's start.
+     */
+    ENTITY_NOT_EFFECTIVE("A patch or replace must lie within the entity's lifetime, from its creation until its "
+            + "end-date, and an end-date must come after the entity's start. A write never extends a lifetime. Change "
+            + "the period or the instant, or create the entity for the period first."),
     /** A write creates an entity with an ID that already exists. */
     ENTITY_EXISTS("An entity with the supplied ID exists already, in the store or earlier in the same transaction. IDs "
             + "are never reused. To change the entity, patch or replace it; otherwise leave the ID out, or supply "
@@ -182,8 +186,8 @@ public enum ProblemCode {
     INVALID_PERIOD("An effective period is half-open: it includes its start and excludes its end, so the end must be "
             + "after the start. Leave the end out for a period without an end, or correct the instants."),
     /** A conflict check found that the entity changed after the caller read it. */
-    CONFLICT("The entity, or for a per-attribute check an attribute that the write sets or clears, was changed by a "
-            + "transaction after the basis at which the caller read it. Read the entity again, decide whether the "
+    CONFLICT("The entity, or for a per-attribute check an attribute that the write sets or clears (the whole entity "
+            + "for a replace or an end-date), differs from its state at the basis at which the caller read it. Read the entity again, decide whether the "
             + "write still applies, and submit it with the new basis."),
     /** A transaction names no principal. */
     MISSING_PRINCIPAL("Every transaction records who submitted it, so it must name a principal that is not blank. "

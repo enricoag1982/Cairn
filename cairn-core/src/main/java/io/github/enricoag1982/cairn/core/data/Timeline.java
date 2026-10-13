@@ -14,8 +14,10 @@ import java.util.function.UnaryOperator;
 
 /**
  * The complete effective history of an entity as known after one transaction (design D4): an immutable, sorted list of
- * non-overlapping {@link Segment}s. Adjacent segments with equal values are merged, so that a timeline lists real
- * changes only. Every operation returns a new timeline.
+ * non-overlapping {@link Segment}s. Adjacent segments are merged when they have equal values and the same recording
+ * (the same transaction time and basis), so that a timeline lists real changes only and every segment names the one
+ * transaction that recorded it. Segments with equal values that different transactions recorded stay apart. Every
+ * operation returns a new timeline.
  *
  * <p>Nothing in the engine creates a gap in a timeline: an entity is created for one period, writes never extend its
  * lifetime, and an end-date cuts the end. The operations nevertheless make no use of that, except {@link #lifetime()}.
@@ -29,6 +31,10 @@ final class Timeline {
     private record Span(Instant from, Instant end, Value value) {
     }
 
+    /** A stretch of effective time in which the entity has the same values. */
+    private record Run(Instant from, Instant end, Map<AttributeId, Value> values) {
+    }
+
     private final List<Segment> segments;
 
     private Timeline(List<Segment> segments) {
@@ -36,9 +42,9 @@ final class Timeline {
     }
 
     /**
-     * Builds a timeline from segments that do not overlap: sorts them and merges adjacent segments with equal values.
-     * Of two merged segments, the merged one keeps the earlier recording, because its values have been known since
-     * then.
+     * Builds a timeline from segments that do not overlap: sorts them and merges adjacent segments that have equal
+     * values and the same recording. Segments that different transactions recorded are never merged, even if their
+     * values are equal, so the merged segment keeps the recording that both had.
      *
      * @param segments the segments, in any order
      * @return the timeline
@@ -57,11 +63,9 @@ final class Timeline {
             if (segment.from().isBefore(last.end())) {
                 throw new IllegalArgumentException("Segments overlap: " + last.period() + " and " + segment.period());
             }
-            if (segment.from().equals(last.end()) && segment.values().equals(last.values())) {
-                Segment earlier = segment.recordedBasis().compareTo(last.recordedBasis()) < 0 ? segment : last;
-                merged.set(merged.size() - 1,
-                        new Segment(last.from(), segment.end(), last.values(), earlier.recordedAt(),
-                                earlier.recordedBasis()));
+            if (segment.from().equals(last.end()) && segment.values().equals(last.values())
+                    && segment.sameRecording(last)) {
+                merged.set(merged.size() - 1, last.withBounds(last.from(), segment.end()));
             } else {
                 merged.add(segment);
             }
@@ -133,7 +137,8 @@ final class Timeline {
     /**
      * Changes the values of the entity in a period. The segments are split at the bounds of the period, and the change
      * is applied to the values of each part inside it. A part whose values the change leaves as they are keeps its
-     * recording; a part that changes is recorded by the given transaction. Adjacent equal segments are merged.
+     * recording; a part that changes is recorded by the given transaction. Adjacent segments with equal values and the
+     * same recording are merged.
      *
      * @param from          the first instant of the period
      * @param end           the first instant after the period, or {@link Segment#OPEN}
@@ -184,17 +189,28 @@ final class Timeline {
         return of(result);
     }
 
-    /** Tells whether two timelines have the same segments with the same values, whoever recorded them. */
+    /**
+     * Tells whether two timelines give the entity the same values at every instant, whoever recorded them. Adjacent
+     * segments with equal values count as one stretch here, so a timeline that was split by two recordings equals the
+     * one that was never split.
+     */
     boolean sameState(Timeline other) {
-        if (segments.size() != other.segments.size()) {
-            return false;
-        }
-        for (int i = 0; i < segments.size(); i++) {
-            if (!segments.get(i).sameState(other.segments.get(i))) {
-                return false;
+        return runs().equals(other.runs());
+    }
+
+    /** The stretches in which the entity has the same values, with adjacent equal ones merged. */
+    private List<Run> runs() {
+        List<Run> runs = new ArrayList<>();
+        for (Segment segment : segments) {
+            if (!runs.isEmpty() && runs.getLast().end().equals(segment.from())
+                    && runs.getLast().values().equals(segment.values())) {
+                Run last = runs.removeLast();
+                runs.add(new Run(last.from(), segment.end(), last.values()));
+            } else {
+                runs.add(new Run(segment.from(), segment.end(), segment.values()));
             }
         }
-        return true;
+        return runs;
     }
 
     /**

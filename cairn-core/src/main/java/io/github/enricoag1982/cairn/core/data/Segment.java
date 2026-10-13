@@ -56,8 +56,8 @@ record Segment(Instant from, Instant end, Map<AttributeId, Value> values, Instan
         return new Segment(newFrom, newEnd, values, recordedAt, recordedBasis);
     }
 
-    /** Tells whether two segments have the same period and the same values, whoever recorded them. */
-    boolean sameState(Segment other) {
-        return from.equals(other.from) && end.equals(other.end) && values.equals(other.values);
+    /** Tells whether the same transaction recorded two segments: they have the same transaction time and basis. */
+    boolean sameRecording(Segment other) {
+        return recordedAt.equals(other.recordedAt) && recordedBasis.equals(other.recordedBasis);
     }
 }

@@ -176,11 +176,15 @@ final class Preparation {
         return commit;
     }
 
-    /** What a commit records: the entities that were created or whose timeline changed, in order of first touch. */
+    /**
+     * What a commit records: the entities that were created or whose state changed, in order of first touch. An entity
+     * whose writes left it as it was, such as one that a transaction changes and changes back, records nothing, even
+     * if the writes split its timeline into parts that different transactions recorded.
+     */
     List<Change> changes() {
         List<Change> changes = new ArrayList<>();
         for (Working entity : working.values()) {
-            if (!entity.failed() && (entity.created || !entity.timeline.equals(entity.before))) {
+            if (!entity.failed() && (entity.created || !entity.timeline.sameState(entity.before))) {
                 changes.add(new Change(entity.id, entity.entityType.id(), entity.created, entity.timeline));
             }
         }

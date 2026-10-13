@@ -5,12 +5,15 @@ import static io.github.enricoag1982.cairn.core.ReferenceStore.id;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
@@ -29,6 +32,7 @@ import io.github.enricoag1982.cairn.schema.ValueType;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -149,6 +153,19 @@ class TransactionsScenariosTest {
                 ProblemCode.UNKNOWN_TEMPORARY_ID, "$beta"));
     }
 
+    @Test
+    @DisplayName("Scenario: Temporary ID used before it is created")
+    void temporaryIdUsedBeforeItIsCreated() {
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(ACME, from(3, 1), values("name", "ACME Holdings"))
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME"))
+                .build());
+
+        assertThat(problems).singleElement().satisfies(problem -> assertProblem(problem,
+                ProblemCode.UNKNOWN_TEMPORARY_ID, "$acme"));
+        assertThat(store.transactions()).isEmpty();
+    }
+
     // ------------------------------------------------------------------ entity IDs
 
     @Test
@@ -254,5 +271,33 @@ class TransactionsScenariosTest {
         assertThat(problems).singleElement().satisfies(problem -> assertProblem(problem,
                 ProblemCode.IDEMPOTENCY_KEY_REUSED, "@transaction"));
         assertThat(store.transactions()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: Retrying writes that are now invalid")
+    void retryingWritesThatAreNowInvalid() {
+        Transaction onboard = Transaction.by("agent:onboarding").idempotencyKey("onboard-acme")
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME", "lei", LEI)).build();
+        Receipt first = reference.commit(onboard);
+        EntityId acme = (EntityId) first.temporaryIds().get(ACME);
+        reference.commit(Transaction.by("importer")
+                .patch(acme, from(1, 1), values(), Set.of("lei"), ConflictCheck.none()).build());
+        reference.commit(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(3, 1), values("name", "Gamma", "lei", LEI)).build());
+        Basis before = store.latestBasis();
+        int recorded = store.transactions().size();
+        DryRunResult withoutKey = store.dryRun(Transaction.by("agent:onboarding")
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME", "lei", LEI)).build());
+        assertThat(withoutKey).as("the same writes, without the key, are invalid now")
+                .isInstanceOf(DryRunResult.Rejected.class);
+        assertThat(((DryRunResult.Rejected) withoutKey).problems()).singleElement().satisfies(problem ->
+                assertProblem(problem, ProblemCode.UNIQUE_VALUE_TAKEN, "$acme.lei"));
+
+        CommitResult retry = store.commit(onboard);
+
+        assertThat(retry).isEqualTo(new CommitResult.Committed(first));
+        assertThat(store.dryRun(onboard)).isInstanceOf(DryRunResult.WouldCommit.class);
+        assertThat(store.latestBasis()).isEqualTo(before);
+        assertThat(store.transactions()).hasSize(recorded);
     }
 }

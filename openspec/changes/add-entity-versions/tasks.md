@@ -33,12 +33,12 @@
 
 - [x] 5.1 Add to `docs/glossary.md`: dry run, idempotency key, temporary ID, receipt, principal, store, timeline; update entity version and view
 - [x] 5.2 Update the building blocks and runtime view in `docs/architecture/README.md`, and the status in `AGENTS.md` and `README.md`; bump `last-reviewed`
-- [ ] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
 
 ## 6. Drift-review fixes
 
-- [ ] 6.1 Merge adjacent segments only when they have equal values and the same recording (D4)
-- [ ] 6.2 Tests for the new scenarios: temporary ID used before it is created, retrying writes that are now invalid, restoring an earlier value, ending an entity before it starts, listing a type the view does not know
-- [ ] 6.3 Fix Javadoc that the specs now contradict or leave out: `EntityState` (value type in the view's schema), `ConflictCheck` (sets or clears; replace and end-date compare the whole entity), `ProblemCode.ENTITY_NOT_EFFECTIVE` (also end-dates at or before the start), and `Stores.inMemory` (link the rule-name rule instead of copying it)
-- [ ] 6.4 A test that keeps `ReferenceStories` in step with the story table of the reference domain page (dates, values, LEI); verify `./gradlew build` passes
+- [x] 6.1 Merge adjacent segments only when they have equal values and the same recording (D4)
+- [x] 6.2 Tests for the new scenarios: temporary ID used before it is created, retrying writes that are now invalid, restoring an earlier value, ending an entity before it starts, listing a type the view does not know
+- [x] 6.3 Fix Javadoc that the specs now contradict or leave out: `EntityState` (value type in the view's schema), `ConflictCheck` (sets or clears; replace and end-date compare the whole entity), `ProblemCode.ENTITY_NOT_EFFECTIVE` (also end-dates at or before the start), and `Stores.inMemory` (link the rule-name rule instead of copying it)
+- [x] 6.4 A test that keeps `ReferenceStories` in step with the story table of the reference domain page (dates, values, LEI); verify `./gradlew build` passes
 

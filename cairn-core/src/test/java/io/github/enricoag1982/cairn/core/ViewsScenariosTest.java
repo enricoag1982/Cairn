@@ -13,6 +13,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd5BalanceP
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd7Rename;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
@@ -119,6 +120,16 @@ class ViewsScenariosTest {
         assertThat(view.entities("Party")).extracting(EntityState::entityType)
                 .containsExactly("Organization", "Organization", "Person");
         assertThat(acme).isEqualTo(id(1));
+    }
+
+    @Test
+    @DisplayName("Scenario: Listing a type the view does not know")
+    void listingATypeTheViewDoesNotKnow() {
+        reference.createParties();
+        View view = reference.view(on(3, 31));
+
+        assertThatThrownBy(() -> view.entities("Organisation")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Organisation");
     }
 
     // ------------------------------------------------------------------ timeline of an entity

@@ -89,7 +89,7 @@ Constraints that shape the approach:
 ### D6a. Details settled while building
 
 - Unknown attribute names and deprecated attributes are found while applying a write, because stored values are keyed by `AttributeId`. Values of the wrong type are kept as written, so that the check reports one `VALUE_TYPE_MISMATCH` rather than also a missing value.
-- Each segment carries the transaction time and basis that recorded it; parts a write leaves unchanged keep theirs, and a timeline equal to the previous one is not appended, so a write that changes nothing records nothing for that entity.
+- Each segment carries the transaction time and basis that recorded it; parts a write leaves unchanged keep theirs, and a timeline equal in state to the previous one is not appended, so a transaction that changes nothing for an entity, or changes a value and back, records nothing for it.
 - An end-date at or before the entity's start is `ENTITY_NOT_EFFECTIVE`; one at or after its end changes nothing.
 - Conflict checks compare the committed timelines at the caller's basis and at the latest basis over the whole timeline. An entity created in the same transaction cannot conflict.
 - A view's basis above the latest is clamped to the latest, and the view reports the clamped basis.

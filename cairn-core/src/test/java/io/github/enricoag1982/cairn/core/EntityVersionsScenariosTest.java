@@ -36,6 +36,7 @@ import io.github.enricoag1982.cairn.schema.ValueType;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -215,6 +216,28 @@ class EntityVersionsScenariosTest {
         assertProblem(only(problems), ProblemCode.ENTITY_NOT_EFFECTIVE, acme.value());
     }
 
+    @Test
+    @DisplayName("Scenario: Restoring an earlier value")
+    void restoringAnEarlierValue() {
+        Receipt created = reference.createParties();
+        EntityId acme = (EntityId) created.temporaryIds().get(ACME);
+        reference.commit(Transaction.by("importer").patch(acme, from(3, 1), values("name", "ACME Group")).build());
+        Receipt restored = reference.commit(Transaction.by("importer")
+                .patch(acme, from(3, 1), values("name", "ACME")).build());
+
+        List<EntityState> timeline = reference.view(on(4, 1)).timeline(acme);
+
+        assertThat(timeline).hasSize(2);
+        assertThat(timeline).extracting(EntityState::values).containsExactly(
+                Map.of("name", Value.of("ACME")), Map.of("name", Value.of("ACME")));
+        assertThat(timeline).extracting(EntityState::period).containsExactly(
+                EffectivePeriod.between(on(1, 1), on(3, 1)), EffectivePeriod.from(on(3, 1)));
+        assertThat(timeline).extracting(EntityState::recordedBasis).containsExactly(created.basis(),
+                restored.basis());
+        assertThat(timeline).extracting(EntityState::recordedAt).containsExactly(created.transactionTime(),
+                restored.transactionTime());
+    }
+
     // ------------------------------------------------------------------ replacing
 
     @Test
@@ -255,6 +278,18 @@ class EntityVersionsScenariosTest {
         assertThat(reference.view(on(6, 1)).entity(beta)).isEmpty();
         assertThat(reference.view(on(6, 1)).entities("Organization")).extracting(EntityState::id)
                 .doesNotContain(beta);
+    }
+
+    @Test
+    @DisplayName("Scenario: Ending an entity before it starts")
+    void endingAnEntityBeforeItStarts() {
+        EntityId beta = (EntityId) reference.createParties().temporaryIds().get(BETA);
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .endDate(beta, on(2025, 12, 1)).build());
+
+        assertProblem(only(problems), ProblemCode.ENTITY_NOT_EFFECTIVE, beta.value());
+        assertThat(reference.view(on(2, 1)).entity(beta)).isPresent();
     }
 
     // ------------------------------------------------------------------ corrections

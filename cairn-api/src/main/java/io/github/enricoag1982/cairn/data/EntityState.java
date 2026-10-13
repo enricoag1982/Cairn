@@ -13,8 +13,8 @@ import java.util.Objects;
  * @param id            the entity's ID
  * @param entityType    the name of the entity's concrete type in the view's schema
  * @param values        the values, keyed by the attribute names of the view's schema and in the order of the attributes
- *                      in that schema; each value has the attribute's current value type; attributes without a value
- *                      are absent
+ *                      in that schema; each value has the attribute's value type in that schema, which may differ
+ *                      from the type it was written in; attributes without a value are absent
  * @param period        the effective period of this version
  * @param recordedAt    the transaction time of the transaction that recorded this version
  * @param recordedBasis the basis of the transaction that recorded this version

@@ -7,9 +7,12 @@ import java.util.Objects;
  * What a write asks to be checked against the state its caller read (ADR-0009, capability {@code entity-versions}).
  * Without a check, the last commit wins.
  *
- * <p>A check compares the entity as known at the basis its caller read it with the entity as known at the latest
- * basis. A per-entity check rejects the write with the problem {@code CONFLICT} if the entity differs in any way; a
- * per-attribute check does so only if an attribute that the write sets or clears differs.
+ * <p>A check compares the entity's state as known at the basis its caller read it with its state as known at the
+ * latest basis. The comparison is by state: the values the entity has at every point in effective time, whichever
+ * transactions recorded them, so an entity that later transactions changed and changed back has not changed. A
+ * per-entity check rejects the write with the problem {@code CONFLICT} if the entity's state differs in any way. A
+ * per-attribute check does so only if the state of an attribute that the write sets or clears differs; a replace or
+ * an end-date concerns every attribute, so a per-attribute check of one compares the whole entity.
  */
 public sealed interface ConflictCheck {
 
@@ -23,7 +26,7 @@ public sealed interface ConflictCheck {
     }
 
     /**
-     * Rejects the write if any transaction after the basis changed the entity.
+     * Rejects the write if the entity's state differs from its state at the basis.
      *
      * @param readAt the basis at which the caller read the entity
      * @return the check
@@ -33,7 +36,8 @@ public sealed interface ConflictCheck {
     }
 
     /**
-     * Rejects the write if any transaction after the basis changed an attribute that the write sets or clears.
+     * Rejects the write if the state of an attribute that the write sets or clears differs from its state at the
+     * basis. For a replace or an end-date, which concern every attribute, it compares the whole entity.
      *
      * @param readAt the basis at which the caller read the entity
      * @return the check
@@ -63,7 +67,7 @@ public sealed interface ConflictCheck {
     }
 
     /**
-     * A check of the attributes that the write sets or clears.
+     * A check of the attributes that the write sets or clears; of the whole entity for a replace or an end-date.
      *
      * @param readAt the basis at which the caller read the entity
      */
