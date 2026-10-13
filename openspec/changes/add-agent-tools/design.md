@@ -1,0 +1,69 @@
+# Design
+
+## Context
+
+Agents use a store through tools (ADR-0017, commitment 7) that are adapters over the plain API (ADR-0007). The formats exist: schema documents (`schema-documents`), transaction payloads and JSON results with generated JSON Schemas (`json-payloads`, which must be archived first). This change adds the MCP adapter, the approval policy (commitment 8) and who and why for schema changes (commitment 6). The requirements are in `specs/agent-tools/spec.md` and `specs/schema-evolution/spec.md`.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Tool handlers that are plain Java and testable without MCP, wrapped by a thin MCP layer.
+- An approval policy and queue that people drive through Java, and agents can observe.
+- A server that runs from the command line for demos and for connecting agents such as Claude Code.
+
+**Non-Goals:**
+
+- Other transports, authentication, multi-tenancy.
+- A language model in tests.
+
+## Decisions
+
+### D1. A new subproject, `cairn-agent-tools`
+
+- Module `io.github.enricoag1982.cairn.agents`, exporting `io.github.enricoag1982.cairn.agents`. It depends on `cairn-core`, `cairn-documents` and the MCP Java SDK 2.0.1 (`mcp-core` and `mcp-json-jackson3`), which only this module carries.
+- The module build file applies the `application` plugin with the server's main class; that is declarative and needs no build logic.
+- SLF4J has no binding in the server, so nothing is logged to standard output, which carries the protocol.
+
+### D2. Tool handlers and the MCP layer
+
+- `AgentTools` holds one method per tool, taking and returning JSON text. It is built from a `Store`, an `AgentPolicy` and an `ApprovalQueue`.
+- `McpAdapter` registers every handler with the SDK's synchronous server: name, description, input JSON Schema, and a call that returns the handler's JSON as text content. A handler never throws for bad input; it returns problems.
+- Tool inputs (JSON objects): `cairn_describe {}`; `cairn_json_schema { kind: "document" | "payload" | "values", type? }`; `cairn_explain_problem { code }`; `cairn_plan_schema { document }`; `cairn_register_schema { document, reason? }`; `cairn_dry_run { payload }`; `cairn_commit { payload }`; `cairn_read_entity { id, effectiveAt, knownAt? }`; `cairn_read_relationship { id, effectiveAt, knownAt? }`; `cairn_list_entities { type, effectiveAt, knownAt? }`; `cairn_timeline { id, knownAt? }`; `cairn_navigate { id, name, effectiveAt, knownAt? }`; `cairn_traverse { id, name, maxDepth, effectiveAt, knownAt? }`; `cairn_approval_status { requestId }`. `knownAt` is `{ basis: n }` or `{ transactionTime: "…" }`.
+- Outputs use the JSON forms of `json-payloads`; reads add `{ effectiveAt, basis }`.
+
+### D3. Describing the store
+
+- `cairn_describe` writes each origin's stored definition as a YAML schema document (`SchemaDocuments.writeYaml`), lists the available rules with `hasCode`, the problem codes with their explanations, the latest basis, and the policy.
+- `Store` gains `declaredRules()`, the descriptors of the rules the store declares without code, so the adapter can tell which rules have code.
+
+### D4. Approval policy and queue
+
+- `AgentPolicy(Decision schemaRegistrations, Decision dataCommits)` with `Decision` being `ALLOW`, `REQUIRE_APPROVAL` or `DENY`; the default allows both.
+- `ApprovalQueue` keeps `ApprovalRequest(String id, Kind kind, String principal, Optional<String> onBehalfOf, Instant submittedAt, String content, Status status, Optional<String> outcome, Optional<String> decidedBy, Optional<Instant> decidedAt)` in memory; IDs are UUIDv7. People call `pending()`, `approve(id, approver)` and `reject(id, approver, reason)`. Approving runs the request as submitted by the agent's principal, against the state at that moment, and keeps the result as JSON in `outcome`; a request that is now invalid is approved but its outcome holds the problems.
+- New problem codes: `APPROVAL_DENIED` (the policy denies the operation) and `PRINCIPAL_MISMATCH` (a payload names another principal).
+
+### D5. Principals
+
+- `AgentTools` is created with the principal it acts as and an optional party acted for. Payloads must name that principal or no other: a payload's `principal` other than the adapter's is `PRINCIPAL_MISMATCH`, located at `/principal`; a payload without `onBehalfOf` gets the configured one.
+- Schema registrations through the tools record the adapter's principal (D6).
+
+### D6. Who and why for schema changes
+
+- `SchemaRegistry` gains `register(Origin, SchemaDefinition, Submission)` with `Submission(String principal, Optional<String> onBehalfOf, Optional<String> reason)`. The existing `register(Origin, SchemaDefinition)` records the principal `@unknown`.
+- `SchemaTransaction` gains `principal`, `onBehalfOf` and `reason`.
+
+### D7. The server
+
+- `CairnAgentServer.main` takes `--schema <file>` (repeatable), `--principal <name>`, `--on-behalf-of <name>` and `--policy schema=<allow|approve|deny>,data=<…>`. It creates an in-memory store with the reference rules' descriptors declared only if a document names them, registers the documents, and serves the tools over standard input and output until the input closes.
+- A guide shows how to connect it to an MCP client such as Claude Code.
+
+### D8. The agent task suite
+
+- `AgentTaskSuiteTest` runs scripted tasks through `AgentTools` only, using nothing but what the tools return: read the schema, edit the document as text, plan, register; build a payload from the generated JSON Schema, dry-run, read the problems and hints, fix, commit; read back. One test also goes through the MCP layer with the SDK's in-process client to list the tools and call one.
+
+## Risks / Trade-offs
+
+- [The MCP SDK brings Reactor and Jackson] → Only in this module; the engine stays free of them.
+- [Approved requests run later than they were submitted] → They are validated again at approval; the outcome says what happened.
+- [Agents can read everything a store holds] → Access control is not designed yet; the server is for trusted local use, which the guide says.
