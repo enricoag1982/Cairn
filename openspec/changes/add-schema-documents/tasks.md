@@ -28,6 +28,6 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Add `Document location` to `docs/glossary.md`, and update `Schema document`
+- [x] 5.1 Add `Document location` to `docs/glossary.md`, and update `Schema document`
 - [ ] 5.2 Add `cairn-documents` to the building blocks in `docs/architecture/README.md` and to the repository map in `AGENTS.md`; bump `last-reviewed`
 - [ ] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
