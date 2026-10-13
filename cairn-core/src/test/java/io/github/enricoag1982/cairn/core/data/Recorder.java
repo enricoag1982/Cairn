@@ -19,8 +19,8 @@ import java.util.Map;
 
 /**
  * Prepares and records transactions the way {@link InMemoryStore} does, but keeps the stored entities and relationships
- * in plain maps, so that a test of this package can read the timelines that a commit appended, which no view reads for
- * relationships yet. The reference model is registered, and the rules of the reference domain have their code.
+ * in plain maps, so that a test of this package can read the timelines that a commit appended as they are stored,
+ * without a view. The reference model is registered, and the rules of the reference domain have their code.
  */
 final class Recorder {
 

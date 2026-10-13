@@ -99,7 +99,7 @@ For a symmetric relationship type, THE SYSTEM SHALL treat a relationship between
 
 ### Requirement: Navigating relationships
 
-A view SHALL navigate from an entity by a relationship type's name to the targets of the relationships it is the source of, and by the type's inverse name to the sources of the relationships it is the target of, including relationships of subtypes. Each result SHALL hold the relationship's state and the state of the entity at the other end, at the view's coordinates. A view SHALL also read a relationship by its ID, and its timeline.
+A view SHALL navigate from an entity by a relationship type's name to the targets of the relationships it is the source of, and by the type's inverse name to the sources of the relationships it is the target of, including relationships of subtypes. Each result SHALL hold the relationship's state and the state of the entity at the other end, at the view's coordinates. A view SHALL also read a relationship by its ID, and its timeline. A view SHALL also return, for an entity and a name, every version at any effective time of the relationships that navigation by that name would find at some effective time, as known at its basis, ordered by relationship and then by the start of the version's period, so that history across effective time can be read without knowing relationship IDs.
 
 #### Scenario: Who owns Beta
 
@@ -115,6 +115,11 @@ A view SHALL navigate from an entity by a relationship type's name to the target
 
 - **WHEN** Beta is a customer, segment "Corporate", from 1 March until 1 October (RD-4), and Beta's `roles` is navigated through views effective at 1 April and at 1 November
 - **THEN** the first finds Beta's CustomerRole, and the second finds nothing
+
+#### Scenario: Every owner of Beta over time
+
+- **WHEN** ACME owns 40% of Beta from 1 February and Gamma owns 50% of Beta from 1 April, and the ownership history of Beta's `ownedBy` is read through a view
+- **THEN** it lists ACME's Owns relationship from 1 February and Gamma's from 1 April, with their shares
 
 ### Requirement: Traversing relationships
 

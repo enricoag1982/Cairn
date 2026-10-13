@@ -12,6 +12,7 @@ import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.NameNotBlankRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
+import io.github.enricoag1982.cairn.fixtures.TotalOwnershipRule;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,10 +34,10 @@ class RuleRegistrationTest {
     @Test
     void theDescriptionsOfRulesWithCodeAndOfDeclaredRulesAreTheAvailableRules() {
         Store store = store(StoreSettings.builder().rules(new LeiChecksumRule(), new NameNotBlankRule())
-                .declaredRules(ReferenceModel.declaredRules()));
+                .declaredRules(List.of(TotalOwnershipRule.DESCRIPTOR)));
 
         assertThat(store.schema().availableRules()).containsExactlyInAnyOrder(LeiChecksumRule.DESCRIPTOR,
-                NameNotBlankRule.DESCRIPTOR, ReferenceModel.declaredRules().getFirst());
+                NameNotBlankRule.DESCRIPTOR, TotalOwnershipRule.DESCRIPTOR);
     }
 
     @Test

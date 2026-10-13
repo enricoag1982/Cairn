@@ -138,7 +138,8 @@ public final class InMemoryStore implements Store {
                     : requested.compareTo(Basis.NONE) < 0 ? Basis.NONE : requested;
             case KnownAt.AtTransactionTime(Instant time) -> basisAt(time, latest);
         };
-        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), entities);
+        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), entities,
+                relationships);
     }
 
     @Override
@@ -203,7 +204,7 @@ public final class InMemoryStore implements Store {
             }
         }
         Receipt receipt = new Receipt(commit.basis(), commit.transactionTime(), preparation.temporaryIds(),
-                preparation.created(), transaction.principal(), transaction.onBehalfOf(), transaction.reason(),
+                preparation.created(), preparation.ended(), transaction.principal(), transaction.onBehalfOf(), transaction.reason(),
                 transaction.idempotencyKey());
         records.add(new TransactionRecord(commit.basis(), commit.transactionTime(), transaction.principal(),
                 transaction.onBehalfOf(), transaction.reason()));

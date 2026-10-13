@@ -142,6 +142,49 @@ class CoordinatesAndStatesTest {
                 .isInstanceOf(NullPointerException.class);
     }
 
+    @Test
+    void aLinkHoldsTheRelationshipAndTheEntityAtItsOtherEnd() {
+        RelationshipState relationship = relationship(Map.of("share", Value.of(60)));
+        EntityState acme = acme();
+
+        Link link = new Link(relationship, acme);
+
+        assertThat(link.relationship()).isSameAs(relationship);
+        assertThat(link.entity()).isSameAs(acme);
+        assertThatThrownBy(() -> new Link(null, acme)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Link(relationship, null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void aStepHoldsTheEntityItsDepthAndTheRelationshipItWasReachedThrough() {
+        RelationshipState relationship = relationship(Map.of("share", Value.of(60)));
+        EntityState acme = acme();
+
+        Step step = new Step(acme, 1, relationship);
+
+        assertThat(step.entity()).isSameAs(acme);
+        assertThat(step.depth()).isEqualTo(1);
+        assertThat(step.via()).isSameAs(relationship);
+        assertThat(new Step(acme, 7, relationship).depth()).isEqualTo(7);
+    }
+
+    @Test
+    void aStepNeedsAnEntityARelationshipAndADepthOfAtLeastOne() {
+        RelationshipState relationship = relationship(Map.of());
+        EntityState acme = acme();
+
+        assertThatThrownBy(() -> new Step(null, 1, relationship)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Step(acme, 1, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Step(acme, 0, relationship)).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("0");
+        assertThatThrownBy(() -> new Step(acme, -1, relationship)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private static EntityState acme() {
+        return new EntityState(new EntityId("acme"), "Organization", Map.of(), EffectivePeriod.from(MARCH_31),
+                APRIL_5, new Basis(2));
+    }
+
     private static RelationshipState relationship(Map<String, Value> values) {
         return new RelationshipState(new RelationshipId("r"), "Owns", new EntityId("acme"), new EntityId("beta"),
                 values, EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2));

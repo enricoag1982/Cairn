@@ -134,6 +134,10 @@ class ReferenceRulesTest {
     @Test
     void theRulesDescribeThemselvesAsTheReferenceModelListsThem() {
         assertThat(new LeiChecksumRule().descriptor()).isEqualTo(ReferenceModel.rules().getFirst());
+        assertThat(new TotalOwnershipRule().descriptor()).isEqualTo(ReferenceModel.rules().get(1));
+        assertThat(new TotalOwnershipRule().descriptor().name()).isEqualTo("total-ownership-at-most-100");
+        assertThat(new TotalOwnershipRule().descriptor().appliesTo()).isEqualTo("Owns");
+        assertThat(codes(TotalOwnershipRule.DESCRIPTOR)).containsExactly("over-100-percent");
         assertThat(new LeiChecksumRule().descriptor().name()).isEqualTo("lei-checksum");
         assertThat(new NameNotBlankRule().descriptor().name()).isEqualTo("name-not-blank");
         assertThat(new NameNotBlankRule().descriptor().appliesTo()).isEqualTo("Party");
@@ -142,11 +146,10 @@ class ReferenceRulesTest {
     }
 
     @Test
-    void theModelSplitsItsRulesIntoThoseWithCodeAndThoseDeclaredWithout() {
+    void everyRuleOfTheModelHasCodeSoNoneIsDeclaredWithout() {
         assertThat(ReferenceModel.executableRules()).map(Rule::descriptor)
-                .containsExactly(LeiChecksumRule.DESCRIPTOR);
-        assertThat(ReferenceModel.declaredRules()).map(RuleDescriptor::name)
-                .containsExactly("total-ownership-at-most-100");
+                .containsExactly(LeiChecksumRule.DESCRIPTOR, TotalOwnershipRule.DESCRIPTOR);
+        assertThat(ReferenceModel.declaredRules()).isEmpty();
         List<RuleDescriptor> all = new ArrayList<>(ReferenceModel.executableRules().stream()
                 .map(Rule::descriptor).toList());
         all.addAll(ReferenceModel.declaredRules());

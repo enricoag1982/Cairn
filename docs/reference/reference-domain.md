@@ -65,7 +65,7 @@ Rules ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-na
 | `lei-checksum` | 1 | `Organization` | The LEI's check digits are valid (ISO 17442, ISO 7064 MOD 97-10). | `invalid-check-digits` |
 | `total-ownership-at-most-100` | 1 | `Owns` | The owners of a party hold at most 100% of it together, at every point in effective time. | `over-100-percent` |
 
-Scenarios that validate or register the reference model assume a registry with these rules available. In the test fixtures, `lei-checksum` has code, and `total-ownership-at-most-100` is a declared rule without code until relationships exist. Scenarios also use a test-only rule, `name-not-blank` for Party.
+Scenarios that validate or register the reference model assume a registry with these rules available. In the test fixtures, both rules have code. Scenarios also use a test-only rule, `name-not-blank` for Party.
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 
@@ -89,7 +89,7 @@ Scenarios reuse these stories and cite them by ID. Dates are in 2026 unless stat
 | RD-12 | Recorded 1 March: creating Gamma, an organization with the LEI `5493001KJTIIGC8Y1R13`, is rejected, because its check digits are wrong. | Rules |
 | RD-13 | Recorded 1 April: Gamma, an organization, is created and owns 50% of Beta from 1 April. It is rejected, because together with ACME's 55% the owners of Beta would hold 105%. | Rules on relationships |
 
-The test fixture `ReferenceStories` builds the stories that need neither relationships nor queries (RD-1, RD-5, RD-7, RD-9 and RD-12), and the scenario tests replay them in date order.
+The test fixture `ReferenceStories` builds every story except the query RD-6, the listing RD-10 and the purge RD-11, and the scenario tests replay them in date order.
 
 ## Datasets
 

@@ -22,15 +22,16 @@ import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * An in-memory store with the reference model registered and a clock that the test moves, with shortcuts to commit,
  * to reject and to replay the {@linkplain ReferenceStories stories of the reference domain}. It is created with the
- * rules of the reference domain: {@code lei-checksum} runs, and {@code total-ownership-at-most-100} is declared without
- * code until the rules of relationships run. The deterministic ID
- * generator makes IDs predictable: {@link #id(int)}. It lives in the tests of {@code cairn-core}, because the test
- * fixtures of {@code cairn-api} cannot create a store; the stories, dates and values are in {@link ReferenceStories}.
+ * rules of the reference domain, which all have code: {@code lei-checksum} and
+ * {@code total-ownership-at-most-100} run. The deterministic ID generator makes IDs predictable: {@link #id(int)}. It
+ * lives in the tests of {@code cairn-core}, because the test fixtures of {@code cairn-api} cannot create a store; the
+ * stories, dates and values are in {@link ReferenceStories}.
  */
 final class ReferenceStore {
 
@@ -82,12 +83,19 @@ final class ReferenceStore {
     }
 
     /**
-     * Store settings with the rules of the reference domain: {@code lei-checksum} with its code, and
-     * {@code total-ownership-at-most-100} declared without it. Chain the clock and the ID generator.
+     * Store settings with the rules of the reference domain, {@code lei-checksum} and
+     * {@code total-ownership-at-most-100}, both with their code. Chain the clock and the ID generator.
      */
     static StoreSettings.Builder referenceSettings() {
         return StoreSettings.builder().rules(ReferenceModel.executableRules())
                 .declaredRules(ReferenceModel.declaredRules());
+    }
+
+    /** The rules of the reference domain, which have code, and the given rules besides. */
+    static List<Rule> rulesWith(Rule... extra) {
+        List<Rule> rules = new ArrayList<>(ReferenceModel.executableRules());
+        rules.addAll(List.of(extra));
+        return rules;
     }
 
     /** The deterministic generator's n-th ID, as the ID of an entity. */

@@ -8,8 +8,9 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
  * runs it at commit.
  *
  * <p>This is the base of all rules. It only describes the rule; what a rule checks depends on the kind of type it is
- * for, and each kind has its own interface that adds the check: an {@link EntityRule} checks one version of an entity.
- * A rule is an instance of one of them.
+ * for, and each kind has its own interface that adds the check: an {@link EntityRule} checks one version of an entity,
+ * and a {@link RelationshipRule} one version of a relationship. A rule is an instance of one of them, and it is for a
+ * type of the kind that its interface checks.
  *
  * <p>A rule must be deterministic. It gives the same result for the same input with every storage implementation and
  * when data is checked again later, so it may not use the clock, files, the network, randomness or shared mutable

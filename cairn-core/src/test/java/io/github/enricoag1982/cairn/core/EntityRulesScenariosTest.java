@@ -1,7 +1,11 @@
 package io.github.enricoag1982.cairn.core;
 
+import static io.github.enricoag1982.cairn.core.ReferenceStore.entity;
+import static io.github.enricoag1982.cairn.core.ReferenceStore.relationship;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
@@ -11,19 +15,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.DryRunResult;
+import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Store;
+import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.NameNotBlankRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
+import io.github.enricoag1982.cairn.fixtures.TotalOwnershipRule;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -44,7 +55,7 @@ class EntityRulesScenariosTest {
 
     /** A store of the reference domain in which Party names {@code name-not-blank}, which it has the code of. */
     private static ReferenceStore partyNamesRuleWithCode() {
-        return ReferenceStore.withRules(PARTY_NAMES_RULE, List.of(new LeiChecksumRule(), new NameNotBlankRule()),
+        return ReferenceStore.withRules(PARTY_NAMES_RULE, ReferenceStore.rulesWith(new NameNotBlankRule()),
                 ReferenceModel.declaredRules());
     }
 
@@ -54,7 +65,7 @@ class EntityRulesScenariosTest {
     @DisplayName("Scenario: Rules become available to the schema")
     void rulesBecomeAvailableToTheSchema() {
         Store store = Stores.inMemory(StoreSettings.builder().clock(new TestClock())
-                .rules(new LeiChecksumRule()).declaredRules(ReferenceModel.declaredRules()).build());
+                .rules(new LeiChecksumRule()).declaredRules(List.of(TotalOwnershipRule.DESCRIPTOR)).build());
 
         RegistrationResult result = store.schema().register(ReferenceModel.origin("1.0.0"),
                 ReferenceModel.definition());
@@ -81,6 +92,56 @@ class EntityRulesScenariosTest {
         assertThat(problem.path()).isEqualTo("$alice");
         assertThat(problem.message()).contains("name-not-blank");
         assertThat(reference.store.latestBasis()).as("only the schema is recorded").isEqualTo(new Basis(1));
+    }
+
+    // ------------------------------------------------------------------ rules on relationships
+
+    private static final TemporaryId ACME_OWNS = new TemporaryId("acmeOwns");
+    private static final TemporaryId GAMMA_OWNS = new TemporaryId("gammaOwns");
+
+    @Test
+    @DisplayName("Scenario: Owners holding more than 100%")
+    void ownersHoldingMoreThan100Percent() {
+        ReferenceStore reference = new ReferenceStore();
+        Receipt parties = reference.createParties();
+        EntityId beta = entity(parties, BETA);
+        reference.recordedOn(on(2, 10));
+        reference.commit(Transaction.by("importer")
+                .relate("Owns", entity(parties, ACME), beta, from(2, 1), values("share", 55)).build());
+
+        List<Problem> problems = reference.rejectReplay(ReferenceStories.rd13GammaOwnsBeta(beta));
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("total-ownership-at-most-100/over-100-percent");
+        assertThat(problem.path()).isEqualTo("$gammaOwnsBeta");
+        assertThat(problem.message()).contains("105");
+        assertThat(reference.view(on(5, 1)).entities("Organization")).as("Gamma was not created").hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Scenario: Shares that change later in the period")
+    void sharesThatChangeLaterInThePeriod() {
+        ReferenceStore reference = new ReferenceStore();
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        Receipt owners = reference.commit(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma"))
+                .relate(ACME_OWNS, "Owns", acme, beta, from(2, 1), values("share", 40))
+                .relate(GAMMA_OWNS, "Owns", GAMMA, beta, from(4, 1), values("share", 50)).build());
+        RelationshipId acmeOwns = relationship(owners, ACME_OWNS);
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(acmeOwns, from(2, 1), values("share", 55)).build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("total-ownership-at-most-100/over-100-percent");
+        assertThat(problem.path()).isEqualTo(acmeOwns.value());
+        assertThat(problem.message()).contains("105").contains(on(4, 1).toString());
+        assertThat(reference.view(on(5, 1)).relationship(acmeOwns).orElseThrow().values())
+                .containsEntry("share", Value.of(new BigDecimal("40")));
     }
 
     // ------------------------------------------------------------------ rules run at commit
@@ -165,7 +226,7 @@ class EntityRulesScenariosTest {
             throw new IllegalStateException("boom");
         });
         ReferenceStore reference = ReferenceStore.withRules(failing.namedIn(ReferenceModel.definition(),
-                "Organization"), List.of(new LeiChecksumRule(), failing), ReferenceModel.declaredRules());
+                "Organization"), ReferenceStore.rulesWith(failing), ReferenceModel.declaredRules());
         Basis before = reference.store.latestBasis();
 
         List<Problem> problems = reference.reject(Transaction.by("importer")
@@ -188,7 +249,7 @@ class EntityRulesScenariosTest {
                 (version, context) -> itsStore.get().commit(Transaction.by("rule")
                         .create("Organization", from(1, 1), values("name", "Written by a rule")).build()));
         ReferenceStore reference = ReferenceStore.withRules(writer.namedIn(ReferenceModel.definition(),
-                "Organization"), List.of(new LeiChecksumRule(), writer), ReferenceModel.declaredRules());
+                "Organization"), ReferenceStore.rulesWith(writer), ReferenceModel.declaredRules());
         itsStore.set(reference.store);
         Basis before = reference.store.latestBasis();
 

@@ -27,8 +27,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Design D2 of {@code add-relationships}: relationships are stored like entities, a type, two ends and a timeline for
  * each basis, and relate, patch, replace, end-date and corrections change their timelines as they change those of
- * entities. The tests read the stored relationships through a {@link Recorder}, because views do not read relationships
- * yet.
+ * entities. The tests read the stored relationships through a {@link Recorder}, as they are stored, not through a view.
  */
 class RelationshipTimelinesTest {
 

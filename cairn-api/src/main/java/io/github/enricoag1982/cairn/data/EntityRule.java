@@ -8,7 +8,8 @@ package io.github.enricoag1982.cairn.data;
  * or one of its supertypes, names the rule, after the declarative constraints of the schema have passed for that
  * entity. A write that changes no values runs no rules: not one that sets the values an entity already has, not one
  * that splits a version, and not one that only ends the entity. Parts of the entity that the transaction leaves as they
- * are are not checked again. A rule that is for an entity type must be an {@code EntityRule}.
+ * are are not checked again. A rule that is for an entity type must be an {@code EntityRule}; a rule for a
+ * relationship type is a {@link RelationshipRule}.
  *
  * <p>Because of that, a rule's verdict must hold at each instant of the version's effective period, and must not depend
  * on where that period starts or ends: the store may check a part of an entity's timeline that begins or ends where a

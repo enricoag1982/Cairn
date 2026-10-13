@@ -28,9 +28,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Checks that {@link ReferenceStories} tells the stories of the table in {@code docs/reference/reference-domain.md}:
- * for each story the fixture builds (RD-1, RD-5, RD-7, RD-9 and RD-12), the page's row names the recording dates in
- * the order of the fixture's transactions, and states every effective date and value that the fixture writes, such as
- * "Recorded 16 March", "15 March", "1,500" and the LEI.
+ * for each story the fixture builds (RD-1 to RD-5, RD-7 to RD-9, RD-12 and RD-13), the page's row names the recording
+ * dates in the order of the fixture's transactions, and states every effective date and value that the fixture writes,
+ * such as "Recorded 16 March", "15 March", "1,500" and the LEI. RD-8 gives no recording date, so its row is checked for
+ * what it writes only.
  */
 class ReferenceStoriesTest {
 
@@ -63,6 +64,22 @@ class ReferenceStoriesTest {
     }
 
     @Test
+    void rd2MatchesThePage() {
+        assertTold("RD-2", ReferenceStories.rd2Ownership(ReferenceStories.ACME, ReferenceStories.BETA),
+                ReferenceStories.rd2ShareCorrection(ReferenceStories.ACME_OWNS_BETA));
+    }
+
+    @Test
+    void rd3MatchesThePage() {
+        assertTold("RD-3", ReferenceStories.rd3Employment(ReferenceStories.BETA, ReferenceStories.ALICE));
+    }
+
+    @Test
+    void rd4MatchesThePage() {
+        assertTold("RD-4", ReferenceStories.rd4CustomerRole(ReferenceStories.BETA));
+    }
+
+    @Test
     void rd5MatchesThePage() {
         assertTold("RD-5", ReferenceStories.rd5Accounts(ReferenceStories.BETA, ReferenceStories.ACME),
                 ReferenceStories.rd5BalancePatch(ReferenceStories.A1),
@@ -89,6 +106,43 @@ class ReferenceStoriesTest {
     }
 
     @Test
+    void rd8MatchesThePage() {
+        ReferenceStories.Recording alone = rd8Alone();
+        ReferenceStories.Recording together = rd8Together();
+
+        String row = rows.get("RD-8");
+        assertThat(row).as("RD-8 gives no recording date").doesNotContainPattern(RECORDED);
+        for (ReferenceStories.Recording recording : List.of(alone, together)) {
+            for (String fact : facts(recording)) {
+                assertThat(row).as("RD-8: the row states '%s'", fact).containsPattern(stated(fact));
+            }
+        }
+        assertThat(recordedDate(alone)).as("the fixture chooses a date").isEqualTo(recordedDate(together));
+    }
+
+    @Test
+    void rd8EndsWhatThePageNamesTogetherWithBeta() {
+        assertThat(rows.get("RD-8")).contains("moves A-1 to ACME (ends `HeldBy` Beta and starts `HeldBy` ACME")
+                .contains("ends `Owns` and `Employs` involving Beta")
+                .contains("ends Beta's customer role together with its `PlayedBy`");
+
+        List<Write> writes = rd8Together().transaction().writes();
+
+        assertThat(writes).filteredOn(Write.EndDate.class::isInstance).map(write -> ((Write.EndDate) write).target())
+                .containsExactly(ReferenceStories.BETA, ReferenceStories.HELD_BY_A1, ReferenceStories.ACME_OWNS_BETA,
+                        ReferenceStories.BETA_EMPLOYS_ALICE, ReferenceStories.CUSTOMER_ROLE,
+                        ReferenceStories.PLAYED_BY);
+        assertThat(writes).filteredOn(Write.Relate.class::isInstance).singleElement().satisfies(write -> {
+            Write.Relate relate = (Write.Relate) write;
+            assertThat(relate.relationshipType()).isEqualTo("HeldBy");
+            assertThat(relate.source()).isEqualTo(ReferenceStories.A1);
+            assertThat(relate.target()).isEqualTo(ReferenceStories.ACME);
+        });
+        assertThat(rd8Alone().transaction().writes()).singleElement().isInstanceOf(Write.EndDate.class)
+                .satisfies(write -> assertThat(((Write.EndDate) write).target()).isEqualTo(ReferenceStories.BETA));
+    }
+
+    @Test
     void rd9MatchesThePage() {
         assertTold("RD-9", ReferenceStories.rd9AcmeLei(ReferenceStories.ACME), ReferenceStories.rd9Gamma());
     }
@@ -99,8 +153,55 @@ class ReferenceStoriesTest {
     }
 
     @Test
+    void rd13MatchesThePage() {
+        assertTold("RD-13", ReferenceStories.rd13GammaOwnsBeta(ReferenceStories.BETA));
+    }
+
+    @Test
+    void rd13CreatesGammaAndRelatesItToBeta() {
+        assertThat(rows.get("RD-13")).contains("Gamma, an organization, is created and owns 50% of Beta");
+
+        List<Write> writes = ReferenceStories.rd13GammaOwnsBeta(ReferenceStories.BETA).transaction().writes();
+
+        assertThat(writes).hasSize(2);
+        assertThat(writes.get(0)).isInstanceOfSatisfying(Write.Create.class, create -> {
+            assertThat(create.entityType()).isEqualTo("Organization");
+            assertThat(create.temporaryId()).contains(ReferenceStories.GAMMA);
+        });
+        assertThat(writes.get(1)).isInstanceOfSatisfying(Write.Relate.class, relate -> {
+            assertThat(relate.relationshipType()).isEqualTo("Owns");
+            assertThat(relate.source()).isEqualTo(ReferenceStories.GAMMA);
+            assertThat(relate.target()).isEqualTo(ReferenceStories.BETA);
+        });
+    }
+
+    @Test
+    void rd2RelatesAcmeToBetaWithOwnsAndRd4GivesBetaACustomerRole() {
+        assertThat(ReferenceStories.rd2Ownership(ReferenceStories.ACME, ReferenceStories.BETA).transaction().writes())
+                .singleElement().isInstanceOfSatisfying(Write.Relate.class, relate -> {
+                    assertThat(relate.relationshipType()).isEqualTo("Owns");
+                    assertThat(relate.source()).isEqualTo(ReferenceStories.ACME);
+                    assertThat(relate.target()).isEqualTo(ReferenceStories.BETA);
+                });
+        assertThat(ReferenceStories.rd4CustomerRole(ReferenceStories.BETA).transaction().writes())
+                .extracting(write -> write.getClass().getSimpleName()).containsExactly("Create", "Relate");
+    }
+
+    @Test
     void theFactsOfAStoryAreWhatTheFixtureWrites() {
         assertThat(facts(ReferenceStories.rd1Parties())).containsExactly("1 January", "ACME", "Beta", "Alice");
+        assertThat(facts(ReferenceStories.rd2Ownership(ReferenceStories.ACME, ReferenceStories.BETA)))
+                .containsExactly("1 February", "60");
+        assertThat(facts(ReferenceStories.rd2ShareCorrection(ReferenceStories.ACME_OWNS_BETA)))
+                .containsExactly("1 February", "55");
+        assertThat(facts(ReferenceStories.rd3Employment(ReferenceStories.BETA, ReferenceStories.ALICE)))
+                .containsExactly("1 March", "Analyst");
+        assertThat(facts(ReferenceStories.rd4CustomerRole(ReferenceStories.BETA)))
+                .containsExactly("1 March", "1 October", "Corporate");
+        assertThat(facts(rd8Alone())).containsExactly("1 June");
+        assertThat(facts(rd8Together())).containsExactly("1 June");
+        assertThat(facts(ReferenceStories.rd13GammaOwnsBeta(ReferenceStories.BETA)))
+                .containsExactly("1 April", "Gamma", "50");
         assertThat(facts(ReferenceStories.rd5Accounts(ReferenceStories.BETA, ReferenceStories.ACME)))
                 .containsExactly("1 January", "A-1", "EUR", "1,000", "A-2", "2,000");
         assertThat(facts(ReferenceStories.rd5BalancePatch(ReferenceStories.A1))).containsExactly("15 March", "1,500");
@@ -113,6 +214,11 @@ class ReferenceStoriesTest {
         assertThat(facts(ReferenceStories.rd9Gamma())).containsExactly("1 March", "Gamma", ReferenceStories.LEI);
         assertThat(facts(ReferenceStories.rd12GammaWrongCheckDigits()))
                 .containsExactly("1 March", "Gamma", ReferenceStories.LEI_WRONG_CHECK_DIGITS);
+        assertThat(recordedDate(ReferenceStories.rd2Ownership(ReferenceStories.ACME, ReferenceStories.BETA)))
+                .isEqualTo("10 February");
+        assertThat(recordedDate(ReferenceStories.rd2ShareCorrection(ReferenceStories.ACME_OWNS_BETA)))
+                .isEqualTo("2 May");
+        assertThat(recordedDate(ReferenceStories.rd13GammaOwnsBeta(ReferenceStories.BETA))).isEqualTo("1 April");
         assertThat(recordedDate(ReferenceStories.rd5BalancePatch(ReferenceStories.A1))).isEqualTo("16 March");
         assertThat(recordedDate(ReferenceStories.rd7Rename(ReferenceStories.ACME))).isEqualTo("12 October");
         assertThat(recordedDate(ReferenceStories.rd12GammaWrongCheckDigits())).isEqualTo("1 March");
@@ -134,6 +240,18 @@ class ReferenceStoriesTest {
     }
 
     // ------------------------------------------------------------------ the check
+
+    /** RD-8: ending Beta alone. */
+    private static ReferenceStories.Recording rd8Alone() {
+        return ReferenceStories.rd8EndBetaAlone(ReferenceStories.BETA);
+    }
+
+    /** RD-8: ending Beta together with the relationships and the role. */
+    private static ReferenceStories.Recording rd8Together() {
+        return ReferenceStories.rd8EndBeta(ReferenceStories.BETA, ReferenceStories.ACME, ReferenceStories.A1,
+                ReferenceStories.HELD_BY_A1, ReferenceStories.ACME_OWNS_BETA, ReferenceStories.BETA_EMPLOYS_ALICE,
+                ReferenceStories.CUSTOMER_ROLE, ReferenceStories.PLAYED_BY);
+    }
 
     /**
      * Checks one story: its row on the page names the recording dates of the given transactions in their order, and

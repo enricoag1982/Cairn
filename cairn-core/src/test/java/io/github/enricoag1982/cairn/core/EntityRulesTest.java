@@ -309,7 +309,7 @@ class EntityRulesTest {
     void anEntityTypesOwnRulesRunBeforeThoseOfItsSupertypes() {
         ReferenceStore reference = ReferenceStore.withRules(
                 TestEntityRule.namedIn(ReferenceModel.definition(), "Party", NameNotBlankRule.DESCRIPTOR),
-                List.of(new LeiChecksumRule(), new NameNotBlankRule()), ReferenceModel.declaredRules());
+                ReferenceStore.rulesWith(new NameNotBlankRule()), ReferenceModel.declaredRules());
 
         List<Problem> problems = reference.reject(Transaction.by("importer")
                 .create(GAMMA, "Organization", from(1, 1), values("name", " ", "lei", LEI_WRONG_CHECK_DIGITS))
@@ -489,7 +489,7 @@ class EntityRulesTest {
                 List.of());
         Rule plain = () -> descriptor;
         SchemaDefinition model = TestEntityRule.namedIn(ReferenceModel.definition(), "Organization", descriptor);
-        ReferenceStore reference = ReferenceStore.withRules(model, List.of(new LeiChecksumRule(), plain),
+        ReferenceStore reference = ReferenceStore.withRules(model, ReferenceStore.rulesWith(plain),
                 ReferenceModel.declaredRules());
 
         Problem problem = only(reference.reject(Transaction.by("importer")
@@ -912,7 +912,7 @@ class EntityRulesTest {
             context.problem("odd", "lei", "Reported by an old name.");
             context.problem("odd", "LEGALENTITYID", "Reported with other capitals.");
         }, "odd");
-        List<Rule> rules = List.of(new LeiChecksumRule(), byAlias);
+        List<Rule> rules = ReferenceStore.rulesWith(byAlias);
         ReferenceStore reference = ReferenceStore.withRules(byAlias.namedIn(renamed, "Organization"), rules,
                 ReferenceModel.declaredRules());
 

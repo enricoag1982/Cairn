@@ -5,11 +5,15 @@ import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityRule;
 import io.github.enricoag1982.cairn.data.EntityState;
+import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.RelationshipId;
+import io.github.enricoag1982.cairn.data.RelationshipRule;
+import io.github.enricoag1982.cairn.data.RelationshipState;
+import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.RuleContext;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.EffectiveRule;
-import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
@@ -20,30 +24,46 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Runs the rules that apply to the entities a transaction writes, and turns what they report into problems (design D2,
- * D3 and D4 of {@code add-entity-rules}). It runs in the writer thread, one rule after another, so a slow rule slows
- * the commit. While it runs, the store refuses writes, so a rule cannot commit, run dry or register a schema; a rule
- * that tries is reported as failed, also if it catches the refusal and returns.
+ * Runs the rules that apply to the entities and relationships a transaction writes, and turns what they report into
+ * problems (design D2, D3 and D4 of {@code add-entity-rules} and D5 of {@code add-relationships}). It runs in the writer
+ * thread, one rule after another, so a slow rule slows the commit. While it runs, the store refuses writes, so a rule
+ * cannot commit, run dry or register a schema; a rule that tries is reported as failed, also if it catches the refusal
+ * and returns.
  *
- * <p>For each entity it takes the effective rules of the entity's type, in the order of the schema, and runs each one
- * for each changed segment, in the order of the timeline. A rule that the store has no code for is reported for the
- * entity whatever the write changed. The problems come in that order, entity by entity.
+ * <p>For each subject, an entity or a relationship, it takes the effective rules of the subject's type, in the order of
+ * the schema, and runs each one for each changed segment, in the order of the timeline. A rule that the store has no
+ * code for is reported for the subject whatever the write changed. A rule must fit the kind of the subject's type: an
+ * {@link EntityRule} checks entities, and a {@link RelationshipRule} checks relationships; any other rule that a type
+ * names is reported as failed. The problems come in that order, subject by subject.
  */
 final class RuleRunner {
 
     /**
-     * An entity whose rules run.
+     * An entity or a relationship whose rules run.
      *
-     * @param id      the entity's ID
-     * @param path    what problems about the entity call it
-     * @param type    the entity's type in the schema the transaction would produce
-     * @param changed the segments of the entity's new timeline that differ from its previous timeline; none if the
-     *                transaction writes the entity without changing its values
+     * @param id      the ID of the entity or relationship
+     * @param path    what problems about it call it
+     * @param type    its type in the schema the transaction would produce
+     * @param source  the source of a relationship; null for an entity
+     * @param target  the target of a relationship; null for an entity
+     * @param changed the segments of its new timeline that differ from its previous timeline; none if the transaction
+     *                writes it without changing its values
      */
-    record Subject(EntityId id, String path, EntityType type, List<Segment> changed) {
+    record Subject(Id id, String path, SubjectType type, EntityId source, EntityId target, List<Segment> changed) {
+
+        /** The rule interface that checks subjects of this kind. */
+        String ruleInterface() {
+            return type.relationship() ? "RelationshipRule" : "EntityRule";
+        }
+
+        /** Tells whether a rule can check subjects of this kind. */
+        boolean fits(Rule rule) {
+            return type.relationship() ? rule instanceof RelationshipRule : rule instanceof EntityRule;
+        }
     }
 
     /** A problem that a rule reported through its context. */
@@ -68,13 +88,13 @@ final class RuleRunner {
     }
 
     /**
-     * Runs the rules of the subjects. A rule that fails for one segment of an entity is not run for its other segments,
+     * Runs the rules of the subjects. A rule that fails for one segment of a subject is not run for its other segments,
      * and a problem that a rule reports for several segments is reported once. Must be called with the writer lock
      * held: while the rules run, the store refuses commits, dry runs and schema registrations with an
      * {@code IllegalStateException}, which is a failure of the rule that caused it, whether the rule lets the exception
      * go or catches it.
      *
-     * @param subjects the entities whose rules run
+     * @param subjects the entities and relationships whose rules run
      * @return the problems, none if every rule is content
      * @throws VirtualMachineError if a rule causes one, such as an {@code OutOfMemoryError}; it is not turned into a
      *                             problem
@@ -96,12 +116,12 @@ final class RuleRunner {
                 if (subject.changed().isEmpty()) {
                     continue; // The rule has code, and a write that changes no values runs no rules.
                 }
-                if (!(registered.get().rule() instanceof EntityRule rule)) {
-                    found.add(notForEntities(subject, registered.get()));
+                if (!subject.fits(registered.get().rule())) {
+                    found.add(notForKind(subject, registered.get()));
                     continue;
                 }
                 for (Segment segment : subject.changed()) {
-                    if (!check(subject, registered.get(), rule, segment, found)) {
+                    if (!check(subject, registered.get(), segment, found)) {
                         break;
                     }
                 }
@@ -118,13 +138,12 @@ final class RuleRunner {
      * the sequence counts the refused writes, and if the count grew while the rule ran, what the rule reported is
      * dropped, as for an exception.
      */
-    private boolean check(Subject subject, Rules.Registered registered, EntityRule rule, Segment segment,
-            Set<Problem> problems) {
-        EntityState version = EntityStates.of(source.index(), subject.id(), subject.type().id(), segment).orElseThrow();
+    private boolean check(Subject subject, Rules.Registered registered, Segment segment, Set<Problem> problems) {
+        Consumer<RuleContext> call = call(subject, registered.rule(), segment);
         Context context = new Context(source, segment.from());
         long refusedBefore = sequence.refusedWrites();
         try {
-            rule.check(version, context);
+            call.accept(context);
         } catch (VirtualMachineError e) {
             throw e;
         } catch (Throwable e) {
@@ -141,6 +160,20 @@ final class RuleRunner {
             problems.add(problem(subject, registered, reported));
         }
         return true;
+    }
+
+    /** The call of a rule that fits the subject, with the version of the subject that a segment holds. */
+    private Consumer<RuleContext> call(Subject subject, Rule rule, Segment segment) {
+        if (subject.type().relationship()) {
+            RelationshipState version = RelationshipStates.of(source.index(), (RelationshipId) subject.id(),
+                    subject.type().id(), subject.source(), subject.target(), segment).orElseThrow();
+            RelationshipRule relationshipRule = (RelationshipRule) rule;
+            return context -> relationshipRule.check(version, context);
+        }
+        EntityState version = EntityStates.of(source.index(), (EntityId) subject.id(), subject.type().id(), segment)
+                .orElseThrow();
+        EntityRule entityRule = (EntityRule) rule;
+        return context -> entityRule.check(version, context);
     }
 
     /** What a rule reported: a violation, or a failure of the rule if it names a code or an attribute wrongly. */
@@ -181,11 +214,12 @@ final class RuleRunner {
 
     private static Problem unknownAttribute(Subject subject, RuleDescriptor rule, Reported reported) {
         String names = subject.type().attributes().stream().map(Attribute::name).collect(Collectors.joining(", "));
+        String kind = subject.type().kind();
         return Problems.of(ProblemCode.RULE_FAILED, subject.path(), "The rule " + name(rule) + " reported a problem "
-                + "about the attribute '" + reported.attribute() + "' while checking " + subject.path() + ", but "
-                + subject.type().name() + " has no such attribute.",
+                + "about the attribute '" + reported.attribute() + "' while checking " + subject.path() + ", but the "
+                + kind + " type " + subject.type().name() + " has no such attribute.",
                 names.isEmpty() ? "an attribute of " + subject.type().name() : "one of " + names, reported.attribute(),
-                "Report the problem about an attribute of the entity's type, or about the whole entity.");
+                "Report the problem about an attribute of the " + kind + "'s type, or about the whole " + kind + ".");
     }
 
     private static Problem undeclared(Subject subject, Rules.Registered registered, Reported reported) {
@@ -198,12 +232,16 @@ final class RuleRunner {
                 reported.code(), "Declare the code in the rule's description, or report a code that it declares.");
     }
 
-    private static Problem notForEntities(Subject subject, Rules.Registered registered) {
+    private static Problem notForKind(Subject subject, Rules.Registered registered) {
         RuleDescriptor rule = registered.descriptor();
+        boolean relationship = subject.type().relationship();
+        String article = relationship ? "a " : "an ";
         return Problems.of(ProblemCode.RULE_FAILED, subject.path(), "The rule " + name(rule) + " cannot check "
-                + subject.path() + ": " + subject.type().name() + " is an entity type, but the rule is not an "
-                + "EntityRule.", "an EntityRule", registered.rule().getClass().getName(),
-                "Make the rule an EntityRule, or name it only on relationship types.");
+                + subject.path() + ": " + subject.type().name() + " is " + article + subject.type().kind()
+                + " type, but the rule is not " + article + subject.ruleInterface() + ".",
+                article + subject.ruleInterface(), registered.rule().getClass().getName(),
+                "Make the rule " + article + subject.ruleInterface() + ", or name it only on "
+                        + (relationship ? "entity" : "relationship") + " types.");
     }
 
     private static Problem unavailable(Subject subject, EffectiveRule effective) {

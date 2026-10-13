@@ -23,7 +23,7 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 - `RelationshipId(String value)` joins `Id`. Entities and relationships share the store's one ID generator (ADR-0019), so `IdGenerator.next()` changes to return the ID's text, which the store wraps as an `EntityId` or a `RelationshipId`. Supplied IDs must be unique across entities and relationships.
 - A new write, `Relate(Optional<TemporaryId> temporaryId, Optional<RelationshipId> id, String relationshipType, Ref source, Ref target, EffectivePeriod period, Map<String, Value> values)`, offered by the transaction builder as `relate`. `Patch`, `Replace` and `EndDate` already take any `Ref`.
 - `RelationshipState(RelationshipId id, String relationshipType, EntityId source, EntityId target, Map<String, Value> values, EffectivePeriod period, Instant recordedAt, Basis recordedBasis)`.
-- `View` gains `relationship(RelationshipId)`, `relationshipTimeline(RelationshipId)`, `navigate(EntityId from, String name)` returning `List<Link>`, and `traverse(EntityId from, String name, Predicate<RelationshipState> follow, int maxDepth)` returning `List<Step>`.
+- `View` gains `relationship(RelationshipId)`, `relationshipTimeline(RelationshipId)`, `navigateTimeline(EntityId from, String name)` returning every version of the relationships `navigate` would find at any effective time (which rules such as total ownership need to find changes later in a version's period), `navigate(EntityId from, String name)` returning `List<Link>`, and `traverse(EntityId from, String name, Predicate<RelationshipState> follow, int maxDepth)` returning `List<Step>`.
 - `Link(RelationshipState relationship, EntityState entity)`: the relationship and the entity at the other end.
 - `Step(EntityState entity, int depth, RelationshipState via)`, in breadth-first order.
 - `RelationshipRule extends Rule` with `void check(RelationshipState version, RuleContext context)`.
@@ -53,7 +53,7 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 - Effective rules of a relationship type include those of its relationship supertypes.
 - `RuleRunner` and `Preparation` generalize from entities to subjects (entities and relationships): `RuleRunner.Subject` gains relationship types, the check that a rule fits its type works in both directions (an `EntityRule` named by a relationship type, or a `RelationshipRule` named by an entity type, is `RULE_FAILED`), and the explanations of `RULE_VIOLATION` and `RULE_FAILED` and the `RuleContext.problem` Javadoc stop saying "entity".
 - Rules are skipped for a subject that already has a declarative problem. The matching by path learns relationship paths and the multiplicity paths of D3 (`$a3[HeldBy]`), which concern the entity `$a3`.
-- `RuleContext.viewAt` lets `total-ownership-at-most-100` collect every boundary within the version's period where an `Owns` relationship to the same target starts or ends, and check the sum at each.
+- `total-ownership-at-most-100` collects, with `navigateTimeline`, every instant within the version's period where an `Owns` relationship to the same target starts or ends, and checks the sum at each with `viewAt`. It reports the first offending instant of each checked version.
 - The rule moves from a declared rule to an implementation in the test fixtures: `ReferenceModel.executableRules()` gains `TotalOwnershipRule`, `ReferenceModel.declaredRules()` becomes empty, and `ReferenceStore.referenceSettings()` follows.
 
 ### D6. Reference domain

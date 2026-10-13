@@ -10,7 +10,6 @@ import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Range;
-import io.github.enricoag1982.cairn.schema.RuleCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.Value;
@@ -103,30 +102,26 @@ public final class ReferenceModel {
      * @return the rules {@code lei-checksum} and {@code total-ownership-at-most-100}, both in version 1
      */
     public static List<RuleDescriptor> rules() {
-        return List.of(
-                LeiChecksumRule.DESCRIPTOR,
-                new RuleDescriptor("total-ownership-at-most-100", 1,
-                        "The owners of a party hold at most 100% of it together, at every point in effective time.",
-                        "Owns",
-                        List.of(new RuleCode("over-100-percent",
-                                "The shares of a party's owners add up to more than 100% at some point in effective "
-                                        + "time. Lower a share, or end an ownership."))));
+        return List.of(LeiChecksumRule.DESCRIPTOR, TotalOwnershipRule.DESCRIPTOR);
     }
 
     /**
-     * The rules of the reference domain that have code: {@code lei-checksum}, as {@link LeiChecksumRule}. Give them to
-     * a store together with {@link #declaredRules()}, so that the store can register the reference model and runs the
-     * rules at commit. {@code total-ownership-at-most-100} has no code until relationships exist.
+     * The rules of the reference domain that have code: {@code lei-checksum}, as {@link LeiChecksumRule}, and
+     * {@code total-ownership-at-most-100}, as {@link TotalOwnershipRule}. Give them to a store, so that the store can
+     * register the reference model and runs the rules at commit. Both rules of the reference domain have code, so
+     * {@link #declaredRules()} is empty.
      *
      * @return new instances of the executable rules
      */
     public static List<Rule> executableRules() {
-        return List.of(new LeiChecksumRule());
+        return List.of(new LeiChecksumRule(), new TotalOwnershipRule());
     }
 
     /**
-     * The descriptors of the rules of the reference domain that have no code yet: {@code total-ownership-at-most-100}.
-     * A store declares them, so that the reference model can name them, and rejects writes that would need to run them.
+     * The descriptors of the rules of the reference domain that have no code. A store declares them, so that the
+     * reference model can name them, and rejects writes that would need to run them. Every rule of the reference
+     * domain has code, so there are none; tests that need a declared rule declare one of their own, such as
+     * {@code name-not-blank}.
      *
      * @return the descriptors among {@link #rules()} that no {@linkplain #executableRules() executable rule} describes
      */

@@ -22,8 +22,12 @@ class ResultsAndHistoryTest {
     private static final Problem PROBLEM = new Problem(ProblemCode.MISSING_PRINCIPAL, "@transaction", "No principal.");
 
     private static Receipt receipt(Map<TemporaryId, Id> temporaryIds, List<Id> created) {
-        return new Receipt(new Basis(1), RECORDED, temporaryIds, created, "agent:onboarding", Optional.of("alice"),
-                Optional.of("New customer"), Optional.of("onboard-acme"));
+        return receipt(temporaryIds, created, List.of());
+    }
+
+    private static Receipt receipt(Map<TemporaryId, Id> temporaryIds, List<Id> created, List<Id> ended) {
+        return new Receipt(new Basis(1), RECORDED, temporaryIds, created, ended, "agent:onboarding",
+                Optional.of("alice"), Optional.of("New customer"), Optional.of("onboard-acme"));
     }
 
     @Test
@@ -57,6 +61,19 @@ class ResultsAndHistoryTest {
     }
 
     @Test
+    void aReceiptListsWhatCompositionsEndedInOrderAndCopiesIt() {
+        RelationshipId hasAddress = new RelationshipId("00000000-0000-7000-8000-000000000003");
+        List<Id> ended = new ArrayList<>(List.of(hasAddress, BETA_ID));
+
+        Receipt receipt = receipt(Map.of(), List.of(ACME_ID), ended);
+        ended.clear();
+
+        assertThat(receipt.ended()).containsExactly(hasAddress, BETA_ID);
+        assertThatThrownBy(() -> receipt.ended().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(receipt(Map.of(), List.of(ACME_ID)).ended()).isEmpty();
+    }
+
+    @Test
     void aReceiptHoldsWhatTheTransactionRecorded() {
         Receipt receipt = receipt(Map.of(), List.of(ACME_ID));
 
@@ -70,22 +87,28 @@ class ResultsAndHistoryTest {
 
     @Test
     void aReceiptRejectsNulls() {
-        assertThatThrownBy(() -> new Receipt(null, RECORDED, Map.of(), List.of(), "p", Optional.empty(),
-                Optional.empty(), Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new Receipt(new Basis(1), null, Map.of(), List.of(), "p", Optional.empty(),
-                Optional.empty(), Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new Receipt(new Basis(1), RECORDED, null, List.of(), "p", Optional.empty(),
-                Optional.empty(), Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new Receipt(new Basis(1), RECORDED, Map.of(), null, "p", Optional.empty(),
-                Optional.empty(), Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new Receipt(new Basis(1), RECORDED, Map.of(), List.of(), null, Optional.empty(),
-                Optional.empty(), Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new Receipt(new Basis(1), RECORDED, Map.of(), List.of(), "p", null,
-                Optional.empty(), Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new Receipt(new Basis(1), RECORDED, Map.of(), List.of(), "p", Optional.empty(),
-                null, Optional.empty())).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new Receipt(new Basis(1), RECORDED, Map.of(), List.of(), "p", Optional.empty(),
-                Optional.empty(), null)).isInstanceOf(NullPointerException.class);
+        Map<TemporaryId, Id> none = Map.of();
+        List<Id> noIds = List.of();
+        Optional<String> empty = Optional.empty();
+        Basis basis = new Basis(1);
+        assertThatThrownBy(() -> new Receipt(null, RECORDED, none, noIds, noIds, "p", empty, empty, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, null, none, noIds, noIds, "p", empty, empty, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, RECORDED, null, noIds, noIds, "p", empty, empty, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, RECORDED, none, null, noIds, "p", empty, empty, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, RECORDED, none, noIds, null, "p", empty, empty, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, RECORDED, none, noIds, noIds, null, empty, empty, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, RECORDED, none, noIds, noIds, "p", null, empty, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, RECORDED, none, noIds, noIds, "p", empty, null, empty))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Receipt(basis, RECORDED, none, noIds, noIds, "p", empty, empty, null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test

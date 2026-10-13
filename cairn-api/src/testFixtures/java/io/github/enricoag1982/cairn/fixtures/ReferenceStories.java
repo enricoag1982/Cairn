@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The stories of the reference domain ({@code docs/reference/reference-domain.md}) that need no queries, as the
+ * The stories of the reference domain ({@code docs/reference/reference-domain.md}) that need no aggregation, as the
  * transactions that tell them, with the dates at which they are recorded.
  *
  * <p>Stories are in 2026 unless they say otherwise. "Recorded" is the transaction time: a {@link Recording} is
@@ -62,6 +62,24 @@ public final class ReferenceStories {
     /** The temporary ID of the {@code HeldBy} relationship between account A-2 and its holder, ACME, in the story RD-5. */
     public static final TemporaryId HELD_BY_A2 = new TemporaryId("heldByA2");
 
+    /** The temporary ID of the {@code Owns} relationship between ACME and Beta in the story RD-2. */
+    public static final TemporaryId ACME_OWNS_BETA = new TemporaryId("acmeOwnsBeta");
+
+    /** The temporary ID of the {@code Employs} relationship between Beta and Alice in the story RD-3. */
+    public static final TemporaryId BETA_EMPLOYS_ALICE = new TemporaryId("betaEmploysAlice");
+
+    /** The temporary ID of Beta's customer role (a {@code CustomerRole}) in the story RD-4. */
+    public static final TemporaryId CUSTOMER_ROLE = new TemporaryId("customerRole");
+
+    /** The temporary ID of the {@code PlayedBy} relationship between Beta's customer role and Beta in RD-4. */
+    public static final TemporaryId PLAYED_BY = new TemporaryId("playedBy");
+
+    /** The temporary ID of the {@code HeldBy} relationship that moves account A-1 to ACME in the story RD-8. */
+    public static final TemporaryId HELD_BY_A1_MOVED = new TemporaryId("heldByA1Moved");
+
+    /** The temporary ID of the {@code Owns} relationship between Gamma and Beta in the story RD-13. */
+    public static final TemporaryId GAMMA_OWNS_BETA = new TemporaryId("gammaOwnsBeta");
+
     /** ACME's Legal Entity Identifier in the story RD-9. */
     public static final String LEI = "5493001KJTIIGC8Y1R12";
 
@@ -101,6 +119,59 @@ public final class ReferenceStories {
                 .create(ACME, "Organization", from(1, 1), values("name", "ACME"))
                 .create(BETA, "Organization", from(1, 1), values("name", "Beta"))
                 .create(ALICE, "Person", from(1, 1), values("name", "Alice"))
+                .build());
+    }
+
+    /**
+     * RD-2, the ownership. Recorded 10 February: ACME owns 60% of Beta from 1 February. The relationship is named by
+     * {@link #ACME_OWNS_BETA}.
+     *
+     * @param acme ACME
+     * @param beta Beta
+     * @return the recording
+     */
+    public static Recording rd2Ownership(Ref acme, Ref beta) {
+        return new Recording(on(2, 10), Transaction.by(PRINCIPAL)
+                .relate(ACME_OWNS_BETA, "Owns", acme, beta, from(2, 1), values("share", 60)).build());
+    }
+
+    /**
+     * RD-2, the correction. Recorded 2 May: the share was 55% from 1 February.
+     *
+     * @param owns the {@code Owns} relationship between ACME and Beta
+     * @return the recording
+     */
+    public static Recording rd2ShareCorrection(Ref owns) {
+        return new Recording(on(5, 2), Transaction.by(PRINCIPAL)
+                .patch(owns, from(2, 1), values("share", 55)).build());
+    }
+
+    /**
+     * RD-3. Recorded 1 March: Beta employs Alice as "Analyst" from 1 March. The relationship is named by
+     * {@link #BETA_EMPLOYS_ALICE}.
+     *
+     * @param beta  Beta
+     * @param alice Alice
+     * @return the recording
+     */
+    public static Recording rd3Employment(Ref beta, Ref alice) {
+        return new Recording(on(3, 1), Transaction.by(PRINCIPAL)
+                .relate(BETA_EMPLOYS_ALICE, "Employs", beta, alice, from(3, 1), values("title", "Analyst")).build());
+    }
+
+    /**
+     * RD-4. Recorded 1 March: Beta is a customer, segment "Corporate", from 1 March until 1 October. The role is a
+     * {@code CustomerRole}, named by {@link #CUSTOMER_ROLE}, which Beta plays through a {@code PlayedBy} relationship
+     * named by {@link #PLAYED_BY}, for the same period.
+     *
+     * @param beta Beta
+     * @return the recording
+     */
+    public static Recording rd4CustomerRole(Ref beta) {
+        EffectivePeriod period = EffectivePeriod.between(on(3, 1), on(10, 1));
+        return new Recording(on(3, 1), Transaction.by(PRINCIPAL)
+                .create(CUSTOMER_ROLE, "CustomerRole", period, values("segment", "Corporate"))
+                .relate(PLAYED_BY, "PlayedBy", CUSTOMER_ROLE, beta, period, values())
                 .build());
     }
 
@@ -157,6 +228,48 @@ public final class ReferenceStories {
     }
 
     /**
+     * RD-8, the rejected end. Ending Beta from 1 June, while relationships to Beta continue after that date, such as
+     * A-1's {@code HeldBy}. The story gives no recording date, so it is recorded on 20 May, after the stories that
+     * precede it.
+     *
+     * @param beta Beta
+     * @return the recording
+     */
+    public static Recording rd8EndBetaAlone(Ref beta) {
+        return new Recording(on(5, 20), Transaction.by(PRINCIPAL).endDate(beta, on(6, 1)).build());
+    }
+
+    /**
+     * RD-8, the successful end. Ending Beta from 1 June succeeds when the same transaction, from 1 June, moves A-1 to
+     * ACME (ends {@code HeldBy} to Beta and starts {@code HeldBy} to ACME, named by {@link #HELD_BY_A1_MOVED}, keeping
+     * exactly one holder), ends {@code Owns} and {@code Employs} involving Beta, and ends Beta's customer role
+     * together with its {@code PlayedBy}. The story gives no recording date, so it is recorded on 20 May, like
+     * {@link #rd8EndBetaAlone}, after the stories that precede it.
+     *
+     * @param beta         Beta
+     * @param acme         ACME
+     * @param a1           account A-1
+     * @param heldByA1     the {@code HeldBy} relationship between A-1 and Beta (RD-5)
+     * @param owns         the {@code Owns} relationship between ACME and Beta (RD-2)
+     * @param employs      the {@code Employs} relationship between Beta and Alice (RD-3)
+     * @param customerRole Beta's customer role (RD-4)
+     * @param playedBy     the {@code PlayedBy} relationship between the role and Beta (RD-4)
+     * @return the recording
+     */
+    public static Recording rd8EndBeta(Ref beta, Ref acme, Ref a1, Ref heldByA1, Ref owns, Ref employs,
+            Ref customerRole, Ref playedBy) {
+        return new Recording(on(5, 20), Transaction.by(PRINCIPAL)
+                .endDate(beta, on(6, 1))
+                .endDate(heldByA1, on(6, 1))
+                .relate(HELD_BY_A1_MOVED, "HeldBy", a1, acme, from(6, 1), values())
+                .endDate(owns, on(6, 1))
+                .endDate(employs, on(6, 1))
+                .endDate(customerRole, on(6, 1))
+                .endDate(playedBy, on(6, 1))
+                .build());
+    }
+
+    /**
      * RD-9, the first part: ACME has the LEI {@link #LEI} from 1 January. The story gives no date, so it is recorded
      * on 5 January, the day ACME is.
      *
@@ -188,6 +301,21 @@ public final class ReferenceStories {
     public static Recording rd12GammaWrongCheckDigits() {
         return new Recording(on(3, 1), Transaction.by(PRINCIPAL)
                 .create(GAMMA, "Organization", from(3, 1), values("name", "Gamma", "lei", LEI_WRONG_CHECK_DIGITS))
+                .build());
+    }
+
+    /**
+     * RD-13. Recorded 1 April: Gamma, an organization named by {@link #GAMMA}, is created and owns 50% of Beta from
+     * 1 April, through a relationship named by {@link #GAMMA_OWNS_BETA}. It is rejected while ACME owns 55% of Beta,
+     * because the owners of Beta would hold 105%.
+     *
+     * @param beta Beta
+     * @return the recording
+     */
+    public static Recording rd13GammaOwnsBeta(Ref beta) {
+        return new Recording(on(4, 1), Transaction.by(PRINCIPAL)
+                .create(GAMMA, "Organization", from(4, 1), values("name", "Gamma"))
+                .relate(GAMMA_OWNS_BETA, "Owns", GAMMA, beta, from(4, 1), values("share", 50))
                 .build());
     }
 

@@ -9,7 +9,8 @@ import java.util.Optional;
 
 /**
  * The proof that a transaction was committed (capability {@code transactions}): when and at which basis it was
- * recorded, which entities and relationships it created, and who and why it recorded.
+ * recorded, which entities and relationships it created and which ones the composition of its writes ended, and who and
+ * why it recorded.
  *
  * <p>A transaction with an idempotency key that is submitted again gets the receipt of the first submission.
  *
@@ -18,6 +19,11 @@ import java.util.Optional;
  * @param temporaryIds    the ID of every entity or relationship the transaction named with a temporary ID, in the
  *                        order of the writes; an {@link EntityId} or a {@link RelationshipId}
  * @param created         the ID of every entity and relationship the transaction created, in the order of the writes
+ * @param ended           the ID of every relationship and entity that the engine ended because a composition ends with
+ *                        its source (capability {@code relationships}), and that none of the transaction's own
+ *                        writes ended: for each entity that a write ended, in the order of the writes, each of its
+ *                        composition relationships in the order of their IDs followed by its target, and then the
+ *                        compositions of that target, each ID once
  * @param principal       who submitted the transaction
  * @param onBehalfOf      the party the principal acted for, if given
  * @param reason          why the transaction was submitted, if given
@@ -28,6 +34,7 @@ public record Receipt(
         Instant transactionTime,
         Map<TemporaryId, Id> temporaryIds,
         List<Id> created,
+        List<Id> ended,
         String principal,
         Optional<String> onBehalfOf,
         Optional<String> reason,
@@ -41,6 +48,7 @@ public record Receipt(
         Objects.requireNonNull(transactionTime, "transactionTime");
         temporaryIds = Copies.map(temporaryIds, "temporaryIds");
         created = List.copyOf(created);
+        ended = List.copyOf(ended);
         Objects.requireNonNull(principal, "principal");
         Objects.requireNonNull(onBehalfOf, "onBehalfOf");
         Objects.requireNonNull(reason, "reason");

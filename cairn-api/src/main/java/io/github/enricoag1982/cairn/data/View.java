@@ -5,14 +5,15 @@ import io.github.enricoag1982.cairn.schema.Schema;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
  * An immutable view of a store, bound to {@linkplain Coordinates coordinates} when it is created (ADR-0013,
  * capability {@code views}). Every read through one view returns the same answer, whatever is committed later, and
  * never waits for a writer.
  *
- * <p>Values are reported under the attribute names of the view's {@linkplain #schema() schema}, in the order of its
- * attributes, and in the attribute's value type in that schema.
+ * <p>Values, of entities and of relationships, are reported under the attribute names of the view's
+ * {@linkplain #schema() schema}, in the order of its attributes, and in the attribute's value type in that schema.
  */
 public interface View {
 
@@ -66,4 +67,71 @@ public interface View {
      *         the basis
      */
     List<EntityState> timeline(EntityId id);
+
+    /**
+     * Reads a relationship at the view's effective time, as known at its basis.
+     *
+     * @param id the relationship's ID
+     * @return the relationship's state; empty if the relationship does not exist at the effective time, was not yet
+     *         recorded at the basis, or the ID is not that of a relationship
+     */
+    Optional<RelationshipState> relationship(RelationshipId id);
+
+    /**
+     * Reads the timeline of a relationship as known at the view's basis: every version across effective time. The
+     * view's effective time does not matter.
+     *
+     * @param id the relationship's ID
+     * @return the versions, ordered by the start of their effective periods; empty if the relationship was not recorded
+     *         at the basis
+     */
+    List<RelationshipState> relationshipTimeline(RelationshipId id);
+
+    /**
+     * Navigates from an entity along the relationships that exist at the view's effective time. A relationship type's
+     * name (or one of its aliases) leads from the source of its relationships to their targets, and its inverse name (or
+     * one of its inverse aliases) from the target to the source; relationships of the type's subtypes are included.
+     * For a symmetric relationship type either name leads from both ends. Names are compared without regard to case.
+     *
+     * @param from the entity to navigate from; one that does not exist at the effective time has no relationships
+     * @param name the name of a relationship type or the inverse name of one in the view's schema, such as {@code Owns}
+     *             or {@code ownedBy}
+     * @return the relationships and the entities at their other ends, ordered by the ID of the relationship; each
+     *         relationship at most once
+     * @throws IllegalArgumentException if the view's schema has no relationship type or inverse name of that name
+     */
+    List<Link> navigate(EntityId from, String name);
+
+    /**
+     * Navigates like {@link #navigate}, but across effective time: every version of every relationship that leads away
+     * from the entity by the name at some effective time, as known at the view's basis. The view's effective time does
+     * not matter. A rule that checks a sum over the relationships of an entity reads the instants at which they start,
+     * end or change from the periods of these versions.
+     *
+     * @param from the entity to navigate from
+     * @param name the name of a relationship type or the inverse name of one, as for {@link #navigate}
+     * @return the versions of the relationships, ordered by the ID of the relationship and then by the start of the
+     *         version's period; empty if the entity has no such relationship at any time
+     * @throws IllegalArgumentException if the view's schema has no relationship type or inverse name of that name
+     */
+    List<RelationshipState> navigateTimeline(EntityId from, String name);
+
+    /**
+     * Traverses relationships recursively from an entity, breadth first, along the relationships that
+     * {@linkplain #navigate navigation} finds by a name and that satisfy a condition. The entities one relationship
+     * away are visited first, in the order of {@link #navigate}, then those two away, and so on. Each entity is visited
+     * at most once, through the first relationship that reached it, so a cycle ends the traversal; the entity the
+     * traversal starts from is not part of the result, even if a cycle leads back to it.
+     *
+     * @param from     the entity to start from
+     * @param name     the name of a relationship type or the inverse name of one, as for {@link #navigate}
+     * @param follow   the condition a relationship must satisfy to be followed; it sees the relationship as this view
+     *                 reads it
+     * @param maxDepth the largest number of relationships to follow from the start; 0 follows none
+     * @return the entities reached, each with its depth and the relationship it was reached through, in the order of
+     *         the traversal
+     * @throws IllegalArgumentException if the view's schema has no relationship type or inverse name of that name, or
+     *                                  {@code maxDepth} is negative
+     */
+    List<Step> traverse(EntityId from, String name, Predicate<RelationshipState> follow, int maxDepth);
 }

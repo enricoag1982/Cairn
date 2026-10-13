@@ -2,7 +2,8 @@ package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
-import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.data.RelationshipId;
+import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Schema;
@@ -19,16 +20,16 @@ import java.util.TreeMap;
 
 /**
  * The view that rules read through (design D3 of {@code add-entity-rules}): the state a transaction would produce. It
- * takes the latest committed timelines of the store and overlays the working timelines of the transaction, with the
- * schema the transaction would produce. Its basis is the prospective basis of the transaction, and the working segments
- * carry it as their recorded basis.
+ * takes the latest committed timelines of the store, of entities and of relationships, and overlays the working
+ * timelines of the transaction, with the schema the transaction would produce. Its basis is the prospective basis of
+ * the transaction, and the working segments carry it as their recorded basis.
  *
  * <p>The view is read-only and valid only while the rules of the transaction run: in a dry run, or if the commit is
  * rejected, the prospective basis later names another commit. The transaction holds the store's writer lock, so the
  * committed timelines do not change underneath it. All views of a transaction share one {@link Source}, which is
  * created once; {@link Source#at(Instant)} makes the view at an effective time.
  */
-final class ProvisionalView implements View {
+final class ProvisionalView extends NavigableView {
 
     /**
      * An entity as the transaction would leave it.
@@ -40,14 +41,31 @@ final class ProvisionalView implements View {
     }
 
     /**
+     * A relationship as the transaction would leave it.
+     *
+     * @param type     the relationship's type
+     * @param source   the entity at its source end
+     * @param target   the entity at its target end
+     * @param timeline its timeline after the transaction
+     */
+    record OverlaidRelationship(TypeId type, EntityId source, EntityId target, Timeline timeline) {
+    }
+
+    /**
      * What the views of one transaction share.
      *
-     * @param basis   the basis the transaction would get
-     * @param index   the schema the transaction would produce
-     * @param stored  the entities of the store, of which the latest timelines are the committed state
-     * @param overlay the entities the transaction creates or changes, with the timelines it would give them
+     * @param basis                the basis the transaction would get
+     * @param index                the schema the transaction would produce
+     * @param stored               the entities of the store, of which the latest timelines are the committed state
+     * @param overlay              the entities the transaction creates or changes, with the timelines it would give
+     *                             them
+     * @param storedRelationships  the relationships of the store, of which the latest timelines are the committed state
+     * @param relationshipOverlay  the relationships the transaction creates or changes, with the timelines it would
+     *                             give them
      */
-    record Source(Basis basis, SchemaIndex index, Map<EntityId, StoredEntity> stored, Map<EntityId, Overlaid> overlay) {
+    record Source(Basis basis, SchemaIndex index, Map<EntityId, StoredEntity> stored, Map<EntityId, Overlaid> overlay,
+            Map<RelationshipId, StoredRelationship> storedRelationships,
+            Map<RelationshipId, OverlaidRelationship> relationshipOverlay) {
 
         /** The view of the transaction's state at an effective time. */
         ProvisionalView at(Instant effectiveAt) {
@@ -62,6 +80,14 @@ final class ProvisionalView implements View {
             }
             StoredEntity entity = stored.get(id);
             return entity == null ? Optional.empty() : Optional.of(new Overlaid(entity.type(), entity.latest()));
+        }
+
+        private Optional<OverlaidRelationship> findRelationship(RelationshipId id) {
+            OverlaidRelationship overlaid = relationshipOverlay.get(id);
+            if (overlaid != null) {
+                return Optional.of(overlaid);
+            }
+            return Optional.ofNullable(storedRelationships.get(id)).map(ProvisionalView::committed);
         }
     }
 
@@ -130,5 +156,67 @@ final class ProvisionalView implements View {
 
     private Optional<EntityState> state(EntityId id, Overlaid entity, Optional<Segment> segment) {
         return segment.flatMap(found -> EntityStates.of(source.index(), id, entity.type(), found));
+    }
+
+    @Override
+    public Optional<RelationshipState> relationship(RelationshipId id) {
+        Objects.requireNonNull(id, "id");
+        return source.findRelationship(id)
+                .flatMap(relationship -> relationshipState(id, relationship,
+                        relationship.timeline().at(effectiveAt)));
+    }
+
+    @Override
+    public List<RelationshipState> relationshipTimeline(RelationshipId id) {
+        Objects.requireNonNull(id, "id");
+        List<RelationshipState> states = new ArrayList<>();
+        source.findRelationship(id).ifPresent(relationship -> {
+            for (Segment segment : relationship.timeline().segments()) {
+                relationshipState(id, relationship, Optional.of(segment)).ifPresent(states::add);
+            }
+        });
+        return List.copyOf(states);
+    }
+
+    @Override
+    SchemaIndex index() {
+        return source.index();
+    }
+
+    @Override
+    String schemaName() {
+        return "The schema of the transaction";
+    }
+
+    @Override
+    List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end) {
+        Map<RelationshipId, OverlaidRelationship> matching = new TreeMap<>();
+        for (StoredRelationship relationship : source.storedRelationships().values()) {
+            if (!source.relationshipOverlay().containsKey(relationship.id())) {
+                matching.put(relationship.id(), committed(relationship));
+            }
+        }
+        matching.putAll(source.relationshipOverlay());
+        List<RelationshipState> states = new ArrayList<>();
+        matching.forEach((id, relationship) -> {
+            if (types.contains(relationship.type())
+                    && (relationship.source().equals(end) || relationship.target().equals(end))) {
+                for (Segment segment : relationship.timeline().segments()) {
+                    relationshipState(id, relationship, Optional.of(segment)).ifPresent(states::add);
+                }
+            }
+        });
+        return states;
+    }
+
+    private static OverlaidRelationship committed(StoredRelationship relationship) {
+        return new OverlaidRelationship(relationship.type(), relationship.source(), relationship.target(),
+                relationship.latest());
+    }
+
+    private Optional<RelationshipState> relationshipState(RelationshipId id, OverlaidRelationship relationship,
+            Optional<Segment> segment) {
+        return segment.flatMap(found -> RelationshipStates.of(source.index(), id, relationship.type(),
+                relationship.source(), relationship.target(), found));
     }
 }

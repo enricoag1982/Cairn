@@ -203,20 +203,23 @@ public enum ProblemCode {
     IDEMPOTENCY_KEY_REUSED("An idempotency key identifies one transaction: a transaction with the same writes, "
             + "principal, party and reason is a retry and gets the first receipt, any other is rejected. Use a new key "
             + "for a new transaction."),
-    /** A rule found that a version of an entity breaks it. */
-    RULE_VIOLATION("A rule that the entity's type, or one of its supertypes, names found that a version of the entity "
-            + "breaks it. The problem's rule code, qualified by the rule's name, says which check failed, and the "
-            + "schema registry lists the codes of every rule with an explanation. Change the values, or the other "
-            + "entities that the rule reads, as the message says."),
-    /** A rule threw, tried to write, reported a code or an attribute that it must not, or cannot check entities. */
+    /** A rule found that a version of an entity or of a relationship breaks it. */
+    RULE_VIOLATION("A rule that the type of an entity or relationship, or one of its supertypes, names found that a "
+            + "version of the entity or relationship breaks it. The problem's rule code, qualified by the rule's name, "
+            + "says which check failed, and the schema registry lists the codes of every rule with an explanation. "
+            + "Change the values, or the other entities and relationships that the rule reads, as the message says."),
+    /** A rule threw, tried to write, reported a code or an attribute that it must not, or cannot check its subject. */
     RULE_FAILED("A rule gave no result: it threw an exception or an error, tried to write, reported a code that its "
-            + "description does not declare or an attribute that the entity's type does not have, or is not a rule "
-            + "for entities. The found details give the exception's message, the code or the attribute. The fault is "
-            + "in the rule, not in the transaction: whoever maintains the rule has to correct it."),
+            + "description does not declare or an attribute that the type of the entity or relationship does not "
+            + "have, or is not a rule for the kind of type that names it (an entity rule for a relationship type, or "
+            + "a relationship rule for an entity type). The found details give the exception's message, the code or "
+            + "the attribute. The fault is in the rule, not in the transaction: whoever maintains the rule has to "
+            + "correct it."),
     /** A type names a rule whose code the store does not have. */
-    RULE_UNAVAILABLE("A type names a rule that the store declares but has no code for, so every write of an entity of "
-            + "that type, or of one of its subtypes, is rejected, whatever the write changes. Create the store with "
-            + "the rule's code, or register a schema in which the type no longer names the rule."),
+    RULE_UNAVAILABLE("A type names a rule that the store declares but has no code for, so every write of an entity "
+            + "or relationship of that type, or of one of its subtypes, is rejected, whatever the write changes. "
+            + "Create the store with the rule's code, or register a schema in which the type no longer names the "
+            + "rule."),
     /** A write relates entities with a name that is not a relationship type. */
     UNKNOWN_RELATIONSHIP_TYPE("A write relates two entities with a type name that the schema does not have as a "
             + "relationship type. Type names and aliases are compared without regard to case. Correct the name, which "

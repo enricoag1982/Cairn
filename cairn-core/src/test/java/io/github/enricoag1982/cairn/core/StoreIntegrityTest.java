@@ -21,6 +21,7 @@ import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
+import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
@@ -32,6 +33,7 @@ import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.ValueType;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -631,6 +633,134 @@ class StoreIntegrityTest {
                 .endDate(relationship(estate.estate, new TemporaryId("tagged")), on(6, 1)).build());
 
         assertProblem(only(problems), ProblemCode.RELATIONSHIP_OUTLIVES_END, hasAnnex.value());
+    }
+
+    // ------------------------------------------------------------------ what cascades ended, in the receipt
+
+    @Test
+    void theReceiptListsTheRelationshipsAndEntitiesThatCascadesEndedInTheOrderOfTheCascade() {
+        Estate estate = new Estate();
+        EntityId region = entity(estate.estate, REGION);
+        RelationshipId tagged = relationship(estate.estate, new TemporaryId("tagged"));
+
+        Receipt receipt = estate.store.commit(transaction().endDate(region, on(6, 1)).endDate(tagged, on(6, 1))
+                .build());
+
+        assertThat(receipt.ended()).containsExactly(relationship(estate.estate, new TemporaryId("hasSite")),
+                entity(estate.estate, SITE), relationship(estate.estate, new TemporaryId("hasRoom")),
+                entity(estate.estate, ROOM));
+        assertThat(receipt.ended()).as("not what the writes ended themselves").doesNotContain(region, tagged);
+        assertThat(receipt.created()).isEmpty();
+    }
+
+    @Test
+    void whatTheWritesEndedThemselvesIsNotListedEvenIfTheCascadeWouldHaveEndedIt() {
+        Estate estate = new Estate();
+        EntityId region = entity(estate.estate, REGION);
+        EntityId site = entity(estate.estate, SITE);
+
+        Receipt receipt = estate.store.commit(transaction()
+                .endDate(region, on(6, 1))
+                .endDate(relationship(estate.estate, new TemporaryId("tagged")), on(6, 1))
+                .endDate(relationship(estate.estate, new TemporaryId("hasSite")), on(6, 1))
+                .endDate(site, on(6, 1)).build());
+
+        assertThat(receipt.ended()).containsExactly(relationship(estate.estate, new TemporaryId("hasRoom")),
+                entity(estate.estate, ROOM));
+    }
+
+    @Test
+    void aCompositionThatEndsAtAnotherInstantIsListedWhenTheCascadeShortensIt() {
+        Estate estate = new Estate();
+        RelationshipId hasSite = relationship(estate.estate, new TemporaryId("hasSite"));
+        estate.store.commit(transaction().endDate(hasSite, on(9, 1))
+                .endDate(relationship(estate.estate, new TemporaryId("tagged")), on(9, 1))
+                .endDate(entity(estate.estate, SITE), on(9, 1)).build());
+
+        Receipt receipt = estate.store.commit(transaction()
+                .endDate(entity(estate.estate, REGION), on(6, 1))
+                .endDate(relationship(estate.estate, new TemporaryId("tagged")), on(6, 1)).build());
+
+        assertThat(receipt.ended()).contains(hasSite, entity(estate.estate, SITE));
+    }
+
+    @Test
+    void theCompositionsOfOneSourceAreListedInTheOrderOfTheirRelationshipIdsNotOfTheirTargets() {
+        Estate estate = new Estate();
+        EntityId site = entity(estate.estate, SITE);
+        TemporaryId roomB = new TemporaryId("roomB");
+        TemporaryId roomA = new TemporaryId("roomA");
+        Receipt rooms = estate.store.commit(transaction()
+                .create(roomB, "Room", from(1, 1), values("name", "B"))
+                .create(roomA, "Room", from(1, 1), values("name", "A"))
+                .relate(new TemporaryId("hasA"), "HasRoom", site, roomA, from(1, 1), values())
+                .relate(new TemporaryId("hasB"), "HasRoom", site, roomB, from(1, 1), values()).build());
+        assertThat(entity(rooms, roomB)).as("created first, so with the smaller ID").isLessThan(entity(rooms, roomA));
+
+        Receipt receipt = estate.store.commit(transaction().endDate(site, on(6, 1))
+                .endDate(relationship(estate.estate, new TemporaryId("tagged")), on(6, 1))
+                .endDate(relationship(estate.estate, new TemporaryId("hasSite")), on(6, 1)).build());
+
+        assertThat(receipt.ended()).containsExactly(relationship(estate.estate, new TemporaryId("hasRoom")),
+                entity(estate.estate, ROOM), relationship(rooms, new TemporaryId("hasA")), entity(rooms, roomA),
+                relationship(rooms, new TemporaryId("hasB")), entity(rooms, roomB));
+    }
+
+    @Test
+    void theListFollowsTheOrderOfTheEntitiesThatTheWritesEnd() {
+        TemporaryId delta = new TemporaryId("delta");
+        TemporaryId office = new TemporaryId("office");
+        Receipt deltaAddress = reference.commit(newAddress(transaction()
+                .create(delta, "Organization", from(1, 1), values("name", "Delta")), HOME)
+                .relate(new TemporaryId("deltaHome"), "HasAddress", delta, HOME, from(1, 1), values()).build());
+        Receipt aliceAddress = reference.commit(newAddress(transaction(), office)
+                .relate(new TemporaryId("aliceOffice"), "HasAddress", alice, office, from(1, 1), values()).build());
+        EntityId deltaId = entity(deltaAddress, delta);
+        List<Id> deltaEnded = List.of(relationship(deltaAddress, new TemporaryId("deltaHome")),
+                entity(deltaAddress, HOME));
+        List<Id> aliceEnded = List.of(relationship(aliceAddress, new TemporaryId("aliceOffice")),
+                entity(aliceAddress, office));
+
+        Receipt aliceFirst = reference.commit(transaction().endDate(alice, on(6, 1)).endDate(deltaId, on(6, 1))
+                .build());
+
+        assertThat(aliceFirst.ended()).containsExactlyElementsOf(concat(aliceEnded, deltaEnded));
+    }
+
+    private static List<Id> concat(List<Id> first, List<Id> second) {
+        List<Id> all = new ArrayList<>(first);
+        all.addAll(second);
+        return all;
+    }
+
+    @Test
+    void compositionsCreatedInTheSameTransactionAreListedAsEndedAndAsCreated() {
+        Receipt receipt = reference.commit(newAddress(transaction(), HOME)
+                .relate(new TemporaryId("hasAddress"), "HasAddress", alice, HOME, from(1, 1), values())
+                .endDate(alice, on(6, 1)).build());
+
+        assertThat(receipt.ended()).containsExactly(relationship(receipt, new TemporaryId("hasAddress")),
+                entity(receipt, HOME));
+        assertThat(receipt.created()).containsExactlyElementsOf(receipt.ended().reversed());
+    }
+
+    @Test
+    void aTransactionWithoutCascadesListsNothingAndASubmissionRepeatedGetsTheSameReceipt() {
+        reference.commit(newAddress(transaction(), HOME).relate("HasAddress", alice, HOME, from(1, 1), values())
+                .build());
+
+        Receipt plain = reference.commit(transaction().patch(acme, from(1, 1), values("name", "ACME Two")).build());
+        Receipt endingAlone = reference.commit(transaction().endDate(beta, on(6, 1))
+                .endDate(heldByA1, on(6, 1)).relate("HeldBy", a1, acme, from(6, 1), values()).build());
+        Transaction withAddressEnded = transaction().idempotencyKey("end-alice").endDate(alice, on(7, 1)).build();
+        Receipt first = reference.commit(withAddressEnded);
+        Receipt again = reference.commit(withAddressEnded);
+
+        assertThat(plain.ended()).isEmpty();
+        assertThat(endingAlone.ended()).isEmpty();
+        assertThat(first.ended()).hasSize(2);
+        assertThat(again).isEqualTo(first);
+        assertThat(again.ended()).isEqualTo(first.ended());
     }
 
     // ------------------------------------------------------------------ dry runs, order and rules
