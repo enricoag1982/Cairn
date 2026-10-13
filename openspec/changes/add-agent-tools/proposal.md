@@ -9,7 +9,7 @@ This change adds an adapter that publishes the API as tools over the Model Conte
 ## What Changes
 
 - A new adapter module that serves a store as MCP tools:
-  - describe: the stored schema as schema documents, the available rules, the problem codes and their explanations, and the JSON Schemas of documents, payloads and type values
+  - describe: the stored schema as schema documents, the available rules, and the approval policy; the JSON Schemas of documents, payloads and type values; and the explanations of problem codes
   - plan and register a schema document
   - dry-run and commit a transaction payload
   - read an entity or relationship, list the entities of a type, read a timeline, navigate, and traverse without a condition

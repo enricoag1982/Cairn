@@ -21,3 +21,11 @@
 - [x] 4.1 Add `Payload` to `docs/glossary.md`
 - [x] 4.2 Update `docs/architecture/README.md` and bump `last-reviewed`
 - [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+
+## 5. Drift-review fixes
+
+- [ ] 5.1 Always write a state's `values`; locate `@transaction.<key>` at that top-level key; write problem JSON keys in record order
+- [ ] 5.2 Generated schemas: patterns for dates and instants, and `values` required in `create` and `relate` branches of types with required attributes
+- [ ] 5.3 Javadoc and explanations: instants accept offsets and are converted to UTC (`Payloads`, the `instant` definition of the transactions schema, `INVALID_VALUE`); `Problem.path` with `@write.<n>.<attribute>`; the stale `IRegexp` comment about exporting
+- [ ] 5.4 Tests for the new scenarios (patching a stored relationship by its ID, a replace without values, a receipt as JSON); verify `./gradlew build` passes
+

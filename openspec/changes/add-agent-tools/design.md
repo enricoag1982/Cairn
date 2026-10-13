@@ -30,7 +30,9 @@ Agents use a store through tools (ADR-0017, commitment 7) that are adapters over
 - `AgentTools` holds one method per tool, taking and returning JSON text. It is built from a `Store`, an `AgentPolicy` and an `ApprovalQueue`.
 - `McpAdapter` registers every handler with the SDK's synchronous server: name, description, input JSON Schema, and a call that returns the handler's JSON as text content. A handler never throws for bad input; it returns problems.
 - Tool inputs (JSON objects): `cairn_describe {}`; `cairn_json_schema { kind: "document" | "payload" | "values", type? }`; `cairn_explain_problem { code }`; `cairn_plan_schema { document }`; `cairn_register_schema { document, reason? }`; `cairn_dry_run { payload }`; `cairn_commit { payload }`; `cairn_read_entity { id, effectiveAt, knownAt? }`; `cairn_read_relationship { id, effectiveAt, knownAt? }`; `cairn_list_entities { type, effectiveAt, knownAt? }`; `cairn_timeline { id, knownAt? }`; `cairn_navigate { id, name, effectiveAt, knownAt? }`; `cairn_traverse { id, name, maxDepth, effectiveAt, knownAt? }`; `cairn_approval_status { requestId }`. `knownAt` is `{ basis: n }` or `{ transactionTime: "…" }`.
-- Outputs use the JSON forms of `json-payloads`; reads add `{ effectiveAt, basis }`.
+- `document` and `payload` inputs are strings holding the text, so that problems keep lines and columns. Payloads are read with `IdLookup.from` the store's latest view, for dry runs, commits and approved requests alike; `cairn_timeline` and the reads take an ID and use the lookup to tell entities from relationships.
+- Outputs reuse the JSON forms of `json-payloads` where they exist; the adapter defines the others with Jackson (which the MCP SDK brings): a plan `{ outcome, changes: [{ path, description, compatible, hint }], problems }`, a registration `{ outcome: "applied" | "unchanged" | "rejected" | "pending", basis?, transactionTime?, problems?, request? }`, a dry run `{ outcome: "wouldCommit" | "rejected", problems? }`, a commit `{ outcome: "committed" | "rejected" | "pending", receipt?, problems?, request? }`, rule descriptors `{ name, version, description, appliesTo, codes, hasCode }`, explanations `{ code, explanation }`, and approval requests (D4). Reads wrap the `json-payloads` form as `{ effectiveAt, basis, result }`.
+- `cairn_json_schema` for an unknown type name returns an `UNKNOWN_ENTITY_TYPE` problem instead of the exception `JsonSchemas.values` throws.
 
 ### D3. Describing the store
 
@@ -45,7 +47,7 @@ Agents use a store through tools (ADR-0017, commitment 7) that are adapters over
 
 ### D5. Principals
 
-- `AgentTools` is created with the principal it acts as and an optional party acted for. Payloads must name that principal or no other: a payload's `principal` other than the adapter's is `PRINCIPAL_MISMATCH`, located at `/principal`; a payload without `onBehalfOf` gets the configured one.
+- `AgentTools` is created with the principal it acts as and an optional party acted for. A payload must name the adapter's principal: another `principal` is `PRINCIPAL_MISMATCH` with the path `@transaction.principal`, which `json-payloads` locates at the payload's `principal` key; a payload without `onBehalfOf` gets the configured one.
 - Schema registrations through the tools record the adapter's principal (D6).
 
 ### D6. Who and why for schema changes

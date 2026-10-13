@@ -34,11 +34,12 @@ It is a living document: update it in the same pull request that changes the arc
 flowchart LR
     app([Application on the JVM]) -->|embeds and calls| cairn[Cairn engine<br/>cairn-api + cairn-core]
     doc([Schema document<br/>*.cairn.yaml, one origin]) -->|read by cairn-documents| model([Schema definition<br/>types of one origin])
+    payload([Transaction payload<br/>YAML or JSON]) -->|read by cairn-documents| cairn
     model -->|registered by the application| cairn
 ```
 
 Cairn runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)). It has no external systems yet.
-AI agents are planned to reach it through tools over the same API ([ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md)); nothing for them is built yet.
+AI agents reach it through text formats over the same API ([ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md)): schema documents, transaction payloads, JSON results and generated JSON Schemas, in `cairn-documents`. Tools that serve these to agents come with `add-agent-tools`.
 
 ## 4. Solution strategy
 
@@ -120,10 +121,10 @@ A dry run follows the same path and stops before appending: it records nothing, 
 
 <!-- Error handling, security, observability, persistence, configuration, testing strategy. -->
 
-- **Errors:** bad data never throws. Registrations, plans, document reading, commits and dry runs return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value, a hint, its location in the document and the code of the rule that reported it. A rule that fails is reported as a problem too. Exceptions mean programming errors in the caller's code: a missing value, a blank temporary ID, a `Multiplicity` other than 0 or 1 to 1 or unbounded, listing a type or navigating or traversing by a name that the view's schema does not have, a negative traversal depth, the same rule given twice or a rule without a description, a rule that the service loader cannot load, or a write attempted from inside a rule.
+- **Errors:** bad data never throws. Registrations, plans, reading schema documents and payloads, commits and dry runs return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value, a hint, its location in the document or payload and the code of the rule that reported it. A rule that fails is reported as a problem too. Exceptions mean programming errors in the caller's code: a missing value, a blank temporary ID, a `Multiplicity` other than 0 or 1 to 1 or unbounded, listing a type or navigating or traversing by a name that the view's schema does not have, a negative traversal depth, asking for the JSON Schema of a type the schema does not have, the same rule given twice or a rule without a description, a rule that the service loader cannot load, or a write attempted from inside a rule.
 - **Concurrency:** schema registrations and data commits of a store share one writer lock and one commit sequence (the single writer). Committed data is appended and then published through the latest basis, so readers never lock and never see a partial commit. Rules run on the writer thread, may only read, and must be thread-safe, because stores that share settings call them concurrently; the store refuses writes while rules run.
 - **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase, across schema and data transactions. Effective periods are half-open UTC instants with microsecond precision.
-- **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md), and `ReferenceModelDocumentTest` keeps its schema document in step with the fixture. `JsonSchemaDriftTest` keeps the published JSON Schema in step with the reader. `ReferenceStoriesTest` keeps `ReferenceStories` in step with the story table of the reference domain. Tests run with compact object headers on.
+- **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md), and `ReferenceModelDocumentTest` keeps its schema document in step with the fixture. `JsonSchemaDriftTest` keeps the published JSON Schema in step with the reader, and `TransactionSchemaTest` the generated payload schema with the payload reader. `EcmaScriptPatternsTest` checks that `cairn-documents` translates patterns as the engine does, and `ReferenceStoryPayloadsTest` that every reference story written as a payload is valid against the generated schema and reads back. `ReferenceStoriesTest` keeps `ReferenceStories` in step with the story table of the reference domain. Tests run with compact object headers on.
 
 ## 9. Architecture decisions
 
