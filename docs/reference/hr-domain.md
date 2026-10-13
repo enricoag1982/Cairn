@@ -12,11 +12,10 @@ The [reference domain](reference-domain.md) stays the engine's own test model; t
 ## Model
 
 ```text
-Person <-EmploymentOf-- Employment --Fills--> Position --BelongsTo--> OrgUnit --PartOf--> OrgUnit
-                         |   |   |                |                    |
-                         |   |   +--EmployedBy--> LegalEntity          +--ManagedBy--> Employment
-                         |   +--WorksAt--> Location   +--OfJob--> Job
-                         +<>-HasLeaveRequest--> LeaveRequest --DecidedBy--> Employment
+Person <--EmploymentOf-- Employment --Fills------> Position --BelongsTo--> OrgUnit --PartOf--> OrgUnit
+                         Employment --EmployedBy--> LegalEntity            OrgUnit --ManagedBy--> Employment
+                         Employment --WorksAt-----> Location               Position --OfJob--> Job
+                         Employment <>-HasLeaveRequest--> LeaveRequest --DecidedBy--> Employment
 ```
 
 | Entity type | Attributes |
@@ -46,8 +45,8 @@ Person <-EmploymentOf-- Employment --Fills--> Position --BelongsTo--> OrgUnit --
 | Rule | Version | Type | What it checks | Code |
 | --- | --- | --- | --- | --- |
 | `no-unit-cycles` | 1 | `PartOf` | Following `PartOf` from a unit never leads back to it. | `cycle` |
-| `decided-by-manager` | 1 | `DecidedBy` | The deciding employment manages the requester's unit, or a unit above it, on the request's first day. | `not-a-manager` |
-| `vacation-within-entitlement` | 1 | `LeaveRequest` | An employment's approved vacation days in a calendar year add up to at most 25. | `over-entitlement` |
+| `decided-by-manager` | 1 | `DecidedBy` | The deciding employment is not the requester, and manages the requester's unit, or a unit above it, on the request's first day. | `not-a-manager`, `own-request` |
+| `vacation-within-entitlement` | 1 | `LeaveRequest` | An employment's approved vacation days, of requests whose first days are in one calendar year, add up to at most 25. | `over-entitlement` |
 | `leave-dates-in-order` | 1 | `LeaveRequest` | The last day is not before the first day. | `last-before-first` |
 
 ## Organization and people
@@ -64,7 +63,7 @@ Units: Brightwater (`BW`), with Engineering (`ENG`) and Sales (`SAL`) below it, 
 | E-006 | Fay Moreau | P-300, Head of Sales (`MGR`) | `SAL` | Berlin | GmbH | 120,000 EUR | `SAL` |
 | E-007 | Gus Lind | P-301, Account Executive (`AE`) | `SAL` | Milan | S.r.l. | 60,000 EUR | |
 
-All employments are permanent, 40 hours a week, effective from 1 January 2026. Locations are in `DE` and `IT`. A leave request is effective from the day it is filed, or from its first day if that is earlier, and so is its decision.
+All employments are permanent, 40 hours a week, effective from 1 January 2026. Locations are in `DE` and `IT`. A leave request is effective from the day it is filed, or from its first day if that is earlier; a decision is effective from the day it is recorded, or from the request's first day if that is earlier.
 
 ## Stories
 
@@ -72,20 +71,20 @@ Dates are in 2026. Each story has a test whose display name starts with its ID; 
 
 | ID | Story | Exercises |
 | --- | --- | --- |
-| HR-1 | Recorded 2 January: the employers, locations, jobs, units with their hierarchy and positions exist from 1 January. | Schema documents, payloads, compositions of the model |
+| HR-1 | Recorded 2 January: the employers, locations, jobs, units with their hierarchy and positions exist from 1 January. | Schema documents, payloads, reference data and the unit hierarchy |
 | HR-2 | Recorded 2 January: the seven people of the table are hired, and the four managers manage their units, from 1 January. | Generated builders, multiplicities |
 | HR-3 | Recorded 10 March: Eli moves to Milan and to Brightwater S.r.l. from 1 July. Effective 30 June Eli works in Berlin; effective 1 July, in Milan. | Future-dated changes |
 | HR-4 | Recorded 15 April: correction, Dev's salary was 72,000 from 1 January. Effective 1 February, as known on 1 April it is 70,000; as known now, 72,000. | Corrections, two time axes |
 | HR-5 | Recorded 1 March: Dev requests vacation from 16 to 20 March, 5 days. Recorded 2 March: Cleo approves it. | Leave requests, approval by the manager |
 | HR-6 | Recorded 3 March: Eli's vacation request for 20 to 24 April, 5 days, decided by Gus, is rejected, because Gus manages none of Eli's units (`decided-by-manager/not-a-manager`). | Rules on relationships, routing along the hierarchy |
-| HR-7 | Recorded 4 March: Dev's approved vacation from 3 to 31 August, 22 days, is rejected, because with HR-5 it makes 27 days in 2026 (`vacation-within-entitlement/over-entitlement`). | Rules that query |
+| HR-7 | Recorded 4 March: Dev's approved vacation from 3 to 31 August, 21 days, is rejected, because with HR-5 it makes 26 days in 2026 (`vacation-within-entitlement/over-entitlement`). | Rules that query |
 | HR-8 | Recorded 5 March: making Brightwater part of Platform is rejected (`no-unit-cycles/cycle`). | Rules that traverse |
 | HR-9 | Effective 31 March: the headcount of each unit with the units below it is `BW` 7, `ENG` 4, `PLT` 3, `SAL` 2. | Queries: traversals, grouping, counts |
 | HR-10 | Effective 31 March: Dev's managers, from the nearest up, are Cleo, Ben and Ana. | Queries along the hierarchy |
 | HR-11 | Recorded 20 May: Gus was sick on 11 and 12 May, 2 days, approved by Fay. Recorded 20 June: Gus leaves on 30 June. Effective 1 July, P-301 is the only vacant position; effective 30 June, none is. | End-dating, vacancies |
-| HR-12 | Recorded 1 October: the principal `dpo` erases Gus's personal data under ticket `DSR-2026-0042`: his person and employment are purged, and with them his sick leave and its decision by Fay. Afterwards, the headcount of `SAL` effective 31 March is 1, and P-301 still exists. | Purges, cascades to compositions, what a purge changes |
+| HR-12 | Recorded 1 October: the principal `dpo` erases Gus's personal data under ticket `DSR-2026-0042`. Purging his person alone is refused, because his employment requires one (`TOO_FEW_RELATIONSHIPS`); his person and employment are purged together, and with them his sick leave and its decision by Fay. Afterwards, the headcount of `SAL` effective 31 March is 1, and P-301 still exists. | Purges, cascades to compositions, what a purge changes |
 | HR-13 | Recorded 1 August: an agent acting as `agent:hr-assistant` hires Hana Kim, E-008, as a Software Engineer in a new position P-213 in `PLT`, in Berlin at Brightwater GmbH for 72,000 EUR from 1 August, through the agent tools; the commit waits for a person's approval, and after approval Hana exists. | Agent tools, payloads, the approval policy |
-| HR-14 | A generated company of 40 employees with a year of hires, transfers, pay changes, leave and terminations, from a fixed seed, reads the same from a durable store after reopening as from an in-memory store, and its headcount equals its active employments at every month end. | Durable stores, scale, consistency |
+| HR-14 | A generated company of 40 employees, in a larger organization than the one above (with the units `OPS` and `QA`, Lisbon, Brightwater Lda in `PT` and the job `SPC`), with a year of hires, transfers, pay changes, leave and terminations, from a fixed seed, reads the same from a durable store after reopening as from an in-memory store, and its headcount equals its active employments at every month end. | Durable stores, scale, consistency |
 
 ## Gaps
 
@@ -93,12 +92,15 @@ What the example could not express directly, found while building it. Each is a 
 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |
-| A rule runs only when a type that names it is written, and a rule is for one type | Ending Cleo's `ManagedBy` of `PLT` after she approved Dev's vacation is accepted, though the decision no longer meets `decided-by-manager`; so is moving the request's first day | Rules that apply to several types, so that every type a rule reads can name it, as [ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md) intends; or re-checking the rules of what depends on a change |
+| A rule runs only when a type that names it is written, and the types that name one rule need a common supertype | Ending Cleo's `ManagedBy` of `PLT` after she approved Dev's vacation would commit, though the decision no longer meets `decided-by-manager` (the HR-5 test shows it); `DecidedBy`, `ManagedBy` and `LeaveRequest` share no supertype, and an entity type and a relationship type never do, so they cannot all name the rule | Rules that apply to several unrelated types, so that every type a rule reads can name it, as [ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md) intends; or re-checking the rules of what depends on a change |
 | Ending an entity does not end the relationships of the targets that its compositions end | Gus leaving (HR-11) must end his sick leave's `DecidedBy` by ID, or the commit is rejected | Cascades that end every relationship of the entities they end, or a way to list all of an entity's relationships |
 | No lookup by a unique attribute | The stories keep IDs from receipts; the agent in HR-13 resolves four codes and names to IDs with `cairn_query` before writing its payload; erasure requests start from a name or number | Reads and payload references by unique key |
 | "At every point in effective time" is the rule author's work | `vacation-within-entitlement` and `no-unit-cycles` collect the instants at which what they read changes, and query or traverse at each | A rule context that lists those instants, or queries over a period |
 | Rules see only the new version | No rule can say that a rejected leave request never changes again | The previous version in the rule context |
-| Typed navigation | Inverse names such as `subunits` and `requester` are strings in rules and queries | Generated constants for relationship names and inverse names |
-| Query ergonomics | A traversal with a depth binding needs the longest builder overload; result cells need casts | Simpler overloads, and typed rows |
-| Derived values | A person's full name is composed by the caller; a leave's `days` is entered, not derived from its dates | Derived attributes (roadmap) |
-| Notifications and access | Approvers learn of a waiting request by polling; every reader, agents included, reads pay | A change feed, and field-level access control (roadmap) |
+| Typed inverse names | Relationship types have `TYPE` constants, but inverse names such as `subunits` and `requester` are strings in rules and queries | Generated constants for inverse names |
+| Query ergonomics | A traversal that binds its depth needs positional `Optional` arguments; result cells need casts | Simpler overloads, and typed rows |
+| Cross-attribute constraints | `leave-dates-in-order` is a Java rule for "the last day is not before the first day" | Declarative constraints across attributes, or CEL expressions, on the [roadmap](../research/2026-10-13-ai-native-schema-and-rules.md#conclusion) |
+| Traversals need a maximum depth | Queries cap the unit hierarchy at 20 levels, so a deeper one would be cut off without notice; rules pass `Integer.MAX_VALUE` and a condition that always holds to `View.traverse` | Traversals to the end, and a `traverse` without a condition |
+| Relationships that record past facts end with their ends | The generated company never ends a manager's employment, because that would end every `DecidedBy` pointing to it, and past decisions would drop out of current views | Relationships that may outlive an end that they only record, such as who decided |
+| Derived values | A person's full name is composed by the caller; a leave's `days` is entered, not derived from its dates | Derived attributes, on the [roadmap](../research/2026-10-13-ai-native-schema-and-rules.md#conclusion) |
+| Notifications and access | Approvers learn of a waiting request by polling; every reader, agents included, reads pay | A change feed, on the [roadmap](../research/2026-10-13-ai-native-schema-and-rules.md#conclusion); field-level access control, which no roadmap names yet |

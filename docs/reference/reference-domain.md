@@ -5,7 +5,7 @@ owner: ""
 
 # Reference domain
 
-A small, made-up enterprise model used for spec scenarios, the conformance suite, examples and benchmarks.
+A small, made-up enterprise model used for spec scenarios, the conformance suite, examples and benchmarks. The [HR domain](hr-domain.md), by contrast, tests the platform end to end, from outside.
 It is not product scope: none of its names (Party, Account, Owns) may appear in the engine, the API or normative requirement text. Scenarios use them as examples.
 It exists because Cairn has no product domain yet, and abstract requirements become testable once they are about concrete data.
 Why it looks like this: [API research note](../research/2026-10-12-graph-system-of-record-api.md).

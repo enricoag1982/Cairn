@@ -21,7 +21,7 @@ The HR domain is described in `docs/reference/hr-domain.md`. Applications use Ca
 
 - `cairn-example-hr`, package `io.github.enricoag1982.cairn.example.hr`, with a `module-info.java` that requires only Cairn's exported modules. `cairn-agent-tools` has no module, so the tests that use it run on the class path, as its own tests do.
 - `src/main/cairn/hr-model.cairn.yaml`: the schema document, origin `hr-model`, version `1.0.0`.
-- Generated types in package `io.github.enricoag1982.cairn.example.hr.model`, into the main source set, by a new convention plugin `cairn.generated-types` in `build-logic/`. It generalizes `cairn.reference-types`: a `JavaExec` task on the runtime class path of `cairn-codegen`, with the documents of `src/main/cairn/` and a package from a Gradle property of the project. `cairn.reference-types` is refactored onto it if that keeps it simple.
+- Generated types in package `io.github.enricoag1982.cairn.example.hr.model`, into the main source set, by a new convention plugin `cairn.generated-types` in `build-logic/`: a `JavaExec` task on the runtime class path of `cairn-codegen`, with the documents of `src/main/cairn/` and the package from the extension `generatedTypes { packageName }` (a subproject's `gradle.properties` is not visible to `providers.gradleProperty`). It also adds `src/main/cairn` to the resources, so the application reads its schema document at run time. `cairn.reference-types` stays as it is: it generates into the test source set with the project's own generator, so moving it onto the new plugin would not be simpler.
 - Main code: the four rules of the domain page, each a subclass of its generated rule base class, listed in `META-INF/services` for the service loader; and `Brightwater`, the stories' data as transactions built with generated builders and payloads.
 
 ### D2. Tests
@@ -35,7 +35,7 @@ The HR domain is described in `docs/reference/hr-domain.md`. Applications use Ca
 
 ### D3. Gaps
 
-When the example meets something Cairn cannot express, the test works around it in the most direct way, the domain page's Gaps section names it, and the research note's gap list is updated. A bug in Cairn is fixed in this change, with a test in the module where it lives.
+When the example meets something Cairn cannot express, the code works around it in the most direct way, and the domain page's Gaps section names it, with what Cairn would need; where a test can show the gap, it does, with an assertion that flips when the gap is closed. The research note keeps its expected gaps and points to the page for those found. A bug in Cairn is fixed in this change, with a test in the module where it lives.
 
 ## Risks / Trade-offs
 
