@@ -7,7 +7,7 @@ You, or your AI agents, define typed entities and relationships, with inheritanc
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which runs Java rules at commit, are built; so are transaction payloads and JSON results, and tools that serve a store to AI agents over the Model Context Protocol; durable storage and queries are not. The core design is recorded in accepted decision records.
+> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which runs Java rules at commit, are built; so are transaction payloads and JSON results, tools that serve a store to AI agents over the Model Context Protocol, and Java types generated from schema documents with a Gradle plugin; durable storage and queries are not. The core design is recorded in accepted decision records.
 
 ## Ideas in one page
 
@@ -31,6 +31,7 @@ The reasoning behind all of this is in the [API research note](docs/research/202
 - [Reference domain](docs/reference/reference-domain.md): the example model used in scenarios and tests
 - [Architecture](docs/architecture/README.md): how it is built
 - [Serve a store to AI agents](docs/guides/serve-a-store-to-ai-agents.md): run the agent server and connect Claude Code or another MCP client
+- [Generate Java types](docs/guides/generate-java-types.md): typed access, builders and rules from your schema documents
 - [Setup status](docs/guides/start-a-new-project-from-this-template.md#status-in-cairn): the template setup steps that are still open
 
 ## How this repository works
