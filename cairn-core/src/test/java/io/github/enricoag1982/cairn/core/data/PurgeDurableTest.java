@@ -41,10 +41,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -383,8 +383,14 @@ class PurgeDurableTest {
 
     // ------------------------------------------------------------------ a rule that purges
 
-    /** How long the thread that stands for close() holds the snapshot lock, at most. */
-    private static final Duration HOLD = Duration.ofSeconds(8);
+    /**
+     * How long the thread that stands for close() holds the snapshot lock, at most. A purge that is refused at once
+     * waits for nothing, so the test asks for less than half of this, which leaves a slow machine many seconds.
+     */
+    private static final Duration HOLD = Duration.ofSeconds(20);
+
+    /** How long a test waits for a thread that it has told to finish. */
+    private static final Duration FINISH = Duration.ofSeconds(30);
 
     /** A rule of the reference domain's Organization that tries to purge, while holding a lock that close() takes first. */
     private static final class PurgingRule implements EntityRule {
@@ -392,6 +398,8 @@ class PurgeDurableTest {
         final AtomicReference<DirectoryStore> store = new AtomicReference<>();
         final AtomicReference<Throwable> outcome = new AtomicReference<>();
         final AtomicReference<Duration> waited = new AtomicReference<>(Duration.ZERO);
+        /** The threads that stood for close() and did not end after they were told to release the lock. */
+        final List<String> stuck = new CopyOnWriteArrayList<>();
         final EntityId target = new EntityId("00000000-0000-7000-8000-0000000000ff");
 
         @Override
@@ -431,12 +439,21 @@ class PurgeDurableTest {
             } finally {
                 waited.set(Duration.ofNanos(System.nanoTime() - start));
                 release.countDown();
+                // The thread unlocks after it is released, so wait for it: the lock is free only once it has ended.
+                try {
+                    closer.join(FINISH.toMillis());
+                    if (closer.isAlive()) {
+                        stuck.add(closer.getName());
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             }
         }
     }
 
     @Test
-    @Timeout(60)
+    @Timeout(120)
     void aRuleThatPurgesIsRefusedBeforeAnyLockIsTakenAndTheRefusalIsCounted() {
         PurgingRule rule = new PurgingRule();
         DirectoryStore store = durable.open(durable.clock, IdGenerators.deterministic(),
@@ -446,6 +463,7 @@ class PurgeDurableTest {
 
         List<Problem> problems = durable.rejectReplay(store, ReferenceStories.rd1Parties());
 
+        assertThat(rule.stuck).as("every thread that held the snapshot lock ended").isEmpty();
         assertThat(rule.outcome.get()).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("running rules");
         assertThat(rule.waited.get()).as("the purge is refused at once, not after the lock is free")
@@ -529,7 +547,7 @@ class PurgeDurableTest {
         store.close();
         Map<String, byte[]> closed = StoreFiles.contents(directory);
         lock.unlock();
-        waiting.join(10_000);
+        waiting.join(FINISH.toMillis());
 
         assertThat(waiting.isAlive()).isFalse();
         assertThat(outcome.get()).isInstanceOf(IllegalStateException.class);
@@ -543,7 +561,7 @@ class PurgeDurableTest {
         DirectoryStore store = durable.openWithReferenceModel();
         Told told = tell(store);
         ReentrantLock lock = store.snapshotLock();
-        List<Object> outcome = new ArrayList<>();
+        List<Object> outcome = new CopyOnWriteArrayList<>();
         lock.lock();
         Thread waiting = new Thread(() -> outcome.add(store.purge(purge(told.alice()))));
         waiting.start();
@@ -554,8 +572,9 @@ class PurgeDurableTest {
         assertThat(outcome).as("the purge waits").isEmpty();
         assertThat(store.view(Coordinates.effectiveAt(on(3, 31))).entity(told.alice())).isPresent();
         lock.unlock();
-        waiting.join(10_000);
+        waiting.join(FINISH.toMillis());
 
+        assertThat(waiting.isAlive()).as("the purge ended").isFalse();
         assertThat(outcome).singleElement().isInstanceOf(PurgeResult.Purged.class);
         assertThat(StoreFiles.filesContaining(directory, "Alice")).isEmpty();
     }
