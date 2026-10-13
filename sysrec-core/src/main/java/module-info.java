@@ -5,4 +5,6 @@
 @SuppressWarnings("module")
 module io.github.enricoag1982.sysrec.core {
     requires transitive io.github.enricoag1982.sysrec;
+
+    exports io.github.enricoag1982.sysrec.core;
 }
