@@ -9,7 +9,7 @@ This page describes the system as it is now, using the [arc42](https://arc42.org
 It is a living document: update it in the same pull request that changes the architecture, and bump `last-reviewed`.
 
 > [!NOTE]
-> **Current state:** only the schema API is built: defining, validating, planning, registering and evolving types (the `type-model` and `schema-evolution` capabilities), and schema documents (`schema-documents`). Entities, relationships, storage and queries are not built yet. The intended design is in accepted ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](../research/2026-10-13-ai-native-schema-and-rules.md). Write "n/a" for sections that do not apply yet instead of deleting them.
+> **Current state:** the schema API is built: defining, validating, planning, registering and evolving types (the `type-model` and `schema-evolution` capabilities), and schema documents (`schema-documents`). Entities are stored in memory with history on two time axes (`transactions`, `entity-versions`, `views`). Relationships, rules at commit, durable storage and queries are not built yet. The intended design is in accepted ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](../research/2026-10-13-ai-native-schema-and-rules.md). Write "n/a" for sections that do not apply yet instead of deleting them.
 > Split a section into its own file in this folder when it outgrows a screen, and link it from here.
 
 ## 1. Introduction and goals
@@ -62,23 +62,49 @@ Accepted, and built one change at a time:
 
 | Building block | Responsibility | Capabilities (specs) |
 | --- | --- | --- |
-| `cairn-api` | Public types: schema definitions and their builders, the resolved schema with descriptions, constraints and rule references, rule descriptors, problems with their details, explained codes and document locations, plans, stored definitions, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model and its rules. | `type-model`, `schema-evolution`, `schema-documents` |
-| `cairn-core` | The engine. Validates definitions against each other and the available rules, compiles them into a resolved schema with schema identifiers, checks compatibility, plans registrations, checks and matches patterns (I-Regexp, with RE2/J), and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. Its only runtime dependency is RE2/J ([ADR-0020](../decisions/0020-write-attribute-patterns-as-i-regexp-and-match-them-in-linear-time.md)). | `type-model`, `schema-evolution` |
+| `cairn-api` | Public types: schema definitions and their builders, the resolved schema with descriptions, constraints and rule references, rule descriptors, problems with their details, explained codes and document locations, plans, stored definitions, identifiers, origins and the `SchemaRegistry` interface (package `schema`); stores, transactions and their writes, receipts, IDs, effective periods, views and entity states (package `data`). No dependencies. Its test fixtures hold the reference domain model, its rules and stories, and a settable test clock. | `type-model`, `schema-evolution`, `schema-documents`, `transactions`, `entity-versions`, `views` |
+| `cairn-core` | The engine. Validates definitions against each other and the available rules, compiles them into a resolved schema with schema identifiers, checks compatibility, plans registrations, checks and matches patterns (I-Regexp, with RE2/J), and keeps the in-memory schema registry with its history. Runs the in-memory store: one writer applies and validates transactions against the state they would produce and appends a timeline per entity and basis, and views read at their basis without waiting. Exports only `SchemaRegistries`, `Stores`, `StoreSettings` and `IdGenerators`; everything else is internal. Its only runtime dependency is RE2/J ([ADR-0020](../decisions/0020-write-attribute-patterns-as-i-regexp-and-match-them-in-linear-time.md)). | `type-model`, `schema-evolution`, `transactions`, `entity-versions`, `views` |
 | `cairn-documents` | Schema documents ([ADR-0012](../decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)): reads YAML 1.2 (and JSON) strictly into an origin and a schema definition, locates every problem in the document, writes definitions as YAML or JSON, and publishes the JSON Schema of the format. Depends on `cairn-api` and SnakeYAML Engine, not on `cairn-core`. | `schema-documents` |
 | `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `cairn.java-library` for every Java module, and `cairn.reference-domain-tests` for modules whose tests read the reference domain page or its schema document. Modules with a `module-info.java` get their whole compile classpath as module path, so that automatic modules such as RE2/J are found. | none |
 
 ```mermaid
 flowchart LR
-    core[cairn-core<br/>validator, compiler,<br/>compatibility checker,<br/>planner, in-memory registry] -->|implements| api[cairn-api<br/>definitions, schema,<br/>rules, plans, SchemaRegistry]
+    core[cairn-core<br/>validator, compiler,<br/>compatibility checker, planner,<br/>in-memory registry and store] -->|implements| api[cairn-api<br/>schema: definitions, rules, plans<br/>data: Store, transactions, views]
     docs[cairn-documents<br/>reader, writer,<br/>JSON Schema] -->|produces definitions for| api
     app([Application, tool or agent]) -->|uses| api
-    app -->|creates a registry with| core
+    app -->|creates a store or registry with| core
     app -->|reads and writes documents with| docs
 ```
 
 ## 6. Runtime view
 
 <!-- Sequence diagrams for the few flows that matter most. -->
+
+A commit, in the in-memory store ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md), [ADR-0008](../decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)):
+
+```mermaid
+sequenceDiagram
+    participant C as Caller
+    participant S as Store (writer lock)
+    participant Q as Commit sequence
+    participant V as View
+    C->>S: commit(transaction)
+    S->>S: idempotency key already used? return its receipt
+    S->>Q: next() basis and transaction time (not advanced yet)
+    S->>S: apply writes to working timelines, IDs from a copy of the generator
+    S->>S: validate the resulting state at every point in effective time
+    alt problems
+        S-->>C: Rejected(problems), nothing recorded
+    else valid
+        S->>S: append timelines under the new basis, keep the generator copy
+        S->>Q: publish(commit)
+        S-->>C: Committed(receipt)
+    end
+    C->>V: view(coordinates) pins a basis and its schema
+    V->>V: reads the timeline at or below its basis, never waits
+```
+
+A dry run follows the same path and stops before appending: it records nothing, uses no basis and reserves no ID.
 
 ## 7. Deployment view
 
@@ -89,8 +115,8 @@ flowchart LR
 <!-- Error handling, security, observability, persistence, configuration, testing strategy. -->
 
 - **Errors:** an invalid schema definition never causes an exception. Registrations, plans and document reading return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value, a hint and its location in the document. Bad input never throws. Exceptions mean programming errors: a missing value, a `Multiplicity` other than 0 or 1 to 1 or unbounded, or a registry given the same rule twice.
-- **Concurrency:** registrations are serialized (the single writer). Each one publishes a new immutable state, so reads never lock.
-- **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase.
+- **Concurrency:** schema registrations and data commits of a store share one writer lock and one commit sequence (the single writer). Committed data is appended and then published through the latest basis, so readers never lock and never see a partial commit.
+- **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase, across schema and data transactions. Effective periods are half-open UTC instants with microsecond precision.
 - **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md), and `ReferenceModelDocumentTest` keeps its schema document in step with the fixture. `JsonSchemaDriftTest` keeps the published JSON Schema in step with the reader. Tests run with compact object headers on.
 
 ## 9. Architecture decisions
