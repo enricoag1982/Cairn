@@ -14,6 +14,7 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
@@ -733,6 +734,29 @@ class SchemaEvolutionScenariosTest {
         assertThat(registry.storedDefinition("crm")).contains(new StoredDefinition(new Origin("crm", "2.0.0"), crm));
         assertThat(registry.storedDefinition("reference-model").orElseThrow().definition())
                 .isEqualTo(ReferenceModel.definition());
+    }
+
+    // ------------------------------------------------------------------ a store's schema registry
+
+    @Test
+    @DisplayName("Scenario: Schema and data at one basis")
+    void schemaAndDataAtOneBasis() {
+        ReferenceStore reference = new ReferenceStore();
+        Basis rd1 = reference.createParties().basis();
+        clock.advance(Duration.ofMinutes(1));
+        Basis withEmail = applied(reference.store.schema().register(ReferenceModel.origin("1.1.0"), withEmail()))
+                .basis();
+
+        var atRd1 = reference.store.view(Coordinates.effectiveAt(ReferenceStore.on(2, 1)).knownAt(rd1));
+        var latest = reference.view(ReferenceStore.on(2, 1));
+
+        assertThat(withEmail).isGreaterThan(rd1);
+        assertThat(atRd1.basis()).isEqualTo(rd1);
+        assertThat(atRd1.schema().entityType("Person").orElseThrow().attribute("email")).isEmpty();
+        assertThat(atRd1.entities("Person")).hasSize(1);
+        assertThat(latest.basis()).isEqualTo(withEmail);
+        assertThat(latest.schema().entityType("Person").orElseThrow().attribute("email")).isPresent();
+        assertThat(latest.entities("Person")).hasSize(1);
     }
 
     // ------------------------------------------------------------------ helpers

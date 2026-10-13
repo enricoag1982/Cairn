@@ -84,11 +84,20 @@ Constraints that shape the approach:
 - Unique attributes are checked for the touched entities against every other entity whose type has the same `AttributeId`, comparing overlapping segments. With scans, the cost is linear in the number of entities, which is acceptable for the in-memory store.
 - Conflict checks compare the entity's timelines at the caller's basis and at the latest basis: per entity, any difference rejects; per attribute, only differences in the attributes the write sets or clears.
 - New problem codes, each with an explanation: `UNKNOWN_ENTITY_TYPE`, `ABSTRACT_ENTITY_TYPE`, `UNKNOWN_ATTRIBUTE`, `VALUE_TYPE_MISMATCH`, `VALUE_OUT_OF_RANGE`, `VALUE_NOT_ALLOWED`, `VALUE_PATTERN_MISMATCH`, `VALUE_LENGTH`, `MISSING_REQUIRED_VALUE`, `DEPRECATED_ATTRIBUTE`, `UNIQUE_VALUE_TAKEN`, `UNKNOWN_ENTITY`, `ENTITY_NOT_EFFECTIVE`, `ENTITY_EXISTS`, `INVALID_ENTITY_ID`, `UNKNOWN_TEMPORARY_ID`, `DUPLICATE_TEMPORARY_ID`, `INVALID_PERIOD`, `CONFLICT`, `MISSING_PRINCIPAL` and `IDEMPOTENCY_KEY_REUSED`.
-- Paths: an entity is `$` and its temporary ID, or its ID; an attribute is appended with a dot (`$acme.name`, `0199...e1.balance`); problems of the transaction itself use `@transaction`. Problems about a value fill in expected and found; unknown names get the closest-name hint.
+- Paths: an entity is `$` and its temporary ID, its ID, or, when it was created without either, `@write.<n>` for the write that creates it, so that a dry run and a commit report the same path; an attribute is appended with a dot (`$acme.name`, `0199...e1.balance`, `@write.1.name`); problems of the transaction itself use `@transaction`. Problems come in a fixed order: the transaction's, then each write's in order, then each touched entity's in first-touch order, attributes in schema order. Value problems are reported once per entity and attribute, and a missing required value once per stretch of effective time. Problems about a value fill in expected and found; unknown names get the closest-name hint.
+
+### D6a. Details settled while building
+
+- Unknown attribute names and deprecated attributes are found while applying a write, because stored values are keyed by `AttributeId`. Values of the wrong type are kept as written, so that the check reports one `VALUE_TYPE_MISMATCH` rather than also a missing value.
+- Each segment carries the transaction time and basis that recorded it; parts a write leaves unchanged keep theirs, and a timeline equal to the previous one is not appended, so a write that changes nothing records nothing for that entity.
+- An end-date at or before the entity's start is `ENTITY_NOT_EFFECTIVE`; one at or after its end changes nothing.
+- Conflict checks compare the committed timelines at the caller's basis and at the latest basis over the whole timeline. An entity created in the same transaction cannot conflict.
+- A view's basis above the latest is clamped to the latest.
 
 ### D7. Dry runs and idempotency
 
 - `dryRun` runs the same code as `commit` under the writer lock, up to the point of appending, and appends nothing. IDs for new entities are drawn from `copy()` of the store's generator; a commit keeps the copy as the store's generator, and a dry run or a rejected commit throws it away, so no ID is reserved. A seeded UUIDv7 generator's copy shares its random source, so a dry run shifts later random bits but not their order.
+- The idempotency key is checked before validation, so a retry gets its receipt even if the same writes would now be rejected. A rejected transaction does not claim its key.
 - The store keeps every committed idempotency key with its transaction and receipt. A transaction equal to the stored one (record equality) gets the stored receipt; any other with the same key is `IDEMPOTENCY_KEY_REUSED`.
 
 ### D8. ID generators

@@ -11,17 +11,24 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.OptionalInt;
 
-/** Comparison of values and range bounds, and how to show them. */
-final class Values {
+/**
+ * Comparison of values and range bounds, and how to show them. Used by the schema validator and by the store, which
+ * checks stored values against the constraints of their attributes (design D6 of {@code add-entity-versions}).
+ */
+public final class Values {
 
     private Values() {
     }
 
     /**
-     * Tells whether a value can bound an attribute of a value type, or be an example of it; narrower numbers fit
-     * wider ones.
+     * Tells whether a value can bound an attribute of a value type, be an example of it, or be stored as its value;
+     * narrower numbers fit wider ones.
+     *
+     * @param value the value
+     * @param type  the value type of the attribute
+     * @return {@code true} if the value has the type, or a narrower numeric type
      */
-    static boolean fits(Value value, ValueType type) {
+    public static boolean fits(Value value, ValueType type) {
         return switch (value) {
             case Value.IntValue ignored -> type == ValueType.INT || type == ValueType.LONG || type == ValueType.DECIMAL;
             case Value.LongValue ignored -> type == ValueType.LONG || type == ValueType.DECIMAL;
@@ -33,8 +40,15 @@ final class Values {
         };
     }
 
-    /** Compares two values, or returns empty when they are of incomparable kinds. */
-    static OptionalInt compare(Value first, Value second) {
+    /**
+     * Compares two values, or returns empty when they are of incomparable kinds. Numbers of any numeric type compare by
+     * their numeric value.
+     *
+     * @param first  the first value
+     * @param second the second value
+     * @return the order of the two values, or empty if they cannot be compared
+     */
+    public static OptionalInt compare(Value first, Value second) {
         Optional<BigDecimal> a = number(first);
         Optional<BigDecimal> b = number(second);
         if (a.isPresent() && b.isPresent()) {
@@ -49,8 +63,14 @@ final class Values {
         return OptionalInt.empty();
     }
 
-    /** Tells whether a value is inside a range. Bounds that cannot be compared with the value are not held against it. */
-    static boolean within(Value value, Range range) {
+    /**
+     * Tells whether a value is inside a range. Bounds that cannot be compared with the value are not held against it.
+     *
+     * @param value the value
+     * @param range the range
+     * @return {@code true} if the value respects both bounds
+     */
+    public static boolean within(Value value, Range range) {
         return aboveLower(value, range.lower()) && belowUpper(value, range.upper());
     }
 
@@ -70,8 +90,13 @@ final class Values {
         return order.isEmpty() || order.getAsInt() < 0 || order.getAsInt() == 0 && upper.get().inclusive();
     }
 
-    /** A value as plain text. */
-    static String describe(Value constant) {
+    /**
+     * A value as plain text.
+     *
+     * @param constant the value
+     * @return its text
+     */
+    public static String describe(Value constant) {
         return switch (constant) {
             case Value.StringValue(String value) -> value;
             case Value.BooleanValue(boolean value) -> String.valueOf(value);
@@ -83,16 +108,26 @@ final class Values {
         };
     }
 
-    /** A range as a condition on a value, such as {@code > 0 and <= 100}. */
-    static String describe(Range range) {
+    /**
+     * A range as a condition on a value, such as {@code > 0 and <= 100}.
+     *
+     * @param range the range
+     * @return the condition
+     */
+    public static String describe(Range range) {
         List<String> conditions = new ArrayList<>();
         range.lower().ifPresent(bound -> conditions.add((bound.inclusive() ? ">= " : "> ") + describe(bound.value())));
         range.upper().ifPresent(bound -> conditions.add((bound.inclusive() ? "<= " : "< ") + describe(bound.value())));
         return String.join(" and ", conditions);
     }
 
-    /** The name of a value type as it is written in schema definitions, in lower case. */
-    static String typeName(ValueType type) {
+    /**
+     * The name of a value type as it is written in schema definitions, in lower case.
+     *
+     * @param type the value type
+     * @return the name
+     */
+    public static String typeName(ValueType type) {
         return type.name().toLowerCase(Locale.ROOT);
     }
 

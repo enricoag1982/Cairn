@@ -16,16 +16,16 @@
 
 - [x] 3.1 Add `IdGenerators` with UUIDv7 and deterministic generators (D8)
 - [x] 3.2 Add the commit sequence and build the store's schema registry on it (D3)
-- [ ] 3.3 Keep timelines per entity and basis, and apply create, patch, replace and end-date (D4, D5)
-- [ ] 3.4 Validate the resulting state: types, values, constraints, required and deprecated attributes, uniqueness, conflicts, references and IDs (D6)
-- [ ] 3.5 Commit, dry run, idempotency and the transaction history (D7)
-- [ ] 3.6 Views: coordinates, entity reads, listings with subtypes, timelines, names and value types of the view's schema (D4, D5)
-- [ ] 3.7 `Stores` and `StoreSettings`
+- [x] 3.3 Keep timelines per entity and basis, and apply create, patch, replace and end-date (D4, D5)
+- [x] 3.4 Validate the resulting state: types, values, constraints, required and deprecated attributes, uniqueness, conflicts, references and IDs (D6)
+- [x] 3.5 Commit, dry run, idempotency and the transaction history (D7)
+- [x] 3.6 Views: coordinates, entity reads, listings with subtypes, timelines, names and value types of the view's schema (D4, D5)
+- [x] 3.7 `Stores` and `StoreSettings`
 
 ## 4. Tests
 
 - [ ] 4.1 Move the settable test clock to the test fixtures and add `ReferenceStories` (D9)
-- [ ] 4.2 One test per scenario of `transactions`, `entity-versions`, `views` and the new `schema-evolution` requirement, named `Scenario: <name>`
+- [x] 4.2 One test per scenario of `transactions`, `entity-versions`, `views` and the new `schema-evolution` requirement, named `Scenario: <name>`
 - [ ] 4.3 Unit tests for timeline splitting and merging, and for the ID generators; verify `./gradlew build` passes
 
 ## 5. Documentation
@@ -33,3 +33,4 @@
 - [x] 5.1 Add to `docs/glossary.md`: dry run, idempotency key, temporary ID, receipt, principal, store, timeline; update entity version and view
 - [ ] 5.2 Update the building blocks and runtime view in `docs/architecture/README.md`, and the status in `AGENTS.md` and `README.md`; bump `last-reviewed`
 - [ ] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [ ] 4.4 Locate problems about entities created without a temporary or supplied ID at `@write.<n>`, with a test for the new scenario

@@ -13,7 +13,7 @@ import java.util.Optional;
  * <p>Names are compared in lower case by their Levenshtein distance, which must be at most {@value #MAX_DISTANCE}.
  * When several names are equally close, the alphabetically first wins.
  */
-final class ClosestName {
+public final class ClosestName {
 
     /** The largest distance at which a name is still suggested. */
     static final int MAX_DISTANCE = 2;
@@ -24,19 +24,31 @@ final class ClosestName {
      * @param text       what the given name is compared with
      * @param suggestion what to suggest when it is the closest
      */
-    record Candidate(String text, String suggestion) {
+    public record Candidate(String text, String suggestion) {
     }
 
     private ClosestName() {
     }
 
-    /** Finds the closest of some names. */
-    static Optional<String> of(String given, Collection<String> names) {
+    /**
+     * Finds the closest of some names.
+     *
+     * @param given the name that was written
+     * @param names the names that exist
+     * @return the closest name within {@value #MAX_DISTANCE} letters, if there is one
+     */
+    public static Optional<String> of(String given, Collection<String> names) {
         return ofCandidates(given, names.stream().map(name -> new Candidate(name, name)).toList());
     }
 
-    /** Finds the closest of some candidates, each of which can be a name or an alias of the thing to suggest. */
-    static Optional<String> ofCandidates(String given, Collection<Candidate> candidates) {
+    /**
+     * Finds the closest of some candidates, each of which can be a name or an alias of the thing to suggest.
+     *
+     * @param given      the name that was written
+     * @param candidates the names and aliases that exist
+     * @return the suggestion of the closest candidate within {@value #MAX_DISTANCE} letters, if there is one
+     */
+    public static Optional<String> ofCandidates(String given, Collection<Candidate> candidates) {
         if (given.isEmpty()) {
             return Optional.empty();
         }
@@ -71,8 +83,14 @@ final class ClosestName {
         return previous[second.length()];
     }
 
-    /** Candidates for a list of names that each have aliases. */
-    static List<Candidate> candidates(String name, List<String> aliases) {
+    /**
+     * Candidates for an element with a name and aliases: each of them suggests the name.
+     *
+     * @param name    the name of the element
+     * @param aliases its aliases
+     * @return the candidates
+     */
+    public static List<Candidate> candidates(String name, List<String> aliases) {
         List<Candidate> result = new ArrayList<>();
         result.add(new Candidate(name, name));
         aliases.forEach(alias -> result.add(new Candidate(alias, name)));

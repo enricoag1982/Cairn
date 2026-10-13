@@ -29,7 +29,7 @@ Effective times SHALL be UTC instants with microsecond precision; periods SHALL 
 
 ### Requirement: Attribute values are validated
 
-THE SYSTEM SHALL check every entity version that a transaction would produce, at every point in effective time. Every value MUST belong to an attribute of the entity's type, named by its name or an alias, and MUST fit the attribute's value type, where an int fits a long or decimal attribute and a long fits a decimal attribute. Every value MUST satisfy the attribute's range, allowed values, pattern and lengths. Every required attribute MUST have a value. A write MUST NOT set an attribute that is deprecated. Each problem SHALL name the entity, by its ID or temporary ID, and the attribute, and SHALL state what was expected and what was found.
+THE SYSTEM SHALL check every entity version that a transaction would produce, at every point in effective time. Every value MUST belong to an attribute of the entity's type, named by its name or an alias, and MUST fit the attribute's value type, where an int fits a long or decimal attribute and a long fits a decimal attribute. Every value MUST satisfy the attribute's range, allowed values, pattern and lengths. Every required attribute MUST have a value. A write MUST NOT set an attribute that is deprecated. Each problem SHALL name the entity, by its temporary ID, by its ID, or, for an entity created without either, by the position of the write that creates it (`@write.` followed by the position, counted from 0), and the attribute, and SHALL state what was expected and what was found.
 
 #### Scenario: Value of the wrong type
 
@@ -45,6 +45,11 @@ THE SYSTEM SHALL check every entity version that a transaction would produce, at
 
 - **WHEN** ACME is created with a value for the attribute `nmae`
 - **THEN** the transaction is rejected with a problem whose hint names the attribute `name`
+
+#### Scenario: Problem about an entity without a temporary ID
+
+- **WHEN** the second write of a transaction creates an Organization without a name, a temporary ID or a supplied ID
+- **THEN** the transaction is rejected with a problem located at `@write.1.name`, in a dry run as in a commit
 
 #### Scenario: Missing required attribute
 

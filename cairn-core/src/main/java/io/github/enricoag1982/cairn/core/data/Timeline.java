@@ -1,0 +1,249 @@
+package io.github.enricoag1982.cairn.core.data;
+
+import io.github.enricoag1982.cairn.schema.AttributeId;
+import io.github.enricoag1982.cairn.schema.Basis;
+import io.github.enricoag1982.cairn.schema.Value;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.UnaryOperator;
+
+/**
+ * The complete effective history of an entity as known after one transaction (design D4): an immutable, sorted list of
+ * non-overlapping {@link Segment}s. Adjacent segments with equal values are merged, so that a timeline lists real
+ * changes only. Every operation returns a new timeline.
+ *
+ * <p>Nothing in the engine creates a gap in a timeline: an entity is created for one period, writes never extend its
+ * lifetime, and an end-date cuts the end. The operations nevertheless make no use of that, except {@link #lifetime()}.
+ */
+final class Timeline {
+
+    /** The history of an entity that was not recorded yet. */
+    static final Timeline EMPTY = new Timeline(List.of());
+
+    /** A stretch of effective time in which one attribute has one value. */
+    private record Span(Instant from, Instant end, Value value) {
+    }
+
+    private final List<Segment> segments;
+
+    private Timeline(List<Segment> segments) {
+        this.segments = segments;
+    }
+
+    /**
+     * Builds a timeline from segments that do not overlap: sorts them and merges adjacent segments with equal values.
+     * Of two merged segments, the merged one keeps the earlier recording, because its values have been known since
+     * then.
+     *
+     * @param segments the segments, in any order
+     * @return the timeline
+     * @throws IllegalArgumentException if two segments overlap
+     */
+    static Timeline of(List<Segment> segments) {
+        List<Segment> sorted = new ArrayList<>(segments);
+        sorted.sort(Comparator.comparing(Segment::from));
+        List<Segment> merged = new ArrayList<>();
+        for (Segment segment : sorted) {
+            if (merged.isEmpty()) {
+                merged.add(segment);
+                continue;
+            }
+            Segment last = merged.getLast();
+            if (segment.from().isBefore(last.end())) {
+                throw new IllegalArgumentException("Segments overlap: " + last.period() + " and " + segment.period());
+            }
+            if (segment.from().equals(last.end()) && segment.values().equals(last.values())) {
+                Segment earlier = segment.recordedBasis().compareTo(last.recordedBasis()) < 0 ? segment : last;
+                merged.set(merged.size() - 1,
+                        new Segment(last.from(), segment.end(), last.values(), earlier.recordedAt(),
+                                earlier.recordedBasis()));
+            } else {
+                merged.add(segment);
+            }
+        }
+        return new Timeline(List.copyOf(merged));
+    }
+
+    /** A timeline of one segment: an entity that is created. */
+    static Timeline created(Instant from, Instant end, Map<AttributeId, Value> values, Instant recordedAt,
+            Basis recordedBasis) {
+        return new Timeline(List.of(new Segment(from, end, values, recordedAt, recordedBasis)));
+    }
+
+    List<Segment> segments() {
+        return segments;
+    }
+
+    boolean isEmpty() {
+        return segments.isEmpty();
+    }
+
+    /** The segment that contains an instant, if the entity exists then. */
+    Optional<Segment> at(Instant instant) {
+        for (Segment segment : segments) {
+            if (segment.contains(instant)) {
+                return Optional.of(segment);
+            }
+            if (segment.from().isAfter(instant)) {
+                break;
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** The start of the first segment and the end of the last, or empty for an empty timeline. */
+    Optional<Lifetime> lifetime() {
+        return segments.isEmpty() ? Optional.empty()
+                : Optional.of(new Lifetime(segments.getFirst().from(), segments.getLast().end()));
+    }
+
+    /** From when until when an entity exists; the end is {@link Segment#OPEN} for an entity without one. */
+    record Lifetime(Instant from, Instant end) {
+    }
+
+    /**
+     * Tells whether the entity exists at every instant of a period.
+     *
+     * @param from the first instant
+     * @param end  the first instant after the period, or {@link Segment#OPEN}
+     * @return {@code true} if segments cover the whole period without a gap
+     */
+    boolean covers(Instant from, Instant end) {
+        Instant cursor = from;
+        for (Segment segment : segments) {
+            if (!segment.end().isAfter(cursor)) {
+                continue;
+            }
+            if (segment.from().isAfter(cursor)) {
+                return false;
+            }
+            cursor = segment.end();
+            if (!cursor.isBefore(end)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Changes the values of the entity in a period. The segments are split at the bounds of the period, and the change
+     * is applied to the values of each part inside it. A part whose values the change leaves as they are keeps its
+     * recording; a part that changes is recorded by the given transaction. Adjacent equal segments are merged.
+     *
+     * @param from          the first instant of the period
+     * @param end           the first instant after the period, or {@link Segment#OPEN}
+     * @param change        computes the new values from the old ones
+     * @param recordedAt    the transaction time of the transaction that makes the change
+     * @param recordedBasis the basis of that transaction
+     * @return the changed timeline
+     */
+    Timeline update(Instant from, Instant end, UnaryOperator<Map<AttributeId, Value>> change, Instant recordedAt,
+            Basis recordedBasis) {
+        List<Segment> result = new ArrayList<>();
+        for (Segment segment : segments) {
+            if (!segment.end().isAfter(from) || !segment.from().isBefore(end)) {
+                result.add(segment);
+                continue;
+            }
+            if (segment.from().isBefore(from)) {
+                result.add(segment.withBounds(segment.from(), from));
+            }
+            Instant partFrom = max(segment.from(), from);
+            Instant partEnd = min(segment.end(), end);
+            Map<AttributeId, Value> changed = change.apply(segment.values());
+            result.add(changed.equals(segment.values())
+                    ? segment.withBounds(partFrom, partEnd)
+                    : new Segment(partFrom, partEnd, changed, recordedAt, recordedBasis));
+            if (segment.end().isAfter(end)) {
+                result.add(segment.withBounds(end, segment.end()));
+            }
+        }
+        return of(result);
+    }
+
+    /**
+     * Cuts the entity off at an instant: every segment ends there at the latest, and the ones that start there or later
+     * are dropped.
+     *
+     * @param instant the first instant at which the entity no longer exists
+     * @return the shortened timeline
+     */
+    Timeline endAt(Instant instant) {
+        List<Segment> result = new ArrayList<>();
+        for (Segment segment : segments) {
+            if (!segment.from().isBefore(instant)) {
+                continue;
+            }
+            result.add(segment.end().isAfter(instant) ? segment.withBounds(segment.from(), instant) : segment);
+        }
+        return of(result);
+    }
+
+    /** Tells whether two timelines have the same segments with the same values, whoever recorded them. */
+    boolean sameState(Timeline other) {
+        if (segments.size() != other.segments.size()) {
+            return false;
+        }
+        for (int i = 0; i < segments.size(); i++) {
+            if (!segments.get(i).sameState(other.segments.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Tells whether two timelines give an attribute the same value at every instant. An entity that does not exist, and
+     * an entity without a value for the attribute, are the same here.
+     */
+    boolean sameValues(Timeline other, AttributeId attribute) {
+        return spans(attribute).equals(other.spans(attribute));
+    }
+
+    /** The stretches in which an attribute has a value, with adjacent equal ones merged. */
+    private List<Span> spans(AttributeId attribute) {
+        List<Span> spans = new ArrayList<>();
+        for (Segment segment : segments) {
+            Value value = segment.values().get(attribute);
+            if (value == null) {
+                continue;
+            }
+            if (!spans.isEmpty() && spans.getLast().end().equals(segment.from())
+                    && spans.getLast().value().equals(value)) {
+                Span last = spans.removeLast();
+                spans.add(new Span(last.from(), segment.end(), value));
+            } else {
+                spans.add(new Span(segment.from(), segment.end(), value));
+            }
+        }
+        return spans;
+    }
+
+    private static Instant max(Instant first, Instant second) {
+        return first.isAfter(second) ? first : second;
+    }
+
+    private static Instant min(Instant first, Instant second) {
+        return first.isBefore(second) ? first : second;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof Timeline timeline && segments.equals(timeline.segments);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(segments);
+    }
+
+    @Override
+    public String toString() {
+        return "Timeline" + segments;
+    }
+}

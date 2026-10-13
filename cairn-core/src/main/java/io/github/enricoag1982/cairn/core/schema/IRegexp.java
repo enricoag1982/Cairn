@@ -20,7 +20,7 @@ import java.util.Optional;
  * character class as {@code -}, because ECMAScript does not allow that escape in Unicode mode, and a consumer should
  * compile it with the {@code u} flag.
  */
-final class IRegexp {
+public final class IRegexp {
 
     /** The result of parsing a pattern. */
     sealed interface Parsed {
@@ -96,7 +96,7 @@ final class IRegexp {
      * @return the pattern
      * @throws IllegalArgumentException if the pattern is not valid
      */
-    static IRegexp of(String pattern) {
+    public static IRegexp of(String pattern) {
         return switch (parse(pattern)) {
             case Parsed.Valid(IRegexp valid) -> valid;
             case Parsed.Invalid(IRegexpSyntax.Violation violation) -> throw new IllegalArgumentException(
@@ -111,7 +111,7 @@ final class IRegexp {
      * @param value the value
      * @return {@code true} if the whole value matches
      */
-    boolean matches(CharSequence value) {
+    public boolean matches(CharSequence value) {
         return compiled.matcher(value).matches();
     }
 
@@ -120,7 +120,7 @@ final class IRegexp {
      *
      * @return the I-Regexp
      */
-    String source() {
+    public String source() {
         return source;
     }
 
