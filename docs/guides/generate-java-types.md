@@ -42,6 +42,10 @@ plugins {
     id("io.github.enricoag1982.cairn.types")
 }
 
+repositories {
+    mavenCentral()    // for the generator's own dependencies, such as SnakeYAML and RE2/J
+}
+
 cairn {
     packageName = "com.example.model"
     // schemaDocuments.from("other/dir/crm.cairn.yaml")    // adds to the default documents; setFrom replaces them
