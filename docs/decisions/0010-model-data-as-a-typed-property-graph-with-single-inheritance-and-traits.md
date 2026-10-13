@@ -10,7 +10,7 @@ informed: []
 
 ## Context and Problem Statement
 
-sysRec must let users define enterprise data with inheritance and relationships.
+Cairn must let users define enterprise data with inheritance and relationships.
 We need one meta-model that every type is defined in, and that the engine, the API and the storage encoding all build on.
 See the [API research note](../research/2026-10-12-graph-system-of-record-api.md).
 

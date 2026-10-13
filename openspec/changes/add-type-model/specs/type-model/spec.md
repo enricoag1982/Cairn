@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines what a sysRec schema can contain (entity types, traits, attributes and relationship types) and how a schema definition is validated before it is registered.
+Defines what a Cairn schema can contain (entity types, traits, attributes and relationship types) and how a schema definition is validated before it is registered.
 
 ## ADDED Requirements
 

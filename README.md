@@ -1,4 +1,6 @@
-# sysRec
+*A cairn is a pile of stones that walkers build up, one stone at a time, to mark the way. Cairn keeps records the same way: history only grows, and the links between records show the path.*
+
+# Cairn
 
 A system of record for enterprise data.
 You define typed entities and relationships, with inheritance. An engine embedded in your JVM application stores them with full history on two time axes, commits consistent transactions, and answers traversals and aggregations.
@@ -9,7 +11,7 @@ The API hides the storage implementation: the same behavior in memory or in a ke
 
 ## Ideas in one page
 
-- **Two time axes.** Every fact has an *effective time* (when it is true in the real world, past or future) and a *transaction time* (when sysRec recorded it). Any past answer can be reproduced, even after corrections. [ADR-0008](docs/decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)
+- **Two time axes.** Every fact has an *effective time* (when it is true in the real world, past or future) and a *transaction time* (when Cairn recorded it). Any past answer can be reproduced, even after corrections. [ADR-0008](docs/decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)
 - **A typed graph.** Entity types with single inheritance and traits; first-class, directed relationships with their own attributes and history. [ADR-0010](docs/decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md)
 - **Whole-entity versions.** Each change records a new version of the entity for an effective period; nothing is overwritten. [ADR-0009](docs/decisions/0009-version-whole-entities-rather-than-single-attributes.md)
 - **Embedded, single writer.** One writer orders all commits; any number of readers work on immutable snapshots. [ADR-0007](docs/decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)
@@ -26,7 +28,7 @@ The reasoning behind all of this is in the [API research note](docs/research/202
 - [Glossary](docs/glossary.md): the terms used in specs, code and conversation
 - [Reference domain](docs/reference/reference-domain.md): the example model used in scenarios and tests
 - [Architecture](docs/architecture/README.md): how it is built
-- [Setup status](docs/guides/start-a-new-project-from-this-template.md#status-in-sysrec): the template setup steps that are still open
+- [Setup status](docs/guides/start-a-new-project-from-this-template.md#status-in-cairn): the template setup steps that are still open
 
 ## How this repository works
 

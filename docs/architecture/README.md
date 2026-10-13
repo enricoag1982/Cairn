@@ -32,11 +32,11 @@ It is a living document: update it in the same pull request that changes the arc
 
 ```mermaid
 flowchart LR
-    app([Application on the JVM]) -->|embeds and calls| sysrec[sysRec engine<br/>sysrec-api + sysrec-core]
-    model([Model module<br/>types of one origin]) -->|registered by the application| sysrec
+    app([Application on the JVM]) -->|embeds and calls| cairn[Cairn engine<br/>cairn-api + cairn-core]
+    model([Model module<br/>types of one origin]) -->|registered by the application| cairn
 ```
 
-sysRec runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md), proposed). It has no external systems yet.
+Cairn runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md), proposed). It has no external systems yet.
 
 ## 4. Solution strategy
 
@@ -58,13 +58,13 @@ Proposed, not yet accepted:
 
 | Building block | Responsibility | Capabilities (specs) |
 | --- | --- | --- |
-| `sysrec-api` | Public types: schema definitions and their builders, the resolved schema, problems, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model. | `type-model`, `schema-evolution` |
-| `sysrec-core` | The engine. Validates definitions, compiles them into a resolved schema with schema identifiers, checks compatibility, and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. | `type-model`, `schema-evolution` |
-| `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `sysrec.java-library` for every Java module, and `sysrec.reference-domain-tests` for modules whose tests read the reference domain page. | none |
+| `cairn-api` | Public types: schema definitions and their builders, the resolved schema, problems, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model. | `type-model`, `schema-evolution` |
+| `cairn-core` | The engine. Validates definitions, compiles them into a resolved schema with schema identifiers, checks compatibility, and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. | `type-model`, `schema-evolution` |
+| `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `cairn.java-library` for every Java module, and `cairn.reference-domain-tests` for modules whose tests read the reference domain page. | none |
 
 ```mermaid
 flowchart LR
-    core[sysrec-core<br/>validator, compiler,<br/>compatibility checker,<br/>in-memory registry] -->|implements| api[sysrec-api<br/>definitions, schema,<br/>SchemaRegistry]
+    core[cairn-core<br/>validator, compiler,<br/>compatibility checker,<br/>in-memory registry] -->|implements| api[cairn-api<br/>definitions, schema,<br/>SchemaRegistry]
     app([Application]) -->|uses| api
     app -->|creates a registry with| core
 ```

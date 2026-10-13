@@ -75,6 +75,6 @@ Several definitions link to ADRs that are still `proposed`, or name specs that t
 | Symmetric relationship type | A relationship type whose two ends are interchangeable, such as "related party". See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Trait | A named set of attribute declarations that entity types can include. It has no entities and no storage of its own. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Transaction | An atomic set of writes, committed by the single writer. It gets a transaction time and a basis. See [ADR-0007](decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md). |
-| Transaction time | When sysRec recorded a fact. The engine sets it at commit, and it only increases. See [ADR-0008](decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md). |
+| Transaction time | When Cairn recorded a fact. The engine sets it at commit, and it only increases. See [ADR-0008](decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md). |
 | Value type | The kind of value an attribute holds: string, boolean, int, long, decimal, date or instant. See the `type-model` spec. |
 | View | An immutable read handle created from a context. Its effective time, basis and meaning of "now" are fixed when it is created. See [ADR-0013](decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md). |

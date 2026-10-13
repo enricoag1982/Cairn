@@ -10,7 +10,7 @@ informed: []
 
 ## Context and Problem Statement
 
-Every access to sysRec carries a standard context besides its own parameters: time coordinates ([ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)), who is asking, limits and feature flags.
+Every access to Cairn carries a standard context besides its own parameters: time coordinates ([ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)), who is asking, limits and feature flags.
 Feature flags must support gradual rollout and A/B testing: a gateway assigns callers to populations centrally, and single calls can override flags.
 We need to decide how the context is passed and how flags reach the engine.
 See the [API research note](../research/2026-10-12-graph-system-of-record-api.md).

@@ -6,11 +6,11 @@ consulted: []
 informed: []
 ---
 
-# Run sysRec as an embedded single-node engine with a single writer
+# Run Cairn as an embedded single-node engine with a single writer
 
 ## Context and Problem Statement
 
-sysRec is a primitive for defining and keeping enterprise data: typed entities and relationships, with history on two time axes, consistent transactions, traversals and aggregations.
+Cairn is a primitive for defining and keeping enterprise data: typed entities and relationships, with history on two time axes, consistent transactions, traversals and aggregations.
 The exploration is in the [API research note](../research/2026-10-12-graph-system-of-record-api.md).
 Before designing the API we need to know where the engine runs and how writes are ordered.
 That decides whether the API is an in-process interface or a wire protocol, and how much the consistency model has to cover.

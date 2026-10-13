@@ -33,12 +33,12 @@ Constraints that shape the approach:
 
 ### D1. Two Gradle subprojects, using Java modules
 
-- `sysrec-api` holds the public types: definitions, the resolved schema, registration results and problems. It has no dependencies.
-- `sysrec-core` holds the validator, the compatibility checker and the in-memory schema registry. It depends on `sysrec-api`.
+- `cairn-api` holds the public types: definitions, the resolved schema, registration results and problems. It has no dependencies.
+- `cairn-core` holds the validator, the compatibility checker and the in-memory schema registry. It depends on `cairn-api`.
 - Both have a `module-info.java`. Core exports only its entry point, not its internals, so internals cannot become API by accident.
-- The convention plugin `sysrec.java-library` in `build-logic/` configures both subprojects: the Java 25 toolchain, JUnit 6, compact object headers for tests, and Javadoc checks. CI tests the newest Java release by overriding the toolchain version through a Gradle property.
-- A second convention plugin, `sysrec.reference-domain-tests`, makes the tests of `sysrec-api` rerun when the reference domain page changes.
-- The publishing group and the base package are `io.github.enricoag1982.sysrec`, with `...sysrec.schema` for the API and `...sysrec.core` for the engine.
+- The convention plugin `cairn.java-library` in `build-logic/` configures both subprojects: the Java 25 toolchain, JUnit 6, compact object headers for tests, and Javadoc checks. CI tests the newest Java release by overriding the toolchain version through a Gradle property.
+- A second convention plugin, `cairn.reference-domain-tests`, makes the tests of `cairn-api` rerun when the reference domain page changes.
+- The publishing group and the base package are `io.github.enricoag1982.cairn` (ADR-0016), with `...cairn.schema` for the API and `...cairn.core` for the engine.
 - Alternatives:
   - a single module, which is simpler but lets internals leak into the API
   - no Java modules, which avoids friction with test tooling but gives a weaker boundary. We fall back to this if the friction outweighs the benefit; the change is local.
@@ -116,7 +116,7 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 ### D8. Tests
 
 - JUnit 6 and AssertJ, as test-only dependencies.
-- A fixture in the test fixtures of `sysrec-api` (`src/testFixtures`) builds the reference domain model. `ReferenceModelTest` checks it against the reference domain page.
+- A fixture in the test fixtures of `cairn-api` (`src/testFixtures`) builds the reference domain model. `ReferenceModelTest` checks it against the reference domain page.
 - Every scenario in the two specs has one test, whose display name is the scenario's name, so a scenario can be traced to its test.
 - There is no conformance-suite module yet. Schema behavior does not depend on storage in this change, so the suite starts with `add-entity-versions`. The schema scenarios join the suite in `add-durable-commit-log`, when the schema moves onto the storage interface.
 
@@ -132,6 +132,3 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 
 None: there is no existing data and there are no users.
 
-## Open Questions
-
-- Publishing group: confirm `io.github.enricoag1982.sysrec` before publishing the first artifact. Until then they are easy to change.

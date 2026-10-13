@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how a schema definition is registered with sysRec, how the stored schema keeps its history in transaction time, and which changes to it are compatible.
+Defines how a schema definition is registered with Cairn, how the stored schema keeps its history in transaction time, and which changes to it are compatible.
 
 ## ADDED Requirements
 

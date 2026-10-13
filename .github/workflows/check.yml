@@ -55,5 +55,5 @@ jobs:
       - name: Build and test
         run: >-
           ./gradlew build
-          -Psysrec.javaVersion=${{ matrix.java }}
+          -Pcairn.javaVersion=${{ matrix.java }}
           -Porg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java }}_X64

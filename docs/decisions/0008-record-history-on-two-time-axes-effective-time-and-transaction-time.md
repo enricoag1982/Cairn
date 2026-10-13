@@ -34,7 +34,7 @@ See the [API research note](../research/2026-10-12-graph-system-of-record-api.md
 Proposed option: "Two time axes", because it is the only option that answers both questions directly.
 
 - **Effective time** is when a fact is true in the real world. The writer sets it, in the past or in the future.
-- **Transaction time** is when sysRec recorded the fact. The engine sets it at commit; callers never set it. It only increases.
+- **Transaction time** is when Cairn recorded the fact. The engine sets it at commit; callers never set it. It only increases.
 - These two names are used everywhere. Synonyms (valid time, system time, business time, processing time) are not used.
 - Both axes are UTC instants with microsecond precision. Periods are half-open, `[from, to)`. An open end means "until further notice".
 - An entity type can declare day granularity. Its effective periods then start and end at midnight in a configured business time zone, and callers can pass plain dates.

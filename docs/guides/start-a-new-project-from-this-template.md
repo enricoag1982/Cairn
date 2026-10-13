@@ -7,9 +7,9 @@ owner: ""
 
 How to turn a fresh copy of this template into your project's repository.
 
-## Status in sysRec
+## Status in Cairn
 
-sysRec was created from this template on 2026-10-10. Where each step stands, checked on 2026-10-13:
+Cairn was created from this template on 2026-10-10. Where each step stands, checked on 2026-10-13:
 
 | Step | Status |
 | --- | --- |

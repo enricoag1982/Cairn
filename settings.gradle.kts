@@ -9,6 +9,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "sysrec"
+rootProject.name = "cairn"
 
-include("sysrec-api", "sysrec-core")
+include("cairn-api", "cairn-core")

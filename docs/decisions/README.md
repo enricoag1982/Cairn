@@ -19,7 +19,7 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0004](0004-keep-docs-as-plain-markdown-browsable-in-obsidian.md) | Keep all project knowledge as plain Markdown in the repository, browsable in Obsidian | accepted | 2026-09-30 |
 | [ADR-0005](0005-choose-primary-implementation-language.md) | Choose the primary implementation language | accepted | 2026-10-12 |
 | [ADR-0006](0006-target-claude-code-without-duplicated-agent-files.md) | Target Claude Code, keep AGENTS.md canonical, and store each agent file once | accepted | 2026-09-30 |
-| [ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md) | Run sysRec as an embedded single-node engine with a single writer | proposed | 2026-10-12 |
+| [ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md) | Run Cairn as an embedded single-node engine with a single writer | proposed | 2026-10-12 |
 | [ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md) | Record history on two time axes: effective time and transaction time | proposed | 2026-10-12 |
 | [ADR-0009](0009-version-whole-entities-rather-than-single-attributes.md) | Version whole entities rather than single attributes | proposed | 2026-10-12 |
 | [ADR-0010](0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md) | Model data as a typed property graph with single inheritance and traits | proposed | 2026-10-12 |
@@ -28,5 +28,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md) | Read through immutable views and take feature flags resolved by the caller | proposed | 2026-10-12 |
 | [ADR-0014](0014-build-the-java-code-with-maven.md) | Build the Java code with Maven | rejected | 2026-10-12 |
 | [ADR-0015](0015-build-the-java-code-with-gradle.md) | Build the Java code with Gradle | accepted | 2026-10-12 |
+| [ADR-0016](0016-name-the-project-cairn.md) | Name the project Cairn | accepted | 2026-10-13 |
 
 <!-- decision-log:end -->

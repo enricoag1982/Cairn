@@ -5,10 +5,10 @@ Keep it short and link rather than copy. Every line should prevent a real mistak
 
 ## Project overview
 
-sysRec is a system of record for enterprise data. Users define typed entities and relationships, with inheritance. An engine embedded in the application's JVM stores them with history on two time axes (effective time and transaction time), commits consistent transactions, and answers traversals and aggregations through an API that hides the storage implementation (in memory, or a key-value store on disk).
+Cairn is a system of record for enterprise data. Users define typed entities and relationships, with inheritance. An engine embedded in the application's JVM stores them with history on two time axes (effective time and transaction time), commits consistent transactions, and answers traversals and aggregations through an API that hides the storage implementation (in memory, or a key-value store on disk).
 What makes it hard: identical behavior across storage implementations, integrity rules that must hold over whole timelines, and aggregations over a key-value store.
 Run with spec-driven development: behavior is specified in OpenSpec and decisions are recorded as ADRs.
-**Status:** the schema API (the `add-type-model` change) is built in `sysrec-api` and `sysrec-core`; entities, storage and queries are not. Java 25 ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). The core design is in `proposed` ADRs 0007 to 0013, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md).
+**Status:** the schema API (the `add-type-model` change) is built in `cairn-api` and `cairn-core`; entities, storage and queries are not. Java 25 ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). The core design is in `proposed` ADRs 0007 to 0013, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md).
 
 ## Sources of truth
 
@@ -40,7 +40,7 @@ Documentation and spec tooling (Node.js 20.19 or later):
 Application build and test (Gradle, [ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). Needs a local JDK 25, which Gradle finds as a toolchain; nothing is downloaded automatically:
 
 - `./gradlew build`: compile (lint warnings are errors), run the tests, and build Javadoc (warnings are errors)
-- `./gradlew :sysrec-core:test --tests '<TestClass>'`: run one test class
+- `./gradlew :cairn-core:test --tests '<TestClass>'`: run one test class
 - Shared build configuration lives only in the convention plugins in `build-logic/`; versions live in `gradle/libs.versions.toml`. Module build files stay declarative.
 
 ## Workflow
@@ -85,7 +85,7 @@ docs/                    decisions, architecture, guides, reference, process, re
 .claude/                 Claude Code: skills, /opsx commands (generated), docs-reviewer subagent, settings
 .github/                 PR/issue templates, CI
 scripts/                 docs.mjs (checks, ADRs, decision log); openspec-update.mjs (agents:update)
-sysrec-api/, sysrec-core/  Java modules: public API, and the engine
+cairn-api/, cairn-core/  Java modules: public API, and the engine
 build-logic/, gradle/    Gradle convention plugins, version catalog and wrapper
 ```
 
