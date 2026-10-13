@@ -8,7 +8,7 @@ Keep it short and link rather than copy. Every line should prevent a real mistak
 Cairn is a system of record for enterprise data. People and AI agents define typed entities and relationships, with inheritance, in schema documents; custom validation is written in Java. An engine embedded in the application's JVM stores them with history on two time axes (effective time and transaction time), commits consistent transactions, and answers traversals and aggregations through an API that hides the storage implementation (in memory, or a key-value store on disk).
 What makes it hard: identical behavior across storage implementations, integrity rules that must hold over whole timelines, and aggregations over a key-value store.
 Run with spec-driven development: behavior is specified in OpenSpec and decisions are recorded as ADRs.
-**Status:** the schema API is built in `cairn-api` and `cairn-core` (capabilities `type-model` and `schema-evolution`), with schema documents in `cairn-documents`, and an in-memory store for entities and relationships with history on two time axes that runs Java rules at commit (capabilities `transactions`, `entity-versions`, `views`, `entity-rules` and `relationships`); and transaction payloads and JSON results in `cairn-documents` (`json-payloads`); durable storage, queries and agent tools are not. Java 25 ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). The core design is in accepted ADRs 0007 to 0013 and 0017 to 0020, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](docs/research/2026-10-13-ai-native-schema-and-rules.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md).
+**Status:** the schema API is built in `cairn-api` and `cairn-core` (capabilities `type-model` and `schema-evolution`), with schema documents in `cairn-documents`, and an in-memory store for entities and relationships with history on two time axes that runs Java rules at commit (capabilities `transactions`, `entity-versions`, `views`, `entity-rules` and `relationships`); transaction payloads and JSON results in `cairn-documents` (`json-payloads`); and agent tools over the Model Context Protocol, with an approval policy and a server, in `cairn-agent-tools` (`agent-tools`); durable storage and queries are not. Java 25 ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). The core design is in accepted ADRs 0007 to 0013 and 0017 to 0020, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](docs/research/2026-10-13-ai-native-schema-and-rules.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md).
 
 ## Sources of truth
 
@@ -42,6 +42,7 @@ Application build and test (Gradle, [ADR-0015](docs/decisions/0015-build-the-jav
 - `./gradlew build`: compile (lint warnings are errors), run the tests, and build Javadoc (warnings are errors)
 - If Maven Central rate-limits downloads (HTTP 429), rerun with `--max-workers=1`
 - `./gradlew :cairn-core:test --tests '<TestClass>'`: run one test class
+- `./gradlew :cairn-agent-tools:installDist`: build the agent server; see the [guide](docs/guides/serve-a-store-to-ai-agents.md)
 - Shared build configuration lives only in the convention plugins in `build-logic/`; versions live in `gradle/libs.versions.toml`. Module build files stay declarative.
 
 ## Workflow
@@ -88,6 +89,7 @@ docs/                    decisions, architecture, guides, reference, process, re
 scripts/                 docs.mjs (checks, ADRs, decision log); openspec-update.mjs (agents:update)
 cairn-api/, cairn-core/  Java modules: public API, and the engine
 cairn-documents/         Java module: schema documents and transaction payloads (YAML 1.2, JSON), JSON results, JSON Schemas
+cairn-agent-tools/       agent tools over MCP, approval policy and server (class path, no module-info)
 build-logic/, gradle/    Gradle convention plugins, version catalog and wrapper
 ```
 
