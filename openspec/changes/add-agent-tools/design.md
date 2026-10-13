@@ -2,7 +2,7 @@
 
 ## Context
 
-Agents use a store through tools (ADR-0017, commitment 7) that are adapters over the plain API (ADR-0007). The formats exist: schema documents (`schema-documents`), transaction payloads and JSON results with generated JSON Schemas (`json-payloads`, which must be archived first). This change adds the MCP adapter, the approval policy (commitment 8) and who and why for schema changes (commitment 6). The requirements are in `specs/agent-tools/spec.md` and `specs/schema-evolution/spec.md`.
+Agents use a store through tools (ADR-0017, commitment 7) that are adapters over the plain API (ADR-0007). The formats exist: schema documents (`schema-documents`), transaction payloads and JSON results with generated JSON Schemas (`json-payloads`). This change adds the MCP adapter, the approval policy (commitment 8) and who and why for schema changes (commitment 6). The requirements are in the deltas `agent-tools`, `schema-evolution`, `schema-documents` and `entity-rules`.
 
 ## Goals / Non-Goals
 
@@ -22,7 +22,7 @@ Agents use a store through tools (ADR-0017, commitment 7) that are adapters over
 ### D1. A new subproject, `cairn-agent-tools`
 
 - Package `io.github.enricoag1982.cairn.agents`. It depends on `cairn-core`, `cairn-documents` and the MCP Java SDK 2.0.1 (`mcp-core` and `mcp-json-jackson3`), which only this subproject carries.
-- It has no `module-info.java` and runs on the class path. The SDK's jars declare automatic module names that are not valid Java names (`io.modelcontextprotocol.sdk.mcp-core`), so the module system cannot resolve them, and a module that reads the class path would need build logic to split the two paths. Its internals are package-private instead. The design of `add-type-model` foresaw this: drop `module-info.java` where it costs more than it protects.
+- It has no `module-info.java` and runs on the class path. The SDK's jars declare automatic module names that are not valid Java names (`io.modelcontextprotocol.sdk.mcp-core`), so the module system cannot resolve them, and a module that reads the class path would need build logic to split the two paths. Its internals are package-private instead. The design of `add-type-model` foresaw this: drop `module-info.java` where it costs more than it protects. On the class path, the packages that `cairn-core` does not export are not enforced for this subproject; it uses only the exported ones.
 - The subproject's build file applies the `application` plugin with the server's main class; that is declarative and needs no build logic.
 - SLF4J has no binding in the server, so nothing is logged to standard output, which carries the protocol.
 
@@ -43,8 +43,9 @@ Agents use a store through tools (ADR-0017, commitment 7) that are adapters over
 
 ### D4. Approval policy and queue
 
+- The policy belongs to the adapter: each `AgentTools` has one, so two adapters on one store can differ. Agents reach a store only through an adapter, so this is how ADR-0017's policy of a store is applied.
 - `AgentPolicy(Decision schemaRegistrations, Decision dataCommits)` with `Decision` being `ALLOW`, `REQUIRE_APPROVAL` or `DENY`; `AgentPolicy.defaults()` allows both.
-- `ApprovalQueue` keeps `ApprovalRequest(String id, Kind kind, String principal, Optional<String> onBehalfOf, Optional<String> reason, Instant submittedAt, String content, Status status, Optional<String> outcome, Optional<String> decidedBy, Optional<Instant> decidedAt)` in memory; IDs are UUIDv7. The reason is the one given with a schema registration, or the payload's. People call `pending()`, `all()`, `find(id)`, `approve(id, approver)` and `reject(id, approver, reason)`. Approving runs the request as submitted by the agent's principal, against the state at that moment, and keeps the result as JSON in `outcome`; a request that is now invalid is approved but its outcome holds the problems. Rejecting keeps `{ outcome: "declined", reason }`.
+- `ApprovalQueue` keeps `ApprovalRequest(String id, Kind kind, String principal, Optional<String> onBehalfOf, Optional<String> reason, Instant submittedAt, String content, Status status, Optional<String> outcome, Optional<String> decidedBy, Optional<Instant> decidedAt)` in memory; IDs are UUIDv7. The reason is the one given with a schema registration, or the payload's; the party acted for is the one the transaction will record, the payload's or else the adapter's. People call `pending()`, `all()`, `find(id)`, `approve(id, approver)` and `reject(id, approver, reason)`. Approving runs the request as submitted by the agent's principal, against the state at that moment, and keeps the result as JSON in `outcome`; a request that is now invalid is approved but its outcome holds the problems. Rejecting keeps `{ outcome: "declined", reason }`.
 - A request is checked before it is kept: a registration whose plan is rejected, or that changes nothing, and a commit whose dry run is rejected, are answered at once, so that people only see requests that would apply.
 - New problem codes: `APPROVAL_DENIED` (the policy denies the operation) and `PRINCIPAL_MISMATCH` (a payload names another principal).
 
@@ -61,7 +62,7 @@ Agents use a store through tools (ADR-0017, commitment 7) that are adapters over
 ### D7. The server
 
 - `CairnAgentServer.main` takes `--schema <file>` (repeatable), `--principal <name>` (required), `--on-behalf-of <name>` and `--policy schema=<allow|approve|deny>,data=<…>`. It creates an in-memory store, registers the documents as its principal with a reason naming the file, and serves the tools over standard input and output until the input closes.
-- Rules: the store runs the rules it finds on the class path through the service loader (`StoreSettings.Builder.discoverRules()`), and declares without code every other rule that a document names, with a descriptor built from the document (the first type that names it, no codes). The documents register, and writes to types that name a declared rule are rejected with `RULE_UNAVAILABLE`.
+- Rules: the store runs the rules it finds on the class path through the service loader (`StoreSettings.Builder.discoverRules()`), and declares without code every other rule that a document names, with a descriptor built from the documents: no codes, and the closest common supertype of the types that name it, or the first of them if they have none. Only documents given at start get this; a document registered later through `cairn_register_schema` that names an unknown rule is rejected. The start message on standard error lists the rules declared this way. The documents register, and writes to types that name a declared rule are rejected with `RULE_UNAVAILABLE`.
 - Standard output carries only the protocol. The SDK's transport stops answering when the input closes, so a client keeps the input open until it has its answers.
 - A guide shows how to connect it to an MCP client such as Claude Code.
 
@@ -73,4 +74,5 @@ Agents use a store through tools (ADR-0017, commitment 7) that are adapters over
 
 - [The MCP SDK brings Reactor and Jackson] → Only in this module; the engine stays free of them.
 - [Approved requests run later than they were submitted] → They are validated again at approval; the outcome says what happened.
+- [The server declares the unknown rules that its start documents name, so a misspelled rule name registers instead of being rejected, as ADR-0018 has registration do] → The start message lists every declared rule, and writes to the types that name one are rejected (`RULE_UNAVAILABLE`), as ADR-0018 has for rules without code.
 - [Agents can read everything a store holds] → Access control is not designed yet; the server is for trusted local use, which the guide says.

@@ -35,7 +35,7 @@ cairn-agent-tools/build/install/cairn-agent-tools/bin/cairn-agent-tools \
 | --- | --- |
 | `--principal <name>` | Required. Who the agent acts as. The server records it on every transaction, schema or data, and rejects a payload that names another principal. |
 | `--schema <file>` | A schema document to register at start, as the principal, with a reason that names the file. Repeat it for several origins. |
-| `--on-behalf-of <name>` | The party the principal acts for, recorded on transactions whose payload names none. |
+| `--on-behalf-of <name>` | The party the principal acts for, recorded on every schema registration and on every transaction whose payload names none. |
 | `--policy schema=<p>,data=<p>` | The *approval policy* for schema registrations and data commits, each `allow` (the default), `approve` or `deny`. |
 
 The server answers on standard output and writes nothing else there; its messages for you go to standard error.
@@ -88,9 +88,11 @@ For a schema change it edits the document from `cairn_describe`, raises the orig
 ## Rules
 
 The server runs the Java rules it finds on its class path through the service loader: a jar that lists its rules in `META-INF/services/io.github.enricoag1982.cairn.data.Rule`.
-It declares without code every other rule that a schema document names, so that the document registers; writes to the types that name such a rule are rejected with `RULE_UNAVAILABLE`.
+Every other rule that a `--schema` document names becomes a *declared rule*: the server declares it without code, so that the document registers, and rejects writes to the types that name it with `RULE_UNAVAILABLE`.
+The start message on standard error lists the declared rules; check it, because a misspelled rule name ends up there too.
+A document registered later through `cairn_register_schema` gets no such help: a rule it names must be available.
 
-The installed server has no rules. With the reference model, writes of Organization (rule `lei-checksum`) and Owns (rule `total-ownership-at-most-100`) are rejected, while the other types work.
+The installed server has no rules. With the reference model, writes of Organization (rule `lei-checksum`) and Owns (rule `total-ownership-at-most-100`) are rejected, and so is Employs, whose source is an Organization. Person, Address, Account and the other relationship types work.
 To run your rules, start the server class with your jar on the class path:
 
 ```sh
@@ -101,9 +103,10 @@ java -cp "cairn-agent-tools/build/install/cairn-agent-tools/lib/*:my-rules.jar" 
 ## Approval
 
 With `--policy schema=approve` or `data=approve`, a registration or commit that would apply waits as an *approval request*, and the tool returns the request instead.
-One that would be rejected, or would change nothing, is answered at once. `cairn_approval_status` shows whether a person has decided.
+A request that would be rejected now, or a registration that would change nothing, is answered at once. `cairn_approval_status` shows whether a person has decided.
 
-People approve and reject requests through the Java API (`ApprovalQueue.pending()`, `approve` and `reject`), which the standalone server does not expose. To let people decide, embed the adapter in your application:
+People approve and reject requests through the Java API (`ApprovalQueue.pending()`, `approve` and `reject`), which the standalone server does not expose.
+To let people decide, embed the adapter in your application. Put `cairn-agent-tools` and its dependencies on the class path, not the module path: the MCP SDK's jars have no valid module names. The transport is any `McpServerTransportProvider` of the MCP Java SDK, such as `StdioServerTransportProvider`.
 
 ```java
 Store store = Stores.inMemory(StoreSettings.builder().discoverRules().build());
