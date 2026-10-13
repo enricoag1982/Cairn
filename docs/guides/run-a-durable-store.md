@@ -26,7 +26,7 @@ try (DurableStore store = Stores.durable(Path.of("/var/lib/my-app/cairn"), setti
 Closing writes a *snapshot file* and releases the directory. A closed store refuses every call but `close`, which does nothing then.
 One open store holds a directory at a time, in any process: opening a second one on the same directory throws `IllegalStateException`.
 
-The settings are those of an in-memory store. Keep the same kind of ID generator: opening a store with a generator that does not accept the IDs it holds fails ([ADR-0019](../decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md)). A store can be opened with other rules than it was written with: recovery does not run rules, and a rule that the schema names but the store has no code for makes writes to the affected types fail, as for any store ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
+The settings are those of an in-memory store. Keep an ID generator of the same format: opening a store with a generator that does not accept the IDs it holds fails ([ADR-0019](../decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md)). A store can be opened with other rules than it was written with: recovery does not run rules, and a rule that the schema names but the store has no code for makes writes to the affected types fail, as for any store ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
 
 ## What a commit guarantees
 

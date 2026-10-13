@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -88,6 +89,17 @@ final class StoreFiles {
     static void append(Path file, byte[] bytes) {
         try {
             Files.write(file, bytes, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** Sets every byte of a file from a position to its end to zero; the file keeps its length. */
+    static void zeroFrom(Path file, long position) {
+        try {
+            byte[] bytes = Files.readAllBytes(file);
+            Arrays.fill(bytes, (int) position, bytes.length, (byte) 0);
+            Files.write(file, bytes);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

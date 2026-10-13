@@ -41,7 +41,7 @@ Recovery SHALL apply what each recorded transaction did. It SHALL NOT validate, 
 
 #### Scenario: Another ID generator
 
-- **WHEN** a durable store created with the default ID generator, which holds entities, is opened again with the deterministic ID generator
+- **WHEN** a durable store created with the default ID generator, which holds entities and relationships, is opened again with an ID generator of another format, which does not accept their IDs
 - **THEN** opening fails with an exception
 
 #### Scenario: IDs after reopening

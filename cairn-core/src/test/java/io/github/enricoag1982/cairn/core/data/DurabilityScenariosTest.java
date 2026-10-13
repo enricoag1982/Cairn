@@ -19,6 +19,8 @@ import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DurableStore;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.IdGenerator;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
@@ -35,6 +37,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -167,6 +171,60 @@ class DurabilityScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Another ID generator")
+    void anotherIdGenerator() {
+        DirectoryStore first = durable.open(durable.clock, IdGenerators.uuidV7(durable.clock, new Random(1)),
+                ReferenceModel.executableRules(), ReferenceModel.declaredRules());
+        DurableFixture.registerReferenceModel(first);
+        ReferenceTales.Told told = ReferenceTales.rd1ToRd5(first, durable.clock);
+        List<String> held = told.ids().stream().map(Id::value).toList();
+        first.close();
+
+        assertThatThrownBy(() -> durable.open(durable.clock, new Accepting(text -> text.startsWith("other-")),
+                ReferenceModel.executableRules(), ReferenceModel.declaredRules()))
+                .isInstanceOf(IllegalStateException.class)
+                .satisfies(e -> assertThat(held).as("it names an ID that the store holds")
+                        .anyMatch(id -> e.getMessage().contains(id)));
+
+        DirectoryStore again = durable.open(durable.clock, IdGenerators.uuidV7(durable.clock, new Random(2)),
+                ReferenceModel.executableRules(), ReferenceModel.declaredRules());
+        assertThat(again.latestBasis()).as("the directory was released, and nothing was changed").isEqualTo(
+                new Basis(9));
+    }
+
+    @Test
+    void anIdGeneratorThatRejectsOnlyTheIdOfARelationshipIsRefusedNamingIt() {
+        DirectoryStore first = durable.openWithReferenceModel();
+        ReferenceTales.Told told = ReferenceTales.rd1ToRd5(first, durable.clock);
+        Id relationship = told.ids().stream().filter(id -> id instanceof RelationshipId).findFirst().orElseThrow();
+        first.close();
+
+        assertThatThrownBy(() -> durable.open(durable.clock, new Accepting(text -> !text.equals(relationship.value())),
+                ReferenceModel.executableRules(), ReferenceModel.declaredRules()))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining(relationship.value())
+                .hasMessageContaining("relationship");
+    }
+
+    /** An ID generator that accepts the texts that a predicate accepts, and is never asked for an ID. */
+    private record Accepting(Predicate<String> accepting) implements IdGenerator {
+
+        @Override
+        public String next() {
+            throw new AssertionError("Recovery asked the ID generator.");
+        }
+
+        @Override
+        public boolean accepts(String text) {
+            return accepting.test(text);
+        }
+
+        @Override
+        public IdGenerator copy() {
+            return this;
+        }
+    }
+
+    @Test
     @DisplayName("Scenario: IDs after reopening")
     void idsAfterReopening() {
         DirectoryStore first = durable.openWithReferenceModel();
@@ -201,6 +259,27 @@ class DurabilityScenariosTest {
         StoreEquivalence.assertEquivalent(beforeTheLast, observe(reopened, told));
         assertThat(DurableFixture.commit(reopened, Transaction.by("importer")
                 .create("Person", from(1, 1), values("name", "Bob")).build()).basis()).isEqualTo(last.basis());
+    }
+
+    @Test
+    @DisplayName("Scenario: A last record full of zeros")
+    void aLastRecordFullOfZeros() {
+        DirectoryStore first = durable.openWithReferenceModel();
+        ReferenceTales.Told told = ReferenceTales.rd1ToRd5(first, durable.clock);
+        StoreEquivalence.Observation beforeTheLast = observe(first, told);
+        Receipt last = durable.replay(first, ReferenceStories.rd7Rename(entity(told.parties, ACME)));
+        DurableFixture.crash(first);
+        Path segment = StoreFiles.lastSegment(directory);
+        long lastRecord = StoreFiles.recordStarts(segment).getLast();
+        long zerosFrom = lastRecord + StoreFiles.FRAME_HEADER + 10;
+        StoreFiles.zeroFrom(segment, zerosFrom);
+        assertThat(StoreFiles.size(segment)).as("the file is as long as it was").isGreaterThan(zerosFrom);
+
+        DirectoryStore reopened = durable.open();
+
+        assertThat(reopened.latestBasis()).isEqualTo(new Basis(last.basis().value() - 1));
+        StoreEquivalence.assertEquivalent(beforeTheLast, observe(reopened, told));
+        assertThat(StoreFiles.size(segment)).as("the record is gone from the log").isEqualTo(lastRecord);
     }
 
     @Test

@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -377,6 +378,94 @@ class RecoveryTest {
     }
 
     @Test
+    void aHeaderThatWasWrittenInPartAndIsFollowedOnlyByZeroBytesIsDropped() throws IOException {
+        for (int written = 1; written <= 11; written++) {
+            writeLog(4, CommitLog.DEFAULT_SEGMENT_LIMIT);
+            Path segment = segments().getFirst();
+            List<Long> starts = starts(segment);
+            byte[] bytes = Files.readAllBytes(segment);
+            Arrays.fill(bytes, (int) (starts.get(3) + written), bytes.length, (byte) 0);
+            Files.write(segment, bytes);
+
+            assertThat(recover().bases()).as("%d bytes of the header are written", written)
+                    .containsExactly(1L, 2L, 3L);
+            assertThat(Files.size(segment)).isEqualTo(starts.get(3));
+            Files.delete(segment);
+        }
+    }
+
+    @Test
+    void aHeaderThatFailsItsChecksumIsDamageIfAnyByteAfterItIsNotZero() throws IOException {
+        for (int written : new int[] {1, 4, 7}) {
+            writeLog(4, CommitLog.DEFAULT_SEGMENT_LIMIT);
+            Path segment = segments().getFirst();
+            List<Long> starts = starts(segment);
+            byte[] bytes = Files.readAllBytes(segment);
+            Arrays.fill(bytes, (int) (starts.get(3) + written), bytes.length, (byte) 0);
+            bytes[bytes.length - 1] = 1;
+            Files.write(segment, bytes);
+            Map<String, byte[]> before = contents();
+
+            assertThatThrownBy(this::recover).as("%d bytes of the header are written", written)
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining(segment.toString())
+                    .hasMessageContaining("byte " + starts.get(3));
+
+            assertThat(contents()).containsOnlyKeys(before.keySet())
+                    .allSatisfy((name, content) -> assertThat(content).isEqualTo(before.get(name)));
+            Files.delete(segment);
+        }
+    }
+
+    @Test
+    void aLastSegmentWhoseHeaderAndEverythingAfterAreZeroBytesIsDeleted() throws IOException {
+        for (int zeros : new int[] {12, 13, 100, 4096}) {
+            writeLog(3, CommitLog.DEFAULT_SEGMENT_LIMIT);
+            Path next = directory.resolve("log").resolve(String.format("%020d.log", 4));
+            Files.write(next, new byte[zeros]);
+
+            assertThat(recover().bases()).as("%d zero bytes", zeros).containsExactly(1L, 2L, 3L);
+            assertThat(next).doesNotExist();
+            Files.delete(segments().getFirst());
+        }
+    }
+
+    @Test
+    void aLastSegmentThatIsTheOnlyOneAndIsAllZeroBytesIsDeletedAndTheStoreIsEmpty() throws IOException {
+        Files.createDirectories(directory.resolve("log"));
+        Path only = directory.resolve("log").resolve(String.format("%020d.log", 1));
+        Files.write(only, new byte[64]);
+
+        Recovery.Result result = Recovery.recover(directory, new Collected());
+
+        assertThat(result.latest()).isEqualTo(Basis.NONE);
+        assertThat(only).doesNotExist();
+    }
+
+    @Test
+    void aZeroHeaderFollowedByOtherDataOrBeforeTheLastSegmentIsDamage() throws IOException {
+        writeLog(9, 150);
+        List<Path> segments = segments();
+        Path last = segments.getLast();
+        Path zeroed = segments.get(1);
+        Files.write(zeroed, new byte[64]);
+        assertThatThrownBy(this::recover).as("a zero segment before the last").isInstanceOf(
+                IllegalStateException.class).hasMessageContaining(zeroed.toString());
+        Files.delete(zeroed);
+        Files.delete(segments.getFirst());
+        for (int i = 2; i < segments.size() - 1; i++) {
+            Files.delete(segments.get(i));
+        }
+        byte[] bytes = new byte[64];
+        bytes[40] = 3;
+        Files.write(last, bytes);
+
+        assertThatThrownBy(this::recover).as("a zero header and other data after it")
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining(last.toString())
+                .hasMessageContaining("CAIRNLOG");
+        assertThat(last).exists();
+    }
+
+    @Test
     void aPayloadChecksumThatFailsInASegmentBeforeTheLastIsDamageEvenAtItsEnd() throws IOException {
         writeLog(9, 150);
         Path first = segments().getFirst();
@@ -665,6 +754,57 @@ class RecoveryTest {
             return Long.MAX_VALUE;
         }
         return Long.parseLong(segments.get(index + 1).getFileName().toString().substring(0, 20)) - 1;
+    }
+
+    @Test
+    void aDamagedNewestSnapshotDoesNotCountAmongTheTwoThatAreKept() throws IOException {
+        writeLog(12, 150);
+        List<Path> before = segments();
+        writeSnapshot(3);
+        writeSnapshot(6);
+        writeSnapshot(9);
+        flip(snapshots().getLast(), 20);
+
+        Snapshots.prune(directory);
+
+        assertThat(snapshots()).as("the valid ones are 6 and 3, so all three files stay").hasSize(3);
+        assertThat(segments()).as("only the segment of the records at or below 3 goes")
+                .isEqualTo(before.subList(1, before.size()));
+        flip(snapshots().get(1), 20);
+        Collected collected = recover();
+        assertThat(collected.transactions).as("with 9 and 6 damaged, recovery starts from 3").extracting(
+                record -> record.basis().value()).containsExactly(3L);
+        assertThat(collected.bases()).containsExactly(4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L);
+    }
+
+    @Test
+    void withAValidNewestSnapshotTheOlderOnesAreDeletedAsBefore() throws IOException {
+        writeLog(12, 150);
+        writeSnapshot(3);
+        writeSnapshot(6);
+        writeSnapshot(9);
+        writeSnapshot(11);
+        flip(snapshots().get(1), 20);
+
+        Snapshots.prune(directory);
+
+        assertThat(snapshots()).extracting(path -> path.getFileName().toString())
+                .as("the valid ones are 11 and 9: what is older than 9 goes, damaged or not")
+                .containsExactly("00000000000000000009.snapshot", "00000000000000000011.snapshot");
+    }
+
+    @Test
+    void withoutTwoValidSnapshotsNothingIsDeleted() throws IOException {
+        writeLog(12, 150);
+        List<Path> before = segments();
+        writeSnapshot(3);
+        writeSnapshot(6);
+        flip(snapshots().getFirst(), 20);
+
+        Snapshots.prune(directory);
+
+        assertThat(snapshots()).hasSize(2);
+        assertThat(segments()).isEqualTo(before);
     }
 
     @Test

@@ -23,13 +23,23 @@ import java.util.Optional;
  *   <li>Log segments are read in the order of their first basis. Records at or below the snapshot's basis are skipped.
  *       The first record after it must have the next basis, and every record the next one after its predecessor.
  *   <li>A bad record at position {@code p} of the last segment is where a crash cut the log, and the segment is
- *       truncated at {@code p}, in four cases only: fewer bytes remain than the header of a record; the header is right
- *       (the checksum of its length matches) but the payload runs past the end of the file; the header is right and the
- *       payload fits, but its checksum fails and nothing but zero bytes follows it, as when a file system extended the
- *       file before the data reached the disk; or every byte from {@code p} to the end of the file is zero. Any other bad
- *       record, whether its length does not match its checksum or its payload checksum fails with a byte other than zero
- *       after it, an unknown format version, or a gap in the bases fails with an {@code IllegalStateException} that
- *       names the file and the position, and nothing on disk changes.
+ *       truncated at {@code p}, in five cases only:
+ *       <ul>
+ *         <li>fewer bytes remain than the header of a record;
+ *         <li>the header is right (the checksum of its length matches), but the payload runs past the end of the file;
+ *         <li>the header is right and the payload fits, but the payload's checksum fails and nothing but zero bytes
+ *             follows it, as when a file system extended the file before the data reached the disk;
+ *         <li>the checksum of the header fails, as when a header was written in part, and every byte after the
+ *             12 bytes of the header, up to the end of the file, is zero;
+ *         <li>every byte from {@code p} to the end of the file is zero (a header whose checksum fails, which is zero
+ *             itself, is of the fourth kind).
+ *       </ul>
+ *   <li>A last segment that is shorter than its header, or whose header and everything after it are zero bytes, as when
+ *       a crash cut its creation, holds no record and is deleted.
+ *   <li>Anything else fails with an {@code IllegalStateException} that names the file and the position, and nothing on
+ *       disk changes: a record whose length does not match its checksum and that other data follows, a payload whose
+ *       checksum fails with a byte other than zero after it, a bad record in a segment before the last, an unknown
+ *       format version, or a gap in the bases.
  * </ul>
  */
 public final class Recovery {
@@ -117,8 +127,14 @@ public final class Recovery {
             throw FileFormat.damaged(file, length, "the file is shorter than its header");
         }
         long truncateAt = -1;
+        boolean zeros = false;
         try (InputStream in = new BufferedInputStream(Files.newInputStream(file), 1 << 16)) {
-            int version = switch (FileFormat.readHeader(in, FileFormat.LOG_MAGIC)) {
+            FileFormat.Header header = FileFormat.readHeader(in, FileFormat.LOG_MAGIC);
+            if (last && header instanceof FileFormat.Header.WrongMagic wrong && wrong.zero()
+                    && FrameReader.zeroToTheEnd(in)) {
+                zeros = true; // A crash while the segment was created: it holds no record.
+            }
+            int version = zeros ? RecordCodec.VERSION : switch (header) {
                 case FileFormat.Header.Version found -> found.version();
                 case FileFormat.Header.WrongMagic ignored -> throw FileFormat.damaged(file, 0,
                         "the file does not start with CAIRNLOG, so it is not a commit log segment");
@@ -127,6 +143,11 @@ public final class Recovery {
             };
             if (version != RecordCodec.VERSION) {
                 throw FileFormat.unknownVersion(file, version);
+            }
+            if (zeros) {
+                Files.delete(file);
+                FileFormat.forceDirectory(file.getParent());
+                return;
             }
             FrameReader frames = new FrameReader(in, FileFormat.HEADER_LENGTH, length);
             boolean first = true;
@@ -180,7 +201,7 @@ public final class Recovery {
     }
 
     /**
-     * Tells whether a bad frame in the last segment is where a crash ended the log, and so is dropped. Only four cases
+     * Tells whether a bad frame in the last segment is where a crash ended the log, and so is dropped. Only these cases
      * are:
      *
      * <ul>
@@ -190,17 +211,18 @@ public final class Recovery {
      *   <li>the header is right and the payload fits in the file, but its checksum fails, and nothing but zero bytes
      *       follows it: some file systems extend a file before its data reaches the disk, so a crash can leave a
      *       payload that is partly zeros or garbage, and that commit was never acknowledged;
-     *   <li>every byte from the frame to the end of the file is zero.
+     *   <li>the checksum of the header fails, and every byte after the header, up to the end of the file, is zero: a
+     *       header that was written in part, across a page boundary, or not at all.
      * </ul>
      *
-     * <p>Everything else is damage, including a frame whose length does not match its checksum, and a payload whose
-     * checksum fails with any byte other than zero after it.
+     * <p>Everything else is damage, including a frame whose length does not match its checksum with any byte other than
+     * zero after the header, and a payload whose checksum fails with any byte other than zero after it. The bytes after
+     * the frame are consumed.
      */
     private static boolean endsTheLog(FrameReader.Bad bad, FrameReader frames) throws IOException {
         return switch (bad.kind()) {
             case SHORT_HEADER, PAYLOAD_PAST_END -> true;
-            case PAYLOAD_CHECKSUM -> frames.restIsZero();
-            case HEADER_CHECKSUM -> bad.zeroHeader() && frames.restIsZero();
+            case PAYLOAD_CHECKSUM, HEADER_CHECKSUM -> frames.restIsZero();
             case LENGTH -> false;
         };
     }

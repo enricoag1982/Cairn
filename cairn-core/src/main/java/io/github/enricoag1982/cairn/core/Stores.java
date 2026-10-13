@@ -81,9 +81,12 @@ public final class Stores {
      * @return the open store, which the caller closes
      * @throws java.io.UncheckedIOException if reading or writing the directory fails
      * @throws IllegalStateException        if another open store holds the directory, if a file in it is damaged
-     *                                      anywhere but at the end of the last log segment, or if a file was written in
-     *                                      a format version that this version does not know; the message names the file
-     *                                      and, for damage, the byte position
+     *                                      anywhere but at the end of the last log segment, if a file was written in a
+     *                                      format version that this version does not know, or if the settings' ID
+     *                                      generator does not {@linkplain io.github.enricoag1982.cairn.data.IdGenerator#accepts
+     *                                      accept} the ID of an entity or a relationship that the store holds, as the
+     *                                      generator of another store; the message names the file and, for damage, the
+     *                                      byte position, or one ID that is not accepted
      * @throws IllegalArgumentException     if a rule's name or version breaks the rules for rule references, or if two
      *                                      rules, whether they have code or are declared, have the same name and version
      * @throws NullPointerException         if a rule has no descriptor

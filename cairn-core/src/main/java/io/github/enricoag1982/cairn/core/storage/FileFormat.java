@@ -98,8 +98,12 @@ final class FileFormat {
         record Short(int length) implements Header {
         }
 
-        /** The magic bytes are not the expected ones. */
-        record WrongMagic() implements Header {
+        /**
+         * The magic bytes are not the expected ones.
+         *
+         * @param zero whether all 12 bytes of the header are zero
+         */
+        record WrongMagic(boolean zero) implements Header {
         }
 
         /** The magic bytes are right. */
@@ -119,7 +123,11 @@ final class FileFormat {
             return new Header.Short(bytes.length);
         }
         if (!Arrays.equals(bytes, 0, magic.length, magic, 0, magic.length)) {
-            return new Header.WrongMagic();
+            boolean zero = true;
+            for (byte b : bytes) {
+                zero &= b == 0;
+            }
+            return new Header.WrongMagic(zero);
         }
         return new Header.Version(ByteBuffer.wrap(bytes, magic.length, 4).getInt());
     }

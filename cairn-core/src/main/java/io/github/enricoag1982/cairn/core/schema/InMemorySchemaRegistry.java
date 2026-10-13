@@ -173,7 +173,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         Instant time = commit.transactionTime();
         SchemaRecord record = new SchemaRecord(basis, time, submission, origin,
                 planned.origins().get(origin.name()).definition(),
-                assigned(compiled.schema(), current.nextId(), compiled.nextId()));
+                identifiers(compiled.schema(), compiled.nextId()));
         Journal written = journal;
         if (written != null) {
             written.append(record);
@@ -197,18 +197,16 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     }
 
     /**
-     * The identifiers that a registration assigned: those of the types and attributes of the schema that did not exist
-     * before, which are the ones numbered from the first free identifier on.
+     * The identifiers of every type, trait, relationship type and attribute of the schema after a registration, and the
+     * first identifier that is free. Recovery takes all of them from the record, and matches nothing by name.
      */
-    private static SchemaIdentifiers assigned(CompiledSchema schema, long firstNew, long nextId) {
+    private static SchemaIdentifiers identifiers(CompiledSchema schema, long nextId) {
         List<SchemaIdentifiers.TypeAssignment> types = schema.entries().stream()
-                .filter(entry -> entry.id().value() >= firstNew)
                 .sorted(Comparator.comparingLong(entry -> entry.id().value()))
                 .map(entry -> new SchemaIdentifiers.TypeAssignment(entry.name(), entry.id()))
                 .toList();
         List<SchemaIdentifiers.AttributeAssignment> attributes = schema.declarations().values().stream()
                 .map(CompiledSchema.Declaration::attribute)
-                .filter(attribute -> attribute.id().value() >= firstNew)
                 .sorted(Comparator.comparingLong(attribute -> attribute.id().value()))
                 .map(attribute -> new SchemaIdentifiers.AttributeAssignment(attribute.declaredBy(), attribute.name(),
                         attribute.id()))
@@ -228,12 +226,12 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
 
     /**
      * Applies a registration that a log or snapshot file recorded, as recovery does (design D4 of
-     * {@code add-durable-commit-log}): the definition is compiled, with the identifiers that the registration assigned,
-     * and added to the history. Nothing is validated or planned, the sequence is not touched, and nothing is written to
+     * {@code add-durable-commit-log}): the definition is compiled, with the identifier that the record holds for every
+     * element and without matching names, and added to the history. Nothing is validated or planned, the sequence is not touched, and nothing is written to
      * the journal. Registrations are restored in the order of their bases, before the registry is used.
      *
      * @param record the registration
-     * @throws IllegalStateException if the record has no identifier for an element that needs one
+     * @throws IllegalStateException if the record has no identifier for an element
      */
     public void restore(SchemaRecord record) {
         Objects.requireNonNull(record, "record");
@@ -245,7 +243,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                 .forEach(name -> originOfType.put(name, origin.origin())));
         List<Origin> list = origins.values().stream().map(OriginState::origin).toList();
         SchemaCompiler.Result compiled = SchemaCompiler.restore(combined(origins),
-                name -> originOfType.get(Names.key(name)), list, current.schema(), record.identifiers());
+                name -> originOfType.get(Names.key(name)), list, record.identifiers());
         state = next(current, origins, compiled, record);
     }
 

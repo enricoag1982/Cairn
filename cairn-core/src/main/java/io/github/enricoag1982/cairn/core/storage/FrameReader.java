@@ -16,7 +16,8 @@ import java.util.zip.CRC32C;
  * <ul>
  *   <li>{@link Kind#SHORT_HEADER}: the file ends before the 12 bytes of the header are complete;
  *   <li>{@link Kind#HEADER_CHECKSUM}: the checksum of the length does not match, so the length is not to be trusted; a
- *       header of zero bytes, as a file that was extended but never written has, is of this kind;
+ *       header of zero bytes, as a file that was extended but never written has, is of this kind, and so is a header that
+ *       was written in part;
  *   <li>{@link Kind#LENGTH}: the checksum of the length matches, but the length is not at least 1, the kind byte;
  *   <li>{@link Kind#PAYLOAD_PAST_END}: the length is right, but the file ends inside the payload;
  *   <li>{@link Kind#PAYLOAD_CHECKSUM}: the payload is whole, but its checksum does not match.
@@ -53,12 +54,11 @@ final class FrameReader {
     /**
      * A frame that is not whole or does not match its checksums.
      *
-     * @param start      the position of the frame in the file
-     * @param reason     what is wrong
-     * @param kind       the kind of what is wrong
-     * @param zeroHeader whether the header bytes that were read are all zero
+     * @param start  the position of the frame in the file
+     * @param reason what is wrong
+     * @param kind   the kind of what is wrong
      */
-    record Bad(long start, String reason, Kind kind, boolean zeroHeader) implements Result {
+    record Bad(long start, String reason, Kind kind) implements Result {
 
         /** Tells whether the file ends inside the frame: in its header, or in its payload after a right header. */
         boolean cutShort() {
@@ -95,9 +95,8 @@ final class FrameReader {
             return new End();
         }
         position += header.length;
-        boolean zero = allZero(header, header.length);
         if (header.length < Encoder.FRAME_HEADER) {
-            return new Bad(start, "the file ends inside the header of a record", Kind.SHORT_HEADER, zero);
+            return new Bad(start, "the file ends inside the header of a record", Kind.SHORT_HEADER);
         }
         ByteBuffer buffer = ByteBuffer.wrap(header);
         int length = buffer.getInt();
@@ -106,28 +105,27 @@ final class FrameReader {
         CRC32C lengthChecksum = new CRC32C();
         lengthChecksum.update(header, 0, 4);
         if ((int) lengthChecksum.getValue() != expectedLengthChecksum) {
-            return new Bad(start, "the checksum of the length of a record does not match", Kind.HEADER_CHECKSUM,
-                    zero);
+            return new Bad(start, "the checksum of the length of a record does not match", Kind.HEADER_CHECKSUM);
         }
         if (length < 1) {
-            return new Bad(start, "a record claims the length " + length, Kind.LENGTH, false);
+            return new Bad(start, "a record claims the length " + length, Kind.LENGTH);
         }
         if (length > fileLength - position) {
             position = fileLength;
             return new Bad(start, "a record of " + length + " bytes is cut short by the end of the file",
-                    Kind.PAYLOAD_PAST_END, false);
+                    Kind.PAYLOAD_PAST_END);
         }
         byte[] payload = in.readNBytes(length);
         position += payload.length;
         if (payload.length < length) {
             return new Bad(start, "a record of " + length + " bytes is cut short by the end of the file",
-                    Kind.PAYLOAD_PAST_END, false);
+                    Kind.PAYLOAD_PAST_END);
         }
         CRC32C checksum = new CRC32C();
         checksum.update(payload, 0, payload.length);
         if ((int) checksum.getValue() != expectedPayloadChecksum) {
             return new Bad(start, "the checksum of a record of " + length + " bytes does not match",
-                    Kind.PAYLOAD_CHECKSUM, false);
+                    Kind.PAYLOAD_CHECKSUM);
         }
         return new Frame(start, payload);
     }
@@ -146,13 +144,17 @@ final class FrameReader {
      * bytes it reads are consumed.
      */
     boolean restIsZero() throws IOException {
+        return zeroToTheEnd(in);
+    }
+
+    /** Tells whether everything that is left in a stream is zero bytes, or nothing; the bytes are consumed. */
+    static boolean zeroToTheEnd(InputStream stream) throws IOException {
         byte[] block = new byte[8192];
         int read;
-        while ((read = in.read(block)) > 0) {
+        while ((read = stream.read(block)) > 0) {
             if (!allZero(block, read)) {
                 return false;
             }
-            position += read;
         }
         return true;
     }

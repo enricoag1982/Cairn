@@ -10,7 +10,9 @@ import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.DurableStore;
+import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.IdGenerator;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
@@ -83,8 +85,10 @@ public final class DirectoryStore implements DurableStore {
      * @return the open store
      * @throws UncheckedIOException     if reading or writing the directory fails
      * @throws IllegalStateException    if another open store holds the directory, a file is damaged anywhere but at the
-     *                                  end of the last log segment, or a file was written in a format version that is
-     *                                  not known; the message names the file and, for damage, the position
+     *                                  end of the last log segment, a file was written in a format version that is not
+     *                                  known, or the generator does not accept the ID of an entity or a relationship that
+     *                                  the store holds; the message names the file and, for damage, the position, or
+     *                                  the ID
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two rules
      *                                  have the same name and version
      */
@@ -108,6 +112,7 @@ public final class DirectoryStore implements DurableStore {
         boolean opened = false;
         try {
             Recovery.Result recovered = Recovery.recover(directory, new Restorer(store));
+            requireIdsOfTheGenerator(store, generator);
             store.underWriterLock(() -> {
                 store.sequence().resume(recovered.latest(), recovered.lastTransactionTime());
                 return null;
@@ -128,6 +133,31 @@ public final class DirectoryStore implements DurableStore {
                 }
             }
         }
+    }
+
+    /**
+     * Checks that the ID generator accepts every ID that the recovered store holds, as an entity or a relationship: a
+     * store keeps the ID generator it was created with, so one that does not accept them is another generator.
+     *
+     * @throws IllegalStateException naming one ID that the generator does not accept
+     */
+    private static void requireIdsOfTheGenerator(InMemoryStore store, IdGenerator generator) {
+        for (EntityId id : store.entities().keySet()) {
+            if (!generator.accepts(id.value())) {
+                throw otherGenerator(id.value(), "an entity");
+            }
+        }
+        for (RelationshipId id : store.relationships().keySet()) {
+            if (!generator.accepts(id.value())) {
+                throw otherGenerator(id.value(), "a relationship");
+            }
+        }
+    }
+
+    private static IllegalStateException otherGenerator(String id, String holder) {
+        return new IllegalStateException("The ID generator that the store is opened with does not accept the ID " + id
+                + " of " + holder + " that the store holds. A store keeps the ID generator it was created with, so open "
+                + "it with that one.");
     }
 
     private void requireOpen() {
@@ -180,22 +210,29 @@ public final class DirectoryStore implements DurableStore {
 
     @Override
     public Basis writeSnapshot() {
-        requireOpen();
-        return snapshot();
+        snapshotLock.lock();
+        try {
+            // Closing holds this lock while it writes its own snapshot and releases the directory, so the store can
+            // have been closed while this call waited for the lock.
+            requireOpen();
+            return snapshot();
+        } finally {
+            snapshotLock.unlock();
+        }
     }
 
-    /** Writes a snapshot file of the latest state and deletes what the two newest snapshot files make unnecessary. */
+    /**
+     * Writes a snapshot file of the latest state and deletes what the two newest valid snapshot files make unnecessary.
+     * The caller holds the snapshot lock.
+     */
     private Basis snapshot() {
-        snapshotLock.lock();
         try {
             Snapshots.Content content = StoreImage.of(store);
             Snapshots.write(directory, content);
-            Snapshots.prune(directory);
+            Snapshots.prune(directory, content.basis().value());
             return content.basis();
         } catch (IOException e) {
             throw new UncheckedIOException("Writing a snapshot file in " + directory + " failed.", e);
-        } finally {
-            snapshotLock.unlock();
         }
     }
 
@@ -248,6 +285,11 @@ public final class DirectoryStore implements DurableStore {
         } finally {
             snapshotLock.unlock();
         }
+    }
+
+    /** The lock that serializes snapshot files and closing; for tests of what happens while it is held. */
+    ReentrantLock snapshotLock() {
+        return snapshotLock;
     }
 
     /** Makes the next write to the log fail, as a failing disk would. For tests of a commit that cannot be written. */

@@ -33,9 +33,10 @@ import java.util.function.Function;
  * same name, or whose name is one of the new type's aliases; an attribute with the same name or alias among the
  * attributes of the type that declared it before. Everything else gets a new identifier.
  *
- * <p>Recovery compiles a logged definition the same way, except that the elements that get a new identifier take the one
- * that the logged registration assigned to them ({@link SchemaIdentifiers}), so that numbering never depends on the
- * code of the version that recovers. An element without a logged identifier is a damaged record.
+ * <p>Recovery compiles a logged definition without matching anything: every element takes the identifier that the
+ * logged registration gave it ({@link SchemaIdentifiers}), kept elements and new ones alike, so that recovery does not
+ * depend on how the code of the version that recovers matches names and aliases or numbers elements. An element without
+ * a logged identifier is a damaged record.
  */
 final class SchemaCompiler {
 
@@ -54,7 +55,7 @@ final class SchemaCompiler {
     private final Function<String, Origin> originOf;
     private final CompiledSchema previous;
     private long nextId;
-    /** The identifiers a logged registration assigned, by name key; null when numbering new elements. */
+    /** The identifiers a logged registration holds, by name key; null when matching and numbering. */
     private final Map<String, TypeId> loggedTypes;
     private final Map<String, AttributeId> loggedAttributes;
 
@@ -75,10 +76,18 @@ final class SchemaCompiler {
             loggedAttributes = null;
         } else {
             loggedTypes = new HashMap<>();
-            logged.types().forEach(type -> loggedTypes.put(Names.key(type.name()), type.id()));
             loggedAttributes = new HashMap<>();
-            logged.attributes().forEach(attribute -> loggedAttributes.put(
-                    Names.key(attribute.declarer()) + "." + Names.key(attribute.name()), attribute.id()));
+            Set<Long> seen = new HashSet<>();
+            for (SchemaIdentifiers.TypeAssignment type : logged.types()) {
+                checkLogged(seen, type.id().value(), type.name(), logged.nextId());
+                loggedTypes.put(Names.key(type.name()), type.id());
+            }
+            for (SchemaIdentifiers.AttributeAssignment attribute : logged.attributes()) {
+                checkLogged(seen, attribute.id().value(), attribute.declarer() + "." + attribute.name(),
+                        logged.nextId());
+                loggedAttributes.put(Names.key(attribute.declarer()) + "." + Names.key(attribute.name()),
+                        attribute.id());
+            }
         }
         definition.entityTypes().forEach(type -> entityTypes.put(Names.key(type.name()), type));
         definition.traits().forEach(trait -> traits.put(Names.key(trait.name()), trait));
@@ -100,43 +109,32 @@ final class SchemaCompiler {
     }
 
     /**
-     * Compiles a definition that a log or snapshot file recorded, giving the elements that are new the identifiers that
-     * the registration assigned, and not numbering anything. The result's next identifier is the logged one.
+     * Compiles a definition that a log or snapshot file recorded. Every type, trait, relationship type and attribute
+     * takes the identifier that the record holds; nothing is matched by name or alias against an earlier schema, and
+     * nothing is numbered. The result's next identifier is the logged one.
      *
      * @param definition a definition with the types of every origin
      * @param originOf   the origin of each type, by type name
      * @param origins    the origins in the schema
-     * @param previous   the schema whose identifiers are kept
-     * @param logged     the identifiers the registration assigned, and the first identifier that was free after it
-     * @throws IllegalStateException if an element that needs a new identifier has none among the logged ones
+     * @param logged     the identifiers of every element of the schema after the registration, and the first
+     *                   identifier that was free after it
+     * @throws IllegalStateException if an element has no logged identifier, if the record gives one identifier to two
+     *                               elements, or if one is not below the logged next identifier
      */
     static Result restore(SchemaDefinition definition, Function<String, Origin> originOf, List<Origin> origins,
-            CompiledSchema previous, SchemaIdentifiers logged) {
-        return new SchemaCompiler(definition, originOf, previous, logged.nextId(), logged).run(origins);
+            SchemaIdentifiers logged) {
+        return new SchemaCompiler(definition, originOf, CompiledSchema.EMPTY, logged.nextId(), logged).run(origins);
     }
 
-    private TypeId newTypeId(String name) {
-        if (loggedTypes == null) {
-            return new TypeId(nextId++);
+    private static void checkLogged(Set<Long> seen, long id, String element, long nextId) {
+        if (id >= nextId || id < 1) {
+            throw new IllegalStateException("The record of the registration gives " + element + " the identifier " + id
+                    + ", which is not below its next identifier " + nextId + ".");
         }
-        TypeId logged = loggedTypes.get(Names.key(name));
-        if (logged == null) {
-            throw new IllegalStateException("The record of the registration has no identifier for the type " + name
-                    + ".");
+        if (!seen.add(id)) {
+            throw new IllegalStateException("The record of the registration gives the identifier " + id
+                    + " to more than one element, one of them " + element + ".");
         }
-        return logged;
-    }
-
-    private AttributeId newAttributeId(String key) {
-        if (loggedAttributes == null) {
-            return new AttributeId(nextId++);
-        }
-        AttributeId logged = loggedAttributes.get(key);
-        if (logged == null) {
-            throw new IllegalStateException("The record of the registration has no identifier for the attribute "
-                    + key + ".");
-        }
-        return logged;
     }
 
     private Result run(List<Origin> origins) {
@@ -191,6 +189,21 @@ final class SchemaCompiler {
     // ------------------------------------------------------------------ identifiers
 
     private void assignTypeIds() {
+        if (loggedTypes != null) {
+            List<String> names = new ArrayList<>();
+            entityTypes.values().forEach(type -> names.add(type.name()));
+            traits.values().forEach(trait -> names.add(trait.name()));
+            relationshipTypes.values().forEach(type -> names.add(type.name()));
+            for (String name : names) {
+                TypeId logged = loggedTypes.get(Names.key(name));
+                if (logged == null) {
+                    throw new IllegalStateException("The record of the registration has no identifier for the type "
+                            + name + ".");
+                }
+                typeIds.put(Names.key(name), logged);
+            }
+            return;
+        }
         Set<TypeId> used = new HashSet<>();
         Map<String, Kind> kinds = new LinkedHashMap<>();
         Map<String, List<String>> aliases = new HashMap<>();
@@ -215,11 +228,22 @@ final class SchemaCompiler {
                     return;
                 }
             }
-            typeIds.put(Names.key(name), newTypeId(name));
+            typeIds.put(Names.key(name), new TypeId(nextId++));
         });
     }
 
     private void assignAttributeIds() {
+        if (loggedAttributes != null) {
+            for (Declared declared : declaredAttributes()) {
+                AttributeId logged = loggedAttributes.get(declared.key());
+                if (logged == null) {
+                    throw new IllegalStateException("The record of the registration has no identifier for the "
+                            + "attribute " + declared.declarer() + "." + declared.attribute().name() + ".");
+                }
+                attributeIds.put(declared.key(), logged);
+            }
+            return;
+        }
         Map<TypeId, String> newNames = new HashMap<>();
         typeIds.forEach((key, id) -> newNames.put(id, key));
         List<CompiledSchema.Declaration> previousDeclarations = previous.declarations().values().stream()
@@ -251,13 +275,18 @@ final class SchemaCompiler {
                         used.add(attribute.id());
                     });
         }
+        for (Declared declared : declaredAttributes()) {
+            attributeIds.computeIfAbsent(declared.key(), key -> new AttributeId(nextId++));
+        }
+    }
+
+    /** Every attribute that the definition declares, with the trait or type that declares it. */
+    private List<Declared> declaredAttributes() {
         List<Declared> all = new ArrayList<>();
         traits.values().forEach(trait -> trait.attributes().forEach(a -> all.add(new Declared(trait.name(), a))));
         entityTypes.values().forEach(type -> type.attributes().forEach(a -> all.add(new Declared(type.name(), a))));
         relationshipTypes.values().forEach(type -> type.attributes().forEach(a -> all.add(new Declared(type.name(), a))));
-        for (Declared declared : all) {
-            attributeIds.computeIfAbsent(declared.key(), this::newAttributeId);
-        }
+        return all;
     }
 
     private TypeId typeId(String name) {

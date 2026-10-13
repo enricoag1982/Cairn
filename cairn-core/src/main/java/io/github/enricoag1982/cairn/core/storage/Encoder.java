@@ -52,7 +52,7 @@ final class Encoder {
         return new Encoder(false);
     }
 
-    /** An encoder for a record in a frame: the payload follows 8 reserved bytes. */
+    /** An encoder for a record in a frame: the payload follows the 12 reserved bytes of the frame header. */
     static Encoder framed() {
         return new Encoder(true);
     }

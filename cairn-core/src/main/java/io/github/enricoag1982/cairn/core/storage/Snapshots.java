@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,7 +42,7 @@ public final class Snapshots {
     private static final int HISTORY = 19;
     private static final int END = 31;
 
-    /** The number of snapshot files to keep. */
+    /** The number of valid snapshot files to keep. */
     private static final int KEPT = 2;
 
     private static final int BUFFER = 1 << 16;
@@ -207,28 +208,51 @@ public final class Snapshots {
     // ------------------------------------------------------------------ keeping
 
     /**
-     * Deletes what the two newest snapshot files make unnecessary: older snapshot files, and the log segments that hold
-     * only records at or below the basis of the older of the two. With fewer than two snapshot files, nothing is
-     * deleted. The snapshot files go first, so that a crash in between never leaves a snapshot without the log it needs.
+     * Deletes what the two newest <em>valid</em> snapshot files make unnecessary: snapshot files older than the older of
+     * the two, and the log segments that hold only records at or below its basis. A snapshot file that is damaged does not
+     * count as one of the two, so that recovery can still use the older ones if it is the newest; it stays until it is
+     * older than the older of the two valid ones. With fewer than two valid snapshot files, nothing is deleted. The
+     * snapshot files go first, so that a crash in between never leaves a snapshot without the log it needs.
      *
      * @param storeDirectory the directory of the store
-     * @throws IOException if deleting fails
+     * @throws IOException if reading or deleting fails
      */
     public static void prune(Path storeDirectory) throws IOException {
+        prune(storeDirectory, -1);
+    }
+
+    /**
+     * Deletes what the two newest valid snapshot files make unnecessary, as {@link #prune(Path)} does, without reading
+     * the snapshot file that was just written, which is known to be valid.
+     *
+     * @param storeDirectory the directory of the store
+     * @param writtenBasis   the basis of the snapshot file that was just written, or a negative number for none
+     * @throws IOException if reading or deleting fails
+     */
+    public static void prune(Path storeDirectory, long writtenBasis) throws IOException {
         Path snapshotDirectory = storeDirectory.resolve(FileFormat.SNAPSHOT_DIRECTORY);
         Path logDirectory = storeDirectory.resolve(FileFormat.LOG_DIRECTORY);
         List<FileFormat.Numbered> snapshots = FileFormat.list(snapshotDirectory, FileFormat.SNAPSHOT_SUFFIX);
+        List<FileFormat.Numbered> valid = new ArrayList<>();
+        for (int i = snapshots.size() - 1; i >= 0 && valid.size() < KEPT; i--) {
+            FileFormat.Numbered file = snapshots.get(i);
+            if (file.basis() == writtenBasis || isValid(file)) {
+                valid.add(file);
+            }
+        }
+        if (valid.size() < KEPT) {
+            return;
+        }
+        long older = valid.get(KEPT - 1).basis();
         boolean deletedSnapshots = false;
-        for (int i = 0; i < snapshots.size() - KEPT; i++) {
-            deletedSnapshots |= Files.deleteIfExists(snapshots.get(i).path());
+        for (FileFormat.Numbered file : snapshots) {
+            if (file.basis() < older) {
+                deletedSnapshots |= Files.deleteIfExists(file.path());
+            }
         }
         if (deletedSnapshots) {
             FileFormat.forceDirectory(snapshotDirectory);
         }
-        if (snapshots.size() < KEPT) {
-            return;
-        }
-        long older = snapshots.get(snapshots.size() - KEPT).basis();
         List<FileFormat.Numbered> segments = FileFormat.list(logDirectory, FileFormat.LOG_SUFFIX);
         boolean deletedSegments = false;
         for (int i = 0; i + 1 < segments.size(); i++) {
@@ -238,6 +262,15 @@ public final class Snapshots {
         }
         if (deletedSegments) {
             FileFormat.forceDirectory(logDirectory);
+        }
+    }
+
+    /** Tells whether a snapshot file is complete and undamaged, and of a format version that is known. */
+    private static boolean isValid(FileFormat.Numbered file) throws IOException {
+        try {
+            return verify(file).isPresent();
+        } catch (IllegalStateException e) {
+            return false; // A format version that is not known: recovery refuses it, pruning leaves it alone.
         }
     }
 

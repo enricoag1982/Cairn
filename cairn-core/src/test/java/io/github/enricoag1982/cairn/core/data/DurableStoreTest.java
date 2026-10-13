@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -135,6 +137,36 @@ class DurableStoreTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> registry.asOf(Basis.NONE)).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> registry.asOf(Instant.EPOCH)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void aSnapshotThatWaitedForTheLockWhileTheStoreWasClosedIsRefusedAndWritesNothing() throws Exception {
+        DirectoryStore store = durable.openWithReferenceModel();
+        ReferenceTales.rd1ToRd5(store, durable.clock);
+        ReentrantLock lock = store.snapshotLock();
+        AtomicReference<Throwable> outcome = new AtomicReference<>();
+        lock.lock();
+        Thread waiting = new Thread(() -> {
+            try {
+                outcome.set(new AssertionError("The snapshot was written: " + store.writeSnapshot()));
+            } catch (Throwable e) {
+                outcome.set(e);
+            }
+        });
+        waiting.start();
+        while (!lock.hasQueuedThread(waiting)) {
+            Thread.onSpinWait();
+        }
+        store.close();
+        Map<String, byte[]> closed = StoreFiles.contents(directory);
+        lock.unlock();
+        waiting.join(10_000);
+
+        assertThat(waiting.isAlive()).isFalse();
+        assertThat(outcome.get()).isInstanceOf(IllegalStateException.class);
+        assertThat(StoreFiles.contents(directory)).as("nothing was written or deleted after the close")
+                .containsOnlyKeys(closed.keySet()).allSatisfy((name, bytes) -> assertThat(bytes)
+                        .isEqualTo(closed.get(name)));
     }
 
     @Test
