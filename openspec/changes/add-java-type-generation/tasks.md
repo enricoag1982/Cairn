@@ -25,7 +25,7 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Add `Generated type`, `Snapshot` and `Rule base class` to `docs/glossary.md`
+- [ ] 5.1 Add `Snapshot record` and `Rule base class` to `docs/glossary.md`, and update `Generated type`
 - [ ] 5.2 Write a guide in `docs/guides/` for generating types and writing rules against them
 - [ ] 5.3 Update `docs/architecture/README.md`, `AGENTS.md`, `README.md` and `openspec/config.yaml` (ADR-0021), and bump `last-reviewed`
 - [ ] 5.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

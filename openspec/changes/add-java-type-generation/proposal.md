@@ -38,4 +38,4 @@ None. Generated code uses the existing generic API; the engine does not depend o
 - **Decisions:** ADR-0012 (generated Java types; the engine never depends on them), ADR-0018 (rules in Java), ADR-0010 (inheritance and traits) and ADR-0021 (the shape of the generated types), all accepted. ADR-0021 was accepted under the standing approval, with this proposal.
 - **Code:** two new subprojects: `cairn-codegen`, the generator with a command-line entry point, and `cairn-gradle-plugin`, the plugin. Two convention plugins in `build-logic/`: one for Gradle plugins, which run on the Java that runs Gradle, and one that generates the reference domain's types for tests. `cairn-api` gains `TypedEntity`, `TypedRelationship` and value conversions.
 - **Dependencies:** none from outside. The plugin uses Gradle's API and TestKit, which Gradle provides.
-- **Docs:** a guide for generating types and writing rules against them, the glossary (generated type, snapshot, rule base class), the architecture page.
+- **Docs:** a guide for generating types and writing rules against them, the glossary (generated type, snapshot record, rule base class), the architecture page.
