@@ -129,6 +129,7 @@ SirixDB is an embeddable, append-only, bitemporal store written in Java. It vers
   7. `add-durable-commit-log`: a file-based commit log, snapshots and recovery.
   8. `add-queries-and-aggregation`.
   9. Later: CEL expressions, derived attributes, feature flags and storage capabilities, change feed, purge, a RocksDB store.
+  10. Then, as an end-to-end test of the platform: a basic HR system built on Cairn, with test data. See the [placeholder note](2026-10-13-hr-system-as-a-test-domain.md).
 
 ## Sources
 
