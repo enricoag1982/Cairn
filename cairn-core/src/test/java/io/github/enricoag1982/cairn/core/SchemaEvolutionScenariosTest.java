@@ -33,6 +33,7 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaPlan;
 import io.github.enricoag1982.cairn.schema.SchemaChange;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.StoredDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import io.github.enricoag1982.cairn.schema.ValueType;
@@ -685,6 +686,53 @@ class SchemaEvolutionScenariosTest {
         Attribute found = schema.entityType("Organization").orElseThrow().attribute("lei").orElseThrow();
         assertThat(found.name()).isEqualTo("legalEntityId");
         assertThat(found.id()).isEqualTo(leiId);
+    }
+
+    // ------------------------------------------------------------------ stored definitions
+
+    @Test
+    @DisplayName("Scenario: Reading a stored definition")
+    void readingAStoredDefinition() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        applied(register("1.1.0", withEmail()));
+
+        assertThat(registry.storedDefinition("reference-model")).contains(
+                new StoredDefinition(ReferenceModel.origin("1.1.0"), withEmail()));
+    }
+
+    @Test
+    @DisplayName("Scenario: Unknown origin")
+    void unknownOrigin() {
+        assertThat(registry.storedDefinition("reference-model")).isEmpty();
+
+        applied(register("1.0.0", ReferenceModel.definition()));
+
+        assertThat(registry.storedDefinition("another-model")).isEmpty();
+        assertThat(registry.storedDefinition("Reference-Model")).isEmpty();
+    }
+
+    @Test
+    void aStoredDefinitionChangesOnlyWithAnAppliedRegistration() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        applied(register("1.1.0", withEmail()));
+        StoredDefinition stored = registry.storedDefinition("reference-model").orElseThrow();
+
+        rejected(register("1.1.0", ReferenceModel.definition()));
+        unchanged(register("1.1.0", withEmail()));
+        unchanged(register("1.0.0", ReferenceModel.definition()));
+
+        assertThat(registry.storedDefinition("reference-model")).contains(stored);
+    }
+
+    @Test
+    void everyOriginHasItsOwnStoredDefinition() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition crm = SchemaDefinition.builder().entityType("Lead").build();
+        applied(registry.register(new Origin("crm", "2.0.0"), crm));
+
+        assertThat(registry.storedDefinition("crm")).contains(new StoredDefinition(new Origin("crm", "2.0.0"), crm));
+        assertThat(registry.storedDefinition("reference-model").orElseThrow().definition())
+                .isEqualTo(ReferenceModel.definition());
     }
 
     // ------------------------------------------------------------------ helpers

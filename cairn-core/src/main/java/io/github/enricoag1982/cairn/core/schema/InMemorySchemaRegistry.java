@@ -14,6 +14,7 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaPlan;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.SchemaTransaction;
+import io.github.enricoag1982.cairn.schema.StoredDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -146,6 +147,12 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     @Override
     public List<RuleDescriptor> availableRules() {
         return rules;
+    }
+
+    @Override
+    public Optional<StoredDefinition> storedDefinition(String originName) {
+        OriginState stored = state.origins().get(Objects.requireNonNull(originName, "originName"));
+        return Optional.ofNullable(stored).map(origin -> new StoredDefinition(origin.origin(), origin.definition()));
     }
 
     @Override

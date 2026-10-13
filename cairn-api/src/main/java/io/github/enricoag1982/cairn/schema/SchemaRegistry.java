@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.schema;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Registers schema definitions and keeps the history of the stored schema in transaction time
@@ -58,6 +59,19 @@ public interface SchemaRegistry {
      * @return the rules, sorted by name and then by version
      */
     List<RuleDescriptor> availableRules();
+
+    /**
+     * Returns the origin and the definition that the stored schema holds for an origin name: those of the latest
+     * applied registration of that origin, which is the definition a tool can export as a schema document.
+     *
+     * <p>A registration that was rejected or left the schema unchanged does not change what is returned; neither does
+     * registering an older version of the origin.
+     *
+     * @param originName the name of the origin, compared as written
+     * @return the origin, with the version of the latest applied registration, and its definition; empty if the
+     *         origin never registered
+     */
+    Optional<StoredDefinition> storedDefinition(String originName);
 
     /**
      * Returns the latest schema.

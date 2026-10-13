@@ -220,12 +220,13 @@ class ReferenceModelTest {
                     .replaceAll("\\([A-Z][^)]*\\)", "");
             List<String> words = Arrays.stream(flags.split(",")).map(String::strip).toList();
             Matcher range = RANGE.matcher(flags);
+            ValueType valueType = ValueType.valueOf(matcher.group(2).toUpperCase(Locale.ROOT));
             result.add(new AttributeDefinition(
                     matcher.group(1),
-                    ValueType.valueOf(matcher.group(2).toUpperCase(Locale.ROOT)),
+                    valueType,
                     words.contains("required"),
                     words.contains("unique"),
-                    range.find() ? Optional.of(range(range)) : Optional.empty(),
+                    range.find() ? Optional.of(range(range, valueType)) : Optional.empty(),
                     List.of(),
                     false,
                     Optional.empty(),
@@ -238,14 +239,16 @@ class ReferenceModelTest {
         return result;
     }
 
-    private static Range range(Matcher matcher) {
+    private static Range range(Matcher matcher, ValueType valueType) {
         return Range.between(
-                bound(matcher.group(1), matcher.group(2)),
-                bound(matcher.group(3), matcher.group(4)));
+                bound(matcher.group(1), matcher.group(2), valueType),
+                bound(matcher.group(3), matcher.group(4), valueType));
     }
 
-    private static Bound bound(String number, String inclusivity) {
-        Literal value = number.contains(".") ? Literal.of(new BigDecimal(number)) : Literal.of(Integer.parseInt(number));
+    /** A bound has the value type of its attribute, so that a schema document gives the same bounds. */
+    private static Bound bound(String number, String inclusivity, ValueType valueType) {
+        Literal value = valueType == ValueType.DECIMAL ? Literal.of(new BigDecimal(number))
+                : Literal.of(Integer.parseInt(number));
         return new Bound(value, inclusivity.equals("inclusive"));
     }
 

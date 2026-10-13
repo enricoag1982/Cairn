@@ -31,6 +31,7 @@ import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.ValueType;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -228,8 +229,8 @@ class TypeModelScenariosTest {
                 .attribute("share").orElseThrow();
         assertThat(share.valueType()).isEqualTo(ValueType.DECIMAL);
         assertThat(share.required()).isTrue();
-        assertThat(share.range()).contains(
-                Range.between(Bound.exclusive(Literal.of(0)), Bound.inclusive(Literal.of(100))));
+        assertThat(share.range()).contains(Range.between(
+                Bound.exclusive(Literal.of(new BigDecimal("0"))), Bound.inclusive(Literal.of(new BigDecimal("100")))));
     }
 
     @Test

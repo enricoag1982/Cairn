@@ -2,20 +2,20 @@
 
 ## 1. Build
 
-- [ ] 1.1 Add SnakeYAML Engine 3.1.1 and json-schema-validator 3.0.7 to `gradle/libs.versions.toml`; add the subproject `cairn-documents` with the `cairn.java-library` convention plugin and a `module-info.java` (D1)
-- [ ] 1.2 Add `docs/reference/reference-model.cairn.yaml` as a test input in the `cairn.reference-domain-tests` convention plugin (D10)
+- [x] 1.1 Add SnakeYAML Engine 3.1.1 and json-schema-validator 3.0.7 to `gradle/libs.versions.toml`; add the subproject `cairn-documents` with the `cairn.java-library` convention plugin and a `module-info.java` (D1)
+- [x] 1.2 Add `docs/reference/reference-model.cairn.yaml` as a test input in the `cairn.reference-domain-tests` convention plugin (D10)
 
 ## 2. API and engine
 
-- [ ] 2.1 Add `DocumentLocation`, `Problem.location` and `Problem.at` to `cairn-api`, keeping the shorter constructors (D4)
-- [ ] 2.2 Add the document problem codes with explanations (D5)
-- [ ] 2.3 Add `SchemaRegistry.storedDefinition` and `StoredDefinition`, and implement it in `cairn-core` (D9)
+- [x] 2.1 Add `DocumentLocation`, `Problem.location` and `Problem.at` to `cairn-api`, keeping the shorter constructors (D4)
+- [x] 2.2 Add the document problem codes with explanations (D5)
+- [x] 2.3 Add `SchemaRegistry.storedDefinition` and `StoredDefinition`, and implement it in `cairn-core` (D9)
 
 ## 3. Documents
 
-- [ ] 3.1 Read documents with SnakeYAML Engine's node tree: format version, origin, traits, entity types, relationship types, every property, defaults, literals and ranges (D2, D6)
-- [ ] 3.2 Report document problems with locations and hints, and reject anchors, aliases, explicit tags, duplicate keys and multi-document streams (D5)
-- [ ] 3.3 Build `DocumentLocations` and `SchemaDocument.locate` (D4)
+- [x] 3.1 Read documents with SnakeYAML Engine's node tree: format version, origin, traits, entity types, relationship types, every property, defaults, literals and ranges (D2, D6)
+- [x] 3.2 Report document problems with locations and hints, and reject anchors, aliases, explicit tags, duplicate keys and multi-document streams (D5)
+- [x] 3.3 Build `DocumentLocations` and `SchemaDocument.locate` (D4)
 - [ ] 3.4 Write documents as YAML and as JSON (D7)
 - [ ] 3.5 Write the JSON Schema resource and `SchemaDocuments.jsonSchema()` (D8)
 

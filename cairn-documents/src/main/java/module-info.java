@@ -1,0 +1,11 @@
+/**
+ * Schema documents: reading them into schema definitions, and locating problems in them.
+ */
+// The name follows the io.github.<user> convention; the user name ends in digits by necessity.
+@SuppressWarnings("module")
+module io.github.enricoag1982.cairn.documents {
+    requires transitive io.github.enricoag1982.cairn;
+    requires org.snakeyaml.engine;
+
+    exports io.github.enricoag1982.cairn.documents;
+}

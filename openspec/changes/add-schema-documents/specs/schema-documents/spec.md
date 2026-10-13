@@ -29,9 +29,9 @@ Literals SHALL be written as YAML numbers for int, long and decimal values, as `
 
 ### Requirement: Strict reading
 
-WHEN a document has problems, THE SYSTEM SHALL report every problem it finds and SHALL NOT return a definition. These are problems: an unknown key, a missing key that is required, a value of the wrong kind, a multiplicity or range written in another form, and YAML features outside the supported subset: anchors, aliases, explicit tags, duplicate keys and more than one document in a stream. An unknown key SHALL come with the closest known key as a hint, when one differs from it by at most two letters.
+WHEN a document has problems, THE SYSTEM SHALL report every problem it finds and SHALL NOT return a definition. These are problems: an unknown key, a missing key that is required, a value of the wrong kind, a multiplicity or range written in another form, and YAML features outside the supported subset: anchors, aliases, explicit tags, merge keys, duplicate keys and more than one document in a stream. A key whose value is a string, such as a version, a description or a pattern, MUST be given a string: a plain number, boolean or null there is a value of the wrong kind, so `version: 1.10` must be quoted. An unknown key SHALL come with the closest known key as a hint, when one differs from it by at most two letters.
 A literal of the wrong value type, such as a string example for a date attribute, is not a problem of the document; it SHALL be read as a literal of its own type and reported by validation (see the `type-model` capability).
-A YAML syntax error SHALL stop reading and SHALL be reported with its location.
+A YAML syntax error, and a format version other than 1, SHALL stop reading and SHALL be reported with their location.
 
 #### Scenario: Misspelled key
 

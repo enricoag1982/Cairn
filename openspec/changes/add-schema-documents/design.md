@@ -29,7 +29,8 @@ ADR-0012 makes YAML 1.2 schema documents the canonical definition of types, with
 
 - SnakeYAML Engine implements YAML 1.2, has no dependencies, and reads JSON as YAML. Release 3.2 is ten days old; 3.1.1 (August 2026) is used until 3.2 has been out for some weeks.
 - The reader composes the node tree (not Java objects), so that every node keeps its start mark (line and column) and every scalar keeps its text and whether it was quoted. Literals are converted from the scalar text, so a decimal never passes through a `double`.
-- Load settings forbid duplicate keys. Anchors, aliases and explicit tags are found on the node tree and reported as problems. More than one document in a stream is a problem.
+- The reader finds duplicate keys, anchors, aliases, explicit tags and merge keys on the node tree and reports them as problems. An explicit tag equal to the implicit one (`!!str`) is invisible on the node tree, so the reader extends SnakeYAML Engine's `Composer` to remember tagged nodes. More than one document in a stream is a problem.
+- SnakeYAML Engine's module descriptor does not export `api.lowlevel`, so the reader builds the tree with `Composer`, `ParserImpl` and `StreamReader` directly.
 - Alternative: Jackson with its YAML module. Rejected for the engine path: it reads YAML 1.1 through SnakeYAML, and it is a much larger dependency.
 
 ### D3. Public API
@@ -49,9 +50,9 @@ ADR-0012 makes YAML 1.2 schema documents the canonical definition of types, with
 ### D5. Problems of the document itself
 
 - New problem codes: `DOCUMENT_SYNTAX` (YAML syntax error), `UNSUPPORTED_FORMAT_VERSION`, `UNSUPPORTED_YAML_FEATURE` (anchor, alias, explicit tag, several documents), `DUPLICATE_KEY`, `UNKNOWN_KEY`, `MISSING_KEY` and `INVALID_VALUE` (a value of the wrong kind, a malformed multiplicity or range).
-- Their path is the element path when the problem is inside a type, attribute, inverse name or rule, and `@document` otherwise. Their location is always set.
+- Their path is the element path when the problem is inside a type, attribute, inverse name or rule, `@origin` inside the `origin` mapping, and `@document` otherwise. Their location is always set.
 - `UNKNOWN_KEY` gets the closest known key at that position as its hint, with the same distance rule as names (at most two letters).
-- The reader reports every problem it finds in one pass, except a syntax error, which stops it.
+- The reader reports every problem it finds in one pass, sorted by line and column, except a syntax error or an unsupported format version, which stop it: the keys of another format version are unknown.
 
 ### D6. Literals in documents
 

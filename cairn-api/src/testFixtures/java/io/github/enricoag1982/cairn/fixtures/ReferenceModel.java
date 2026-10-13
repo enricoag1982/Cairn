@@ -13,11 +13,15 @@ import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RuleCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
  * The reference domain of {@code docs/reference/reference-domain.md} as a schema definition.
  * {@code ReferenceModelTest} checks that the two stay in step.
+ *
+ * <p>The bounds of the range of {@code Owns.share} are decimal values, like the attribute: a schema document gives a
+ * bound the value type of its attribute, and decimal values are equal only if their scales are.
  */
 public final class ReferenceModel {
 
@@ -64,8 +68,9 @@ public final class ReferenceModel {
                         .from("Organization").to("Party")
                         .targetsPerSource(ZERO_OR_MORE).sourcesPerTarget(ZERO_OR_MORE)
                         .inverse("ownedBy")
-                        .attribute("share", DECIMAL, a -> a.required().range(
-                                Range.between(Bound.exclusive(Literal.of(0)), Bound.inclusive(Literal.of(100)))))
+                        .attribute("share", DECIMAL, a -> a.required().range(Range.between(
+                                Bound.exclusive(Literal.of(new BigDecimal("0"))),
+                                Bound.inclusive(Literal.of(new BigDecimal("100"))))))
                         .rule("total-ownership-at-most-100", 1))
                 .relationshipType("Employs", r -> r
                         .from("Organization").to("Person")

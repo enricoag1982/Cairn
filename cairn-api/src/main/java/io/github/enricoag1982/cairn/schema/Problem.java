@@ -4,19 +4,26 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * One reason a schema definition or registration is rejected (capabilities {@code type-model} and {@code schema-evolution}).
+ * One reason a schema definition or registration is rejected (capabilities {@code type-model} and {@code schema-evolution}),
+ * or a schema document cannot be read (capability {@code schema-documents}).
  *
  * <p>The code, path and message are always present. A problem can also say what was expected, what was found and how
  * to fix it. These details are text for people and agents to read: anything a program needs to act on is in the
  * code and the path.
  *
+ * <p>The engine does not know about documents, so the problems it reports have no location. A problem about a schema
+ * document, and a problem about the definition read from one after
+ * {@linkplain #at(DocumentLocation) it has been located}, carry the place in the document.
+ *
  * @param code     a stable code
  * @param path     the element concerned: a type name, or a type name and an attribute, inverse name or rule name joined by a
- *                 dot; {@code @origin} for problems with the origin itself
+ *                 dot; {@code @origin} for problems with the origin itself; {@code @document} for problems with a
+ *                 schema document as a whole
  * @param message  a readable explanation
  * @param expected what would have been accepted, for example the form a name must have
  * @param found    what the definition contains instead, for example the offending name
  * @param hint     how to fix the problem, for example the closest name that exists
+ * @param location where the problem is in the schema document it came from, if it is located
  */
 public record Problem(
         ProblemCode code,
@@ -24,7 +31,8 @@ public record Problem(
         String message,
         Optional<String> expected,
         Optional<String> found,
-        Optional<String> hint) {
+        Optional<String> hint,
+        Optional<DocumentLocation> location) {
 
     /**
      * Rejects null components.
@@ -36,6 +44,27 @@ public record Problem(
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(found, "found");
         Objects.requireNonNull(hint, "hint");
+        Objects.requireNonNull(location, "location");
+    }
+
+    /**
+     * Creates a problem without a location.
+     *
+     * @param code     a stable code
+     * @param path     the element concerned
+     * @param message  a readable explanation
+     * @param expected what would have been accepted
+     * @param found    what the definition contains instead
+     * @param hint     how to fix the problem
+     */
+    public Problem(
+            ProblemCode code,
+            String path,
+            String message,
+            Optional<String> expected,
+            Optional<String> found,
+            Optional<String> hint) {
+        this(code, path, message, expected, found, hint, Optional.empty());
     }
 
     /**
@@ -46,7 +75,17 @@ public record Problem(
      * @param message a readable explanation
      */
     public Problem(ProblemCode code, String path, String message) {
-        this(code, path, message, Optional.empty(), Optional.empty(), Optional.empty());
+        this(code, path, message, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    /**
+     * Returns a copy of this problem that is located in a schema document.
+     *
+     * @param location where the problem is in the document
+     * @return the located copy
+     */
+    public Problem at(DocumentLocation location) {
+        return new Problem(code, path, message, expected, found, hint, Optional.of(Objects.requireNonNull(location, "location")));
     }
 
     @Override
