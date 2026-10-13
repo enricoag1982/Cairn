@@ -18,6 +18,6 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Add `Payload` to `docs/glossary.md`
+- [x] 4.1 Add `Payload` to `docs/glossary.md`
 - [ ] 4.2 Update `docs/architecture/README.md` and bump `last-reviewed`
 - [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
