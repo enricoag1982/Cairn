@@ -239,7 +239,7 @@ class ValuesSchemaTest {
     void aDateAndAnInstantAreStringsWithTheirFormatsAndPatterns() {
         assertThat(DocumentTrees.at(property("day"), "type")).isEqualTo("string");
         assertThat(DocumentTrees.at(property("day"), "format")).isEqualTo("date");
-        assertThat(DocumentTrees.at(property("day"), "pattern")).isEqualTo("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+        assertThat(DocumentTrees.at(property("day"), "pattern")).isEqualTo(ValuesSchema.DATE_PATTERN);
         assertThat(DocumentTrees.at(property("moment"), "type")).isEqualTo("string");
         assertThat(DocumentTrees.at(property("moment"), "format")).isEqualTo("date-time");
         assertThat(DocumentTrees.at(property("moment"), "pattern")).isEqualTo(ValuesSchema.INSTANT_PATTERN);
@@ -259,6 +259,28 @@ class ValuesSchemaTest {
         assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17\"}")).as("a date").isFalse();
         assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17T09:30:00\"}")).as("no zone").isFalse();
         assertThat(isValid("Thing", "{" + required + "\"moment\": 5}")).as("no string").isFalse();
+    }
+
+    @Test
+    void aDateInEveryFormThatTheReaderAcceptsIsValid() {
+        String required = "\"name\": \"x\", \"kind\": \"big\", ";
+
+        for (String date : List.of("2026-05-17", "0001-01-01", "-0001-01-01", "-12345-01-01", "+12345-01-01",
+                "+999999999-12-31", "-999999999-01-01")) {
+            assertThat(LocalDate.parse(date)).as("the reader reads %s", date).isNotNull();
+            assertThat(isValid("Thing", "{" + required + "\"day\": \"" + date + "\"}")).as(date).isTrue();
+        }
+    }
+
+    @Test
+    void aDateInAFormThatTheReaderDoesNotAcceptIsInvalidIfItIsClearlyMalformed() {
+        String required = "\"name\": \"x\", \"kind\": \"big\", ";
+
+        for (String date : List.of("2026-5-17", "2026-05-7", "yesterday", "", "26-05-17", "20260517", "2026/05/17",
+                "+2026-01-01", "12345-01-01", "-123-01-01", "+1234-01-01", "2026-05-17 ", " 2026-05-17",
+                "2026-05-17T00:00:00Z")) {
+            assertThat(isValid("Thing", "{" + required + "\"day\": \"" + date + "\"}")).as("'" + date + "'").isFalse();
+        }
     }
 
     @Test

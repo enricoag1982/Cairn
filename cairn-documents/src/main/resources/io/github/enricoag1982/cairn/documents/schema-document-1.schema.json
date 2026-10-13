@@ -192,7 +192,7 @@
       "required": ["type"],
       "properties": {
         "type": {
-          "description": "The kind of value the attribute holds. A date is ISO 8601 (2026-01-05) and an instant is ISO 8601 in UTC (2026-01-05T09:00:00Z).",
+          "description": "The kind of value the attribute holds. A date is ISO 8601 (2026-01-05). An instant is ISO 8601 with Z or an offset (2026-01-05T09:00:00Z); an offset other than UTC, such as +01:00, is converted to UTC.",
           "enum": ["string", "boolean", "int", "long", "decimal", "date", "instant"]
         },
         "required": {

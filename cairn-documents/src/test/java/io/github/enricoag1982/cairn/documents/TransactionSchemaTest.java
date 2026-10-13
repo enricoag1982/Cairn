@@ -10,6 +10,7 @@ import io.github.enricoag1982.cairn.core.SchemaRegistries;
 import io.github.enricoag1982.cairn.documents.PayloadFixtures.ReferenceDomainStore;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -323,7 +324,7 @@ class TransactionSchemaTest {
         assertThat(DocumentTrees.at(instant, "pattern")).isEqualTo(ValuesSchema.INSTANT_PATTERN);
         assertThat(DocumentTrees.at(instant, "description")).asString().contains("offset", "UTC");
         assertThat(DocumentTrees.at(TREE, "$defs", "entityValues.Person", "properties", "birthDate", "pattern"))
-                .isEqualTo("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+                .isEqualTo(ValuesSchema.DATE_PATTERN);
     }
 
     /** Instants in the forms that {@code Instant.parse}, which the reader uses, accepts. */
@@ -365,6 +366,39 @@ class TransactionSchemaTest {
         assertThat(Payloads.readTransaction(payload, REFERENCE)).as("reading")
                 .isInstanceOf(PayloadReadResult.Invalid.class);
         assertThat(GeneratedSchemaCheck.errors(SCHEMA, payload)).as("errors of the JSON Schema").isNotEmpty();
+    }
+
+    /** Dates in the forms that {@code LocalDate.parse}, which the reader uses, accepts. */
+    static Stream<String> datesTheReaderAccepts() {
+        return Stream.of("2026-05-17", "0001-01-01", "-0001-01-01", "-12345-01-01", "+12345-01-01", "+999999999-12-31");
+    }
+
+    /** Text in forms that are no date, clearly: for the reader, and for the pattern. */
+    static Stream<String> textsThatAreNoDates() {
+        return Stream.of("yesterday", "", "2026-5-17", "2026-05-7", "20260517", "2026/05/17", "+2026-01-01",
+                "12345-01-01", "2026-05-17 ", "2026-05-17T00:00:00Z");
+    }
+
+    private static String createPersonBorn(String date) {
+        return payload("{ \"create\": { \"entityType\": \"Person\", " + FROM + ", \"values\": { \"name\": \"Alice\", "
+                + "\"birthDate\": \"" + date + "\" } } }");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("datesTheReaderAccepts")
+    void aDateTheReaderAcceptsIsValidAgainstTheJsonSchema(String date) {
+        String text = createPersonBorn(date);
+
+        assertThat(LocalDate.parse(date)).as("the date, as the reader reads it").isNotNull();
+        assertThat(Payloads.readTransaction(text, REFERENCE)).as("reading").isInstanceOf(PayloadReadResult.Read.class);
+        assertThat(GeneratedSchemaCheck.errors(SCHEMA, text)).as("errors of the JSON Schema").isEmpty();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("textsThatAreNoDates")
+    void textThatIsNoDateIsRejectedByTheJsonSchema(String text) {
+        assertThat(GeneratedSchemaCheck.errors(SCHEMA, createPersonBorn(text))).as("errors of the JSON Schema")
+                .isNotEmpty();
     }
 
     // ------------------------------------------------------------------ payloads

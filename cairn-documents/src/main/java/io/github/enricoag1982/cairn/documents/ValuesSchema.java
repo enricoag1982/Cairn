@@ -32,12 +32,14 @@ final class ValuesSchema {
     static final String DIALECT = "https://json-schema.org/draft/2020-12/schema";
 
     /**
-     * The pattern of a date, in ECMAScript, for validators that do not check {@code format}: four digits of the year,
-     * two of the month and two of the day. Whether the date exists is the reader's to say. The reader, which uses
-     * {@link java.time.LocalDate#parse}, also accepts a year with a sign or with more than four digits, which this
-     * pattern does not.
+     * The pattern of a date, in ECMAScript, for validators that do not check {@code format}: the year, two digits of
+     * the month and two of the day. The year has four digits, or a sign and more: {@code -} and four to nine digits, or
+     * {@code +} and five to nine digits. It accepts every string that the reader accepts, which reads dates with
+     * {@link java.time.LocalDate#parse}: {@code 2026-05-17}, {@code -0001-01-01} and {@code +12345-01-01}. It also
+     * accepts some that the reader does not, such as a date that does not exist or {@code -0000-01-01}, which is for
+     * the reader to say.
      */
-    static final String DATE_PATTERN = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$";
+    static final String DATE_PATTERN = "^(?:[0-9]{4}|-[0-9]{4,9}|\\+[0-9]{5,9})-[0-9]{2}-[0-9]{2}$";
 
     /**
      * The pattern of an instant, in ECMAScript, for validators that do not check {@code format}: the date, {@code T},
