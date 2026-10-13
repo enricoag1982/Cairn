@@ -12,7 +12,10 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/** The rules that the server declares from the documents that name them (design D7 of {@code add-agent-tools}). */
+/**
+ * The rules that the server declares from the documents that name them (design D7 of {@code add-agent-tools}). The
+ * type a rule is for is found by {@code NamedRules}, which has its own tests.
+ */
 class DeclaredRulesTest {
 
     private static final Path CRM = Path.of("/models/crm.cairn.yaml");
@@ -148,142 +151,5 @@ class DeclaredRulesTest {
             assertThat(rule.name()).isEqualTo("lead-score");
             assertThat(rule.appliesTo()).isEqualTo("Party");
         });
-    }
-
-    @Test
-    void theClosestCommonSupertypeIsFoundThroughSeveralLevelsAndAcrossDocuments() {
-        SchemaDocument people = read("""
-                cairn: 1
-                origin: { name: people, version: "1.0.0" }
-                entityTypes:
-                  Student:
-                    supertype: Person
-                    rules:
-                      - { name: lead-score, version: 1 }
-                  Employee:
-                    supertype: Person
-                    rules:
-                      - { name: lead-score, version: 1 }
-                  Person:
-                    supertype: Party
-                """);
-        SchemaDocument parties = read("""
-                cairn: 1
-                origin: { name: parties, version: "1.0.0" }
-                entityTypes:
-                  Party: {}
-                  Organization:
-                    supertype: Party
-                    rules:
-                      - { name: lead-score, version: 1 }
-                """);
-
-        List<RuleDescriptor> students = DeclaredRules.namedBy(List.of(Path.of("a.yaml")), List.of(people), Set.of());
-        List<RuleDescriptor> both = DeclaredRules.namedBy(List.of(Path.of("a.yaml"), Path.of("b.yaml")),
-                List.of(people, parties), Set.of());
-
-        assertThat(students).extracting(RuleDescriptor::appliesTo).containsExactly("Person");
-        assertThat(both).extracting(RuleDescriptor::appliesTo).containsExactly("Party");
-        assertThat(both.getFirst().description()).contains("a.yaml");
-    }
-
-    @Test
-    void typesWithoutACommonSupertypeKeepTheFirstInTheOrderOfTheDocument() {
-        SchemaDocument document = read("""
-                cairn: 1
-                origin: { name: crm, version: "1.0.0" }
-                entityTypes:
-                  Party: {}
-                  Lead:
-                    rules:
-                      - { name: lead-score, version: 1 }
-                  Person:
-                    supertype: Party
-                    rules:
-                      - { name: lead-score, version: 1 }
-                """);
-
-        assertThat(declared(document, Set.of())).extracting(RuleDescriptor::appliesTo).containsExactly("Lead");
-    }
-
-    @Test
-    void typesOfDifferentKindsKeepTheFirstEvenIfTheirNamesLookRelated() {
-        SchemaDocument document = read("""
-                cairn: 1
-                origin: { name: crm, version: "1.0.0" }
-                entityTypes:
-                  Party: {}
-                  Person:
-                    supertype: Party
-                    rules:
-                      - { name: lead-score, version: 1 }
-                relationshipTypes:
-                  Knows:
-                    source: Person
-                    target: Person
-                    targetsPerSource: "0..*"
-                    sourcesPerTarget: "0..*"
-                    inverseName: knownBy
-                    supertype: Party
-                    rules:
-                      - { name: lead-score, version: 1 }
-                """);
-
-        assertThat(declared(document, Set.of())).extracting(RuleDescriptor::appliesTo).containsExactly("Person");
-    }
-
-    @Test
-    void relationshipTypesHaveSupertypesOfTheirOwnKind() {
-        SchemaDocument document = read("""
-                cairn: 1
-                origin: { name: crm, version: "1.0.0" }
-                relationshipTypes:
-                  Link:
-                    source: Person
-                    target: Person
-                    targetsPerSource: "0..*"
-                    sourcesPerTarget: "0..*"
-                    inverseName: linkedFrom
-                  Knows:
-                    supertype: Link
-                    source: Person
-                    target: Person
-                    targetsPerSource: "0..*"
-                    sourcesPerTarget: "0..*"
-                    inverseName: knownBy
-                    rules:
-                      - { name: lead-score, version: 1 }
-                  Employs:
-                    supertype: Link
-                    source: Person
-                    target: Person
-                    targetsPerSource: "0..*"
-                    sourcesPerTarget: "0..*"
-                    inverseName: employedBy
-                    rules:
-                      - { name: lead-score, version: 1 }
-                """);
-
-        assertThat(declared(document, Set.of())).extracting(RuleDescriptor::appliesTo).containsExactly("Link");
-    }
-
-    @Test
-    void aCycleOfSupertypesDoesNotLoopAndKeepsTheFirstType() {
-        SchemaDocument document = read("""
-                cairn: 1
-                origin: { name: crm, version: "1.0.0" }
-                entityTypes:
-                  Alpha:
-                    supertype: Beta
-                    rules:
-                      - { name: lead-score, version: 1 }
-                  Beta:
-                    supertype: Alpha
-                  Gamma:
-                    rules:
-                      - { name: lead-score, version: 1 }
-                """);
-
-        assertThat(declared(document, Set.of())).extracting(RuleDescriptor::appliesTo).containsExactly("Alpha");
     }
 }
