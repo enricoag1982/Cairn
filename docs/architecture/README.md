@@ -61,13 +61,13 @@ Accepted, and built one change at a time:
 
 | Building block | Responsibility | Capabilities (specs) |
 | --- | --- | --- |
-| `cairn-api` | Public types: schema definitions and their builders, the resolved schema, problems, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model. | `type-model`, `schema-evolution` |
-| `cairn-core` | The engine. Validates definitions, compiles them into a resolved schema with schema identifiers, checks compatibility, and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. | `type-model`, `schema-evolution` |
+| `cairn-api` | Public types: schema definitions and their builders, the resolved schema with descriptions, constraints and rule references, rule descriptors, problems with their details and explained codes, plans, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model and its rules. | `type-model`, `schema-evolution` |
+| `cairn-core` | The engine. Validates definitions against each other and the available rules, compiles them into a resolved schema with schema identifiers, checks compatibility, plans registrations, and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. | `type-model`, `schema-evolution` |
 | `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `cairn.java-library` for every Java module, and `cairn.reference-domain-tests` for modules whose tests read the reference domain page. | none |
 
 ```mermaid
 flowchart LR
-    core[cairn-core<br/>validator, compiler,<br/>compatibility checker,<br/>in-memory registry] -->|implements| api[cairn-api<br/>definitions, schema,<br/>SchemaRegistry]
+    core[cairn-core<br/>validator, compiler,<br/>compatibility checker,<br/>planner, in-memory registry] -->|implements| api[cairn-api<br/>definitions, schema,<br/>rules, plans, SchemaRegistry]
     app([Application]) -->|uses| api
     app -->|creates a registry with| core
 ```
@@ -84,7 +84,7 @@ flowchart LR
 
 <!-- Error handling, security, observability, persistence, configuration, testing strategy. -->
 
-- **Errors:** an invalid schema definition never causes an exception. Registrations return a result that lists every problem, each with a stable code and a path. Exceptions mean programming errors: a missing value, or a `Multiplicity` other than 0 or 1 to 1 or unbounded.
+- **Errors:** an invalid schema definition never causes an exception. Registrations and plans return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value and a hint. Exceptions mean programming errors: a missing value, a `Multiplicity` other than 0 or 1 to 1 or unbounded, or a registry given the same rule twice.
 - **Concurrency:** registrations are serialized (the single writer). Each one publishes a new immutable state, so reads never lock.
 - **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase.
 - **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md). Tests run with compact object headers on.
