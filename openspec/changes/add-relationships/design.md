@@ -20,7 +20,7 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 
 ### D1. API
 
-- `RelationshipId(String value)` joins `Id`.
+- `RelationshipId(String value)` joins `Id`. Entities and relationships share the store's one ID generator (ADR-0019), so `IdGenerator.next()` changes to return the ID's text, which the store wraps as an `EntityId` or a `RelationshipId`. Supplied IDs must be unique across entities and relationships.
 - A new write, `Relate(Optional<TemporaryId> temporaryId, Optional<RelationshipId> id, String relationshipType, Ref source, Ref target, EffectivePeriod period, Map<String, Value> values)`, offered by the transaction builder as `relate`. `Patch`, `Replace` and `EndDate` already take any `Ref`.
 - `RelationshipState(RelationshipId id, String relationshipType, EntityId source, EntityId target, Map<String, Value> values, EffectivePeriod period, Instant recordedAt, Basis recordedBasis)`.
 - `View` gains `relationship(RelationshipId)`, `relationshipTimeline(RelationshipId)`, `navigate(EntityId from, String name)` returning `List<Link>`, and `traverse(EntityId from, String name, Predicate<RelationshipState> follow, int maxDepth)` returning `List<Step>`.
@@ -39,7 +39,7 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 - **Lifetimes:** for each entity whose lifetime shrank, every relationship with that entity as an end lies within the new lifetime.
 - **Multiplicities:** for every entity that is an end of a touched relationship, or is touched itself, and for every relationship type whose source or target type is the entity's type or a supertype, the count of active relationships is computed on each interval between consecutive boundaries (relationship starts and ends, and the entity's own) and compared with the minimum and maximum. A minimum of 1 is checked only within the entity's lifetime.
 - **Duplicates:** two relationships of the same type with the same ends (in either order for symmetric types) must not overlap.
-- New problem codes: `UNKNOWN_RELATIONSHIP_TYPE`, `WRONG_END_TYPE`, `END_NOT_EFFECTIVE`, `RELATIONSHIP_OUTLIVES_END`, `TOO_FEW_RELATIONSHIPS`, `TOO_MANY_RELATIONSHIPS`, `DUPLICATE_RELATIONSHIP` and `UNKNOWN_RELATIONSHIP`. Paths name the relationship (`$owns1`, or its ID), or the entity and the type name for multiplicities (`$a3.HeldBy`).
+- New problem codes: `UNKNOWN_RELATIONSHIP_TYPE`, `WRONG_END_TYPE`, `END_NOT_EFFECTIVE`, `RELATIONSHIP_OUTLIVES_END`, `TOO_FEW_RELATIONSHIPS`, `TOO_MANY_RELATIONSHIPS`, `DUPLICATE_RELATIONSHIP` and `UNKNOWN_RELATIONSHIP`. Paths name the relationship (`$owns1`, its ID, or `@write.<n>` when it has neither), or, for multiplicities, the entity followed by the relationship type's or inverse name in brackets (`$a3[HeldBy]`), so they cannot be mistaken for attribute paths.
 
 ### D4. Composition cascades
 
@@ -55,7 +55,8 @@ Entities, transactions, views and entity rules exist (`add-entity-versions`, `ad
 ### D6. Reference domain
 
 - Story RD-13 is added to the reference domain page: recorded 1 April, Gamma is created and related to Beta with Owns, share 50, from 1 April; it is rejected, because with ACME's 55% the owners would hold 105%.
-- `ReferenceStories` gains the relationship stories RD-2 to RD-4, RD-8 and RD-13, and RD-1 and RD-5 relate accounts to their holders, as the multiplicity of `HeldBy` requires.
+- `ReferenceStories` gains the relationship stories RD-2 to RD-4, RD-8 and RD-13, and RD-5 relates accounts to their holders, as the multiplicity of `HeldBy` requires (its builder then takes the holders' references).
+- With `HeldBy` exactly one, an account can no longer be created alone. The tests of `add-entity-versions` that create accounts alone (through `ReferenceStore.createAccounts()`, the value, replace and conflict scenarios) are updated to create the holder too, keeping what each test checks.
 
 ## Risks / Trade-offs
 

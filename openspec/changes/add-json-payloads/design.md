@@ -28,16 +28,16 @@
 - Top-level keys: `cairn`, `principal`, `onBehalfOf`, `reason`, `idempotencyKey`, `writes`.
 - Write keys mirror the records: `create { temporaryId, id, entityType, from, until, values }`, `relate { temporaryId, id, relationshipType, source, target, from, until, values }`, `patch { target, from, until, set, clear, conflictCheck }`, `replace { target, from, until, values, conflictCheck }`, `endDate { target, from, conflictCheck }`.
 - `conflictCheck` is `{ perEntity: <basis> }` or `{ perAttribute: <basis> }`; absent means none.
-- References: `$name` is a temporary ID; anything else is an ID, entity or relationship, resolved by the engine.
-- The type of a `patch` or `replace` target is found from the payload (a temporary ID created earlier in it) or from the schema and store: the reader takes an optional resolver from IDs to type names, which the store provides; without it, values are read by their own YAML type.
+- References: `$name` is a temporary ID; anything else is an ID. Because `Ref` is typed, the reader decides whether an ID names an entity or a relationship with a lookup the caller passes, which a store's latest view provides (`view.entity(id)` or `view.relationship(id)`). An ID that names neither is read as an entity ID, so that the engine reports it as unknown.
+- The type of a `patch` or `replace` target is found from the payload (a temporary ID created earlier in it) or from the schema and store: the reader takes an optional resolver from IDs to type names, built from a view (`view.entity(id).map(EntityState::entityType)`); without it, values are read by their own YAML type.
 
 ### D3. Locations
 
-- The reader records, for every write, the pointer of the write and of each value key, and maps problem paths (`$acme.name`, `<id>.balance`, `$owns1`) to the last write concerning that reference, then to the value key if the path has an attribute.
+- The reader records, for every write, the pointer of the write and of each value key, and maps problem paths (`$acme.name`, `<id>.balance`, `$owns1`) to the last write concerning that reference, then to the value key if the path has an attribute. `@write.<n>` and `@write.<n>.<attribute>` map to `/writes/<n>` and its value key; `@transaction` maps to the payload's root.
 
 ### D4. JSON forms
 
-- Field names follow the Java records; `Optional.empty()` and empty collections are left out; `Value`s are written as JSON scalars by type, decimals from `BigDecimal.toPlainString()`.
+- Field names follow the Java records; `Optional.empty()` and empty collections are left out; temporary IDs are written with their `$`, as in payloads; `Value`s are written as JSON scalars by type, decimals from `BigDecimal.toPlainString()`.
 - Problems: `{ code, path, message, expected, found, hint, ruleCode, location: { pointer, line, column } }`.
 
 ### D5. Generated JSON Schemas

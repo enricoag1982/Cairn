@@ -55,6 +55,8 @@ Accepted, and built one change at a time:
 - AI agents as first-class users: [ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md)
 - Declarative constraints, plus validation rules written in Java: [ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)
 - Reads through immutable views; feature flags resolved by the caller: [ADR-0013](../decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md)
+- Opaque entity IDs from one generator per store, UUIDv7 by default: [ADR-0019](../decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md)
+- Patterns written as I-Regexp and matched in linear time: [ADR-0020](../decisions/0020-write-attribute-patterns-as-i-regexp-and-match-them-in-linear-time.md)
 
 ## 5. Building block view
 
@@ -100,8 +102,10 @@ sequenceDiagram
         S->>Q: publish(commit)
         S-->>C: Committed(receipt)
     end
-    C->>V: view(coordinates) pins a basis and its schema
-    V->>V: reads the timeline at or below its basis, never waits
+    C->>S: view(coordinates)
+    S-->>V: a view pinned to a basis and its schema
+    C->>V: reads
+    V->>V: reads timelines at or below its basis, never waits
 ```
 
 A dry run follows the same path and stops before appending: it records nothing, uses no basis and reserves no ID.
@@ -114,10 +118,10 @@ A dry run follows the same path and stops before appending: it records nothing, 
 
 <!-- Error handling, security, observability, persistence, configuration, testing strategy. -->
 
-- **Errors:** an invalid schema definition never causes an exception. Registrations, plans and document reading return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value, a hint and its location in the document. Bad input never throws. Exceptions mean programming errors: a missing value, a `Multiplicity` other than 0 or 1 to 1 or unbounded, or a registry given the same rule twice.
+- **Errors:** an invalid schema definition never causes an exception. Registrations, plans, document reading, commits and dry runs return a result that lists every problem, each with a stable code, a path and, where it helps, the expected value, the found value, a hint and its location in the document. Bad data never throws. Exceptions mean programming errors in the caller's code: a missing value, a blank temporary ID, listing a type the view's schema does not have, or a registry given the same rule twice. Exceptions mean programming errors: a missing value, a `Multiplicity` other than 0 or 1 to 1 or unbounded, or a registry given the same rule twice.
 - **Concurrency:** schema registrations and data commits of a store share one writer lock and one commit sequence (the single writer). Committed data is appended and then published through the latest basis, so readers never lock and never see a partial commit.
 - **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase, across schema and data transactions. Effective periods are half-open UTC instants with microsecond precision.
-- **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md), and `ReferenceModelDocumentTest` keeps its schema document in step with the fixture. `JsonSchemaDriftTest` keeps the published JSON Schema in step with the reader. Tests run with compact object headers on.
+- **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md), and `ReferenceModelDocumentTest` keeps its schema document in step with the fixture. `JsonSchemaDriftTest` keeps the published JSON Schema in step with the reader. `ReferenceStories` follows the story table of the reference domain by hand; no test checks it yet. Tests run with compact object headers on.
 
 ## 9. Architecture decisions
 

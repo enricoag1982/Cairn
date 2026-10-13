@@ -34,7 +34,7 @@ Constraints that shape the approach:
 ### D1. `Literal` becomes `Value`
 
 - `Literal` and its records become `Value`, `StringValue`, `BooleanValue`, `IntValue`, `LongValue`, `DecimalValue`, `DateValue` and `InstantValue`; `Literal.of` becomes `Value.of`. Range bounds and examples hold values.
-- Done first, as its own commit, so that the behavior changes are reviewed separately.
+- Done first, as its own commit, so that the behavior changes are reviewed separately. The problem code `RANGE_LITERAL_MISMATCH` keeps its name: codes are a stable contract, and a range bound is a literal in the schema.
 
 ### D2. The public API, package `io.github.enricoag1982.cairn.data`
 
@@ -69,7 +69,7 @@ Constraints that shape the approach:
 - For every entity the store keeps its type identifier and a map from basis to timeline. A timeline is the entity's complete effective history as known after that basis: an immutable, sorted list of segments, each an effective period with values keyed by `AttributeId`.
 - A commit computes new timelines for the touched entities from their latest ones and appends them under the new basis. Nothing is changed in place.
 - A view at basis B takes, for each entity, the timeline with the greatest basis at or below B, then the segment that contains its effective time. A view known at a transaction time first finds the greatest basis recorded at or before that time.
-- Adjacent segments with equal values are merged, so that a timeline lists real changes only.
+- Adjacent segments are merged when they have equal values and the same recording, so that a timeline lists real changes only and every version names the one transaction that recorded it (ADR-0009).
 - Alternative: versions with a transaction-time end that a later commit sets. Rejected for the in-memory store, because setting the end changes recorded data and needs care for concurrent readers; timelines per basis are append-only and trivially safe.
 
 ### D5. Applying writes
@@ -84,7 +84,7 @@ Constraints that shape the approach:
 - Unique attributes are checked for the touched entities against every other entity whose type has the same `AttributeId`, comparing overlapping segments. With scans, the cost is linear in the number of entities, which is acceptable for the in-memory store.
 - Conflict checks compare the entity's timelines at the caller's basis and at the latest basis: per entity, any difference rejects; per attribute, only differences in the attributes the write sets or clears.
 - New problem codes, each with an explanation: `UNKNOWN_ENTITY_TYPE`, `ABSTRACT_ENTITY_TYPE`, `UNKNOWN_ATTRIBUTE`, `VALUE_TYPE_MISMATCH`, `VALUE_OUT_OF_RANGE`, `VALUE_NOT_ALLOWED`, `VALUE_PATTERN_MISMATCH`, `VALUE_LENGTH`, `MISSING_REQUIRED_VALUE`, `DEPRECATED_ATTRIBUTE`, `UNIQUE_VALUE_TAKEN`, `UNKNOWN_ENTITY`, `ENTITY_NOT_EFFECTIVE`, `ENTITY_EXISTS`, `INVALID_ENTITY_ID`, `UNKNOWN_TEMPORARY_ID`, `DUPLICATE_TEMPORARY_ID`, `INVALID_PERIOD`, `CONFLICT`, `MISSING_PRINCIPAL` and `IDEMPOTENCY_KEY_REUSED`.
-- Paths: an entity is `$` and its temporary ID, its ID, or, when it was created without either, `@write.<n>` for the write that creates it, so that a dry run and a commit report the same path; an attribute is appended with a dot (`$acme.name`, `0199...e1.balance`, `@write.1.name`); problems of the transaction itself use `@transaction`. Problems come in a fixed order: the transaction's, then each write's in order, then each touched entity's in first-touch order, attributes in schema order. Value problems are reported once per entity and attribute, and a missing required value once per stretch of effective time. Problems about a value fill in expected and found; unknown names get the closest-name hint.
+- Paths: an entity is `$` and its temporary ID, its ID, or, when it was created without either, `@write.<n>` for the write that creates it, so that a dry run and a commit report the same path; an attribute is appended with a dot (`$acme.name`, `0199...e1.balance`, `@write.1.name`); problems of the transaction itself use `@transaction`. Problems come in a fixed order: the transaction's, then each write's in order, then each touched entity's in first-touch order, its attribute problems in schema order before its uniqueness problems. A value problem is reported once even when it appears in several segments, and a missing required value once per stretch of effective time. Missing required values are not reported for an entity whose write named an unknown attribute, because the unknown name is the likelier cause. Problems about a value fill in expected and found; unknown names get the closest-name hint.
 
 ### D6a. Details settled while building
 
@@ -92,7 +92,10 @@ Constraints that shape the approach:
 - Each segment carries the transaction time and basis that recorded it; parts a write leaves unchanged keep theirs, and a timeline equal to the previous one is not appended, so a write that changes nothing records nothing for that entity.
 - An end-date at or before the entity's start is `ENTITY_NOT_EFFECTIVE`; one at or after its end changes nothing.
 - Conflict checks compare the committed timelines at the caller's basis and at the latest basis over the whole timeline. An entity created in the same transaction cannot conflict.
-- A view's basis above the latest is clamped to the latest.
+- A view's basis above the latest is clamped to the latest, and the view reports the clamped basis.
+- `View.entities` throws `IllegalArgumentException` for a type the view's schema does not have, including a type registered only after the view's basis: a typo must not look like an empty result.
+- A transaction without writes, or whose writes change nothing, is committed and recorded; it costs a basis and leaves a history entry.
+- There is no implicit "now": `Coordinates` needs an effective time, as ADR-0013 asks.
 
 ### D7. Dry runs and idempotency
 

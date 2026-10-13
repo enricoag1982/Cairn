@@ -8,7 +8,7 @@ Defines how data is read: through immutable views bound to an effective time and
 
 ### Requirement: Views are bound to coordinates
 
-THE SYSTEM SHALL read data only through views. A view SHALL be created with an effective time, and with a basis or a transaction time to read as of; without one, it SHALL read as of the latest basis when it is created. A view's coordinates SHALL be fixed when it is created: every read through one view SHALL return the same answer, whatever is committed later. A view SHALL report its effective time and its basis.
+THE SYSTEM SHALL read data only through views. A view SHALL be created with an effective time, and with a basis or a transaction time to read as of; without one, it SHALL read as of the latest basis when it is created. A view's coordinates SHALL be fixed when it is created: every read through one view SHALL return the same answer, whatever is committed later. A view SHALL report its effective time and its basis; a basis after the latest SHALL read as the latest. There is no implicit "now": the caller always gives the effective time (ADR-0013).
 
 #### Scenario: Repeatable reads
 
@@ -23,7 +23,7 @@ THE SYSTEM SHALL read data only through views. A view SHALL be created with an e
 ### Requirement: Reading an entity
 
 A view SHALL return the state of an entity at its effective time, as known at its basis: the entity's ID, its type, the values of its attributes, the effective period of the version, and the transaction time and basis that recorded it. It SHALL return nothing for an entity that does not exist at that effective time, or that was not yet recorded at that basis.
-Values SHALL be reported under the attribute names of the view's schema, and in the attribute's current value type.
+Values SHALL be reported under the attribute names of the view's schema, and in the attribute's value type in the view's schema.
 
 #### Scenario: Not yet recorded
 
@@ -37,12 +37,17 @@ Values SHALL be reported under the attribute names of the view's schema, and in 
 
 ### Requirement: Listing entities of a type
 
-A view SHALL list the entities of an entity type that exist at its effective time, including the entities of the type's subtypes, ordered by ID.
+A view SHALL list the entities of an entity type that exist at its effective time, including the entities of the type's subtypes, ordered by ID. Listing a type that the view's schema does not have SHALL fail.
 
 #### Scenario: Polymorphic listing
 
 - **WHEN** ACME, Beta and Alice exist, and the entities of Party and of Organization are listed through a view effective at 31 March (RD-10)
 - **THEN** Party lists ACME, Beta and Alice, and Organization lists ACME and Beta
+
+#### Scenario: Listing a type the view does not know
+
+- **WHEN** the entities of `Organisation` are listed through a view
+- **THEN** the listing fails, naming the unknown type
 
 ### Requirement: Timeline of an entity
 

@@ -3,7 +3,7 @@
 ## 1. API
 
 - [ ] 1.1 Add `Rule`, `EntityRule` and `RuleContext` (D1)
-- [ ] 1.2 Add `Problem.ruleCode`, and the codes `RULE_VIOLATION` and `RULE_FAILED` with explanations (D4)
+- [ ] 1.2 Add `Problem.ruleCode`, and the codes `RULE_VIOLATION`, `RULE_FAILED` and `RULE_UNAVAILABLE` with explanations (D2, D4)
 
 ## 2. Engine
 

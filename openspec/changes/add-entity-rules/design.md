@@ -28,22 +28,23 @@ ADR-0018 decides that custom validation is Java code that schemas name by name a
 
 - `StoreSettings` gains `rules(Rule...)` and `discoverRules()`, which loads `Rule` implementations with `ServiceLoader`; `cairn-core`'s module declares `uses io.github.enricoag1982.cairn.data.Rule`.
 - A rule whose descriptor applies to an entity type must be an `EntityRule`; otherwise creating the store fails.
-- The store passes the rules' descriptors to its schema registry as its available rules. Two rules with the same name and version throw `IllegalArgumentException`.
+- `StoreSettings.availableRules(Collection<RuleDescriptor>)`, built by `add-entity-versions`, stays: it declares rules whose code the store does not have, such as a rule for relationships before `add-relationships`. Schemas may name them, but a write that would need to run one is rejected with `RULE_UNAVAILABLE`, as ADR-0018 says for stores whose rules are missing.
+- The store passes the descriptors of its rules and its declared rules to its schema registry as its available rules. Two with the same name and version throw `IllegalArgumentException`.
 
 ### D3. Running rules
 
 - After the declarative checks of D6 in `add-entity-versions`, for each touched entity without problems, the engine collects the entity type's effective rules (its own and its supertypes', from the schema at the new state), and runs each one for every segment of the entity's new timeline that differs from its previous timeline.
-- The view given to a rule is a provisional view: the latest committed state plus the transaction's working timelines, at a provisional basis one above the latest. It is created once per transaction and is read-only.
+- The view given to a rule is a provisional view: a `View` over the latest committed timelines overlaid with the transaction's working timelines from `Preparation`, with the schema the transaction would produce. Its `basis()` is the prospective basis from `CommitSequence.next()`, and working segments carry it as their recorded basis. A provisional view is only valid while the rule runs: in a dry run, or if the commit is rejected, that basis later names another commit, so rules must not keep it. It is created once per transaction and is read-only.
 - A rule runs synchronously in the writer thread. A slow rule slows every commit; that is the documented cost (ADR-0018).
 
 ### D4. Rule problems
 
-- `Problem` gains `Optional<String> ruleCode`. Rule problems have the code `RULE_VIOLATION`, the rule's code qualified by its name in `ruleCode`, and a path built like other data problems (`$gamma.lei`).
+- `Problem` gains `Optional<String> ruleCode`. Rule problems have the code `RULE_VIOLATION`, the rule's code qualified by its name in `ruleCode`, and a path built like other data problems (`$gamma.lei`, `@write.1.lei` for an entity created without a temporary ID, or the entity's ID).
 - An exception thrown by a rule, or a code the rule does not declare, gives a `RULE_FAILED` problem naming the rule; the exception's message is the found value. The transaction is rejected.
 
 ### D5. Reference rules
 
-- The test fixtures gain `LeiChecksumRule` (ISO 7064 MOD 97-10 over the LEI's characters) and `NameNotBlankRule` (for Party), plus descriptors that `ReferenceModel.rules()` returns. `total-ownership-at-most-100` keeps a descriptor only until `add-relationships`.
+- The test fixtures gain `LeiChecksumRule` (ISO 7064 MOD 97-10 over the LEI's characters) and `NameNotBlankRule` (for Party). `total-ownership-at-most-100` stays a declared rule (`availableRules`) until `add-relationships` implements it; `ReferenceModel.rules()` keeps returning the descriptors, and a fixture helper builds store settings with the executable rules plus the declared one.
 - The reference domain page gains story RD-12: creating Gamma with the LEI `5493001KJTIIGC8Y1R13`, whose check digits are wrong, is rejected.
 
 ## Risks / Trade-offs

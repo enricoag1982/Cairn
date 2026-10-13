@@ -17,6 +17,7 @@
 ## 3. Reference domain and tests
 
 - [ ] 3.1 Add RD-13 to the reference domain page, the relationship stories to `ReferenceStories`, and `TotalOwnershipRule` to the test fixtures (D5, D6)
+- [ ] 3.1a Update the existing tests that create accounts without a holder (D6)
 - [ ] 3.2 One test per scenario of `relationships` and of the new `entity-rules` requirement, named `Scenario: <name>`; verify `./gradlew build` passes
 
 ## 4. Documentation
