@@ -35,10 +35,11 @@ This change adds an adapter that publishes the API as tools over the Model Conte
 ### Modified Capabilities
 
 - `schema-evolution`: schema transactions record their principal, the party acted for and a reason
+- `schema-documents`: a problem about an element that a document no longer has is located at the closest enclosing element
 
 ## Impact
 
 - **Decisions:** ADR-0017 (commitments 6, 7 and 8: who and why, tools, approval) and ADR-0007 (adapters outside the embedded engine). Both are accepted.
-- **Code:** a new subproject, `cairn-agent-tools`; `cairn-api` and `cairn-core` gain who and why for schema registrations.
+- **Code:** a new subproject, `cairn-agent-tools`, on the class path; `cairn-api` and `cairn-core` gain who and why for schema registrations; `cairn-documents` locates problems about removed elements.
 - **Dependencies:** the MCP Java SDK 2.0.1 (`io.modelcontextprotocol.sdk:mcp-core` with its Jackson 3 JSON module) in `cairn-agent-tools` only, which brings Reactor, Jackson and SLF4J into that module. Approved by the user with the AI-native roadmap.
 - **Docs:** a guide for running the server and connecting an agent, the glossary (approval policy, approval request), the architecture page.
