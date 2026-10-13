@@ -35,11 +35,11 @@ ADR-0023 decides the form of queries: data, a pipeline of steps over named bindi
 
 ### Modified Capabilities
 
-- `agent-tools`: the tool `cairn_query`
-- `java-types`: typed attribute references and reading query rows as generated types
+- `agent-tools`: the tool `cairn_query`, and the JSON Schema of queries from `cairn_json_schema`
+- `java-types`: typed references and their constant names, and reading query rows as the nearest generated type
 
 ## Impact
 
 - **Decisions:** ADR-0023 (queries as data), accepted under the standing approval with this proposal; ADR-0010 (polymorphic queries include subtypes), ADR-0013 (reads through views), ADR-0017 (agents) and ADR-0021 (generated types), all accepted.
 - **Code:** a new package `query` in `cairn-api` and `View.query`; evaluation in `cairn-core`; the JSON form, its JSON Schema and results in `cairn-documents`; `cairn_query` in `cairn-agent-tools`; attribute references in `cairn-codegen`. No new dependencies.
-- **Docs:** a guide for writing queries, the glossary (query, binding, query step), the architecture page, the agent guide.
+- **Docs:** a guide for writing queries, the glossary (aggregate, binding, group key, query, query step, typed reference), the architecture page, the agent guide and the guide to generated types.

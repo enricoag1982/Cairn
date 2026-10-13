@@ -71,16 +71,16 @@ Other MCP clients that start servers on standard input and output take the same 
 | Tool | What it does |
 | --- | --- |
 | `cairn_describe` | The latest basis, every origin's stored definition as a schema document, the available rules and whether the server has their code, the problem codes, the principal and the approval policy. Start here. |
-| `cairn_json_schema` | The JSON Schema of schema documents (`document`), of transaction payloads (`payload`), or of the values of one type (`values` with `type`). |
+| `cairn_json_schema` | The JSON Schema of schema documents (`document`), of transaction payloads (`payload`), of queries (`query`), or of the values of one type (`values` with `type`). |
 | `cairn_explain_problem` | The explanation of a problem code, or of a rule's code such as `lei-checksum/invalid-check-digits`. |
 | `cairn_plan_schema`, `cairn_register_schema` | Plan a schema document, then register it. The plan lists each change as compatible or breaking, with hints. |
 | `cairn_dry_run`, `cairn_commit` | Run a transaction payload dry, then commit it. Problems are located in the payload, with hints. |
 | `cairn_read_entity`, `cairn_read_relationship`, `cairn_list_entities` | Read at an effective time, and optionally as known at a basis or a transaction time (`knownAt`). |
 | `cairn_timeline`, `cairn_navigate`, `cairn_traverse` | Read an entity's or relationship's history, follow one relationship name, or follow it to a maximum depth. |
-| `cairn_query` | Run a *query* written as JSON: filters, follow steps, traversals, grouping and aggregates. See [Query a store](query-a-store.md). |
+| `cairn_query` | Run a *query* written as JSON or YAML: filters, follow steps, traversals, grouping and aggregates. See [Query a store](query-a-store.md). |
 | `cairn_approval_status` | The status of an approval request and, once decided, its outcome. |
 
-Documents and payloads are passed as text, YAML or JSON, so that problems keep their lines and columns.
+Documents, payloads and queries are passed as text, YAML or JSON, so that problems keep their lines and columns.
 Every tool returns JSON. A call that cannot be done returns problems instead of failing, each with a code, a path, and where it helps a hint: `{ problems }`, or `{ outcome: "rejected", problems }` for the tools that plan, register, dry-run and commit. A problem with an argument has the path `@arguments.<name>`.
 
 A typical agent session reads `cairn_describe`, asks `cairn_json_schema` for the payload schema, writes a payload, runs it with `cairn_dry_run` until it has no problems, and then commits it. To answer questions over many entities, it asks `cairn_json_schema` for the kind `query` and sends queries to `cairn_query`.

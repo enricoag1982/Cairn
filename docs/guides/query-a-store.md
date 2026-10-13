@@ -76,13 +76,13 @@ The same RD-6 query, as agents send it to `cairn_query` and as `Queries.read` in
 
 Conditions compare operands, such as `{ "compare": { "left": { "attribute": "balance", "of": "a" }, "op": "gt", "right": { "value": 1200 } } }`, with `op` one of `eq`, `ne`, `lt`, `le`, `gt` and `ge`.
 The JSON Schema of the form is published with `cairn-documents` (`Queries.jsonSchema()`), and `cairn_json_schema` returns it for the kind `query`.
-Results come back as `{ effectiveAt, basis, columns, rows }`, each row a list of cells: entity and relationship states and values in the forms of transaction payloads, or `null`.
+`Queries.toJson` writes a result as `{ effectiveAt, basis, columns, rows }`, each row a list of cells in the JSON result forms of the `json-payloads` spec (entity and relationship states, values), or `null` for an empty cell; `cairn_query` returns `{ effectiveAt, basis, result: { columns, rows } }`, like the other reads.
 
 ## What to expect
 
 - **Missing values never match a comparison.** `balance > 0` is false for an account without a balance; test for a value with `hasValue` and `not`.
-- **Numbers compare by value** whatever their value types; strings by code point; dates and instants in time. A string compared with a date or instant attribute is read as one.
-- **Rows multiply along relationships.** An account held by a party with two owners nobody owns counts in both groups.
+- **Numbers compare by value** whatever their value types; strings by code point; dates and instants in time. A string compared with a date or instant attribute is read as one if it spells one, in the forms of payloads; otherwise the query has a problem.
+- **Rows multiply along relationships.** A traversal without a condition reaches every owner, so a party with two owners that nobody owns counts in both of their groups. A condition on the relationships followed, such as RD-6's share above 50, keeps one chain where the data has one.
 - **A traversal stops at its maximum depth.** A chain longer than that is cut, so the last party reached may still have an owner; choose the depth with the data in mind.
 - **The order is stable.** Rows come in the order you ask for, then by the IDs of their bindings, so the same query on the same data gives the same rows in the same order, whatever stores them.
 - **Mistakes come back as problems**, before anything is read: an unknown type, binding, attribute or relationship name, with the closest valid name as a hint, or values that cannot be compared or summed.

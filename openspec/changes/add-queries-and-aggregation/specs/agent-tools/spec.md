@@ -1,5 +1,19 @@
 ## MODIFIED Requirements
 
+### Requirement: Describing the store
+
+`cairn_describe` SHALL return the store's latest basis, the stored definition of every origin as a schema document, the available rules with their descriptions, types and codes and whether the store has their code, and the store's approval policy. `cairn_json_schema` SHALL return the published JSON Schema of schema documents, the generated JSON Schema of transaction payloads, the published JSON Schema of queries, or the generated JSON Schema of the values of a named type. `cairn_explain_problem` SHALL return the explanation of a problem code, or of a rule's code.
+
+#### Scenario: Reading the schema as documents
+
+- **WHEN** a store holds the reference domain model and an agent calls `cairn_describe`
+- **THEN** the result holds a schema document for the origin `reference-model` that reads back to the stored definition, and lists the rules `lei-checksum` and `total-ownership-at-most-100`
+
+#### Scenario: JSON Schema of a type's values
+
+- **WHEN** an agent asks `cairn_json_schema` for the values of Organization
+- **THEN** the result is the JSON Schema that requires `name` and describes `lei`
+
 ### Requirement: Tools over a store
 
 THE SYSTEM SHALL serve a store as tools of the Model Context Protocol, each with a name, a description and a JSON Schema for its input. Every tool SHALL take text in the formats of the `schema-documents` and `json-payloads` capabilities where it takes documents or payloads, and SHALL return JSON. A tool call that cannot be done SHALL return problems as JSON, located in the document or payload where one was given, and SHALL NOT fail the protocol call. A problem with an argument of the call SHALL have the path `@arguments.<name>`.

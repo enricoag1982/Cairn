@@ -151,7 +151,7 @@ A rule that several types name is generated for their closest common supertype.
 ## Names
 
 Generated names are the names in the documents.
-A name that would not compile or would clash with what the generated code adds gets the suffix `_`: an attribute `default` has the accessor `default_()`, and an attribute `id` the accessor `id_()`. The `java-types` spec has the full rule.
+A name that would not compile or would clash with what the generated code adds gets the suffix `_`: an attribute `default` has the accessor `default_()`, and an attribute `id` the accessor `id_()`. Typed references are named after their attribute in upper snake case, such as `BIRTH_DATE`. The `java-types` spec has the full rule.
 
 ## Limits
 
