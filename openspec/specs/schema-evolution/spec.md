@@ -40,7 +40,7 @@ The system SHALL give every entity type, trait, relationship type and attribute 
 
 ### Requirement: Unchanged registrations
 
-WHEN a registration's definition is equal to the stored definition of its origin, THE SYSTEM SHALL report the registration as unchanged and SHALL NOT record a transaction. Definitions are equal when they contain the same elements, whatever the order in which types, attributes, traits and aliases are listed. Numeric range bounds are equal when they have the same value, such as 100 and 100.0.
+WHEN a registration's definition is equal to the stored definition of its origin, THE SYSTEM SHALL report the registration as unchanged and SHALL NOT record a transaction. Definitions are equal when they contain the same elements, whatever the order in which types, attributes, traits, aliases, allowed values, rule references and examples are listed. Numeric range bounds are equal when they have the same value, such as 100 and 100.0.
 
 #### Scenario: Registering the same model twice
 
@@ -50,6 +50,11 @@ WHEN a registration's definition is equal to the stored definition of its origin
 #### Scenario: Same model in a different order
 
 - **WHEN** the origin `reference-model` registers version `1.0.0` again with the same types listed in a different order
+- **THEN** the result is "unchanged" and no transaction is recorded
+
+#### Scenario: Same allowed values in a different order
+
+- **WHEN** the origin `reference-model` registers version `1.0.0` again with the allowed values of `segment` listed as `Retail` and `Corporate`
 - **THEN** the result is "unchanged" and no transaction is recorded
 
 ### Requirement: Schema history in transaction time
@@ -111,6 +116,9 @@ The system SHALL apply a registration whose differences from the stored definiti
 - renaming a type, attribute or inverse name while declaring the previous name as an alias
 - widening a value type: int to long, int to decimal, or long to decimal
 - making a required attribute optional, removing a unique constraint, or widening a range
+- relaxing a string constraint: adding allowed values to an attribute that already has some, removing all allowed values, removing a pattern, lowering or removing a minimum length, or raising or removing a maximum length
+- adding, changing or removing a description or examples
+- removing a rule from a type
 - moving an optional attribute without a unique constraint to a supertype, keeping its definition
 - marking an attribute or type as deprecated
 - making an abstract entity type concrete
@@ -132,15 +140,32 @@ The system SHALL apply a registration whose differences from the stored definiti
 - **WHEN** a later version changes HeldBy from exactly one target per source to from 1 to unbounded targets per source
 - **THEN** the registration is applied
 
+#### Scenario: Changing a description
+
+- **WHEN** a later version changes the description of Organization
+- **THEN** the registration is applied
+
+#### Scenario: Adding an allowed value
+
+- **WHEN** the attribute `segment` of CustomerRole allows `Corporate` and `Retail`, and a later version also allows `Private`
+- **THEN** the registration is applied
+
+#### Scenario: Removing a rule
+
+- **WHEN** a later version of `reference-model` no longer names the rule `lei-checksum` on Organization
+- **THEN** the registration is applied
+
 ### Requirement: Breaking changes are rejected
 
-The system SHALL reject a registration whose differences from the stored definition of its origin include any breaking change. The rejection SHALL list every breaking change with its path and reason, and MUST NOT change the stored schema. In these rules, an existing type is a concrete entity type or a relationship type that the stored schema already has: abstract types have no entities of their own. These changes are breaking:
+The system SHALL reject a registration whose differences from the stored definition of its origin include any breaking change. The rejection SHALL list every breaking change with its path and reason, and a hint for fixing it where one applies, and MUST NOT change the stored schema. In these rules, an existing type is a concrete entity type or a relationship type that the stored schema already has: abstract types have no entities of their own. These changes are breaking:
 - removing a type, an attribute, or a trait from a type's included traits
 - renaming without declaring the previous name as an alias
 - narrowing a value type, a range, a relationship source or target, or a multiplicity
 - adding a required attribute to an existing type, or making an optional attribute required
 - adding a relationship type that requires at least one relationship for a concrete entity type that already exists
 - adding a unique constraint to an existing attribute
+- tightening a string constraint: giving allowed values, a pattern or a length to an existing attribute that had none, removing an allowed value, changing a pattern, raising a minimum length, or lowering a maximum length
+- adding a rule to an entity type or relationship type that the stored schema already has, abstract or not, or changing the version of a rule it names
 - extending an existing required or unique attribute to more existing types, for example by moving it to a supertype or by including its trait in another type
 - widening a relationship source or target that requires a relationship (a minimum of 1) to concrete entity types that already exist
 - adding, removing or changing an entity type's or relationship type's supertype
@@ -152,6 +177,7 @@ The system SHALL reject a registration whose differences from the stored definit
 
 - **WHEN** a later version of `reference-model` no longer declares `birthDate` on Person
 - **THEN** the registration is rejected with a breaking change located at `Person.birthDate`
+- **AND** its hint suggests marking the attribute deprecated instead, or keeping its name as an alias if it was renamed
 
 #### Scenario: Renaming without an alias
 
@@ -173,6 +199,16 @@ The system SHALL reject a registration whose differences from the stored definit
 - **WHEN** version `1.0.0` also defines the relationship type Manages from Person to Organization, with exactly one target per source, and a later version changes its source from Person to Party
 - **THEN** the registration is rejected with a breaking change located at Manages, because every existing Organization would now need a target
 
+#### Scenario: Removing an allowed value
+
+- **WHEN** the attribute `segment` of CustomerRole allows `Corporate` and `Retail`, and a later version allows only `Corporate`
+- **THEN** the registration is rejected with a breaking change located at `CustomerRole.segment`
+
+#### Scenario: Adding a rule to an existing type
+
+- **WHEN** version 1 of the rule `birth-date-in-past` is available for Person, and a later version of `reference-model` names it on Person
+- **THEN** the registration is rejected with a breaking change located at `Person.birth-date-in-past`
+
 #### Scenario: Several breaking changes
 
 - **WHEN** a later version removes `birthDate` from Person and makes Organization abstract
@@ -187,3 +223,50 @@ WHEN a type, attribute or inverse name is looked up in the schema by a name decl
 
 - **WHEN** version `1.2.0` of `reference-model` renames `lei` to `legalEntityId` with the alias `lei`, and the attributes of Organization are looked up by `lei`
 - **THEN** the result is the attribute `legalEntityId`, with the identifier that `lei` had
+
+### Requirement: Planning a registration
+
+THE SYSTEM SHALL plan a registration without applying it. A plan SHALL state whether the registration would be applied, leave the schema unchanged, or be rejected. It SHALL list every difference from the stored definition of the origin, each with its path, a description and whether it is compatible, and every problem that registering would report.
+Planning MUST NOT record a schema transaction or change the stored schema.
+For an origin's first registration, every type it defines SHALL be listed as a compatible difference. For an invalid definition, the plan SHALL list the problems and no differences. For a lower version that the stored definition evolved from compatibly, the plan SHALL say the schema would be unchanged, and SHALL list the differences from the submitted version to the stored one, which are what the stored version adds. For a changed definition with the same version as the stored one, the plan SHALL say the registration would be rejected, with the problem that the version did not increase, and SHALL still list the differences.
+
+#### Scenario: Plan of a compatible change
+
+- **WHEN** version `1.0.0` of `reference-model` is stored, and a registration of version `1.1.0` that adds the optional attribute `email` to Person is planned
+- **THEN** the plan says the registration would be applied, and lists a compatible change located at `Person.email`
+- **AND** no schema transaction is recorded
+
+#### Scenario: Plan of a breaking change
+
+- **WHEN** version `1.0.0` of `reference-model` is stored, and a registration of a later version that no longer declares `birthDate` on Person is planned
+- **THEN** the plan says the registration would be rejected, lists a breaking change located at `Person.birthDate`, and lists the problem that registering would report
+
+#### Scenario: Plan of an unchanged registration
+
+- **WHEN** version `1.0.0` of `reference-model` is stored, and registering the same version again is planned
+- **THEN** the plan says the schema would be unchanged, and lists no differences
+
+#### Scenario: Plan of a first registration
+
+- **WHEN** an empty store plans the registration of the reference domain model
+- **THEN** the plan says the registration would be applied, and lists every type of the model as a compatible difference
+
+#### Scenario: Plan of an invalid definition
+
+- **WHEN** a registration whose definition declares two types named Party is planned
+- **THEN** the plan says the registration would be rejected, lists the problem, and lists no differences
+
+#### Scenario: Plan of a rollback
+
+- **WHEN** versions `1.0.0` and `1.1.0` of `reference-model` were registered, where `1.1.0` adds the optional attribute `email` to Person, and registering `1.0.0` again is planned
+- **THEN** the plan says the schema would be unchanged, and lists a compatible difference located at `Person.email`
+
+#### Scenario: Plan of a changed definition with the same version
+
+- **WHEN** version `1.0.0` of `reference-model` is stored, and a registration of version `1.0.0` that adds the optional attribute `email` to Person is planned
+- **THEN** the plan says the registration would be rejected with the problem that the version did not increase, and lists a compatible difference located at `Person.email`
+
+#### Scenario: Plan of an attribute added to a trait
+
+- **WHEN** version `1.0.0` of `reference-model` is stored, and a registration of version `1.1.0` that adds the optional attribute `nickname` to the trait Named is planned
+- **THEN** the plan lists a compatible difference located at `Named.nickname`

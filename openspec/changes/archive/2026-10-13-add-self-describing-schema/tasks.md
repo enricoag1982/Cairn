@@ -34,7 +34,7 @@
 
 - [x] 5.1 Add `Plan` and `Available rule` to `docs/glossary.md`, and update the `Problem` and `Rule` entries
 - [x] 5.2 Update the building blocks in `docs/architecture/README.md` and bump `last-reviewed`
-- [ ] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
 
 ## 6. Drift-review fixes
 
