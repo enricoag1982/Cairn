@@ -1,95 +1,106 @@
 ---
 status: proposed
-date: 2026-10-12
+date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
 informed: []
 ---
 
-# Define types as annotated Java interfaces processed at compile time
+# Define types in schema documents and generate Java types from them
 
 ## Context and Problem Statement
 
 Users define entity types, traits and relationship types ([ADR-0010](0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md)).
-We need a way to write those definitions that feels natural to Java developers, can be reviewed like an API contract, and lets the engine check compatibility before a change reaches production.
-See the [API research note](../research/2026-10-12-graph-system-of-record-api.md).
+We need a way to write those definitions that people and AI agents can both write, check and review, that registers in a running store, and that still gives Java developers typed access to data.
+The first version of this ADR chose annotated Java interfaces. Then Cairn was required to be AI-native ([ADR-0017](0017-design-cairn-so-that-ai-agents-are-first-class-users.md)): agents must be able to add types to a running store, which rules out definitions that need a Java compiler.
+See the [API research note](../research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](../research/2026-10-13-ai-native-schema-and-rules.md).
 
 ## Decision Drivers
 
-- Natural in any Java editor: autocompletion, navigation, refactoring
-- Errors in the model are found at compile time
-- The model can be reviewed and versioned like an API
+- Agents and tools can write, read, check and compare definitions without a compiler
+- Types registered in a running store are the normal case
+- Editors complete and check definitions as they are typed
+- Definitions are reviewed and versioned like an API, as text files in Git
 - Typed Java access to data, without managed objects or sessions
-- Types defined at runtime stay possible later
+- No language of our own to maintain: no parser, no editor plugin
+- Custom logic stays in Java ([ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md))
 
 ## Considered Options
 
+- Schema documents in YAML or JSON, with a published JSON Schema, generating Java types
 - Annotated Java interfaces, processed at compile time
-- A schema language (DSL) in its own files, generating Java
-- Annotated Java records or classes, in the style of JPA
-- Annotated Java interfaces, read by reflection at startup
+- An existing modeling language: LinkML, GraphQL SDL, Smithy or Pkl
+- A schema language of our own
 - Only a programmatic schema API (builders)
 
 ## Decision Outcome
 
-Proposed option: "Annotated Java interfaces, processed at compile time", because it gives full editor support and compile-time checks without a language of our own to maintain.
+Proposed option: "Schema documents in YAML or JSON, with a published JSON Schema, generating Java types", because it is the only option that agents can produce at runtime, that editors check without a plugin, and that still gives typed Java access.
 
-- Entity types, traits and relationship types are Java interfaces annotated `@EntityType`, `@Trait` and `@RelationshipType`. Accessor methods declare attributes. Annotations declare constraints (`@Unique`, `@Range`) and renames (`@Alias`).
-- Inheritance uses `extends`. The annotation processor allows at most one `@EntityType` supertype; other parents must be traits.
-- At compile time the annotation processor:
-  - checks the model and reports errors in the editor
-  - generates immutable implementations, builders and a typed query model
-  - writes a model description with a fixed format into the jar
-- At startup the engine registers the model description through the programmatic schema API, as a schema transaction checked for compatibility. CI compares the description with the last release.
-- Generated types are values, not managed objects: a snapshot at a view's coordinates, with no lazy loading, change tracking or session. Every change goes through a transaction.
-- A generic, untyped API reads and writes every type, for bulk loads and tools.
-- The model lives in its own module, reviewed and versioned like an API. For consumers outside Java, the engine can export the stored schema (for example as JSON Schema or Avro).
-
-**Types defined at runtime** are a follow-up. These rules keep them possible:
-
-1. Every schema change goes through the programmatic schema API. The annotation processor's model description is one caller of it.
-2. The engine works on the meta-model, by type and attribute identifiers, never on Java classes.
-3. The generic API ships in the first version, and the conformance suite runs scenarios through both the typed and the generic API.
-4. Each type records where it came from (a model jar and version, or runtime).
-5. The model description format is the schema API's input format.
-6. A typed query returns entities of unknown subtypes through their nearest known Java supertype, with extra attributes reachable through the generic API.
+- **The schema document is the canonical definition.** One document belongs to one origin and holds its traits, entity types and relationship types, with their attributes, constraints, descriptions, examples and rule references. A format version (`cairn: 1`) heads every document.
+- **One data model, two notations.** People write YAML (files named `*.cairn.yaml`); APIs and agent tools exchange JSON. Both are read into the same definitions. Cairn reads a JSON-compatible subset of YAML 1.2, without custom tags or anchors, so that a value never changes meaning between the two.
+- **A published JSON Schema** describes the document format. Editors such as IntelliJ IDEA and VS Code use it for completion and checks; agents use it to build documents.
+- **Documents map one to one to the programmatic schema API** (`SchemaDefinition`). Registering a document goes through the schema registry, with its validation, compatibility checks and origins. Problems point into the document, with a JSON Pointer path and, for YAML, a line and column.
+- **Types registered at runtime** by a tool, an agent or an administration screen are equal to types shipped with an application. Each type records its origin.
+- **Java types are generated from documents** by a build step, offered as a Gradle plugin: immutable value types, builders, a typed query model, and base types for the rules the documents name. Generated types are values, not managed objects: a snapshot at a view's coordinates, with no lazy loading, change tracking or session. Every change goes through a transaction.
+- **The engine never depends on generated classes.** It works on the meta-model, by type and attribute identifiers. Types without generated classes, such as types an agent registered at runtime, are read and written through the generic API, as JSON payloads or generic values.
+- A typed query returns entities of unknown subtypes through their nearest known Java supertype, with extra attributes reachable through the generic API.
+- The stored schema can be exported as schema documents, and as a JSON Schema per entity type for payloads ([ADR-0017](0017-design-cairn-so-that-ai-agents-are-first-class-users.md)).
+- Annotated Java interfaces are not planned. They stay possible as another way to write a schema document.
 
 ### Consequences
 
-- Good, because types are plain Java with full editor support, and model errors appear at compile time.
-- Good, because there is no parser, schema language or editor plugin to maintain.
-- Good, because the generated types are immutable values that work the same with every storage implementation.
-- Bad, because the model is written in Java only. Other languages consume an exported schema.
-- Bad, because constraint annotations can pile up. Complex rules belong in code, not annotations.
-- Bad, because we maintain an annotation processor, which must work with incremental builds in editors.
+- Good, because agents and tools create, check and preview definitions without a build, so runtime types are first-class.
+- Good, because the format is language-neutral, and consumers outside Java read the same documents.
+- Good, because editors complete and check documents through the JSON Schema, with no plugin to maintain.
+- Good, because the model and its changes are reviewed as plain text diffs.
+- Bad, because errors that need the whole model (an unknown supertype, a cycle) are found when the build step or the registry validates, not as you type.
+- Bad, because renames do not propagate automatically between documents and the Java code that uses the generated types.
+- Bad, because YAML has pitfalls (indentation, values that look like other types), which the strict subset and the JSON Schema only partly contain.
+- Bad, because Cairn needs a JSON and YAML parsing library at runtime, and a code generator to maintain.
 
 ### Confirmation
 
-- The annotation processor has tests for every rule it enforces.
-- CI fails when the model description is incompatible with the last release and no migration is provided.
+- Every schema definition converts to a document and back unchanged, checked by tests over generated definitions.
+- The reference domain is kept as a schema document, and the tests read it.
+- The published JSON Schema accepts every example document in the docs and tests, and rejects the documents of the negative tests.
+- CI compares an application's documents with its last release and fails on incompatible changes without a migration.
 
 ## Pros and Cons of the Options
 
-### A schema language in its own files
+### Annotated Java interfaces, processed at compile time
 
-- Good, because it is concise and independent of any programming language.
-- Bad, because editors have no autocompletion, navigation or refactoring for it without a plugin, and we maintain a parser and code generator.
+The first version of this ADR proposed this option.
 
-### Annotated records or classes
+- Good, because types are plain Java, with full editor support and model errors shown at compile time.
+- Good, because there is no document format to parse.
+- Bad, because a new type needs a compiler, a build and a release, so agents cannot add types to a running store.
+- Bad, because the model is written in Java only. Other languages consume an export.
+- Bad, because an annotation processor must work with incremental builds in every editor.
 
-- Good, because they are familiar from JPA.
-- Bad, because records cannot extend each other, so every record repeats its inherited attributes. Classes pull towards managed objects with sessions.
+### An existing modeling language
 
-### Reflection at startup
+- LinkML is YAML-based, with classes, mixins and slots, and generates JSON Schema and code.
+- GraphQL SDL is widely known, with interfaces and types.
+- Smithy and Pkl are typed languages for models and configuration, with their own tools.
+- Good, because they come with documentation, tools and users.
+- Bad, because none of them knows Cairn's concepts: multiplicities on both relationship ends, composition, inverse names, aliases, origins and time. Extensions or conventions would carry them, and the real model would hide in those.
+- Bad, because their evolution is driven by other needs, and Cairn would follow it.
 
-- Good, because it needs no build step.
-- Bad, because model errors only show at runtime, and deep reflection conflicts with the JDK's move to make `final` really final.
+### A schema language of our own
+
+- Good, because it can be the most concise and readable.
+- Bad, because we maintain a parser, a formatter and editor plugins, and agents know it less well than YAML or JSON.
 
 ### Only a programmatic schema API
 
-- Good, because it is the simplest to build, and tools need it anyway.
-- Bad, because it is verbose to write and gives no typed Java access to data.
+- Good, because it is the simplest to build, and the documents need it anyway.
+- Bad, because it is verbose, needs Java, and gives no typed access to data.
 
 ## More Information
 
-- Similar annotation processors: Immutables, MapStruct and Hibernate's metamodel generator.
+- Revised on 2026-10-13, while still proposed. The first version chose annotated Java interfaces processed at compile time; the AI-native requirement of [ADR-0017](0017-design-cairn-so-that-ai-agents-are-first-class-users.md) changed the outcome. The file name keeps the first title.
+- Validation logic that a document cannot declare is written in Java: [ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md).
+- JSON Schema: <https://json-schema.org/>
+- YAML 1.2: <https://yaml.org/spec/1.2.2/>
+- LinkML: <https://linkml.io/>

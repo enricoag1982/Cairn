@@ -24,11 +24,11 @@ Building it first gives the later changes a stable, testable schema API. It also
 
 ### Non-goals
 
-- The Java annotation processor and generated types, which come with `add-java-type-definitions` (ADR-0012)
+- Schema documents in YAML and JSON, which come with `add-schema-documents`, and generated Java types, which come with `add-java-type-generation` (ADR-0012)
 - Entities and relationships as data: creating, versioning or reading them, polymorphic queries over them, and integrity checks on them
 - Migrations for breaking changes, and default values or backfills
 - Durable storage of the schema: it is kept in memory until the commit log exists (`add-durable-commit-log`)
-- Types defined at runtime through a user interface. The design keeps them possible (ADR-0012)
+- Tools for AI agents and people to define types in a running store, which come with `add-agent-tools` (ADR-0017). The programmatic schema API built here is what they will call
 - Multi-valued attributes, structured values, and constraints spanning several entities
 - Effective time for the schema: the schema has history in transaction time only (ADR-0010)
 

@@ -9,6 +9,8 @@ related: [ADR-0005, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, 
 
 > [!NOTE]
 > sysRec was the working name of Cairn. See [ADR-0016](../decisions/0016-name-the-project-cairn.md).
+>
+> The review of 2026-10-13 made Cairn AI-native. Types are now defined in schema documents rather than annotated Java interfaces, and the next steps changed. See the [AI-native research note](2026-10-13-ai-native-schema-and-rules.md).
 
 ## Question
 

@@ -8,7 +8,7 @@ Constraints that shape the approach:
 
 - Java 25 (ADR-0005) and Gradle with the Kotlin DSL (ADR-0015), both accepted: convention plugins in `build-logic/`, a version catalog, and a Java 25 toolchain.
 - The meta-model follows ADR-0010 (proposed): single inheritance, traits, first-class relationship types, and the schema stored as data with history in transaction time.
-- Types will be written as annotated Java interfaces (ADR-0012, proposed). The definition format built here is what the annotation processor will produce, and what runtime tools will produce later (ADR-0012, rules 1 and 5).
+- Types will be written in schema documents, in YAML or JSON (ADR-0012, proposed, revised on 2026-10-13 for ADR-0017). Documents will be read into the definition format built here, so it must stay plain data that any source can produce: a document, a tool or an AI agent.
 - Registration is serialized because of the single writer of ADR-0007 (proposed).
 - The storage interface of ADR-0011 does not exist yet, so the schema lives in memory in this change. ADR-0011 is context only; this change does not depend on it.
 - Transaction time and basis follow ADR-0008 (proposed): UTC instants with microsecond precision, strictly increasing.
@@ -25,7 +25,7 @@ Constraints that shape the approach:
 
 **Non-Goals:**
 
-- Encoding definitions as JSON or a binary format. `add-java-type-definitions` decides how the model description is written into jars.
+- Encoding definitions as text. `add-schema-documents` defines the YAML and JSON format (ADR-0012).
 - Concurrency beyond the single-writer rule. Registrations are serialized; readers use immutable snapshots.
 - Performance work. Schemas are small (hundreds of types).
 
@@ -125,7 +125,7 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 - [ADR-0007, ADR-0008, ADR-0010 and ADR-0012 are still proposed and may change at review] → The definition format (D2) is reviewed in this change's pull request before code is written.
 - [Matching attribute identity for moved and renamed attributes is subtle] → Dedicated tests for moving up, renaming, and renaming plus moving.
 - [Without migrations, the compatibility rules are strict: making an attribute required is always breaking] → Accepted until a later change adds defaults, backfills and migrations.
-- [Java modules can cause friction with test tooling and, later, the annotation processor] → Drop `module-info.java` if it costs more than it protects (D1).
+- [Java modules can cause friction with test tooling and, later, the code generator] → Drop `module-info.java` if it costs more than it protects (D1).
 - [Identifiers differ between stores] → Models are exchanged by name. Identifiers are documented as local to a store.
 
 ## Migration Plan

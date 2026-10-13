@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-09-30
+last-reviewed: 2026-10-13
 owner: ""
 ---
 
@@ -27,7 +27,7 @@ flowchart TD
 | Area rules | `docs/CLAUDE.md`, `openspec/CLAUDE.md` | When Claude works in that folder | Rules that only apply there |
 | Skills | `.claude/skills/<name>/SKILL.md` | When the task matches the skill's `description` | Step-by-step procedures: recording a decision, maintaining docs |
 | OpenSpec workflows | `.claude/commands/opsx/*.md` (generated) + `openspec/config.yaml` | When you run `/opsx:*` | Project context and per-artifact rules for proposals, specs, designs, tasks |
-| Subagents | `.claude/agents/*.md` | When delegated to | Focused reviewers, e.g. `docs-reviewer` |
+| Subagents | `.claude/agents/*.md` | When delegated to | Focused helpers: `docs-reviewer` reviews drift; `implementer` writes code on a smaller model |
 | Settings | `.claude/settings.json` | By Claude Code | Pre-approved safe commands |
 
 Other tools that read `AGENTS.md` natively (Codex, Copilot, Cursor and others) still get the root guide. Cursor and Copilot also read `.claude/skills/`.
