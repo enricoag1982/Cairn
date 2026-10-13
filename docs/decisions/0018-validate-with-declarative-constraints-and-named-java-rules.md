@@ -45,24 +45,23 @@ Validation has three levels:
 
 ### Java rules
 
-- A document names the rules that apply to an entity type or relationship type, with a description:
+- A document names the rules that apply to an entity type or relationship type, by name and version:
 
   ```yaml
   entityTypes:
     Organization:
-      extends: Party
+      supertype: Party
       rules:
-        - name: lei-checksum
-          description: The LEI's check digits are valid (ISO 17442, MOD 97-10).
+        - { name: lei-checksum, version: 1 }  # The LEI's check digits are valid (ISO 17442, MOD 97-10).
   ```
 
-- A rule is a Java class with a name, a version, a description and the type it applies to. It works on the Java type generated from the document, or on the generic entity API.
+- A rule is a Java class with a name, a version, a description, the type it applies to and the problem codes it reports. The description and the codes live in the class only. A rule works on the Java type generated from the document, or through the generic API.
 - Applications register rules when they open a store, or through Java's `ServiceLoader`. Introspection lists the registered rules with their names, versions, descriptions and types, so agents can find them.
-- **Checked at registration:** a schema that names an unknown rule, or a rule for a different type, is rejected with a problem.
+- **Checked at registration:** a schema that names an unknown rule or version, or a rule for a different type, is rejected with a problem.
 - **Run at commit,** inside the single writer ([ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)), after the declarative constraints, against the state the transaction would produce, over every effective period it changes. A rule runs when an instance of the type it is attached to is written; a rule that other writes can break is attached to those types too, such as a rule on `Owns` for total ownership.
-- **Read-only context:** a rule reads other entities through a rule context, at the same coordinates as the data being checked, and reports problems through it. A rule's problems carry the rule's name and a code the rule defines.
+- **Read-only context:** a rule reads other entities through a rule context, at the same coordinates as the data being checked, and reports problems through it. A rule declares its problem codes, each with an explanation. The codes are qualified by the rule's name, such as `lei-checksum/invalid-check-digits`, and introspection lists them with the rule.
 - **Deterministic:** a rule may not use the clock, files, the network, randomness or shared mutable state, except through the rule context. Then it gives the same result with every storage implementation and when data is checked again. Java cannot enforce this fully, so tests run every rule against every storage implementation.
-- **Compatibility:** adding a rule to an existing type is a stricter constraint, so it is a breaking change until the engine can check existing data. Removing a rule is compatible. A rule whose meaning changes gets a new version, and moving a document to that version is a schema change classified like any other.
+- **Compatibility:** adding a rule to an existing type is a stricter constraint, so it is a breaking change until the engine can check existing data. Removing a rule is compatible. A rule whose meaning changes gets a new version, and moving a document to that version is a schema change classified like any other. Several versions of a rule can be registered at once, so documents move one at a time.
 - **A store whose schema names a rule that is not registered** can still be read, but writes to the affected types are rejected with a problem.
 - Other custom logic, such as derived attributes, follows the same pattern later: named Java functions referenced from the document. Side effects never run inside the engine; they belong to applications, fed by the change feed.
 

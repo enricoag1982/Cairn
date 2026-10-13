@@ -38,9 +38,10 @@ See the [API research note](../research/2026-10-12-graph-system-of-record-api.md
 Proposed option: "Schema documents in YAML or JSON, with a published JSON Schema, generating Java types", because it is the only option that agents can produce at runtime, that editors check without a plugin, and that still gives typed Java access.
 
 - **The schema document is the canonical definition.** One document belongs to one origin and holds its traits, entity types and relationship types, with their attributes, constraints, descriptions, examples and rule references. A format version (`cairn: 1`) heads every document.
-- **One data model, two notations.** People write YAML (files named `*.cairn.yaml`); APIs and agent tools exchange JSON. Both are read into the same definitions. Cairn reads a JSON-compatible subset of YAML 1.2, without custom tags or anchors, so that a value never changes meaning between the two.
+- **One data model, two notations.** People write YAML (files named `*.cairn.yaml`); APIs and agent tools exchange JSON. Both are read into the same definitions. Documents use the glossary's names for concepts, such as supertype, traits, source, target and inverse name. Cairn reads a JSON-compatible subset of YAML 1.2, without custom tags or anchors, so that a value never changes meaning between the two.
 - **A published JSON Schema** describes the document format. Editors such as IntelliJ IDEA and VS Code use it for completion and checks; agents use it to build documents.
-- **Documents map one to one to the programmatic schema API** (`SchemaDefinition`). Registering a document goes through the schema registry, with its validation, compatibility checks and origins. Problems point into the document, with a JSON Pointer path and, for YAML, a line and column.
+- **A document is read into an origin and a schema definition**, the input of the programmatic schema API (`Origin` and `SchemaDefinition`). `add-schema-documents` extends the definitions compatibly with what documents carry and definitions lack so far: descriptions, examples, allowed values, patterns, lengths and rule references. Registering a document goes through the schema registry, with its validation, compatibility checks and origins.
+- **Problems keep the element path** of the `type-model` spec, such as `Account.active`, and add where the element is in the document: a JSON Pointer and, for YAML, a line and column.
 - **Types registered at runtime** by a tool, an agent or an administration screen are equal to types shipped with an application. Each type records its origin.
 - **Java types are generated from documents** by a build step, offered as a Gradle plugin: immutable value types, builders, a typed query model, and base types for the rules the documents name. Generated types are values, not managed objects: a snapshot at a view's coordinates, with no lazy loading, change tracking or session. Every change goes through a transaction.
 - **The engine never depends on generated classes.** It works on the meta-model, by type and attribute identifiers. Types without generated classes, such as types an agent registered at runtime, are read and written through the generic API, as JSON payloads or generic values.
@@ -61,8 +62,8 @@ Proposed option: "Schema documents in YAML or JSON, with a published JSON Schema
 
 ### Confirmation
 
-- Every schema definition converts to a document and back unchanged, checked by tests over generated definitions.
-- The reference domain is kept as a schema document, and the tests read it.
+- Every origin and schema definition converts to a document and back unchanged, checked by tests over generated definitions.
+- The reference domain is also kept as a schema document, which the tests read. The [reference domain page](../reference/reference-domain.md) stays canonical, and a test checks the document against it, as one checks the test fixture today.
 - The published JSON Schema accepts every example document in the docs and tests, and rejects the documents of the negative tests.
 - CI compares an application's documents with its last release and fails on incompatible changes without a migration.
 

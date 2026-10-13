@@ -38,17 +38,18 @@ Proposed option: "Agents as first-class users of the core API", because the prop
 
 **Agents are first-class users: everything they need is machine-readable, validated and previewable.**
 It joins the candidate principles in the [API research note](../research/2026-10-12-graph-system-of-record-api.md#conclusion), to be agreed with them before they enter [the principles](../principles.md).
+It does not conflict with the working principle "Agents are contributors, not authorities", which is about contributing to this repository. Agents that use a running store are limited by the approval policy below.
 
 ### Commitments
 
 1. **Definitions are data with a published format.** Types are defined in schema documents, written in YAML or JSON and described by a published JSON Schema ([ADR-0012](0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)). Types registered at runtime are the normal case, not a follow-up.
-2. **The model describes itself.** Types, attributes, relationship types and rules carry descriptions and examples. Allowed values, patterns and lengths are declared, not hidden in code. An introspection API returns the whole schema, the available rules ([ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md)) and the options a store supports.
+2. **The model describes itself.** Types, attributes, relationship types and rules carry descriptions and examples. Allowed values, patterns and lengths are declared, not hidden in code. An introspection API returns the whole schema, the available rules ([ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md)), and the options and storage capabilities a store supports.
 3. **Every change can be previewed.** Planning a schema change returns the classified differences and the problems without applying anything. Transactions on entities have a dry run that validates without committing.
-4. **Problems explain themselves.** Every problem has a stable code, the path of the element concerned and a message. Where it applies, it also says what was expected, what was found and how to fix it. Every code is listed in a catalog with an explanation.
+4. **Problems explain themselves.** Every problem has a stable code, the path of the element concerned and a message. Where it applies, it also says what was expected, what was found and how to fix it. Every code Cairn defines is listed in a catalog with an explanation; codes that rules define are listed with their rule ([ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md)).
 5. **Entities can be written as JSON.** Besides typed Java access, the generic API accepts entities as JSON payloads, checked against a JSON Schema that the engine generates for each entity type.
-6. **Writes say who and why.** Every transaction records the principal, who it acts for when that is someone else, and a reason. An idempotency key makes retries safe. These fields extend the context of [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md).
+6. **Writes say who and why.** The context of [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md) already carries the principal, a reason and an idempotency key. It also says who the principal acts for when that is someone else, and the transaction records all of them, so that the history shows which changes agents made and for whom.
 7. **Agents connect through tools.** An adapter publishes the API as tools for agents, starting with the Model Context Protocol (MCP): introspect, plan and register a schema change, validate and write entities, and query. Like a server, it is an adapter over the same plain values ([ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)), outside the core engine.
-8. **People approve what can lose data.** A store has an approval policy. By default an agent may apply compatible schema changes and write entities; breaking schema changes, migrations and purges need a person's approval. Java code, including rules, reaches production only through code review.
+8. **People approve what can lose data.** A store has an approval policy. By default an agent may apply compatible schema changes and write entities, while purges need a person's approval. Breaking schema changes are rejected for everyone, as the `schema-evolution` spec says; once migrations exist, a breaking change with its migration needs a person's approval too. Java code, including rules, reaches production only through code review.
 
 ### Consequences
 
@@ -61,8 +62,8 @@ It joins the candidate principles in the [API research note](../research/2026-10
 
 ### Confirmation
 
-- Every problem code is in the catalog, with an explanation and a test that produces it.
-- The reference domain is defined as a schema document, and its scenarios run through the generic JSON API as well as typed Java access.
+- Every problem code Cairn defines is in the catalog, with an explanation and a test that produces it.
+- The scenarios of the reference domain run through the generic API with JSON payloads as well as through typed Java access.
 - Before the agent adapter ships, a set of agent tasks (for example "add an optional attribute to Person" or "record that one organization owns another") runs against it, and the tasks succeed without help from a person.
 
 ## Pros and Cons of the Options

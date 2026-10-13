@@ -39,7 +39,7 @@ Other tools that read `AGENTS.md` natively (Codex, Copilot, Cursor and others) s
 | Think through an idea without writing code | `/opsx:explore` |
 | Turn an idea into a proposal with specs, design and tasks | `/opsx:propose "<what and why>"` |
 | Record a decision | "Record a decision about X". Triggers the `record-decision` skill |
-| Implement an agreed change | `/opsx:apply <change-id>` |
+| Implement an agreed change | `/opsx:apply <change-id>`. Claude Code hands the code to the `implementer` subagent |
 | Adjust a change after feedback | `/opsx:update <change-id>` |
 | Check docs are in sync before a PR | "Review docs drift", `docs-reviewer` subagent, `maintain-docs` skill |
 | Finish a change | `npm run check`, then `/opsx:archive <change-id>` |

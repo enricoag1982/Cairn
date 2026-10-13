@@ -15,7 +15,7 @@ Cairn was created from this template on 2026-10-10. Where each step stands, chec
 | --- | --- |
 | 1. Install and verify the tooling | Done |
 | 2. Describe the project in `AGENTS.md` | Done |
-| 3. Set the principles | Open. Candidate principles are in the [API research note](../research/2026-10-12-graph-system-of-record-api.md#conclusion) |
+| 3. Set the principles | Open. Candidate principles are in the [API research note](../research/2026-10-12-graph-system-of-record-api.md#conclusion) and [ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md) |
 | 4. Seed the glossary | Done |
 | 5. Review the template's decisions | Open. ADR-0001 to ADR-0004 still name `project maintainers` as decision-makers |
 | 6. Decide ADR-0005 | Done: Java 25 ([ADR-0005](../decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)), and the build is set up |

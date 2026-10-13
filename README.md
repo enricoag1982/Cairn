@@ -3,7 +3,7 @@
 # Cairn
 
 A system of record for enterprise data.
-You define typed entities and relationships, with inheritance. An engine embedded in your JVM application stores them with full history on two time axes, commits consistent transactions, and answers traversals and aggregations.
+You, or your AI agents, define typed entities and relationships, with inheritance. An engine embedded in your JVM application stores them with full history on two time axes, commits consistent transactions, and answers traversals and aggregations.
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
@@ -17,9 +17,11 @@ The API hides the storage implementation: the same behavior in memory or in a ke
 - **Embedded, single writer.** One writer orders all commits; any number of readers work on immutable snapshots. [ADR-0007](docs/decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)
 - **Views and context.** Reads go through immutable views bound to a context: time coordinates, caller, limits and feature flags resolved by a gateway. [ADR-0013](docs/decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md)
 - **Storage behind a narrow interface.** An ordered key-value store and a commit log; the in-memory implementation is the reference, and every implementation passes the same conformance suite. [ADR-0011](docs/decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md)
-- **Types as Java interfaces.** Annotated interfaces, checked and turned into immutable values and builders at compile time. [ADR-0012](docs/decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)
+- **Types in schema documents.** YAML for people, JSON for tools, checked against a published JSON Schema and registered in a running store; Java types are generated from them. [ADR-0012](docs/decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)
+- **Logic in Java.** Documents declare constraints; anything more is a Java rule that documents name and the engine runs at commit. [ADR-0018](docs/decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)
+- **Built for AI agents.** Agents read the schema, preview changes, get problems they can act on, and work through tools over the same API; people approve what can lose data. [ADR-0017](docs/decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md)
 
-The reasoning behind all of this is in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md).
+The reasoning behind all of this is in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](docs/research/2026-10-13-ai-native-schema-and-rules.md).
 
 ## Where to start
 

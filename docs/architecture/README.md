@@ -33,7 +33,7 @@ It is a living document: update it in the same pull request that changes the arc
 ```mermaid
 flowchart LR
     app([Application on the JVM]) -->|embeds and calls| cairn[Cairn engine<br/>cairn-api + cairn-core]
-    model([Model module<br/>types of one origin]) -->|registered by the application| cairn
+    model([Schema definition<br/>types of one origin]) -->|registered by the application| cairn
 ```
 
 Cairn runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md), proposed). It has no external systems yet.

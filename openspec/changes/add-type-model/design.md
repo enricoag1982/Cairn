@@ -18,7 +18,7 @@ Constraints that shape the approach:
 
 **Goals:**
 
-- A definition format that later changes reuse unchanged.
+- A definition format that later changes extend compatibly, without changing what exists.
 - Validation and compatibility checking as pure functions over definitions, independent of storage.
 - An in-memory schema registry with history in transaction time, shaped so that it can move onto the commit log and key-value store later without changing its API.
 - One test per spec scenario, built on the reference domain.
@@ -122,7 +122,7 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 
 ## Risks / Trade-offs
 
-- [ADR-0007, ADR-0008, ADR-0010 and ADR-0012 are still proposed and may change at review] → The definition format (D2) is reviewed in this change's pull request before code is written.
+- [ADR-0007, ADR-0008, ADR-0010 and ADR-0012 are still proposed and may change at review; ADR-0012 already changed after the code was written, for ADR-0017] → Definitions stay plain data that refer to each other by name, so schema documents can be read into them, and `add-schema-documents` extends them compatibly.
 - [Matching attribute identity for moved and renamed attributes is subtle] → Dedicated tests for moving up, renaming, and renaming plus moving.
 - [Without migrations, the compatibility rules are strict: making an attribute required is always breaking] → Accepted until a later change adds defaults, backfills and migrations.
 - [Java modules can cause friction with test tooling and, later, the code generator] → Drop `module-info.java` if it costs more than it protects (D1).

@@ -28,7 +28,7 @@ This note records the review of 2026-10-13. The decisions moved into ADR-0017, a
 | Problems they can act on | A code, a path and a message | Also what was expected, what was found and how to fix it, with a catalog of codes (ADR-0017) |
 | Safe retries and an audit of who did what | An idempotency key and a reason (ADR-0013) | Also who the principal acts for (ADR-0017) |
 | A way in | A Java API in the application's JVM | Tools over the same API, starting with MCP (ADR-0017) |
-| Limits | None | An approval policy: people approve breaking changes, migrations and purges (ADR-0017) |
+| Limits | None | An approval policy: people approve purges, and breaking changes with their migrations once migrations exist (ADR-0017) |
 
 The programmatic schema API built in `add-type-model` already fits: definitions are plain data that refer to each other by name, and every problem is reported at once.
 Schema documents are read into the same definitions.
@@ -61,10 +61,10 @@ traits:
 entityTypes:
   Party:
     abstract: true
-    description: A person or organization that can own others, hold accounts and play roles.
-    includes: [Named]
+    description: A person or organization that can be owned, hold accounts, have addresses and play roles.
+    traits: [Named]
   Organization:
-    extends: Party
+    supertype: Party
     attributes:
       lei:
         type: string
@@ -73,22 +73,21 @@ entityTypes:
         description: Legal Entity Identifier (ISO 17442).
         examples: ["5493001KJTIIGC8Y1R12"]
     rules:
-      - name: lei-checksum
-        description: The LEI's check digits are valid (ISO 17442, MOD 97-10).
+      - { name: lei-checksum, version: 1 }  # The LEI's check digits are valid (ISO 17442, MOD 97-10).
 
 relationshipTypes:
   Owns:
     description: An organization holds a share of a party.
-    from: Organization
-    to: Party
+    source: Organization
+    target: Party
     targetsPerSource: "0..*"
     sourcesPerTarget: "0..*"
-    inverse: ownedBy
+    inverseName: ownedBy
     attributes:
       share: { type: decimal, required: true, range: "(0, 100]" }
     rules:
-      - name: total-ownership-at-most-100
-        description: The owners of a party hold at most 100% of it together, at every point in effective time.
+      # The owners of a party hold at most 100% of it together, at every point in effective time.
+      - { name: total-ownership-at-most-100, version: 1 }
 ```
 
 ### Where custom logic lives
@@ -115,7 +114,7 @@ SirixDB is an embeddable, append-only, bitemporal store written in Java. It vers
 - ADR-0005 still holds: the engine, the generated types and the rules are Java.
 - Assumptions, until the user says otherwise:
   - Agents use a running store through tools first. Coding agents that write Java work through pull requests as usual.
-  - Agents may apply compatible schema changes directly; breaking ones need a person.
+  - Agents may apply compatible schema changes directly. Breaking changes stay rejected for everyone until migrations exist; then they need a person.
 - Open:
   - The library for reading JSON and YAML (for example Jackson, or SnakeYAML Engine with a JSON library) is a new runtime dependency, to be agreed with `add-schema-documents`.
   - The MCP SDK for Java is a dependency of the agent adapter only.

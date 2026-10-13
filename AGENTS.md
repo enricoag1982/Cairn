@@ -40,6 +40,7 @@ Documentation and spec tooling (Node.js 20.19 or later):
 Application build and test (Gradle, [ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). Needs a local JDK 25, which Gradle finds as a toolchain; nothing is downloaded automatically:
 
 - `./gradlew build`: compile (lint warnings are errors), run the tests, and build Javadoc (warnings are errors)
+- If Maven Central rate-limits downloads (HTTP 429), rerun with `--max-workers=1`
 - `./gradlew :cairn-core:test --tests '<TestClass>'`: run one test class
 - Shared build configuration lives only in the convention plugins in `build-logic/`; versions live in `gradle/libs.versions.toml`. Module build files stay declarative.
 
@@ -82,7 +83,7 @@ Bug fixes that restore specified behavior and pure refactors need no spec change
 AGENTS.md, CLAUDE.md     agent guidance (this file is canonical)
 openspec/                specs (current behavior) and changes (proposals + archive); rules in openspec/CLAUDE.md
 docs/                    decisions, architecture, guides, reference, process, research, templates; rules in docs/CLAUDE.md
-.claude/                 Claude Code: skills, /opsx commands (generated), docs-reviewer subagent, settings
+.claude/                 Claude Code: skills, /opsx commands (generated), docs-reviewer and implementer subagents, settings
 .github/                 PR/issue templates, CI
 scripts/                 docs.mjs (checks, ADRs, decision log); openspec-update.mjs (agents:update)
 cairn-api/, cairn-core/  Java modules: public API, and the engine

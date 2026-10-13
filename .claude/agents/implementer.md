@@ -16,6 +16,6 @@ Rules:
 3. Do not add dependencies, subprojects, source trees or CI jobs, and do not put build logic outside `build-logic/`. Report the need instead.
 4. Do not edit `openspec/specs/**`, ADRs, `AGENTS.md` or `.claude/`. Report documentation that your change makes stale.
 5. Do not tick `tasks.md`, commit or push.
-6. Run `./gradlew build` and make it pass: lint and Javadoc warnings are errors. If Maven Central rate-limits downloads (HTTP 429), retry with `--max-workers=1`.
+6. Run `./gradlew build` (see Commands in `AGENTS.md`) and make it pass: lint and Javadoc warnings are errors.
 
 Report, briefly: the files you changed, the tests you added (by scenario), the result of `./gradlew build`, and anything you were unsure about or did differently from the spec.

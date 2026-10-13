@@ -48,5 +48,5 @@
 
 - [x] 7.1 Check the glossary entries that this proposal added (alias, breaking change, compatible change, deprecated, inverse name, multiplicity, origin, problem, schema definition, schema identifier, schema transaction, symmetric relationship type, value type) against the implemented behavior and correct them; verify `npm run docs:check` passes
 - [x] 7.2 Describe the `cairn-api` and `cairn-core` building blocks and their capabilities in `docs/architecture/README.md` and bump `last-reviewed`; verify `npm run docs:check` passes
-- [ ] 7.3 Before archiving, ask the user to accept or reject ADR-0007, ADR-0008, ADR-0010 and ADR-0012, which this change relies on; update their status and run `npm run docs:index`. If one is rejected, update the delta specs first. Verify the decision log
+- [ ] 7.3 Before archiving, ask the user to accept or reject ADR-0007, ADR-0008, ADR-0010 and ADR-0012, which this change relies on, and ADR-0017, on which the revised ADR-0012 rests; update their status and run `npm run docs:index`. If one is rejected, update the delta specs first. Verify the decision log
 - [x] 7.4 Run `npm run check` and `./gradlew build`, then delegate a drift review to the `docs-reviewer` subagent and fix its findings; verify both commands pass and the review reports no open drift
