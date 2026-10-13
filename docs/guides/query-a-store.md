@@ -17,20 +17,23 @@ A query is data that a *view* runs. It starts from an entity type and gives each
 | `where` | Keeps the row if a condition holds |
 | `follow` | Gives one row per relationship that leads from a binding by a relationship name or inverse name, binding the entity at the other end, and if asked the relationship |
 | `optionalFollow` | The same, but keeps a row without such relationships, with empty bindings |
-| `traverse` | Gives one row per entity reached by a name at depths from a minimum to a maximum; depth 0 is the binding itself |
+| `traverse` | Gives one row per entity reached by a name at depths from a minimum to a maximum, optionally only along relationships that meet a condition (`along`); depth 0 is the binding itself |
 
 After the steps, a query can group rows and compute aggregates (count, sum, minimum, maximum, average), name the columns to return, order the rows and limit them.
 Everything is read at the view's coordinates: one effective time, as known at one basis or transaction time.
 
 ## In Java
 
-The total balance of accounts by ultimate parent, story RD-6 of the [reference domain](../reference/reference-domain.md):
+The total balance of accounts by ultimate parent, story RD-6 of the [reference domain](../reference/reference-domain.md), where a party's ultimate parent is found by following `ownedBy` while the share is above 50%:
 
 ```java
+Condition overHalf = Condition.gt(Operand.attribute("ownership", "share"), Operand.literal(50));
 Query query = Query.from("Account", "a")
         .follow("a", "HeldBy", "holder")                        // the party that holds the account
-        .traverse("holder", "ownedBy", 0, 10, "party")          // the holder and its owners, up to 10 levels
-        .where(Condition.not(Condition.hasLink("party", "ownedBy")))    // keep the ones nobody owns
+        .traverse("holder", "ownedBy", 0, 10, "party",          // the holder and its owners, up to 10 levels,
+                "ownership", overHalf)                          // along ownerships above 50%
+        .where(Condition.not(Condition.hasLink("party", "ownedBy", "large",     // keep those without
+                Condition.gt(Operand.attribute("large", "share"), Operand.literal(50)))))   // such an owner
         .groupBy("party")
         .aggregate(Aggregate.sum(Operand.attribute("a", "balance"), "total"))
         .build();
@@ -66,8 +69,11 @@ The same RD-6 query, as agents send it to `cairn_query` and as `Queries.read` in
   "from": { "type": "Account", "as": "a" },
   "steps": [
     { "follow": { "from": "a", "name": "HeldBy", "as": "holder" } },
-    { "traverse": { "from": "holder", "name": "ownedBy", "minDepth": 0, "maxDepth": 10, "as": "party" } },
-    { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy" } } } }
+    { "traverse": { "from": "holder", "name": "ownedBy", "minDepth": 0, "maxDepth": 10, "as": "party",
+                    "relationship": "ownership",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "ownership" }, "op": "gt", "right": { "value": 50 } } } } },
+    { "where": { "not": { "hasLink": { "of": "party", "name": "ownedBy", "relationship": "large",
+                    "along": { "compare": { "left": { "attribute": "share", "of": "large" }, "op": "gt", "right": { "value": 50 } } } } } } }
   ],
   "groupBy": [ { "of": "party" } ],
   "aggregates": [ { "function": "sum", "attribute": "balance", "of": "a", "as": "total" } ]

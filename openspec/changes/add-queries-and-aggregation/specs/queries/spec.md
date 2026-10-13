@@ -22,12 +22,17 @@ THE SYSTEM SHALL run a query against a view and return rows that reflect exactly
 
 ### Requirement: Filters
 
-A filter step SHALL keep the rows for which its condition holds. A condition SHALL compare an attribute of a binding, its ID or its type with a value or with an attribute of a binding; test whether such an operand is one of a list of values; test whether an attribute has a value; test whether a bound entity is of an entity type or one of its subtypes; test whether a bound entity has a link by a relationship name or inverse name; or combine conditions with and, or and not. Numbers SHALL compare by value whatever their value types; dates, instants and strings SHALL compare in their order, strings by code point; booleans SHALL compare for equality only. A comparison with an attribute that has no value, or of a binding that is empty, SHALL be false, so that only the test for a value tells missing values apart.
+A filter step SHALL keep the rows for which its condition holds. A condition SHALL compare an attribute of a binding, its ID or its type with a value or with an attribute of a binding; test whether such an operand is one of a list of values; test whether an attribute has a value; test whether a bound entity is of an entity type or one of its subtypes; test whether a bound entity has a link by a relationship name or inverse name, optionally only a link whose relationship meets a condition; or combine conditions with and, or and not. Numbers SHALL compare by value whatever their value types; dates, instants and strings SHALL compare in their order, strings by code point; booleans SHALL compare for equality only. A comparison with an attribute that has no value, or of a binding that is empty, SHALL be false, so that only the test for a value tells missing values apart.
 
 #### Scenario: Accounts above a balance
 
 - **WHEN** the transactions of RD-5 are recorded, and a query for the Accounts whose balance is greater than 1200 is run effective 31 March
 - **THEN** it returns A-1 and A-2 as known on 5 April, and only A-2 as known now
+
+#### Scenario: Organizations without a large owner
+
+- **WHEN** the transactions of RD-1 and RD-2 are recorded, and a query for the Organizations that have no `ownedBy` link whose share is above 60 is run effective 1 March
+- **THEN** it returns ACME and Beta, because ACME's share of Beta is 55
 
 #### Scenario: Persons without a birth date
 
@@ -73,7 +78,7 @@ A query MAY group its rows by keys, which are bindings or attributes of bindings
 
 #### Scenario: Total balance by ultimate parent
 
-- **WHEN** the transactions of RD-1, RD-2 and RD-5 are recorded, and a query for Accounts follows `HeldBy` to the holder, traverses `ownedBy` from the holder from depth 0 along the ownerships whose share is above 50, keeps the reached parties that have no such ownership, groups by them and sums the balances, effective 31 March
+- **WHEN** the transactions of RD-1, RD-2 and RD-5 are recorded, and a query for Accounts follows `HeldBy` to the holder, traverses `ownedBy` from the holder from depth 0 along the ownerships whose share is above 50, keeps the reached parties that have no `ownedBy` link whose share is above 50, groups by them and sums the balances, effective 31 March
 - **THEN** as known on 5 April, it returns ACME with 3500, and as known now, ACME with 3200
 
 #### Scenario: Counting no rows
