@@ -32,6 +32,8 @@ Why it looks like this: [API research note](../research/2026-10-12-graph-system-
    CustomerRole --PlayedBy---------> Party      1    / 0..*   a role
 ```
 
+The same model as a schema document: [reference-model.cairn.yaml](reference-model.cairn.yaml). This page stays canonical.
+
 Entity types and traits:
 
 | Type | Kind | Attributes |
