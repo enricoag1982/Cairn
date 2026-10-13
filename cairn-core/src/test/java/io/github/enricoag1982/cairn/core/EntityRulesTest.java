@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
@@ -22,13 +23,16 @@ import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.RuleContext;
+import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.NameNotBlankRule;
+import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.Basis;
+import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
@@ -39,8 +43,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * How rules run at commit (design D3 and D4 of {@code add-entity-rules}): which versions they check, what they see
@@ -566,5 +576,252 @@ class EntityRulesTest {
                 .patch(id(1), from(3, 1), values("lei", LEI_WRONG_CHECK_DIGITS)).build()));
 
         assertThat(problem.ruleCode()).contains("lei-checksum/invalid-check-digits");
+    }
+
+    // ------------------------------------------------------------------ problems come in a fixed order
+
+    @Test
+    void theProblemsOfRulesComeAfterThoseOfTheTransactionTheWritesAndTheDeclarativeChecksOfEveryEntity() {
+        ReferenceStore reference = new ReferenceStore();
+
+        List<Problem> problems = reference.reject(Transaction.by("")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma", "lei", LEI_WRONG_CHECK_DIGITS))
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME", "lei", "bad"))
+                .patch(id(404), from(3, 1), values("name", "x")).build());
+
+        assertThat(problems).extracting(Problem::code, Problem::path).containsExactly(
+                tuple(ProblemCode.MISSING_PRINCIPAL, "@transaction"),
+                tuple(ProblemCode.UNKNOWN_ENTITY, id(404).value()),
+                tuple(ProblemCode.VALUE_PATTERN_MISMATCH, "$acme.lei"),
+                tuple(ProblemCode.RULE_VIOLATION, "$gamma.lei"));
+    }
+
+    @Test
+    void theProblemOfARuleOfAnEntityTouchedFirstComesAfterTheDeclarativeProblemOfOneTouchedLater() {
+        ReferenceStore reference = new ReferenceStore();
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma", "lei", LEI_WRONG_CHECK_DIGITS))
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME", "lei", "bad")).build());
+
+        assertThat(problems).extracting(Problem::code, Problem::path).containsExactly(
+                tuple(ProblemCode.VALUE_PATTERN_MISMATCH, "$acme.lei"),
+                tuple(ProblemCode.RULE_VIOLATION, "$gamma.lei"));
+    }
+
+    // ------------------------------------------------------------------ rules cannot write
+
+    private static final Transaction INNER = Transaction.by("rule")
+            .create("Organization", from(1, 1), values("name", "Inner")).build();
+
+    /**
+     * A store of the reference domain with a rule on Organization that does something with its own store when it
+     * checks ACME. The rule has a reference to the store, as a rule that is given one at creation would.
+     */
+    private static ReferenceStore storeWhoseRuleDoes(Consumer<Store> action) {
+        AtomicReference<Store> self = new AtomicReference<>();
+        TestEntityRule rule = TestEntityRule.of("store-user", "Organization", (version, context) -> {
+            if (name(version).equals(Value.of("ACME"))) {
+                action.accept(self.get());
+            }
+        });
+        ReferenceStore reference = storeWith(rule);
+        self.set(reference.store);
+        return reference;
+    }
+
+    private static Transaction createAcme() {
+        return Transaction.by("importer").create(ACME, "Organization", from(1, 1), values("name", "ACME")).build();
+    }
+
+    private static Transaction createBeta() {
+        return Transaction.by("importer").create(BETA, "Organization", from(1, 1), values("name", "Beta")).build();
+    }
+
+    /** Checks that a rule that wrote was reported as failed, and that the store is unchanged and still works. */
+    private static void assertRefusedAndUnchanged(ReferenceStore reference, Problem problem, Basis before) {
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_FAILED);
+        assertThat(problem.path()).isEqualTo("$acme");
+        assertThat(problem.message()).contains("store-user").contains("IllegalStateException");
+        assertThat(problem.found()).hasValueSatisfying(found -> assertThat(found).contains("must not write"));
+        assertThat(reference.store.latestBasis()).isEqualTo(before);
+        assertThat(reference.store.transactions()).isEmpty();
+        assertThat(reference.view(on(2, 1)).entities("Organization")).isEmpty();
+        assertThat(reference.store.schema().current().entityType("Thing")).as("no schema registered").isEmpty();
+        reference.commit(createBeta());
+        assertThat(reference.view(on(2, 1)).entities("Organization")).hasSize(1);
+    }
+
+    @Test
+    void aRuleCannotCommitWhileTheStoreRunsRules() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> store.commit(INNER));
+        Basis before = reference.store.latestBasis();
+
+        Problem problem = only(reference.reject(createAcme()));
+
+        assertRefusedAndUnchanged(reference, problem, before);
+    }
+
+    @Test
+    void aRuleCannotRunADryRunWhileTheStoreRunsRules() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> store.dryRun(INNER));
+        Basis before = reference.store.latestBasis();
+
+        Problem problem = only(reference.reject(createAcme()));
+
+        assertRefusedAndUnchanged(reference, problem, before);
+    }
+
+    @Test
+    void aRuleCannotRegisterASchemaWhileTheStoreRunsRules() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> store.schema().register(new Origin("things", "1"),
+                SchemaDefinition.builder().entityType("Thing").build()));
+        Basis before = reference.store.latestBasis();
+
+        Problem problem = only(reference.reject(createAcme()));
+
+        assertRefusedAndUnchanged(reference, problem, before);
+    }
+
+    @Test
+    void aRuleCannotWriteWhileTheStoreRunsRulesForADryRunEither() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> store.commit(INNER));
+        Basis before = reference.store.latestBasis();
+
+        DryRunResult result = reference.store.dryRun(createAcme());
+
+        assertThat(result).isInstanceOf(DryRunResult.Rejected.class);
+        Problem problem = only(((DryRunResult.Rejected) result).problems());
+        assertRefusedAndUnchanged(reference, problem, before);
+    }
+
+    @Test
+    void aRuleMayReadTheStoreWhileTheStoreRunsRules() {
+        List<String> seen = new ArrayList<>();
+        ReferenceStore reference = storeWhoseRuleDoes(store -> {
+            seen.add("basis " + store.latestBasis().value());
+            seen.add(store.view(Coordinates.effectiveAt(on(2, 1))).entities("Organization").size() + " organizations");
+            seen.add(store.transactions().size() + " transactions");
+            seen.add(store.schema().current().entityType("Organization").isPresent() + " type");
+            seen.add(!store.schema().availableRules().isEmpty() + " rules");
+        });
+
+        reference.commit(createAcme());
+
+        assertThat(seen).containsExactly("basis 1", "0 organizations", "0 transactions", "true type", "true rules");
+        assertThat(reference.view(on(2, 1)).entities("Organization")).hasSize(1);
+    }
+
+    @Test
+    void aWriteByAnotherThreadWaitsForTheCommitInsteadOfBeingRefused() throws Exception {
+        // The writer lock is held while rules run: a rule that hands a write to another thread, and does not wait for
+        // it, does not write inside the commit. The write waits, and runs afterwards.
+        List<CompletableFuture<CommitResult>> later = new ArrayList<>();
+        ReferenceStore reference = storeWhoseRuleDoes(store -> later.add(CompletableFuture.supplyAsync(
+                () -> store.commit(createBeta()))));
+
+        Receipt receipt = reference.commit(createAcme());
+
+        assertThat(later).hasSize(1);
+        assertThat(later.getFirst().get(10, TimeUnit.SECONDS)).isInstanceOf(CommitResult.Committed.class);
+        assertThat(reference.store.latestBasis().value()).isGreaterThan(receipt.basis().value());
+    }
+
+    // ------------------------------------------------------------------ errors and virtual machine errors
+
+    private static Stream<Error> errorsThatFailTheRule() {
+        return Stream.of(new AssertionError("assertion"), new NoClassDefFoundError("com/example/Missing"),
+                new ExceptionInInitializerError("static initializer"), new LinkageError("linkage"));
+    }
+
+    private static Stream<VirtualMachineError> errorsOfTheVirtualMachine() {
+        return Stream.of(new StackOverflowError(), new OutOfMemoryError("Java heap space"),
+                new InternalError("internal"));
+    }
+
+    /** A store with a rule that throws a throwable when it checks ACME. */
+    private static ReferenceStore storeWhoseRuleThrows(Error thrown) {
+        return storeWith(TestEntityRule.of("fails-badly", "Organization", (version, context) -> {
+            if (name(version).equals(Value.of("ACME"))) {
+                throw thrown;
+            }
+        }));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("errorsThatFailTheRule")
+    void anErrorThatIsNotOneOfTheVirtualMachineIsAFailureOfTheRule(Error thrown) {
+        ReferenceStore reference = storeWhoseRuleThrows(thrown);
+        Basis before = reference.store.latestBasis();
+
+        Problem problem = only(reference.reject(createAcme()));
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_FAILED);
+        assertThat(problem.path()).isEqualTo("$acme");
+        assertThat(problem.message()).contains("fails-badly").contains(thrown.getClass().getName());
+        assertThat(problem.found()).contains(thrown.getMessage());
+        assertThat(reference.store.latestBasis()).isEqualTo(before);
+        assertThat(reference.store.dryRun(createAcme())).isInstanceOf(DryRunResult.Rejected.class);
+        reference.commit(createBeta());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("errorsOfTheVirtualMachine")
+    void anErrorOfTheVirtualMachineIsNotCaught(VirtualMachineError thrown) throws Exception {
+        ReferenceStore reference = storeWhoseRuleThrows(thrown);
+        Basis before = reference.store.latestBasis();
+
+        assertThatThrownBy(() -> reference.store.commit(createAcme())).isSameAs(thrown);
+        assertThatThrownBy(() -> reference.store.dryRun(createAcme())).isSameAs(thrown);
+
+        assertThat(reference.store.latestBasis()).isEqualTo(before);
+        assertThat(reference.view(on(2, 1)).entities("Organization")).isEmpty();
+        reference.commit(createBeta());
+        Transaction delta = Transaction.by("importer")
+                .create(DELTA, "Organization", from(1, 1), values("name", "Delta")).build();
+        assertThat(CompletableFuture.supplyAsync(() -> reference.store.commit(delta)).get(10, TimeUnit.SECONDS))
+                .as("the writer lock was released").isInstanceOf(CommitResult.Committed.class);
+    }
+
+    // ------------------------------------------------------------------ attributes of the entity's type
+
+    @Test
+    void anAttributeThatTheEntitysTypeDoesNotHaveIsAFailureOfTheRule() {
+        TestEntityRule typo = TestEntityRule.of("typo", "Organization", (version, context) -> {
+            context.problem("odd", "name", "A real problem.");
+            context.problem("odd", "nmae", "A problem about a typo.");
+        }, "odd");
+        ReferenceStore reference = storeWith(typo);
+
+        List<Problem> problems = reference.reject(createAcme());
+
+        assertThat(problems).extracting(Problem::code, Problem::path, problem -> problem.ruleCode().orElse(""))
+                .containsExactly(
+                        tuple(ProblemCode.RULE_VIOLATION, "$acme.name", "typo/odd"),
+                        tuple(ProblemCode.RULE_FAILED, "$acme", ""));
+        Problem failed = problems.get(1);
+        assertThat(failed.message()).contains("typo").contains("nmae").contains("Organization");
+        assertThat(failed.found()).contains("nmae");
+        assertThat(failed.expected()).hasValueSatisfying(expected -> assertThat(expected).contains("name"));
+    }
+
+    @Test
+    void aRuleMayNameAnAttributeByItsAliasAndTheProblemIsLocatedAtTheAttributesName() {
+        SchemaDefinition renamed = Definitions.changeEntityType(ReferenceModel.definition(), "Organization",
+                type -> Definitions.changeAttribute(type, "lei", lei -> Definitions.renamed(lei, "legalEntityId",
+                        "lei")));
+        TestEntityRule byAlias = TestEntityRule.of("by-alias", "Organization", (version, context) -> {
+            context.problem("odd", "lei", "Reported by an old name.");
+            context.problem("odd", "LEGALENTITYID", "Reported with other capitals.");
+        }, "odd");
+        List<Rule> rules = List.of(new LeiChecksumRule(), byAlias);
+        ReferenceStore reference = ReferenceStore.withRules(byAlias.namedIn(renamed, "Organization"), rules,
+                ReferenceModel.declaredRules());
+
+        List<Problem> problems = reference.reject(createAcme());
+
+        assertThat(problems).extracting(Problem::code, Problem::path).containsExactly(
+                tuple(ProblemCode.RULE_VIOLATION, "$acme.legalEntityId"),
+                tuple(ProblemCode.RULE_VIOLATION, "$acme.legalEntityId"));
     }
 }

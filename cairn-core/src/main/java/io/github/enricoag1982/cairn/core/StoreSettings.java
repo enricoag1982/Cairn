@@ -18,25 +18,28 @@ import java.util.ServiceLoader;
  * declares without code.
  *
  * <p>The descriptions of both kinds of rules are the rules available to the store's schema registry, which checks the
- * rules that types name against them. A store runs the rules that it has {@linkplain #rules() code} for, at commit; a
- * write that would need a declared rule is rejected with the problem {@code RULE_UNAVAILABLE}.
+ * rules that types name against them. A store runs the rules that it has {@linkplain #rules() code} for, at commit. A
+ * transaction that writes an entity whose type, or one of whose supertypes, names a {@linkplain #declaredRules()
+ * declared rule} is rejected with the problem {@code RULE_UNAVAILABLE}, whatever the write changes.
  *
  * <p>The settings are plain data and can be used for several stores. A store takes a {@linkplain IdGenerator#copy()
  * copy} of the generator, so stores made from the same settings do not share its state: two stores with a
  * deterministic generator commit the same transactions and get the same IDs. Stores made from the same settings share
- * the rule objects, which therefore should keep no state.
+ * the rule objects, so the stores call a rule at the same time, from different threads: rules must be thread-safe, and
+ * a rule that keeps no state is.
  *
- * @param clock          the source of transaction times
- * @param idGenerator    the generator of entity IDs, which also says which supplied IDs the store accepts
- * @param rules          the rules, with their code, that the store runs at commit
- * @param availableRules the descriptions of rules that the store declares without having their code: types of the
- *                       store's schema may name them, but a write that would need to run one is rejected
+ * @param clock         the source of transaction times
+ * @param idGenerator   the generator of entity IDs, which also says which supplied IDs the store accepts
+ * @param rules         the rules, with their code, that the store runs at commit
+ * @param declaredRules the descriptions of rules that the store declares without having their code: types of the
+ *                      store's schema may name them, but a transaction that writes an entity whose type names one is
+ *                      rejected
  */
 public record StoreSettings(
         InstantSource clock,
         IdGenerator idGenerator,
         List<Rule> rules,
-        List<RuleDescriptor> availableRules) {
+        List<RuleDescriptor> declaredRules) {
 
     /**
      * Rejects null components and copies the rules.
@@ -45,18 +48,18 @@ public record StoreSettings(
         Objects.requireNonNull(clock, "clock");
         Objects.requireNonNull(idGenerator, "idGenerator");
         rules = List.copyOf(rules);
-        availableRules = List.copyOf(availableRules);
+        declaredRules = List.copyOf(declaredRules);
     }
 
     /**
      * Creates settings without rules that have code.
      *
-     * @param clock          the source of transaction times
-     * @param idGenerator    the generator of entity IDs
-     * @param availableRules the descriptions of the rules that the store declares
+     * @param clock         the source of transaction times
+     * @param idGenerator   the generator of entity IDs
+     * @param declaredRules the descriptions of the rules that the store declares
      */
-    public StoreSettings(InstantSource clock, IdGenerator idGenerator, List<RuleDescriptor> availableRules) {
-        this(clock, idGenerator, List.of(), availableRules);
+    public StoreSettings(InstantSource clock, IdGenerator idGenerator, List<RuleDescriptor> declaredRules) {
+        this(clock, idGenerator, List.of(), declaredRules);
     }
 
     /**
@@ -156,13 +159,14 @@ public record StoreSettings(
 
         /**
          * Sets the descriptions of rules that the store declares without having their code, replacing any set before.
-         * Types of the store's schema may name them, but a write that would need to run one is rejected with the problem
-         * {@code RULE_UNAVAILABLE}. A rule with code is described by the rule itself: do not declare it again.
+         * Types of the store's schema may name them, but a transaction that writes an entity whose type, or one of
+         * whose supertypes, names one is rejected with the problem {@code RULE_UNAVAILABLE}, whatever the write
+         * changes. A rule with code is described by the rule itself: do not declare it again.
          *
          * @param rules the descriptions; none by default
          * @return this builder
          */
-        public Builder availableRules(Collection<RuleDescriptor> rules) {
+        public Builder declaredRules(Collection<RuleDescriptor> rules) {
             Objects.requireNonNull(rules, "rules");
             this.declared.clear();
             this.declared.addAll(rules);

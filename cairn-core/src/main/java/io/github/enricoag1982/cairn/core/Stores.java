@@ -25,7 +25,9 @@ public final class Stores {
     /**
      * Creates an empty in-memory store. The store's schema registry shares its sequence of bases and transaction times
      * with its data transactions. The descriptions of the settings' rules, with the rules the settings declare, are the
-     * rules available to the registry; the store runs the rules at commit (capability {@code entity-rules}).
+     * rules available to the registry; the store runs the rules at commit (capability {@code entity-rules}). While it
+     * runs them, the store refuses writes: a rule that commits, runs dry or registers a schema in its store gets an
+     * {@code IllegalStateException}, and its transaction is rejected.
      *
      * @param settings the clock, ID generator and rules; the store works on a copy of the generator
      * @return the store
@@ -37,6 +39,6 @@ public final class Stores {
     public static Store inMemory(StoreSettings settings) {
         Objects.requireNonNull(settings, "settings");
         return new InMemoryStore(settings.clock(), settings.idGenerator().copy(), settings.rules(),
-                settings.availableRules());
+                settings.declaredRules());
     }
 }

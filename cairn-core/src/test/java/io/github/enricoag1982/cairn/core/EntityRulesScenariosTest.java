@@ -26,6 +26,7 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,14 +54,14 @@ class EntityRulesScenariosTest {
     @DisplayName("Scenario: Rules become available to the schema")
     void rulesBecomeAvailableToTheSchema() {
         Store store = Stores.inMemory(StoreSettings.builder().clock(new TestClock())
-                .rules(new LeiChecksumRule()).availableRules(ReferenceModel.declaredRules()).build());
+                .rules(new LeiChecksumRule()).declaredRules(ReferenceModel.declaredRules()).build());
 
         RegistrationResult result = store.schema().register(ReferenceModel.origin("1.0.0"),
                 ReferenceModel.definition());
 
         assertThat(result).isInstanceOf(RegistrationResult.Applied.class);
         assertThat(store.schema().availableRules()).extracting(RuleDescriptor::name, RuleDescriptor::version)
-                .contains(tuple("lei-checksum", 1));
+                .contains(tuple("lei-checksum", 1), tuple("total-ownership-at-most-100", 1));
         assertThat(store.schema().availableRules()).contains(LeiChecksumRule.DESCRIPTOR);
     }
 
@@ -174,6 +175,30 @@ class EntityRulesScenariosTest {
         assertThat(problem.code()).isEqualTo(ProblemCode.RULE_FAILED);
         assertThat(problem.message()).contains("always-fails");
         assertThat(problem.found()).contains("boom");
+        assertThat(reference.store.latestBasis()).isEqualTo(before);
+        assertThat(reference.store.transactions()).isEmpty();
+        assertThat(reference.view(on(2, 1)).entities("Organization")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Scenario: A rule that tries to write")
+    void aRuleThatTriesToWrite() {
+        AtomicReference<Store> itsStore = new AtomicReference<>();
+        TestEntityRule writer = TestEntityRule.of("writes-while-checking", "Organization",
+                (version, context) -> itsStore.get().commit(Transaction.by("rule")
+                        .create("Organization", from(1, 1), values("name", "Written by a rule")).build()));
+        ReferenceStore reference = ReferenceStore.withRules(writer.namedIn(ReferenceModel.definition(),
+                "Organization"), List.of(new LeiChecksumRule(), writer), ReferenceModel.declaredRules());
+        itsStore.set(reference.store);
+        Basis before = reference.store.latestBasis();
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME")).build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_FAILED);
+        assertThat(problem.path()).isEqualTo("$acme");
+        assertThat(problem.message()).contains("writes-while-checking");
         assertThat(reference.store.latestBasis()).isEqualTo(before);
         assertThat(reference.store.transactions()).isEmpty();
         assertThat(reference.view(on(2, 1)).entities("Organization")).isEmpty();

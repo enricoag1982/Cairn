@@ -33,7 +33,7 @@ class RuleRegistrationTest {
     @Test
     void theDescriptionsOfRulesWithCodeAndOfDeclaredRulesAreTheAvailableRules() {
         Store store = store(StoreSettings.builder().rules(new LeiChecksumRule(), new NameNotBlankRule())
-                .availableRules(ReferenceModel.declaredRules()));
+                .declaredRules(ReferenceModel.declaredRules()));
 
         assertThat(store.schema().availableRules()).containsExactlyInAnyOrder(LeiChecksumRule.DESCRIPTOR,
                 NameNotBlankRule.DESCRIPTOR, ReferenceModel.declaredRules().getFirst());
@@ -80,7 +80,7 @@ class RuleRegistrationTest {
         assertThatThrownBy(() -> store(StoreSettings.builder().rules(new LeiChecksumRule(), new LeiChecksumRule())))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("lei-checksum");
         assertThatThrownBy(() -> store(StoreSettings.builder().rules(new LeiChecksumRule())
-                .availableRules(ReferenceModel.rules())))
+                .declaredRules(ReferenceModel.rules())))
                 .as("a rule with code and the same rule declared")
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("lei-checksum");
     }

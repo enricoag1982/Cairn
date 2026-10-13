@@ -103,6 +103,7 @@ final class Preparation {
     private final CommitSequence.Commit commit;
     private final ValueChecks checks;
     private final Rules rules;
+    private final CommitSequence sequence;
 
     private final List<Problem> problems = new ArrayList<>();
     private final Map<EntityId, Working> working = new LinkedHashMap<>();
@@ -120,9 +121,12 @@ final class Preparation {
      * @param commit      the basis and transaction time the transaction would get
      * @param checks      the value checks
      * @param rules       the rules with code that run once the declarative checks have passed
+     * @param sequence    the store's sequence, which the caller has locked for writing and which refuses writes while
+     *                    the rules run
      */
     Preparation(Transaction transaction, SchemaIndex index, Map<EntityId, StoredEntity> stored,
-            IdGenerator generator, CommitSequence.Commit commit, ValueChecks checks, Rules rules) {
+            IdGenerator generator, CommitSequence.Commit commit, ValueChecks checks, Rules rules,
+            CommitSequence sequence) {
         this.transaction = transaction;
         this.index = index;
         this.stored = stored;
@@ -130,6 +134,7 @@ final class Preparation {
         this.commit = commit;
         this.checks = checks;
         this.rules = rules;
+        this.sequence = sequence;
     }
 
     /** Applies and validates the transaction; returns this. */
@@ -536,10 +541,11 @@ final class Preparation {
     // ------------------------------------------------------------------ rules
 
     /**
-     * Runs the rules of the entities the transaction changes (design D3 of {@code add-entity-rules}), after the
-     * declarative checks of every entity. An entity takes part if it has no problem so far and its new timeline has
-     * segments that differ from its previous timeline. The rules read a provisional view of the state the transaction
-     * would produce, which is built once and only if some rule runs.
+     * Runs the rules of the entities the transaction writes (design D2 and D3 of {@code add-entity-rules}), after the
+     * declarative checks of every entity. An entity takes part if it has rules and no problem so far. A rule with code
+     * runs for the segments of its new timeline that differ from its previous timeline, of which there may be none; a
+     * rule without code is reported whatever the write changed. The rules read a provisional view of the state the
+     * transaction would produce, which is built once and only if some entity takes part.
      */
     private void runRules() {
         List<RuleRunner.Subject> subjects = new ArrayList<>();
@@ -547,10 +553,8 @@ final class Preparation {
             if (entity.failed() || entity.entityType.effectiveRules().isEmpty() || hasProblems(entity)) {
                 continue;
             }
-            List<Segment> changed = entity.timeline.changedSince(entity.before);
-            if (!changed.isEmpty()) {
-                subjects.add(new RuleRunner.Subject(entity.id, entity.path, entity.entityType, changed));
-            }
+            subjects.add(new RuleRunner.Subject(entity.id, entity.path, entity.entityType,
+                    entity.timeline.changedSince(entity.before)));
         }
         if (subjects.isEmpty()) {
             return;
@@ -561,8 +565,8 @@ final class Preparation {
                 overlay.put(entity.id, new ProvisionalView.Overlaid(entity.entityType.id(), entity.timeline));
             }
         }
-        problems.addAll(new RuleRunner(rules, new ProvisionalView.Source(commit.basis(), index, stored, overlay))
-                .run(subjects));
+        problems.addAll(new RuleRunner(rules, new ProvisionalView.Source(commit.basis(), index, stored, overlay),
+                sequence).run(subjects));
     }
 
     /** Tells whether a problem found so far is about the entity or one of its attributes. */

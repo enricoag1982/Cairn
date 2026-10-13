@@ -18,15 +18,16 @@ public interface RuleContext {
 
     /**
      * A view of the state the transaction would produce, effective at the start of the checked version's effective
-     * period.
+     * period. Other data may change inside the period: a rule whose verdict depends on it reads the state at the other
+     * instants with {@link #viewAt(Instant)}.
      *
      * @return the view, read-only
      */
     View view();
 
     /**
-     * A view of the same state at another effective time, so that a rule can check every point of the version's
-     * period where other data changes.
+     * A view of the same state at any other effective time, so that a rule can check every point of the version's
+     * period where other data changes. The time need not lie in the version's period.
      *
      * @param effectiveAt the effective time; truncated to microseconds
      * @return the view, read-only
@@ -38,7 +39,9 @@ public interface RuleContext {
      *
      * @param code      one of the codes the rule's descriptor declares, such as {@code invalid-check-digits}; a code
      *                  that it does not declare makes the store reject the transaction with a problem about the rule
-     * @param attribute the name of the attribute, as the version reports it
+     * @param attribute the name, or an alias, of an attribute of the checked entity's type, in the schema that the
+     *                  transaction would produce; an attribute that the type does not have makes the store reject the
+     *                  transaction with a problem about the rule. The problem is located at the attribute's name
      * @param message   what is wrong, readable by people and agents
      * @throws IllegalStateException if the rule has returned
      */

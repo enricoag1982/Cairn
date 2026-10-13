@@ -201,6 +201,63 @@ class CommitSequenceTest {
     }
 
     @Test
+    void whileRulesRunTheWriterThreadCannotTakeTheLockAgain() {
+        CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
+
+        String result = sequence.underWriterLock(() -> sequence.whileRunningRules(() -> {
+            assertThatThrownBy(() -> commit(sequence)).isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("running rules");
+            assertThatThrownBy(() -> sequence.underWriterLock(() -> "inner"))
+                    .isInstanceOf(IllegalStateException.class);
+            assertThat(sequence.latestBasis()).as("reads are not refused").isEqualTo(Basis.NONE);
+            return "rules done";
+        }));
+
+        assertThat(result).isEqualTo("rules done");
+        assertThat(sequence.latestBasis()).isEqualTo(Basis.NONE);
+    }
+
+    @Test
+    void theRefusalEndsWhenTheRulesReturnOrFail() {
+        CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
+
+        sequence.underWriterLock(() -> {
+            sequence.whileRunningRules(() -> "returned");
+            assertThat(sequence.underWriterLock(() -> "inner")).as("after a return").isEqualTo("inner");
+            assertThatThrownBy(() -> sequence.whileRunningRules(() -> {
+                throw new AssertionError("a rule failed");
+            })).isInstanceOf(AssertionError.class);
+            assertThat(sequence.underWriterLock(() -> "inner")).as("after a failure").isEqualTo("inner");
+            return null;
+        });
+        assertThat(commit(sequence).basis()).isEqualTo(new Basis(1));
+    }
+
+    @Test
+    void runningRulesNeedsTheWriterLockAndOnlyRefusesTheThreadThatHoldsIt() throws InterruptedException {
+        CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
+        assertThatThrownBy(() -> sequence.whileRunningRules(() -> "unlocked"))
+                .isInstanceOf(IllegalStateException.class);
+
+        CountDownLatch running = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread holder = new Thread(() -> sequence.underWriterLock(() -> sequence.whileRunningRules(() -> {
+            running.countDown();
+            await(release);
+            return null;
+        })));
+        holder.start();
+        assertThat(running.await(10, TimeUnit.SECONDS)).isTrue();
+        Thread other = new Thread(() -> commit(sequence));
+        other.start();
+        release.countDown();
+        holder.join(10_000);
+        other.join(10_000);
+
+        assertThat(sequence.latestBasis()).as("the other writer waited, and then committed").isEqualTo(new Basis(1));
+    }
+
+    @Test
     void concurrentWritersGetDistinctBasesWithoutGapsAndIncreasingTimes() throws InterruptedException {
         CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
         int threads = 8;

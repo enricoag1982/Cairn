@@ -1,11 +1,13 @@
 package io.github.enricoag1982.cairn.core.data;
 
+import io.github.enricoag1982.cairn.core.commit.CommitSequence;
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityRule;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.RuleContext;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.EffectiveRule;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -21,12 +23,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Runs the rules that apply to the entities a transaction changes, and turns what they report into problems (design D3
- * and D4 of {@code add-entity-rules}). It runs in the writer thread, one rule after another, so a slow rule slows the
- * commit.
+ * Runs the rules that apply to the entities a transaction writes, and turns what they report into problems (design D2,
+ * D3 and D4 of {@code add-entity-rules}). It runs in the writer thread, one rule after another, so a slow rule slows
+ * the commit. While it runs, the store refuses writes, so a rule cannot commit, run dry or register a schema.
  *
  * <p>For each entity it takes the effective rules of the entity's type, in the order of the schema, and runs each one
- * for each changed segment, in the order of the timeline. The problems come in that order, entity by entity.
+ * for each changed segment, in the order of the timeline. A rule that the store has no code for is reported for the
+ * entity whatever the write changed. The problems come in that order, entity by entity.
  */
 final class RuleRunner {
 
@@ -36,7 +39,8 @@ final class RuleRunner {
      * @param id      the entity's ID
      * @param path    what problems about the entity call it
      * @param type    the entity's type in the schema the transaction would produce
-     * @param changed the segments of the entity's new timeline that differ from its previous timeline
+     * @param changed the segments of the entity's new timeline that differ from its previous timeline; none if the
+     *                transaction writes the entity without changing its values
      */
     record Subject(EntityId id, String path, EntityType type, List<Segment> changed) {
     }
@@ -47,26 +51,37 @@ final class RuleRunner {
 
     private final Rules rules;
     private final ProvisionalView.Source source;
+    private final CommitSequence sequence;
 
     /**
      * Creates a runner for one transaction.
      *
-     * @param rules  the rules the store has code for
-     * @param source the state the rules read
+     * @param rules    the rules the store has code for
+     * @param source   the state the rules read
+     * @param sequence the sequence of the store, which refuses writes while the rules run
      */
-    RuleRunner(Rules rules, ProvisionalView.Source source) {
+    RuleRunner(Rules rules, ProvisionalView.Source source, CommitSequence sequence) {
         this.rules = rules;
         this.source = source;
+        this.sequence = sequence;
     }
 
     /**
      * Runs the rules of the subjects. A rule that fails for one segment of an entity is not run for its other segments,
-     * and a problem that a rule reports for several segments is reported once.
+     * and a problem that a rule reports for several segments is reported once. Must be called with the writer lock
+     * held: while the rules run, the store refuses commits, dry runs and schema registrations with an
+     * {@code IllegalStateException}, which is a failure of the rule that caused it.
      *
      * @param subjects the entities whose rules run
      * @return the problems, none if every rule is content
+     * @throws VirtualMachineError if a rule causes one, such as an {@code OutOfMemoryError}; it is not turned into a
+     *                             problem
      */
     List<Problem> run(List<Subject> subjects) {
+        return sequence.whileRunningRules(() -> runAll(subjects));
+    }
+
+    private List<Problem> runAll(List<Subject> subjects) {
         List<Problem> problems = new ArrayList<>();
         for (Subject subject : subjects) {
             Set<Problem> found = new LinkedHashSet<>();
@@ -74,13 +89,18 @@ final class RuleRunner {
                 Optional<Rules.Registered> registered = rules.find(effective.rule());
                 if (registered.isEmpty()) {
                     found.add(unavailable(subject, effective));
-                } else if (!(registered.get().rule() instanceof EntityRule rule)) {
+                    continue;
+                }
+                if (subject.changed().isEmpty()) {
+                    continue; // The rule has code, and a write that changes no values runs no rules.
+                }
+                if (!(registered.get().rule() instanceof EntityRule rule)) {
                     found.add(notForEntities(subject, registered.get()));
-                } else {
-                    for (Segment segment : subject.changed()) {
-                        if (!check(subject, registered.get(), rule, segment, found)) {
-                            break;
-                        }
+                    continue;
+                }
+                for (Segment segment : subject.changed()) {
+                    if (!check(subject, registered.get(), rule, segment, found)) {
+                        break;
                     }
                 }
             }
@@ -89,41 +109,67 @@ final class RuleRunner {
         return problems;
     }
 
-    /** Runs a rule for one segment; tells whether it ran to its end. */
+    /**
+     * Runs a rule for one segment; tells whether it ran to its end. Anything the rule throws is a failure of the rule,
+     * except a {@link VirtualMachineError}: when the virtual machine is out of resources, nothing can be said about the
+     * rule, so the error goes on.
+     */
     private boolean check(Subject subject, Rules.Registered registered, EntityRule rule, Segment segment,
             Set<Problem> problems) {
         EntityState version = EntityStates.of(source.index(), subject.id(), subject.type().id(), segment).orElseThrow();
         Context context = new Context(source, segment.from());
         try {
             rule.check(version, context);
-        } catch (Exception e) {
+        } catch (VirtualMachineError e) {
+            throw e;
+        } catch (Throwable e) {
             problems.add(threw(subject, registered.descriptor(), e));
             return false;
         } finally {
             context.close();
         }
         for (Reported reported : context.reported) {
-            problems.add(registered.codes().contains(reported.code())
-                    ? violation(subject, registered.descriptor(), reported)
-                    : undeclared(subject, registered, reported));
+            problems.add(problem(subject, registered, reported));
         }
         return true;
     }
 
+    /** What a rule reported: a violation, or a failure of the rule if it names a code or an attribute wrongly. */
+    private static Problem problem(Subject subject, Rules.Registered registered, Reported reported) {
+        if (!registered.codes().contains(reported.code())) {
+            return undeclared(subject, registered, reported);
+        }
+        if (reported.attribute() == null) {
+            return violation(registered.descriptor(), reported, subject.path());
+        }
+        Optional<Attribute> attribute = subject.type().attribute(reported.attribute());
+        return attribute.isPresent()
+                ? violation(registered.descriptor(), reported, subject.path() + "." + attribute.get().name())
+                : unknownAttribute(subject, registered.descriptor(), reported);
+    }
+
     // ------------------------------------------------------------------ problems
 
-    private static Problem violation(Subject subject, RuleDescriptor rule, Reported reported) {
-        String path = reported.attribute() == null ? subject.path() : subject.path() + "." + reported.attribute();
+    private static Problem violation(RuleDescriptor rule, Reported reported, String path) {
         return new Problem(ProblemCode.RULE_VIOLATION, path, reported.message(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.of(rule.name() + "/" + reported.code()));
     }
 
-    private static Problem threw(Subject subject, RuleDescriptor rule, Exception e) {
+    private static Problem threw(Subject subject, RuleDescriptor rule, Throwable e) {
         String message = e.getMessage();
         return Problems.of(ProblemCode.RULE_FAILED, subject.path(), "The rule " + name(rule) + " threw "
                 + e.getClass().getName() + " while checking " + subject.path() + ".",
                 "a rule that checks without an exception", message != null ? message : e.getClass().getName(),
                 "Correct the rule; the transaction is not at fault.");
+    }
+
+    private static Problem unknownAttribute(Subject subject, RuleDescriptor rule, Reported reported) {
+        String names = subject.type().attributes().stream().map(Attribute::name).collect(Collectors.joining(", "));
+        return Problems.of(ProblemCode.RULE_FAILED, subject.path(), "The rule " + name(rule) + " reported a problem "
+                + "about the attribute '" + reported.attribute() + "' while checking " + subject.path() + ", but "
+                + subject.type().name() + " has no such attribute.",
+                names.isEmpty() ? "an attribute of " + subject.type().name() : "one of " + names, reported.attribute(),
+                "Report the problem about an attribute of the entity's type, or about the whole entity.");
     }
 
     private static Problem undeclared(Subject subject, Rules.Registered registered, Reported reported) {

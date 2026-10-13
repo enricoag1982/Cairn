@@ -30,6 +30,7 @@ public interface Store {
      *
      * @param transaction the transaction
      * @return the receipt, or every problem found
+     * @throws IllegalStateException if a rule of this store calls it while the store runs rules: a rule must not write
      */
     CommitResult commit(Transaction transaction);
 
@@ -39,6 +40,8 @@ public interface Store {
      *
      * @param transaction the transaction
      * @return that the transaction would be committed, or every problem that committing would report
+     * @throws IllegalStateException if a rule of this store calls it while the store runs rules: a rule must not
+     *                               write, and a dry run is a commit that is not recorded
      */
     DryRunResult dryRun(Transaction transaction);
 

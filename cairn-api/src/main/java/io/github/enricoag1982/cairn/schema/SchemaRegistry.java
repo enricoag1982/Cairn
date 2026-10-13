@@ -24,6 +24,8 @@ public interface SchemaRegistry {
      * @param origin     the origin, with its version
      * @param definition all types of the origin
      * @return the outcome
+     * @throws IllegalStateException if the registry is the registry of a store, and a rule of that store calls this
+     *                               while the store runs rules: a rule must not write
      */
     RegistrationResult register(Origin origin, SchemaDefinition definition);
 

@@ -14,8 +14,11 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
  * <p>A rule must be deterministic. It gives the same result for the same input with every storage implementation and
  * when data is checked again later, so it may not use the clock, files, the network, randomness or shared mutable
  * state. Anything that is not in the version it checks, it reads through its {@link RuleContext}. Java cannot enforce
- * this, so tests should run every rule against every storage implementation. A rule is shared by all writes of a store,
- * which run one at a time, but it should not keep state between calls.
+ * this, so tests should run every rule against every storage implementation.
+ *
+ * <p>A rule must be thread-safe. A store runs its rules one at a time, in the thread that commits, but stores that are
+ * created with the same rule objects, for example from the same settings, call them at the same time from different
+ * threads. A rule that keeps no state between calls is thread-safe.
  *
  * <p>A rule is found by a store when the store is created with it, or through Java's {@link java.util.ServiceLoader},
  * which needs a public class with a public constructor without parameters, or a public static {@code provider()}

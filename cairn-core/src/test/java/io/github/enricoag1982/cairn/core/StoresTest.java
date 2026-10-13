@@ -34,7 +34,7 @@ class StoresTest {
     void defaultSettingsHaveTheSystemClockAUuidV7GeneratorAndNoRules() {
         StoreSettings settings = StoreSettings.defaults();
 
-        assertThat(settings.availableRules()).isEmpty();
+        assertThat(settings.declaredRules()).isEmpty();
         assertThat(settings.idGenerator().accepts(IdGenerators.uuidV7().next().value())).isTrue();
         assertThat(settings.idGenerator().accepts("not an id")).isFalse();
         assertThat(settings.clock().instant()).isBetween(Instant.now().minusSeconds(60), Instant.now().plusSeconds(60));
@@ -46,30 +46,30 @@ class StoresTest {
         IdGenerator generator = IdGenerators.deterministic();
 
         StoreSettings settings = StoreSettings.builder().clock(clock).idGenerator(generator)
-                .availableRules(List.of(RULE)).build();
+                .declaredRules(List.of(RULE)).build();
 
         assertThat(settings.clock()).isSameAs(clock);
         assertThat(settings.idGenerator()).isSameAs(generator);
-        assertThat(settings.availableRules()).containsExactly(RULE);
+        assertThat(settings.declaredRules()).containsExactly(RULE);
     }
 
     @Test
-    void settingTheAvailableRulesAgainReplacesThem() {
-        StoreSettings settings = StoreSettings.builder().availableRules(ReferenceModel.rules())
-                .availableRules(List.of(RULE)).build();
+    void settingTheDeclaredRulesAgainReplacesThem() {
+        StoreSettings settings = StoreSettings.builder().declaredRules(ReferenceModel.rules())
+                .declaredRules(List.of(RULE)).build();
 
-        assertThat(settings.availableRules()).containsExactly(RULE);
+        assertThat(settings.declaredRules()).containsExactly(RULE);
     }
 
     @Test
     void theSettingsKeepTheirOwnCopyOfTheRules() {
         List<RuleDescriptor> rules = new ArrayList<>(List.of(RULE));
-        StoreSettings settings = StoreSettings.builder().availableRules(rules).build();
+        StoreSettings settings = StoreSettings.builder().declaredRules(rules).build();
 
         rules.clear();
 
-        assertThat(settings.availableRules()).containsExactly(RULE);
-        assertThatThrownBy(() -> settings.availableRules().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(settings.declaredRules()).containsExactly(RULE);
+        assertThatThrownBy(() -> settings.declaredRules().clear()).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
@@ -96,13 +96,13 @@ class StoresTest {
         assertThatThrownBy(() -> StoreSettings.builder().idGenerator(null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> Stores.inMemory(null)).isInstanceOf(NullPointerException.class);
         RuleDescriptor bad = new RuleDescriptor("Bad Name", 1, "d", "Organization", List.of());
-        assertThatThrownBy(() -> Stores.inMemory(StoreSettings.builder().availableRules(List.of(bad)).build()))
+        assertThatThrownBy(() -> Stores.inMemory(StoreSettings.builder().declaredRules(List.of(bad)).build()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void theAvailableRulesAreThoseOfTheStoresSchemaRegistry() {
-        Store store = Stores.inMemory(StoreSettings.builder().availableRules(ReferenceModel.rules()).build());
+    void theDescriptionsOfTheRulesAreTheAvailableRulesOfTheStoresSchemaRegistry() {
+        Store store = Stores.inMemory(StoreSettings.builder().declaredRules(ReferenceModel.rules()).build());
 
         assertThat(store.schema().availableRules()).hasSize(2);
         assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition()))

@@ -41,6 +41,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * appends the new timelines, records the transaction, and publishes its basis. A dry run does the same up to the append
  * and then throws everything away. Readers take no lock: they read through {@linkplain StoreView views}, which see only
  * data at or below the basis that was published when they were created.
+ *
+ * <p>While the store runs rules, in a commit or a dry run, it refuses writes: a rule that commits, runs dry or
+ * registers a schema in the store gets an {@code IllegalStateException}, and its transaction is rejected.
  */
 public final class InMemoryStore implements Store {
 
@@ -165,7 +168,7 @@ public final class InMemoryStore implements Store {
      */
     private Preparation prepare(Transaction transaction) {
         return new Preparation(transaction, new SchemaIndex(registry.current()), entities, generator.copy(),
-                sequence.next(), checks, rules).run();
+                sequence.next(), checks, rules, sequence).run();
     }
 
     /**

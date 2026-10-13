@@ -28,6 +28,10 @@ import java.util.function.Supplier;
  * <p>Nothing advances before the data is in place, so a commit that fails half way burns no basis, and a reader that
  * learns of a basis through {@link #latestBasis()} finds all of its data.
  *
+ * <p>While the writer {@linkplain #whileRunningRules(Supplier) runs rules}, the sequence refuses all writers: a rule
+ * must not write, and the writer lock is reentrant, so without this a rule that holds the store could commit inside a
+ * commit.
+ *
  * <p>Transaction times have microsecond precision and strictly increase, even if the clock stands still or goes back.
  */
 public final class CommitSequence {
@@ -52,6 +56,8 @@ public final class CommitSequence {
     private final ReentrantLock writerLock = new ReentrantLock();
     /** The transaction time of the latest published commit; guarded by the writer lock. */
     private Instant lastTime;
+    /** Tells whether the writer is running rules; guarded by the writer lock. */
+    private boolean runningRules;
     private volatile Basis latest = Basis.NONE;
 
     /**
@@ -64,18 +70,46 @@ public final class CommitSequence {
     }
 
     /**
-     * Runs an action while holding the writer lock, which serializes all commits of the store. The lock is reentrant.
+     * Runs an action while holding the writer lock, which serializes all commits of the store. The lock is reentrant,
+     * except while the holder {@linkplain #whileRunningRules(Supplier) runs rules}: then taking it again is refused.
      *
      * @param action what to do; commits go here
      * @param <T>    the type of the result
      * @return what the action returns
+     * @throws IllegalStateException if the calling thread is running rules, that is, if a rule tries to write
      */
     public <T> T underWriterLock(Supplier<? extends T> action) {
         writerLock.lock();
         try {
+            if (runningRules) {
+                throw new IllegalStateException("The store is running rules, and a rule must not write: commits, dry "
+                        + "runs and schema registrations are refused until the rules have returned.");
+            }
             return action.get();
         } finally {
             writerLock.unlock();
+        }
+    }
+
+    /**
+     * Runs an action in which the writer runs rules. While it runs, {@link #underWriterLock(Supplier)} throws an
+     * {@code IllegalStateException} in the writer thread, so that a commit, a dry run or a schema registration that a
+     * rule starts fails. Other threads wait for the writer lock as before. Reads are not affected: they take no lock.
+     * The refusal ends when the action returns or throws.
+     *
+     * @param action what to do while the rules run
+     * @param <T>    the type of the result
+     * @return what the action returns
+     * @throws IllegalStateException if the caller does not hold the writer lock
+     */
+    public <T> T whileRunningRules(Supplier<? extends T> action) {
+        requireWriterLock();
+        boolean before = runningRules;
+        runningRules = true;
+        try {
+            return action.get();
+        } finally {
+            runningRules = before;
         }
     }
 

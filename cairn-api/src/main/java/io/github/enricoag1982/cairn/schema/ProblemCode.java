@@ -202,14 +202,15 @@ public enum ProblemCode {
             + "breaks it. The problem's rule code, qualified by the rule's name, says which check failed, and the "
             + "schema registry lists the codes of every rule with an explanation. Change the values, or the other "
             + "entities that the rule reads, as the message says."),
-    /** A rule threw an exception, reported a code it does not declare, or cannot check entities. */
-    RULE_FAILED("A rule gave no result: it threw an exception, reported a code that its description does not declare, "
-            + "or is not a rule for entities. The found details give the exception's message or the code. The fault "
-            + "is in the rule, not in the transaction: whoever maintains the rule has to correct it."),
+    /** A rule threw, tried to write, reported a code or an attribute that it must not, or cannot check entities. */
+    RULE_FAILED("A rule gave no result: it threw an exception or an error, tried to write, reported a code that its "
+            + "description does not declare or an attribute that the entity's type does not have, or is not a rule "
+            + "for entities. The found details give the exception's message, the code or the attribute. The fault is "
+            + "in the rule, not in the transaction: whoever maintains the rule has to correct it."),
     /** A type names a rule whose code the store does not have. */
-    RULE_UNAVAILABLE("A type names a rule that the store declares but has no code for, so a write that would need to "
-            + "run the rule is rejected. Create the store with the rule's code, or register a schema in which the "
-            + "type no longer names the rule.");
+    RULE_UNAVAILABLE("A type names a rule that the store declares but has no code for, so every write of an entity of "
+            + "that type, or of one of its subtypes, is rejected, whatever the write changes. Create the store with "
+            + "the rule's code, or register a schema in which the type no longer names the rule.");
 
     private final String explanation;
 

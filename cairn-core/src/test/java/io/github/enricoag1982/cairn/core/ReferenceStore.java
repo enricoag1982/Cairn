@@ -54,7 +54,7 @@ final class ReferenceStore {
                 .clock(clock)
                 .idGenerator(generator)
                 .rules(rules)
-                .availableRules(declaredRules)
+                .declaredRules(declaredRules)
                 .build());
         assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), definition))
                 .isInstanceOf(RegistrationResult.Applied.class);
@@ -83,7 +83,7 @@ final class ReferenceStore {
      */
     static StoreSettings.Builder referenceSettings() {
         return StoreSettings.builder().rules(ReferenceModel.executableRules())
-                .availableRules(ReferenceModel.declaredRules());
+                .declaredRules(ReferenceModel.declaredRules());
     }
 
     /** The deterministic generator's n-th ID. */
