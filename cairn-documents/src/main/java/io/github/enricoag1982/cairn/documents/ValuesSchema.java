@@ -34,8 +34,9 @@ final class ValuesSchema {
     /**
      * The pattern of a date, in ECMAScript, for validators that do not check {@code format}: the year, two digits of
      * the month and two of the day. The year has four digits, or a sign and more: {@code -} and four to nine digits, or
-     * {@code +} and five to nine digits. It accepts every string that the reader accepts, which reads dates with
-     * {@link java.time.LocalDate#parse}: {@code 2026-05-17}, {@code -0001-01-01} and {@code +12345-01-01}. It also
+     * {@code +} and five to nine digits. The reader checks the form of a date with this pattern, and then reads it with
+     * {@link java.time.LocalDate#parse}, so it accepts exactly the strings that this pattern accepts and that stand for
+     * a date, on every Java version: {@code 2026-05-17}, {@code -0001-01-01} and {@code +12345-01-01}. The pattern also
      * accepts some that the reader does not, such as a date that does not exist or {@code -0000-01-01}, which is for
      * the reader to say.
      */
@@ -44,10 +45,12 @@ final class ValuesSchema {
     /**
      * The pattern of an instant, in ECMAScript, for validators that do not check {@code format}: the date, {@code T},
      * the time of day with seconds and a fraction of up to nine digits if need be, and {@code Z} or an offset
-     * {@code ±hh:mm}, which the reader converts to UTC. It accepts every string that the reader accepts, which reads
-     * instants with {@link java.time.Instant#parse}: also {@code t} and {@code z}, an offset with seconds, and a year of
-     * four to ten digits with a sign. It also accepts some that the reader does not, such as a date or an offset that
-     * does not exist, or a year of five digits without a sign, which is for the reader to say.
+     * {@code ±hh:mm}, which the reader converts to UTC. The reader checks the form of an instant with this pattern, and
+     * then reads it with {@link java.time.Instant#parse}, so it accepts exactly the strings that this pattern accepts
+     * and that stand for an instant, on every Java version: also {@code t} and {@code z}, an offset with seconds, and a
+     * year of four to ten digits with a sign. An offset without a colon, such as {@code +0100}, is no instant, although
+     * some Java versions read it. The pattern also accepts some strings that the reader does not, such as a date or an
+     * offset that does not exist, or a year of five digits without a sign, which is for the reader to say.
      */
     static final String INSTANT_PATTERN = "^[+-]?[0-9]{4,10}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}"
             + "(\\.[0-9]{0,9})?([Zz]|[+-][0-9]{2}:[0-9]{2}(:[0-9]{2})?)$";

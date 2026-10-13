@@ -26,6 +26,11 @@ import org.snakeyaml.engine.v2.schema.CoreSchema;
  * <p>A number must be written as in JSON, so that every document means the same read as JSON: the forms that only YAML
  * knows ({@code 0x10}, {@code 0o17}, {@code +1}, {@code .5}, {@code 1.}, {@code 01}, {@code .inf}) are numbers for YAML
  * but never numbers of a schema document ({@link #isYamlOnlyNumber}).
+ *
+ * <p>The form of a date or an instant is decided here, by the patterns of the generated JSON Schemas
+ * ({@link ValuesSchema#DATE_PATTERN}, {@link ValuesSchema#INSTANT_PATTERN}), before {@code java.time} reads the text.
+ * What {@code java.time} accepts differs between Java versions, and the reader must accept the same text on every one
+ * of them: the text that the JSON Schema accepts and that stands for a date or an instant that exists.
  */
 final class Scalars {
 
@@ -33,6 +38,8 @@ final class Scalars {
 
     private static final Pattern JSON_INTEGER = Pattern.compile("-?(0|[1-9][0-9]*)");
     private static final Pattern JSON_NUMBER = Pattern.compile("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?");
+    private static final Pattern DATE_FORM = Pattern.compile(ValuesSchema.DATE_PATTERN);
+    private static final Pattern INSTANT_FORM = Pattern.compile(ValuesSchema.INSTANT_PATTERN);
     private static final Pattern YAML_NUMBER = Pattern.compile("([-+]?)([0-9]*)(?:\\.([0-9]*))?([eE][-+]?[0-9]+)?");
 
     private Scalars() {
@@ -202,7 +209,14 @@ final class Scalars {
         }
     }
 
-    private static Optional<LocalDate> date(String text) {
+    /**
+     * Reads a date: text of the form of {@link ValuesSchema#DATE_PATTERN} that stands for a date that exists. It is
+     * empty for any other text, whatever Java version reads it.
+     */
+    static Optional<LocalDate> date(String text) {
+        if (!DATE_FORM.matcher(text).matches()) {
+            return Optional.empty();
+        }
         try {
             return Optional.of(LocalDate.parse(text));
         } catch (DateTimeParseException e) {
@@ -210,7 +224,14 @@ final class Scalars {
         }
     }
 
-    private static Optional<Instant> instant(String text) {
+    /**
+     * Reads an instant: text of the form of {@link ValuesSchema#INSTANT_PATTERN} that stands for an instant that
+     * exists. It is empty for any other text, whatever Java version reads it, such as an offset without a colon.
+     */
+    static Optional<Instant> instant(String text) {
+        if (!INSTANT_FORM.matcher(text).matches()) {
+            return Optional.empty();
+        }
         try {
             return Optional.of(Instant.parse(text));
         } catch (DateTimeParseException e) {

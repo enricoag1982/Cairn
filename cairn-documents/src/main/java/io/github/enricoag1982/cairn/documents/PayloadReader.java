@@ -18,8 +18,6 @@ import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigInteger;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -492,12 +490,9 @@ final class PayloadReader {
     /** A date written where an instant is needed gets a hint that completes it. */
     private static String dateHint(Node node) {
         if (node instanceof ScalarNode scalar && Scalars.isString(scalar)) {
-            try {
-                LocalDate.parse(scalar.getValue());
-                return "Add the time of day and the zone: \"" + scalar.getValue() + "T00:00:00Z\".";
-            } catch (DateTimeParseException e) {
-                return null;
-            }
+            return Scalars.date(scalar.getValue())
+                    .map(date -> "Add the time of day and the zone: \"" + scalar.getValue() + "T00:00:00Z\".")
+                    .orElse(null);
         }
         return null;
     }
