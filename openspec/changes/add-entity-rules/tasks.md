@@ -24,7 +24,7 @@
 
 ## 5. Drift-review fixes
 
-- [ ] 5.1 Rename `StoreSettings.availableRules` to `declaredRules`, and reject any transaction that writes an entity whose type names a declared rule (D2)
-- [ ] 5.2 Refuse writes while rules run; turn any `Throwable` except `VirtualMachineError` and unknown attributes into `RULE_FAILED`; update the `Rule`, `EntityRule` and `RuleContext` Javadoc (verdict per instant, transaction time as now, thread safety) (D3, D4)
-- [ ] 5.3 Tests for the new scenarios (a rule that tries to write, ending an entity whose rule has no code) and the updated ones; verify `./gradlew build` passes
+- [x] 5.1 Rename `StoreSettings.availableRules` to `declaredRules`, and reject any transaction that writes an entity whose type names a declared rule (D2)
+- [x] 5.2 Refuse writes while rules run; turn any `Throwable` except `VirtualMachineError` and unknown attributes into `RULE_FAILED`; update the `Rule`, `EntityRule` and `RuleContext` Javadoc (verdict per instant, transaction time as now, thread safety) (D3, D4)
+- [x] 5.3 Tests for the new scenarios (a rule that tries to write, ending an entity whose rule has no code) and the updated ones; verify `./gradlew build` passes
 
