@@ -21,7 +21,7 @@ ADR-0018 decides that custom validation is Java code that schemas name by name a
 ### D1. The interface
 
 - `Rule` in `io.github.enricoag1982.cairn.data` is the base interface, with `RuleDescriptor descriptor()`. `EntityRule extends Rule` adds `void check(EntityState version, RuleContext context)`. `add-relationships` adds `RelationshipRule` the same way, so each rule gets a typed subject.
-- `RuleContext`: `View view()`, a view of the state the transaction would produce, effective at the start of the version's period; `void problem(String code, String attribute, String message)` and `void problem(String code, String message)` for a problem about the whole entity.
+- `RuleContext`: `View view()`, a view of the state the transaction would produce, effective at the start of the version's period; `View viewAt(Instant effectiveAt)`, the same state at another effective time, so that a rule can check every point of the version's period where other data changes; `void problem(String code, String attribute, String message)` and `void problem(String code, String message)` for a problem about the whole entity.
 - Rules on generated Java types come with `add-java-type-generation`, as adapters over this interface.
 
 ### D2. Registration

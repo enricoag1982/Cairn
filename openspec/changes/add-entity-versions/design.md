@@ -49,7 +49,8 @@ Constraints that shape the approach:
 - `EffectivePeriod(Instant from, Optional<Instant> until)`, truncated to microseconds by its constructor; `EffectivePeriod.from(Instant)` and `between(Instant, Instant)`.
 - `ConflictCheck` is sealed: `none()`, `perEntity(Basis readAt)`, `perAttribute(Basis readAt)`.
 - `CommitResult` is sealed: `Committed(Receipt receipt)` or `Rejected(List<Problem> problems)`. `DryRunResult` is sealed: `WouldCommit()` or `Rejected(List<Problem> problems)`.
-- `Receipt(Basis basis, Instant transactionTime, Map<TemporaryId, EntityId> temporaryIds, List<EntityId> created, String principal, Optional<String> onBehalfOf, Optional<String> reason, Optional<String> idempotencyKey)`.
+- `Id` is sealed and extends `Ref`: `EntityId` now, and `RelationshipId` with `add-relationships`.
+- `Receipt(Basis basis, Instant transactionTime, Map<TemporaryId, Id> temporaryIds, List<Id> created, String principal, Optional<String> onBehalfOf, Optional<String> reason, Optional<String> idempotencyKey)`.
 - `TransactionRecord(Basis basis, Instant transactionTime, String principal, Optional<String> onBehalfOf, Optional<String> reason)`.
 - `Coordinates`: an effective instant and a sealed `KnownAt` (`latest()`, `basis(Basis)`, `transactionTime(Instant)`), built with `Coordinates.effectiveAt(instant)`, optionally `.knownAt(...)`.
 - `View`: `effectiveAt()`, `basis()`, `schema()`, `entity(EntityId)` returning `Optional<EntityState>`, `entities(String entityType)` returning `List<EntityState>`, and `timeline(EntityId)` returning `List<EntityState>`.
