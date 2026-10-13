@@ -102,7 +102,8 @@ public enum ProblemCode {
     /** A schema document or a transaction payload is not valid YAML 1.2, or JSON. */
     DOCUMENT_SYNTAX("The text of a schema document or of a transaction payload is not valid YAML 1.2 or JSON, so it "
             + "cannot be read at all. Reading stops at the first syntax error; fix the syntax at the given line and "
-            + "column, and read the text again."),
+            + "column, and read the text again. An agent tool reports it too, with the path @arguments, when the "
+            + "arguments of the call are not valid JSON."),
     /** A schema document or a transaction payload declares a format version that this reader does not know. */
     UNSUPPORTED_FORMAT_VERSION("This reader knows schema documents and transaction payloads of format version 1, "
             + "written as 'cairn: 1'. Set the key cairn to 1, or use a reader for the version that the text "
@@ -118,22 +119,28 @@ public enum ProblemCode {
     /** A key in a schema document or a transaction payload is not one that is known at that position. */
     UNKNOWN_KEY("A key is not one of the keys that a schema document or a transaction payload knows at that "
             + "position, for example a kind of write that does not exist. The expected details list the known keys, "
-            + "and the hint names the closest one. Correct the key, or remove it."),
+            + "and the hint names the closest one. Correct the key, or remove it. An agent tool reports it too, with a "
+            + "path such as @arguments.id, for an argument that it does not take, or for a key of knownAt other than "
+            + "basis and transactionTime."),
     /** A key that a schema document or a transaction payload requires at a position is missing. */
     MISSING_KEY("A key that is required at that position is missing, for example the source, the target, the inverse "
             + "name and both multiplicities of a relationship type, or the principal and the writes of a transaction "
-            + "payload. Add the key."),
+            + "payload. Add the key. An agent tool reports it too, with a path such as @arguments.id, when an argument "
+            + "that it needs is missing."),
     /** A value in a schema document or a transaction payload has the wrong kind, or is written in a form that is not allowed. */
     INVALID_VALUE("A value in a schema document or a transaction payload has the wrong kind, for example a number "
             + "where text is expected, or is written in a form that is not allowed, for example a multiplicity other "
             + "than 0..1, 1..1, 0..* or 1..*, or an instant that is not ISO 8601 with Z or an offset, such as "
             + "2026-01-05T09:00:00Z or 2026-01-05T10:00:00+01:00, which is converted to UTC. The expected and found "
             + "details say which. Correct the value; put text that YAML would read as another kind, such as "
-            + "\"1.10\" or \"true\", in quotes."),
+            + "\"1.10\" or \"true\", in quotes. An agent tool reports it too when an argument has the wrong kind or "
+            + "form, such as an instant that is not ISO 8601 or a negative maximum depth, or names nothing that "
+            + "exists, such as a problem code or an approval request."),
     /** A write creates an entity of a name that is not an entity type. */
     UNKNOWN_ENTITY_TYPE("A write creates an entity of a type name that the schema does not have as an entity type. "
             + "Type names and aliases are compared without regard to case. Correct the name, which the hint suggests, "
-            + "or register the type first."),
+            + "or register the type first. An agent tool reports it too when it is asked for the entities, or the "
+            + "JSON Schema of the values, of a type name that the schema does not have."),
     /** A write creates an entity of an abstract entity type. */
     ABSTRACT_ENTITY_TYPE("An abstract entity type has no entities of its own: it only groups its subtypes. Create the "
             + "entity as one of the concrete subtypes."),
@@ -173,7 +180,9 @@ public enum ProblemCode {
     /** A write refers to an ID that no entity has, to change the entity or to relate it. */
     UNKNOWN_ENTITY("A write patches, replaces or end-dates an entity, or relates one as the source or target of a "
             + "relationship, by an ID that no entity of the store has; the ID of a relationship is not the ID of an "
-            + "entity. Correct the ID, or create the entity first."),
+            + "entity. Correct the ID, or create the entity first. An agent tool reports it too when it reads by an ID "
+            + "that no entity has (for a timeline, that neither an entity nor a relationship has), or that is the ID "
+            + "of a relationship."),
     /**
      * A patch or replace covers a period in which the entity or relationship does not exist, or an end-date is at or
      * before its start.
@@ -232,7 +241,8 @@ public enum ProblemCode {
     /** A write relates entities with a name that is not a relationship type. */
     UNKNOWN_RELATIONSHIP_TYPE("A write relates two entities with a type name that the schema does not have as a "
             + "relationship type. Type names and aliases are compared without regard to case. Correct the name, which "
-            + "the hint suggests, or register the type first."),
+            + "the hint suggests, or register the type first. An agent tool reports it too when it navigates or "
+            + "traverses by a name that is neither the name nor the inverse name of a relationship type."),
     /** The source or the target of a relationship is not an entity of the type that the relationship type needs. */
     WRONG_END_TYPE("The source of a relationship must be an entity of the relationship type's source type, or of one of "
             + "its subtypes, and the target an entity of its target type or of one of its subtypes. For a symmetric "
@@ -264,7 +274,8 @@ public enum ProblemCode {
             + "period so that they no longer overlap, or patch the existing relationship instead."),
     /** A write refers to an ID that no relationship has. */
     UNKNOWN_RELATIONSHIP("A write patches, replaces or end-dates a relationship that does not exist, by an ID that no "
-            + "relationship of the store has. Correct the ID, or relate the entities first."),
+            + "relationship of the store has. Correct the ID, or relate the entities first. An agent tool reports it "
+            + "too when it reads by an ID that no relationship has, or that is the ID of an entity."),
     /** The approval policy of the store denies an operation that an agent asked for. */
     APPROVAL_DENIED("The approval policy of the store denies this kind of operation to agents, such as registering a "
             + "schema or committing a transaction, so the request is refused and nothing is recorded. The message "

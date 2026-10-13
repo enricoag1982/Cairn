@@ -175,6 +175,36 @@ class CairnAgentServerTest {
     }
 
     @Test
+    void aRuleThatSeveralTypesNameIsDeclaredForTheirCommonSupertypeAndTheServerStarts() throws Exception {
+        Path parties = Files.writeString(directory.resolve("parties.cairn.yaml"), """
+                cairn: 1
+                origin: { name: crm, version: "1.0.0" }
+                entityTypes:
+                  Party: { abstract: true }
+                  Person:
+                    supertype: Party
+                    rules:
+                      - { name: lead-score, version: 1 }
+                  Organization:
+                    supertype: Party
+                    rules:
+                      - { name: lead-score, version: 1 }
+                """);
+
+        Store store = CairnAgentServer.createStore(ServerOptions.parse(new String[] {"--principal", "agent:demo",
+                "--schema", parties.toString()}));
+
+        assertThat(store.schema().current().origins()).extracting(origin -> origin.name()).containsExactly("crm");
+        assertThat(store.declaredRules()).singleElement().satisfies(rule -> {
+            assertThat(rule.name()).isEqualTo("lead-score");
+            assertThat(rule.appliesTo()).isEqualTo("Party");
+        });
+        Run run = run("--principal", "agent:demo", "--schema", parties.toString());
+        assertThat(run.status()).isZero();
+        assertThat(run.err()).contains("lead-score v1 (Party)");
+    }
+
+    @Test
     void thePolicyAndThePartyActedForAreOptions() throws Exception {
         try (StdioSession session = new StdioSession("--principal", "agent:demo", "--on-behalf-of", "alice",
                 "--policy", "schema=deny,data=approve")) {
@@ -240,6 +270,39 @@ class CairnAgentServerTest {
             assertThat(description.get("origins")).isEmpty();
             assertThat(description.get("basis").longValue()).isZero();
         }
+    }
+
+    // ------------------------------------------------------------------ what the server says at start
+
+    @Test
+    void theStartMessageListsTheRulesDeclaredWithoutCodeWithVersionAndType() {
+        Run run = run("--schema", model(), "--principal", "agent:demo");
+
+        assertThat(run.status()).isZero();
+        assertThat(run.err()).contains("Declared without code (writes to these types are rejected): "
+                + "lei-checksum v1 (Organization), total-ownership-at-most-100 v1 (Owns).");
+        assertThat(run.err()).contains("Cairn agent server ready: acting as agent:demo");
+        assertThat(run.out()).isEmpty();
+    }
+
+    @Test
+    void theStartMessageSaysNothingAboutRulesWhenNoneAreDeclared() throws IOException {
+        Path crm = Files.writeString(directory.resolve("crm.cairn.yaml"),
+                "cairn: 1\norigin: { name: crm, version: \"2.0.0\" }\nentityTypes:\n  Lead: {}\n");
+        Path leads = Files.writeString(directory.resolve("leads.cairn.yaml"), "cairn: 1\n"
+                + "origin: { name: leads, version: \"1.0.0\" }\nentityTypes:\n  Lead:\n    rules:\n"
+                + "      - { name: lead-has-source, version: 1 }\n");
+
+        Run withoutRules = run("--principal", "agent:demo", "--schema", crm.toString());
+        Run withRuleOnTheClassPath = run("--principal", "agent:demo", "--schema", leads.toString());
+        Run withoutDocuments = run("--principal", "agent:demo");
+
+        assertThat(withoutRules.err()).contains("Cairn agent server ready").doesNotContain("Declared without code");
+        // lead-has-source is provided on the class path, so it is not declared.
+        assertThat(withRuleOnTheClassPath.status()).isZero();
+        assertThat(withRuleOnTheClassPath.err()).contains("Cairn agent server ready")
+                .doesNotContain("Declared without code");
+        assertThat(withoutDocuments.err()).contains("Cairn agent server ready").doesNotContain("Declared without code");
     }
 
     // ------------------------------------------------------------------ failing to start

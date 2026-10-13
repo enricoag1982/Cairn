@@ -284,13 +284,14 @@ public final class AgentTools {
      * not matter: planning changes nothing.
      *
      * @param arguments the arguments: {@code {document}}
-     * @return {@code {outcome, changes, problems}} as JSON text
+     * @return {@code {outcome, changes, problems}} as JSON text; for wrong arguments the outcome is {@code rejected}
+     *         and there are no changes
      */
     public String planSchema(String arguments) {
         Arguments in = Arguments.parse(arguments, "document");
         String document = in.string("document");
         if (!in.valid()) {
-            return Json.render(Operations.problemsOnly(in.problems()));
+            return Json.render(Operations.rejectedPlan(in.problems()));
         }
         return Json.render(operations.planSchema(document));
     }

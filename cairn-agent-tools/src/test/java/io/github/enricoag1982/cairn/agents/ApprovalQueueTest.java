@@ -267,6 +267,42 @@ class ApprovalQueueTest {
         });
     }
 
+    @Test
+    void aPayloadThatNamesAPartyActedForIsRequestedAndCommittedForThatParty() {
+        AgentFixture acting = new AgentFixture();
+        AgentTools onBehalf = new AgentTools(acting.store, new AgentPolicy(Decision.ALLOW, Decision.REQUIRE_APPROVAL),
+                acting.queue, AgentFixture.PRINCIPAL, Optional.of("alice"));
+        String forBob = payload(createOrganization("A")).replace("\"writes\"",
+                "\"onBehalfOf\": \"bob\", \"writes\"");
+
+        JsonNode pending = Json.parse(onBehalf.commit(Json.render(args("payload", forBob))));
+
+        String id = pending.get("request").get("id").stringValue();
+        assertThat(pending.get("request").get("onBehalfOf").stringValue()).isEqualTo("bob");
+        assertThat(acting.queue.find(id).orElseThrow().onBehalfOf()).contains("bob");
+        assertThat(acting.call("cairn_approval_status", args("requestId", id)).get("onBehalfOf").stringValue())
+                .isEqualTo("bob");
+        acting.queue.approve(id, "carol");
+        assertThat(acting.store.transactions()).singleElement()
+                .satisfies(record -> assertThat(record.onBehalfOf()).contains("bob"));
+        assertThat(acting.queue.find(id).orElseThrow().onBehalfOf()).contains("bob");
+    }
+
+    @Test
+    void aPayloadThatNamesAPartyIsRequestedForThatPartyWhenTheToolsActForNoOne() {
+        AgentFixture acting = new AgentFixture(new AgentPolicy(Decision.ALLOW, Decision.REQUIRE_APPROVAL));
+        String forBob = payload(createOrganization("A")).replace("\"writes\"",
+                "\"onBehalfOf\": \"bob\", \"writes\"");
+
+        JsonNode pending = acting.call("cairn_commit", args("payload", forBob));
+        JsonNode unnamed = acting.call("cairn_commit", args("payload", payload(createOrganization("B"))));
+
+        assertThat(pending.get("request").get("onBehalfOf").stringValue()).isEqualTo("bob");
+        assertThat(unnamed.get("request").has("onBehalfOf")).isFalse();
+        assertThat(acting.queue.pending()).map(ApprovalRequest::onBehalfOf)
+                .containsExactly(Optional.of("bob"), Optional.empty());
+    }
+
     // ------------------------------------------------------------------ rejecting
 
     @Test

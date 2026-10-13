@@ -600,6 +600,39 @@ class AgentToolsTest {
     }
 
     @Test
+    void wrongArgumentsGetTheShapeOfTheResultOfTheTool() {
+        assertThat(shape("cairn_plan_schema", "{}")).containsExactly("outcome", "changes", "problems");
+        for (String tool : List.of("cairn_register_schema", "cairn_dry_run", "cairn_commit")) {
+            assertThat(shape(tool, "{}")).as(tool).containsExactly("outcome", "problems");
+        }
+        for (String tool : List.of("cairn_json_schema", "cairn_explain_problem", "cairn_read_entity",
+                "cairn_read_relationship", "cairn_list_entities", "cairn_timeline", "cairn_navigate",
+                "cairn_traverse", "cairn_approval_status")) {
+            assertThat(shape(tool, "{}")).as(tool).containsExactly("problems");
+        }
+        assertThat(shape("cairn_describe", "{\"extra\": 1}")).containsExactly("problems");
+    }
+
+    @Test
+    void aPlanOfWrongArgumentsIsRejectedWithNoChanges() {
+        JsonNode plan = fixture.call("cairn_plan_schema", args("document", "x").put("extra", 1));
+        JsonNode notAnObject = Json.parse(fixture.tools.planSchema("[1]"));
+
+        assertThat(plan.get("outcome").stringValue()).isEqualTo("rejected");
+        assertThat(plan.get("changes")).isEmpty();
+        assertThat(codes(plan)).containsExactly("UNKNOWN_KEY");
+        assertThat(notAnObject.get("outcome").stringValue()).isEqualTo("rejected");
+        assertThat(notAnObject.get("problems").get(0).get("path").stringValue()).isEqualTo("@arguments");
+    }
+
+    /** The names of the fields of the result of a tool called with some arguments, in order. */
+    private List<String> shape(String tool, String arguments) {
+        List<String> names = new ArrayList<>();
+        Json.parse(fixture.tools.call(tool, arguments)).propertyNames().forEach(names::add);
+        return names;
+    }
+
+    @Test
     void aStatusRequestForAnUnknownRequestIsAProblem() {
         JsonNode result = fixture.call("cairn_approval_status", args("requestId", "nope"));
 

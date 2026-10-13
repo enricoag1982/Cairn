@@ -80,7 +80,7 @@ Other MCP clients that start servers on standard input and output take the same 
 | `cairn_approval_status` | The status of an approval request and, once decided, its outcome. |
 
 Documents and payloads are passed as text, YAML or JSON, so that problems keep their lines and columns.
-Every tool returns JSON. A call that cannot be done returns problems instead of failing, each with a code, a path, and where it helps a hint; a problem with an argument has the path `@arguments.<name>`.
+Every tool returns JSON. A call that cannot be done returns problems instead of failing, each with a code, a path, and where it helps a hint: `{ problems }`, or `{ outcome: "rejected", problems }` for the tools that plan, register, dry-run and commit. A problem with an argument has the path `@arguments.<name>`.
 
 A typical agent session reads `cairn_describe`, asks `cairn_json_schema` for the payload schema, writes a payload, runs it with `cairn_dry_run` until it has no problems, and then commits it.
 For a schema change it edits the document from `cairn_describe`, raises the origin's version, plans and registers it.

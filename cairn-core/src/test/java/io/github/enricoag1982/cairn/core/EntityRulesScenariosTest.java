@@ -77,6 +77,17 @@ class EntityRulesScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Listing declared rules")
+    void listingDeclaredRules() {
+        Store store = Stores.inMemory(StoreSettings.builder().clock(new TestClock())
+                .rules(new LeiChecksumRule()).declaredRules(List.of(TotalOwnershipRule.DESCRIPTOR)).build());
+
+        assertThat(store.declaredRules()).containsExactly(TotalOwnershipRule.DESCRIPTOR);
+        assertThat(store.schema().availableRules()).containsExactlyInAnyOrder(LeiChecksumRule.DESCRIPTOR,
+                TotalOwnershipRule.DESCRIPTOR);
+    }
+
+    @Test
     @DisplayName("Scenario: A declared rule without code")
     void aDeclaredRuleWithoutCode() {
         List<RuleDescriptor> declared = new ArrayList<>(ReferenceModel.declaredRules());

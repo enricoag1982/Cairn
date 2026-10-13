@@ -136,21 +136,24 @@ final class Operations {
     /**
      * What a look at a payload finds before it is put to a person.
      *
-     * @param outcome the outcome that ends the commit at once: rejected, if a dry run of the payload is; empty if the
-     *                transaction would be committed
-     * @param reason  the reason that the payload gives for the transaction, if it gives one
+     * @param outcome    the outcome that ends the commit at once: rejected, if a dry run of the payload is; empty if
+     *                   the transaction would be committed
+     * @param reason     the reason that the payload gives for the transaction, if it gives one
+     * @param onBehalfOf the party the transaction is for: the one the payload names, or else the adapter's, if it has
+     *                   one; this is what committing the transaction records
      */
-    record Preflight(Optional<ObjectNode> outcome, Optional<String> reason) {
+    record Preflight(Optional<ObjectNode> outcome, Optional<String> reason, Optional<String> onBehalfOf) {
     }
 
-    /** Runs a payload dry, and reads the reason it gives, to put it to a person if the dry run passes. */
+    /** Runs a payload dry, and reads the reason and the party it gives, to put it to a person if the dry run passes. */
     Preflight commitPreflight(String text, String principal, Optional<String> onBehalfOf) {
         Prepared prepared = prepare(text, principal, onBehalfOf);
         ObjectNode dryRun = dryRun(prepared);
         if ("wouldCommit".equals(dryRun.get("outcome").stringValue())) {
-            return new Preflight(Optional.empty(), ((Prepared.Ready) prepared).transaction().reason());
+            Transaction transaction = ((Prepared.Ready) prepared).transaction();
+            return new Preflight(Optional.empty(), transaction.reason(), transaction.onBehalfOf());
         }
-        return new Preflight(Optional.of(dryRun), Optional.empty());
+        return new Preflight(Optional.of(dryRun), Optional.empty(), Optional.empty());
     }
 
     /** The refusal of a commit that the approval policy denies, located at the root of the payload. */
@@ -211,6 +214,11 @@ final class Operations {
         }
         plan.set("problems", Json.problems(problems));
         return plan;
+    }
+
+    /** The plan of a call whose arguments are wrong: rejected, with no changes. */
+    static ObjectNode rejectedPlan(List<Problem> problems) {
+        return plan("rejected", List.of(), problems);
     }
 
     static ObjectNode rejected(List<Problem> problems) {

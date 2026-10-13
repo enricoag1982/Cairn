@@ -139,14 +139,15 @@ public final class ApprovalQueue {
     }
 
     /**
-     * Puts the commit of a transaction payload to a person, unless it would be rejected now.
+     * Puts the commit of a transaction payload to a person, unless it would be rejected now. The request records the
+     * party that the transaction is for: the one the payload names, or else {@code onBehalfOf}.
      *
      * @return {@code {outcome: pending, request}}, or the rejection that ends the commit at once
      */
     synchronized ObjectNode requestCommit(String payload, String principal, Optional<String> onBehalfOf) {
         Operations.Preflight preflight = operations.commitPreflight(payload, principal, onBehalfOf);
         return preflight.outcome().orElseGet(() ->
-                pending(submit(Kind.DATA_COMMIT, principal, onBehalfOf, payload, preflight.reason())));
+                pending(submit(Kind.DATA_COMMIT, principal, preflight.onBehalfOf(), payload, preflight.reason())));
     }
 
     Operations operations() {

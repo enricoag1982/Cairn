@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
 
 /**
  * A server that serves an in-memory store to AI agents over standard input and output (ADR-0017, design D7 of
@@ -52,10 +53,11 @@ import java.util.concurrent.CountDownLatch;
  * <p>The store lives in memory and is gone when the server stops. The rules that run are those that Java's
  * {@link java.util.ServiceLoader} finds on the server's class path ({@code Rule} providers, ADR-0018); add a jar with
  * rules to the class path to have the server run them. A rule that a schema document names and that is not found is
- * declared without code, from what the document says: its name and version, the first type that names it, and the
- * file. The document can then be registered, but every write of an entity or relationship whose type names the rule
- * is rejected with {@code RULE_UNAVAILABLE}. The server is for trusted, local use: there is no authentication, and an
- * agent can read everything the store holds.
+ * declared without code, from what the documents say: its name and version, the closest type that is, or is a
+ * supertype of, every type that names it (or else the first of them), and the file. The documents can then be
+ * registered, but every write of an entity or relationship whose type names the rule is rejected with
+ * {@code RULE_UNAVAILABLE}; the start message on standard error lists these rules. The server is for trusted, local
+ * use: there is no authentication, and an agent can read everything the store holds.
  */
 public final class CairnAgentServer {
 
@@ -114,6 +116,13 @@ public final class CairnAgentServer {
         EndOfInput input = new EndOfInput(in);
         McpSyncServer server = McpAdapter.serve(tools,
                 new StdioServerTransportProvider(McpJsonDefaults.getMapper(), input, out));
+        if (!store.declaredRules().isEmpty()) {
+            err.println("Declared without code (writes to these types are rejected): "
+                    + store.declaredRules().stream()
+                            .map(rule -> rule.name() + " v" + rule.version() + " (" + rule.appliesTo() + ")")
+                            .collect(Collectors.joining(", "))
+                    + ".");
+        }
         err.println("Cairn agent server ready: acting as " + options.principal() + ", serving "
                 + store.schema().current().origins().size() + " origin(s) over standard input and output.");
         try {

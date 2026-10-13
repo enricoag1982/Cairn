@@ -28,7 +28,9 @@ import java.util.Optional;
  *                 {@code @transaction.<key>}, such as {@code @transaction.principal}, for problems with one of its
  *                 top-level keys, and {@code @write.<n>}, with the position {@code n} counted from 0, for problems
  *                 with a write of one, or {@code @write.<n>.<attribute>} for problems with one of its attributes;
- *                 {@code @arguments.<name>} for problems with an argument of an agent tool call
+ *                 {@code @arguments} for problems with the arguments of an agent tool call as a whole, such as
+ *                 arguments that are not a JSON object, and {@code @arguments.<name>} for problems with one
+ *                 argument of the call
  * @param message  a readable explanation
  * @param expected what would have been accepted, for example the form a name must have
  * @param found    what the definition contains instead, for example the offending name

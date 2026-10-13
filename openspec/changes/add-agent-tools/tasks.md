@@ -24,4 +24,4 @@
 - [x] 4.1 Add `Adapter`, `Agent tool`, `Approval request` and `Model Context Protocol (MCP)` to `docs/glossary.md`, and update `Approval policy`, `Problem` and `Schema transaction`
 - [x] 4.2 Write a guide in `docs/guides/` for running the server and connecting an agent
 - [x] 4.3 Update `docs/architecture/README.md`, `AGENTS.md` and `README.md`, and bump `last-reviewed`
-- [ ] 4.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.4 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
