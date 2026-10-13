@@ -1,0 +1,5 @@
+# The rules of the HR domain, found by StoreSettings.Builder.discoverRules() on the class path.
+io.github.enricoag1982.cairn.example.hr.rules.DecidedByManager
+io.github.enricoag1982.cairn.example.hr.rules.LeaveDatesInOrder
+io.github.enricoag1982.cairn.example.hr.rules.NoUnitCycles
+io.github.enricoag1982.cairn.example.hr.rules.VacationWithinEntitlement

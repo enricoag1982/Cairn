@@ -1,0 +1,121 @@
+# The HR domain of the fictional company Brightwater as a schema document (ADR-0012).
+# The domain page (docs/reference/hr-domain.md) is canonical: its tables are this document.
+cairn: 1
+origin:
+  name: hr-model
+  version: "1.0.0"
+
+entityTypes:
+  Person:
+    attributes:
+      givenName: { type: string, required: true }
+      familyName: { type: string, required: true }
+      birthDate: { type: date }
+  LegalEntity:
+    attributes:
+      name: { type: string, required: true, unique: true }
+      # ISO 3166-1 alpha-2
+      country: { type: string, required: true, pattern: "[A-Z]{2}" }
+  Location:
+    attributes:
+      name: { type: string, required: true, unique: true }
+      city: { type: string }
+      country: { type: string, required: true }
+  Job:
+    attributes:
+      code: { type: string, required: true, unique: true }
+      title: { type: string, required: true }
+  OrgUnit:
+    attributes:
+      code: { type: string, required: true, unique: true }
+      name: { type: string, required: true }
+  Position:
+    attributes:
+      code: { type: string, required: true, unique: true }
+      title: { type: string, required: true }
+      fte: { type: decimal, required: true }
+  Employment:
+    attributes:
+      employeeNumber: { type: string, required: true, unique: true, pattern: "E-[0-9]{3}" }
+      kind: { type: string, required: true, allowedValues: [permanent, fixed-term] }
+      weeklyHours: { type: int }
+      annualSalary: { type: decimal, required: true }
+      # ISO 4217
+      currency: { type: string, required: true, pattern: "[A-Z]{3}" }
+  LeaveRequest:
+    attributes:
+      kind: { type: string, required: true, allowedValues: [vacation, sick, unpaid] }
+      firstDay: { type: date, required: true }
+      lastDay: { type: date, required: true }
+      days: { type: decimal, required: true }
+      status: { type: string, required: true, allowedValues: [requested, approved, rejected, cancelled] }
+    rules:
+      - { name: vacation-within-entitlement, version: 1 }
+      - { name: leave-dates-in-order, version: 1 }
+
+relationshipTypes:
+  EmploymentOf:
+    source: Employment
+    target: Person
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..1"
+    inverseName: employment
+  EmployedBy:
+    source: Employment
+    target: LegalEntity
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..*"
+    inverseName: employments
+  WorksAt:
+    source: Employment
+    target: Location
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..*"
+    inverseName: staff
+  Fills:
+    source: Employment
+    target: Position
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..1"
+    inverseName: filledBy
+  BelongsTo:
+    source: Position
+    target: OrgUnit
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..*"
+    inverseName: positions
+  OfJob:
+    source: Position
+    target: Job
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..*"
+    inverseName: jobPositions
+  PartOf:
+    source: OrgUnit
+    target: OrgUnit
+    targetsPerSource: "0..1"
+    sourcesPerTarget: "0..*"
+    inverseName: subunits
+    rules:
+      - { name: no-unit-cycles, version: 1 }
+  ManagedBy:
+    source: OrgUnit
+    target: Employment
+    targetsPerSource: "0..1"
+    sourcesPerTarget: "0..*"
+    inverseName: manages
+  HasLeaveRequest:
+    source: Employment
+    target: LeaveRequest
+    kind: composition
+    targetsPerSource: "0..*"
+    sourcesPerTarget: "1..1"
+    inverseName: requester
+  DecidedBy:
+    source: LeaveRequest
+    target: Employment
+    targetsPerSource: "0..1"
+    sourcesPerTarget: "0..*"
+    inverseName: decisions
+    rules:
+      - { name: decided-by-manager, version: 1 }

@@ -11,4 +11,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "cairn"
 
-include("cairn-api", "cairn-core", "cairn-documents", "cairn-agent-tools", "cairn-codegen", "cairn-gradle-plugin")
+include(
+    "cairn-api", "cairn-core", "cairn-documents", "cairn-agent-tools", "cairn-codegen", "cairn-gradle-plugin",
+    "cairn-example-hr",
+)

@@ -1,0 +1,46 @@
+# HR-1: the structure of Brightwater, recorded on 2 January 2026 as a transaction payload (YAML 1.2): the employers,
+# locations, jobs, units with their hierarchy, and positions, all from 1 January. Names after "$" are the temporary
+# IDs of this payload; the receipt maps them to the IDs the store gives.
+cairn: 1
+principal: hr-admin
+reason: The structure of Brightwater
+writes:
+  # Employers and locations
+  - create: { temporaryId: gmbh, entityType: LegalEntity, from: "2026-01-01T00:00:00Z", values: { name: Brightwater GmbH, country: DE } }
+  - create: { temporaryId: srl, entityType: LegalEntity, from: "2026-01-01T00:00:00Z", values: { name: Brightwater S.r.l., country: IT } }
+  - create: { temporaryId: berlin, entityType: Location, from: "2026-01-01T00:00:00Z", values: { name: Berlin, city: Berlin, country: DE } }
+  - create: { temporaryId: milan, entityType: Location, from: "2026-01-01T00:00:00Z", values: { name: Milan, city: Milan, country: IT } }
+  # Jobs
+  - create: { temporaryId: mgr, entityType: Job, from: "2026-01-01T00:00:00Z", values: { code: MGR, title: Manager } }
+  - create: { temporaryId: swe, entityType: Job, from: "2026-01-01T00:00:00Z", values: { code: SWE, title: Software Engineer } }
+  - create: { temporaryId: ae, entityType: Job, from: "2026-01-01T00:00:00Z", values: { code: AE, title: Account Executive } }
+  # Units, and the hierarchy: Engineering and Sales below Brightwater, Platform below Engineering
+  - create: { temporaryId: bw, entityType: OrgUnit, from: "2026-01-01T00:00:00Z", values: { code: BW, name: Brightwater } }
+  - create: { temporaryId: eng, entityType: OrgUnit, from: "2026-01-01T00:00:00Z", values: { code: ENG, name: Engineering } }
+  - create: { temporaryId: sal, entityType: OrgUnit, from: "2026-01-01T00:00:00Z", values: { code: SAL, name: Sales } }
+  - create: { temporaryId: plt, entityType: OrgUnit, from: "2026-01-01T00:00:00Z", values: { code: PLT, name: Platform } }
+  - relate: { temporaryId: engPartOfBw, relationshipType: PartOf, source: "$eng", target: "$bw", from: "2026-01-01T00:00:00Z" }
+  - relate: { temporaryId: salPartOfBw, relationshipType: PartOf, source: "$sal", target: "$bw", from: "2026-01-01T00:00:00Z" }
+  - relate: { temporaryId: pltPartOfEng, relationshipType: PartOf, source: "$plt", target: "$eng", from: "2026-01-01T00:00:00Z" }
+  # Positions, each in a unit and of a job
+  - create: { temporaryId: p100, entityType: Position, from: "2026-01-01T00:00:00Z", values: { code: P-100, title: Head of Brightwater, fte: 1 } }
+  - relate: { relationshipType: BelongsTo, source: "$p100", target: "$bw", from: "2026-01-01T00:00:00Z" }
+  - relate: { relationshipType: OfJob, source: "$p100", target: "$mgr", from: "2026-01-01T00:00:00Z" }
+  - create: { temporaryId: p200, entityType: Position, from: "2026-01-01T00:00:00Z", values: { code: P-200, title: Head of Engineering, fte: 1 } }
+  - relate: { relationshipType: BelongsTo, source: "$p200", target: "$eng", from: "2026-01-01T00:00:00Z" }
+  - relate: { relationshipType: OfJob, source: "$p200", target: "$mgr", from: "2026-01-01T00:00:00Z" }
+  - create: { temporaryId: p210, entityType: Position, from: "2026-01-01T00:00:00Z", values: { code: P-210, title: Platform Lead, fte: 1 } }
+  - relate: { relationshipType: BelongsTo, source: "$p210", target: "$plt", from: "2026-01-01T00:00:00Z" }
+  - relate: { relationshipType: OfJob, source: "$p210", target: "$mgr", from: "2026-01-01T00:00:00Z" }
+  - create: { temporaryId: p211, entityType: Position, from: "2026-01-01T00:00:00Z", values: { code: P-211, title: Software Engineer, fte: 1 } }
+  - relate: { relationshipType: BelongsTo, source: "$p211", target: "$plt", from: "2026-01-01T00:00:00Z" }
+  - relate: { relationshipType: OfJob, source: "$p211", target: "$swe", from: "2026-01-01T00:00:00Z" }
+  - create: { temporaryId: p212, entityType: Position, from: "2026-01-01T00:00:00Z", values: { code: P-212, title: Software Engineer, fte: 1 } }
+  - relate: { relationshipType: BelongsTo, source: "$p212", target: "$plt", from: "2026-01-01T00:00:00Z" }
+  - relate: { relationshipType: OfJob, source: "$p212", target: "$swe", from: "2026-01-01T00:00:00Z" }
+  - create: { temporaryId: p300, entityType: Position, from: "2026-01-01T00:00:00Z", values: { code: P-300, title: Head of Sales, fte: 1 } }
+  - relate: { relationshipType: BelongsTo, source: "$p300", target: "$sal", from: "2026-01-01T00:00:00Z" }
+  - relate: { relationshipType: OfJob, source: "$p300", target: "$mgr", from: "2026-01-01T00:00:00Z" }
+  - create: { temporaryId: p301, entityType: Position, from: "2026-01-01T00:00:00Z", values: { code: P-301, title: Account Executive, fte: 1 } }
+  - relate: { relationshipType: BelongsTo, source: "$p301", target: "$sal", from: "2026-01-01T00:00:00Z" }
+  - relate: { relationshipType: OfJob, source: "$p301", target: "$ae", from: "2026-01-01T00:00:00Z" }
