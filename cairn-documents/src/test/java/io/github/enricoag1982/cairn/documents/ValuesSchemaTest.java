@@ -236,11 +236,39 @@ class ValuesSchemaTest {
     }
 
     @Test
-    void aDateAndAnInstantAreStringsWithTheirFormats() {
+    void aDateAndAnInstantAreStringsWithTheirFormatsAndPatterns() {
         assertThat(DocumentTrees.at(property("day"), "type")).isEqualTo("string");
         assertThat(DocumentTrees.at(property("day"), "format")).isEqualTo("date");
+        assertThat(DocumentTrees.at(property("day"), "pattern")).isEqualTo("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
         assertThat(DocumentTrees.at(property("moment"), "type")).isEqualTo("string");
         assertThat(DocumentTrees.at(property("moment"), "format")).isEqualTo("date-time");
+        assertThat(DocumentTrees.at(property("moment"), "pattern")).isEqualTo(ValuesSchema.INSTANT_PATTERN);
+    }
+
+    @Test
+    void aDateOrAnInstantInTheWrongFormIsInvalidWithoutCheckingFormats() {
+        String required = "\"name\": \"x\", \"kind\": \"big\", ";
+
+        assertThat(isValid("Thing", "{" + required + "\"day\": \"2026-05-17\"}")).isTrue();
+        assertThat(isValid("Thing", "{" + required + "\"day\": \"not-a-date\"}")).as("no date").isFalse();
+        assertThat(isValid("Thing", "{" + required + "\"day\": \"2026-5-17\"}")).as("no leading zero").isFalse();
+        assertThat(isValid("Thing", "{" + required + "\"day\": \"2026-05-17T00:00:00Z\"}")).as("an instant").isFalse();
+        assertThat(isValid("Thing", "{" + required + "\"day\": 20260517}")).as("no string").isFalse();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17T09:30:00Z\"}")).isTrue();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"yesterday\"}")).as("no instant").isFalse();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17\"}")).as("a date").isFalse();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17T09:30:00\"}")).as("no zone").isFalse();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": 5}")).as("no string").isFalse();
+    }
+
+    @Test
+    void anInstantMayHaveAFractionAndAnOffsetOtherThanZ() {
+        String required = "\"name\": \"x\", \"kind\": \"big\", ";
+
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17T09:30:00.123456Z\"}")).isTrue();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17T10:30:00+01:00\"}")).isTrue();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17T04:30:00.5-05:00\"}")).isTrue();
+        assertThat(isValid("Thing", "{" + required + "\"moment\": \"2026-05-17T10:30:00+0100\"}")).isFalse();
     }
 
     @Test

@@ -77,6 +77,32 @@ class PayloadLocationsTest {
         }
 
         @Test
+        void aProblemAboutATopLevelKeyIsLocatedAtThatKey() {
+            String text = "{\n  \"cairn\": 1,\n  \"principal\": \"importer\",\n  \"reason\": \"x\",\n  \"writes\": []\n}\n";
+            TransactionPayload payload = reference.read(text);
+            Problem principal = new Problem(ProblemCode.INVALID_VALUE, "@transaction.principal",
+                    "The principal is not the one of the connection.");
+            Problem reason = new Problem(ProblemCode.INVALID_VALUE, "@transaction.reason", "The reason is not accepted.");
+
+            assertThat(payload.locate(List.of(principal, reason))).extracting(Problem::location).containsExactly(
+                    Optional.of(new DocumentLocation("/principal", 3, 3)), Optional.of(new DocumentLocation("/reason", 4, 3)));
+            assertThat(payload.locations().find("@transaction.principal")).contains(new DocumentLocation("/principal", 3, 3));
+            assertThat(payload.locations().of("@transaction.reason")).isEqualTo(new DocumentLocation("/reason", 4, 3));
+        }
+
+        @Test
+        void aProblemAboutATopLevelKeyThePayloadDoesNotHaveIsLocatedAtTheRoot() {
+            String text = "{\n  \"cairn\": 1,\n  \"principal\": \"importer\",\n  \"writes\": []\n}\n";
+            TransactionPayload payload = reference.read(text);
+            Problem onBehalfOf = new Problem(ProblemCode.INVALID_VALUE, "@transaction.onBehalfOf", "No party is acted for.");
+            Problem unknown = new Problem(ProblemCode.INVALID_VALUE, "@transaction.nothing", "Nothing is named so.");
+
+            assertThat(payload.locate(List.of(onBehalfOf, unknown))).extracting(Problem::location).containsExactly(
+                    Optional.of(new DocumentLocation("", 1, 1)), Optional.of(new DocumentLocation("", 1, 1)));
+            assertThat(payload.locations().find("@transaction.onBehalfOf")).contains(payload.locations().root());
+        }
+
+        @Test
         void aReusedIdempotencyKeyIsLocatedAtTheRootToo() {
             String first = "{ \"cairn\": 1, \"principal\": \"importer\", \"idempotencyKey\": \"k\", \"writes\": [] }";
             String second = "{ \"cairn\": 1, \"principal\": \"importer\", \"idempotencyKey\": \"k\", \"reason\": \"x\", "

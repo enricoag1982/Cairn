@@ -160,15 +160,30 @@ class JsonResultsTest {
         }
 
         @Test
-        void aStateLeavesOutAnEmptyValuesAndAnEndlessPeriodsEnd() {
+        void aStateAlwaysWritesItsValuesAndLeavesOutAnEndlessPeriodsEnd() {
             EntityState state = new EntityState(new EntityId("e-3"), "Thing", Map.of(), EffectivePeriod.from(JAN_1),
                     RECORDED, new Basis(1));
 
             Object json = DocumentTrees.load(Payloads.toJson(state));
 
-            assertThat(DocumentTrees.keysOf(json)).containsExactly("id", "entityType", "period", "recordedAt",
+            assertThat(DocumentTrees.keysOf(json)).containsExactly("id", "entityType", "values", "period", "recordedAt",
                     "recordedBasis");
+            assertThat(DocumentTrees.keysAt(json, "values")).isEmpty();
+            assertThat(Payloads.toJson(state)).contains("  \"values\": {},\n");
             assertThat(DocumentTrees.keysAt(json, "period")).containsExactly("from");
+        }
+
+        @Test
+        void aRelationshipStateWithoutValuesWritesEmptyValuesToo() {
+            RelationshipState heldBy = new RelationshipState(new RelationshipId("r-2"), "HeldBy", new EntityId("a-1"),
+                    new EntityId("e-2"), Map.of(), EffectivePeriod.from(JAN_1), RECORDED, new Basis(5));
+
+            Object json = DocumentTrees.load(Payloads.toJson(heldBy));
+
+            assertThat(DocumentTrees.keysOf(json)).containsExactly("id", "relationshipType", "source", "target", "values",
+                    "period", "recordedAt", "recordedBasis");
+            assertThat(DocumentTrees.keysAt(json, "values")).isEmpty();
+            assertThat(Payloads.relationshipStatesToJson(List.of(heldBy))).contains("\"values\": {},\n");
         }
 
         @Test
@@ -237,7 +252,7 @@ class JsonResultsTest {
     class Problems {
 
         @Test
-        void aProblemHasAllItsDetailsInAFixedOrder() {
+        void aProblemHasAllItsDetailsInTheOrderOfTheRecord() {
             assertThat(Payloads.toJson(problem())).isEqualTo("""
                     {
                       "code": "UNKNOWN_ATTRIBUTE",
@@ -246,12 +261,12 @@ class JsonResultsTest {
                       "expected": "an attribute of Organization",
                       "found": "nmae",
                       "hint": "Did you mean 'name'?",
-                      "ruleCode": "a-rule/code",
                       "location": {
                         "pointer": "/writes/0/create/values/nmae",
                         "line": 3,
                         "column": 27
-                      }
+                      },
+                      "ruleCode": "a-rule/code"
                     }
                     """);
         }
@@ -413,8 +428,33 @@ class JsonResultsTest {
         }
 
         @Test
-        void aStateWithoutValuesHasNoValuesToReadBack() {
-            assertThat(Payloads.toJson(thing(Map.of()))).doesNotContain("values");
+        void aStateWithoutValuesWritesEmptyValuesThatReadBackAsTheValuesOfAReplace() {
+            EntityState state = thing(Map.of());
+
+            assertThat(valuesObject(Payloads.toJson(state))).isEqualTo("{}");
+            assertThat(readBack(state)).isEmpty();
+        }
+
+        @Test
+        void theValuesOfARelationshipWithoutAttributesReadBackAsTheValuesOfAReplaceOfTheRelationship() {
+            Schema linked = PayloadFixtures.schemaOf(SchemaDefinition.builder()
+                    .entityType("Thing", e -> e.attribute("text", STRING))
+                    .relationshipType("Link", r -> r.from("Thing").to("Thing").inverse("linkedFrom"))
+                    .build());
+            RelationshipState link = new RelationshipState(new RelationshipId("r-1"), "Link", new EntityId("t-1"),
+                    new EntityId("t-2"), Map.of(), EffectivePeriod.from(JAN_1), RECORDED, new Basis(1));
+            String payload = "{ \"cairn\": 1, \"principal\": \"agent:test\", \"writes\": [ { \"replace\": { "
+                    + "\"target\": \"r-1\", \"from\": \"2026-02-01T00:00:00Z\", \"values\": "
+                    + valuesObject(Payloads.toJson(link)) + " } } ] }";
+
+            TransactionPayload read = PayloadFixtures.read(payload, linked,
+                    id -> Optional.of(new IdLookup.Known(IdLookup.Kind.RELATIONSHIP, "Link")));
+
+            assertThat(read.transaction().writes()).singleElement().isInstanceOfSatisfying(Write.Replace.class,
+                    replace -> {
+                        assertThat(replace.target()).isEqualTo(new RelationshipId("r-1"));
+                        assertThat(replace.values()).isEmpty();
+                    });
         }
     }
 }

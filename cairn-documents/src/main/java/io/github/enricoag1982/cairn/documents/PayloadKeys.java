@@ -11,6 +11,9 @@ final class PayloadKeys {
     /** The path of problems about the payload as a whole, and of those that no write is concerned in. */
     static final String TRANSACTION_PATH = "@transaction";
 
+    /** The start of the path of problems about one top-level key of the payload: {@code @transaction.} and the key. */
+    static final String TRANSACTION_KEY_PATH = TRANSACTION_PATH + ".";
+
     /** The start of the path of problems about a write: {@code @write.} and the position of the write, from 0. */
     static final String WRITE_PATH = "@write.";
 

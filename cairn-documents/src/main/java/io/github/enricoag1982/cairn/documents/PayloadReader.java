@@ -131,6 +131,8 @@ final class PayloadReader {
             return invalid();
         }
         Map<String, Entry> p = top.get();
+        Map<String, DocumentLocation> keys = new HashMap<>();
+        p.forEach((key, entry) -> keys.put(key, NodeReader.location(entry.pointer(), entry.keyNode())));
         nodes.formatVersion(p.get("cairn"), TRANSACTION_PATH);
         nodes.string(p.get(Keys.SCHEMA), TRANSACTION_PATH, "value of '$schema'");
         String principal = nodes.string(p.get("principal"), TRANSACTION_PATH, "value of 'principal'").orElse("");
@@ -144,7 +146,7 @@ final class PayloadReader {
         }
         Transaction transaction = new Transaction(principal, onBehalfOf, reason, idempotencyKey, writes);
         return new PayloadReadResult.Read(
-                new TransactionPayload(transaction, new PayloadLocations(rootLocation, entries)));
+                new TransactionPayload(transaction, new PayloadLocations(rootLocation, keys, entries)));
     }
 
     private PayloadReadResult invalid() {
@@ -466,7 +468,10 @@ final class PayloadReader {
         return new EffectivePeriod(instant(from, path).orElse(Instant.EPOCH), instant(until, path));
     }
 
-    /** Reads an instant: a string in ISO 8601 form, in UTC. An absent value is empty. */
+    /**
+     * Reads an instant: a string in ISO 8601 form, such as {@code 2026-01-01T00:00:00Z}. An offset other than UTC is
+     * converted to UTC. An absent value is empty.
+     */
     private Optional<Instant> instant(Entry entry, String path) {
         if (entry == null) {
             return Optional.empty();
@@ -477,7 +482,7 @@ final class PayloadReader {
                 return instant;
             }
         }
-        String expected = "an instant in ISO 8601 UTC form, such as " + INSTANT_EXAMPLE;
+        String expected = "an instant in ISO 8601 form, with Z or an offset, such as " + INSTANT_EXAMPLE;
         String found = NodeReader.describe(entry.value());
         nodes.add(ProblemCode.INVALID_VALUE, path, "The value of '" + entry.key() + "' must be " + expected + ", but it is "
                 + found + ".", expected, found, dateHint(entry.value()), NodeReader.location(entry.pointer(), entry.value()));

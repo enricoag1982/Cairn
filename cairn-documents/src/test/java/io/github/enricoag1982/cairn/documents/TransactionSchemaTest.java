@@ -11,6 +11,7 @@ import io.github.enricoag1982.cairn.documents.PayloadFixtures.ReferenceDomainSto
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -262,6 +263,110 @@ class TransactionSchemaTest {
                 .containsExactly("alpha", "beta", "gamma");
     }
 
+    @Test
+    void aBranchRequiresValuesExactlyWhereItsTypeHasRequiredAttributes() {
+        for (Object branch : (List<?>) DocumentTrees.at(definition("create"), "oneOf")) {
+            assertThat(required(branch)).as("create %s", DocumentTrees.at(branch, "title"))
+                    .containsExactly("entityType", "values");
+        }
+        Map<String, List<String>> relate = new LinkedHashMap<>();
+        for (Object branch : (List<?>) DocumentTrees.at(definition("relate"), "oneOf")) {
+            relate.put(String.valueOf(DocumentTrees.at(branch, "title")), required(branch));
+        }
+        assertThat(relate).containsEntry("Owns", List.of("relationshipType", "values"))
+                .containsEntry("Employs", List.of("relationshipType"))
+                .containsEntry("HeldBy", List.of("relationshipType"))
+                .containsEntry("HasAddress", List.of("relationshipType"))
+                .containsEntry("PlayedBy", List.of("relationshipType"));
+        assertThat(required(definition("create"))).as("the keys of a create").isEqualTo(PayloadKeys.CREATE_REQUIRED);
+        assertThat(required(definition("relate"))).as("the keys of a relate").isEqualTo(PayloadKeys.RELATE_REQUIRED);
+    }
+
+    @Test
+    void aWriteNeedsValuesOnlyIfItsTypeHasRequiredAttributes() {
+        Schema mixed = PayloadFixtures.schemaOf(SchemaDefinition.builder()
+                .entityType("Needy", type -> type.attribute("name", STRING, a -> a.required()))
+                .entityType("Easy", type -> type.attribute("note", STRING))
+                .relationshipType("Weighted", link -> link.from("Needy").to("Easy").inverse("weightedBy")
+                        .attribute("weight", DECIMAL, a -> a.required()))
+                .relationshipType("Plain", link -> link.from("Needy").to("Easy").inverse("plainBy")
+                        .attribute("note", STRING))
+                .build());
+        String schema = JsonSchemas.transactions(mixed);
+        String relate = "{ \"relate\": { \"relationshipType\": \"%s\", \"source\": \"a\", \"target\": \"b\", " + FROM
+                + "%s } }";
+
+        assertThat(GeneratedSchemaCheck.isValid(schema, payload(
+                "{ \"create\": { \"entityType\": \"Easy\", " + FROM + " } }"))).as("no required attribute").isTrue();
+        assertThat(GeneratedSchemaCheck.isValid(schema, payload(
+                "{ \"create\": { \"entityType\": \"Needy\", " + FROM + " } }"))).as("required name, no values").isFalse();
+        assertThat(GeneratedSchemaCheck.isValid(schema, payload(
+                "{ \"create\": { \"entityType\": \"Needy\", " + FROM + ", \"values\": {} } }")))
+                .as("required name, empty values").isFalse();
+        assertThat(GeneratedSchemaCheck.isValid(schema, payload(
+                "{ \"create\": { \"entityType\": \"Needy\", " + FROM + ", \"values\": { \"name\": \"x\" } } }")))
+                .as("required name, given").isTrue();
+        assertThat(GeneratedSchemaCheck.isValid(schema, payload(relate.formatted("Plain", ""))))
+                .as("no required attribute of the relationship").isTrue();
+        assertThat(GeneratedSchemaCheck.isValid(schema, payload(relate.formatted("Weighted", ""))))
+                .as("required weight, no values").isFalse();
+        assertThat(GeneratedSchemaCheck.isValid(schema, payload(
+                relate.formatted("Weighted", ", \"values\": { \"weight\": 1.5 }")))).as("required weight, given").isTrue();
+    }
+
+    @Test
+    void theInstantsAndDatesAreCheckedByPatternAsWellAsByFormat() {
+        Object instant = definition("instant");
+
+        assertThat(DocumentTrees.at(instant, "type")).isEqualTo("string");
+        assertThat(DocumentTrees.at(instant, "format")).isEqualTo("date-time");
+        assertThat(DocumentTrees.at(instant, "pattern")).isEqualTo(ValuesSchema.INSTANT_PATTERN);
+        assertThat(DocumentTrees.at(instant, "description")).asString().contains("offset", "UTC");
+        assertThat(DocumentTrees.at(TREE, "$defs", "entityValues.Person", "properties", "birthDate", "pattern"))
+                .isEqualTo("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+    }
+
+    /** Instants in the forms that {@code Instant.parse}, which the reader uses, accepts. */
+    static Stream<String> instantsTheReaderAccepts() {
+        return Stream.of("2026-01-01T00:00:00Z", "2026-01-01t00:00:00z", "2026-01-01T00:00:00+01:00",
+                "2026-01-01T00:00:00-05:30", "2026-01-01T00:00:00-00:00", "2026-01-01T00:00:00+18:00",
+                "2026-01-01T00:00:00+01:00:30", "2026-01-01T00:00:00.1Z", "2026-01-01T00:00:00.123456Z",
+                "2026-01-01T00:00:00.123456789+01:00", "2026-01-01T00:00:00.Z", "2026-01-01T23:59:60Z",
+                "2026-01-01T24:00:00Z", "0001-01-01T00:00:00Z", "-0001-01-01T00:00:00Z", "+12345-01-01T00:00:00Z");
+    }
+
+    /** Text in forms that are no instant for the reader, and for the pattern. */
+    static Stream<String> textsThatAreNoInstants() {
+        return Stream.of("yesterday", "", "2026-01-01", "2026-01-01T00:00:00", "2026-01-01 00:00:00Z", "2026-01-01T00:00Z",
+                "2026-1-1T00:00:00Z", "20260101T000000Z", "2026-01-01T00:00:00+0100", "2026-01-01T00:00:00+01",
+                "2026-01-01T00:00:00.1234567890Z", "2026-01-01T00:00:00 Z", " 2026-01-01T00:00:00Z",
+                "2026-01-01T0:0:0Z", "999-01-01T00:00:00Z");
+    }
+
+    private static String createFrom(String from) {
+        return payload("{ \"create\": { \"entityType\": \"Organization\", \"from\": \"" + from + "\", "
+                + "\"values\": { \"name\": \"ACME\" } } }");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("instantsTheReaderAccepts")
+    void anInstantTheReaderAcceptsIsValidAgainstTheJsonSchema(String instant) {
+        String text = createFrom(instant);
+
+        assertThat(Payloads.readTransaction(text, REFERENCE)).as("reading").isInstanceOf(PayloadReadResult.Read.class);
+        assertThat(GeneratedSchemaCheck.errors(SCHEMA, text)).as("errors of the JSON Schema").isEmpty();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("textsThatAreNoInstants")
+    void textThatIsNoInstantIsRejectedByTheReaderAndByTheJsonSchema(String text) {
+        String payload = createFrom(text);
+
+        assertThat(Payloads.readTransaction(payload, REFERENCE)).as("reading")
+                .isInstanceOf(PayloadReadResult.Invalid.class);
+        assertThat(GeneratedSchemaCheck.errors(SCHEMA, payload)).as("errors of the JSON Schema").isNotEmpty();
+    }
+
     // ------------------------------------------------------------------ payloads
 
     private static final String ALL_KINDS = """
@@ -324,7 +429,9 @@ class TransactionSchemaTest {
         return Stream.of(
                 Arguments.of("only the required keys", "{\"cairn\": 1, \"principal\": \"importer\", \"writes\": []}"),
                 Arguments.of("every kind of write and every key", ALL_KINDS),
-                Arguments.of("a create without values", payload("{ \"create\": { \"entityType\": \"Address\", " + FROM + " } }")),
+                Arguments.of("a create with values for the required attributes", payload("{ \"create\": { "
+                        + "\"entityType\": \"Address\", " + FROM + ", \"values\": { \"street\": \"1 Main Street\", "
+                        + "\"city\": \"Rome\", \"country\": \"IT\" } } }")),
                 Arguments.of("a create that supplies an ID and ends", payload("{ \"create\": { \"id\": \"x\", "
                         + "\"entityType\": \"Person\", " + FROM + ", \"until\": \"2027-01-01T00:00:00Z\", "
                         + "\"values\": { \"name\": \"Alice\", \"birthDate\": \"1990-05-17\" } } }")),
@@ -334,6 +441,12 @@ class TransactionSchemaTest {
                         + "\"source\": \"a\", \"target\": \"b\", " + FROM + ", \"values\": { \"share\": 100 } } }")),
                 Arguments.of("a relate without values", payload("{ \"relate\": { \"relationshipType\": \"HeldBy\", "
                         + "\"source\": \"$a1\", \"target\": \"$beta\", " + FROM + " } }")),
+                Arguments.of("a relate without values of a type with optional attributes only", payload("{ \"relate\": { "
+                        + "\"relationshipType\": \"Employs\", \"source\": \"$beta\", \"target\": \"$alice\", " + FROM
+                        + " } }")),
+                Arguments.of("instants with a fraction, an offset and lower case letters", payload("{ \"create\": { "
+                        + "\"entityType\": \"Person\", \"from\": \"2026-01-01T01:00:00.123456+01:00\", "
+                        + "\"until\": \"2026-02-01t00:00:00z\", \"values\": { \"name\": \"Alice\" } } }")),
                 Arguments.of("a patch that sets a value of any type", payload("{ \"patch\": { \"target\": \"a\", " + FROM
                         + ", \"set\": { \"balance\": 5, \"name\": \"x\" } } }")),
                 Arguments.of("a conflict check at basis 0", payload("{ \"endDate\": { \"target\": \"a\", " + FROM
@@ -361,6 +474,12 @@ class TransactionSchemaTest {
                         + FROM + ", \"type\": \"x\" } }")),
                 Arguments.of("a create with values that are a list", payload("{ \"create\": { \"entityType\": \"Address\", "
                         + FROM + ", \"values\": [] } }")),
+                Arguments.of("a from that is no instant", payload("{ \"create\": { \"entityType\": \"Address\", "
+                        + "\"from\": \"yesterday\" } }")),
+                Arguments.of("a from that is a date", payload("{ \"endDate\": { \"target\": \"a\", "
+                        + "\"from\": \"2026-01-01\" } }")),
+                Arguments.of("an until without a zone", payload("{ \"patch\": { \"target\": \"a\", " + FROM
+                        + ", \"until\": \"2027-01-01T00:00:00\" } }")),
                 Arguments.of("a create with a blank temporary ID", payload("{ \"create\": { \"temporaryId\": \"\", "
                         + "\"entityType\": \"Address\", " + FROM + " } }")),
                 Arguments.of("a value that is null", payload("{ \"create\": { \"entityType\": \"Address\", " + FROM
@@ -397,6 +516,16 @@ class TransactionSchemaTest {
                         + FROM + ", \"values\": { \"nmae\": \"ACME\" } } }")),
                 Arguments.of("a missing required value", payload("{ \"create\": { \"entityType\": \"Organization\", " + FROM
                         + ", \"values\": { \"lei\": \"5493001KJTIIGC8Y1R12\" } } }")),
+                Arguments.of("a create without values, though its type has required attributes", payload("{ \"create\": { "
+                        + "\"entityType\": \"Organization\", " + FROM + " } }")),
+                Arguments.of("a create of Address without values, though its type has required attributes",
+                        payload("{ \"create\": { \"entityType\": \"Address\", " + FROM + " } }")),
+                Arguments.of("a relate without values, though its type has required attributes", payload("{ \"relate\": { "
+                        + "\"relationshipType\": \"Owns\", \"source\": \"a\", \"target\": \"b\", " + FROM + " } }")),
+                Arguments.of("a date that is no date", payload("{ \"create\": { \"entityType\": \"Person\", " + FROM
+                        + ", \"values\": { \"name\": \"Alice\", \"birthDate\": \"not-a-date\" } } }")),
+                Arguments.of("a date without leading zeros", payload("{ \"create\": { \"entityType\": \"Person\", " + FROM
+                        + ", \"values\": { \"name\": \"Alice\", \"birthDate\": \"1990-5-17\" } } }")),
                 Arguments.of("a value of the wrong type", payload("{ \"create\": { \"entityType\": \"Organization\", " + FROM
                         + ", \"values\": { \"name\": 5 } } }")),
                 Arguments.of("a value that breaks a pattern", payload("{ \"create\": { \"entityType\": \"Account\", " + FROM

@@ -32,17 +32,19 @@ import java.util.Objects;
  *
  * <p>A reference ({@code source}, {@code target}) is written as {@code $} followed by a temporary ID, or as an ID. The
  * {@code temporaryId} of a {@code create} or {@code relate} is written the same way, or as the name alone. Instants are
- * ISO 8601 UTC strings. A conflict check is {@code {perEntity: <basis>}} or {@code {perAttribute: <basis>}}, with the
+ * ISO 8601 strings, such as {@code 2026-01-01T00:00:00Z}; an offset other than UTC, such as {@code +01:00}, is accepted
+ * and converted to UTC. A conflict check is {@code {perEntity: <basis>}} or {@code {perAttribute: <basis>}}, with the
  * basis as a whole number. Numbers are written as JSON writes them.
  *
  * <p>The {@code toJson} methods and their plural forms write receipts, entity and relationship states, links, steps and
  * problems as JSON, with two-space indentation and a line break at the end. Each form has the field names of the Java
  * record it stands for, in the order of the record's components; a field that is an empty {@code Optional}, an empty map
- * or an empty list is left out. IDs are strings, and a temporary ID has its {@code $}. Instants are ISO 8601 strings in
- * UTC, dates are ISO 8601 dates, and values are written as schema documents write literals: numbers as JSON numbers
- * (a decimal with every digit and its scale), booleans as {@code true} or {@code false}, and strings, dates and instants
- * as strings. The {@code values} of an entity state or relationship state, written this way, can be used as the
- * {@code values} of a {@code replace} write.
+ * or an empty list is left out, except the {@code values} of a state, which are always written, as {@code {}} when the
+ * state has none. IDs are strings, and a temporary ID has its {@code $}. Instants are ISO 8601 strings in UTC, dates are
+ * ISO 8601 dates, and values are written as schema documents write literals: numbers as JSON numbers (a decimal with
+ * every digit and its scale), booleans as {@code true} or {@code false}, and strings, dates and instants as strings. The
+ * {@code values} of an entity state or relationship state, written this way, can be used as the {@code values} of a
+ * {@code replace} write, whatever the state holds.
  */
 public final class Payloads {
 
@@ -81,6 +83,10 @@ public final class Payloads {
      * attribute is unknown, is not a problem of reading: it is read as a value of its own YAML type, and the validation
      * of the transaction reports it.
      *
+     * <p>An instant, in the period of a write and in the value of an instant attribute, is an ISO 8601 string, such as
+     * {@code 2026-01-01T00:00:00Z}. One with an offset other than UTC, such as {@code 2026-01-01T01:00:00+01:00}, is
+     * accepted and converted to UTC.
+     *
      * <p>A reference that is not a temporary ID becomes an {@code EntityId} or a {@code RelationshipId}, as the payload
      * or the lookup says, and an {@code EntityId} if neither knows it, so that the transaction's validation reports it.
      *
@@ -116,8 +122,9 @@ public final class Payloads {
     }
 
     /**
-     * Writes the state of an entity as JSON: {@code id}, {@code entityType}, {@code values}, {@code period} (with
-     * {@code from} and {@code until}), {@code recordedAt} and {@code recordedBasis}.
+     * Writes the state of an entity as JSON: {@code id}, {@code entityType}, {@code values} (always, as {@code {}} when
+     * the state has none), {@code period} (with {@code from} and {@code until}), {@code recordedAt} and
+     * {@code recordedBasis}.
      *
      * @param state the state
      * @return the JSON text
@@ -128,8 +135,8 @@ public final class Payloads {
 
     /**
      * Writes the state of a relationship as JSON: {@code id}, {@code relationshipType}, {@code source}, {@code target},
-     * {@code values}, {@code period} (with {@code from} and {@code until}), {@code recordedAt} and
-     * {@code recordedBasis}.
+     * {@code values} (always, as {@code {}} when the state has none, as for a relationship type without attributes),
+     * {@code period} (with {@code from} and {@code until}), {@code recordedAt} and {@code recordedBasis}.
      *
      * @param state the state
      * @return the JSON text
@@ -162,8 +169,8 @@ public final class Payloads {
 
     /**
      * Writes a problem as JSON: {@code code}, {@code path}, {@code message}, {@code expected}, {@code found},
-     * {@code hint}, {@code ruleCode} and {@code location} (with {@code pointer}, {@code line} and {@code column}). The
-     * details that the problem does not have are left out.
+     * {@code hint}, {@code location} (with {@code pointer}, {@code line} and {@code column}) and {@code ruleCode}, in
+     * the order of the components of {@link Problem}. The details that the problem does not have are left out.
      *
      * @param problem the problem
      * @return the JSON text

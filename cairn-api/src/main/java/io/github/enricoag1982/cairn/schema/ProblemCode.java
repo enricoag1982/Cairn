@@ -125,7 +125,8 @@ public enum ProblemCode {
     /** A value in a schema document or a transaction payload has the wrong kind, or is written in a form that is not allowed. */
     INVALID_VALUE("A value in a schema document or a transaction payload has the wrong kind, for example a number "
             + "where text is expected, or is written in a form that is not allowed, for example a multiplicity other "
-            + "than 0..1, 1..1, 0..* or 1..*, or an instant that is not ISO 8601 in UTC. The expected and found "
+            + "than 0..1, 1..1, 0..* or 1..*, or an instant that is not ISO 8601 with Z or an offset, such as "
+            + "2026-01-05T09:00:00Z or 2026-01-05T10:00:00+01:00, which is converted to UTC. The expected and found "
             + "details say which. Correct the value; put text that YAML would read as another kind, such as "
             + "\"1.10\" or \"true\", in quotes."),
     /** A write creates an entity of a name that is not an entity type. */

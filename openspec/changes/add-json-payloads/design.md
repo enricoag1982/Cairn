@@ -42,7 +42,7 @@
 ### D4. JSON forms
 
 - Field names follow the Java records; `Optional.empty()` and empty collections are left out; temporary IDs are written with their `$`, as in payloads; IDs whose kind the field does not fix (in a receipt's `temporaryIds`, `created` and `ended`) are written as `{ "entity": "<id>" }` or `{ "relationship": "<id>" }`; `Value`s are written as JSON scalars by type, decimals from `BigDecimal.toPlainString()`.
-- Problems: `{ code, path, message, expected, found, hint, ruleCode, location: { pointer, line, column } }`.
+- Problems: `{ code, path, message, expected, found, hint, location: { pointer, line, column }, ruleCode }`, in the order of the `Problem` record.
 
 ### D5. Generated JSON Schemas
 

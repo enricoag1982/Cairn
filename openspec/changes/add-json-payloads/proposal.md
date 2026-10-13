@@ -26,7 +26,7 @@ Java callers already have this through the generic API of `add-entity-versions` 
 
 ### Modified Capabilities
 
-None.
+- `schema-documents`: instants with an offset are read and converted to UTC, as in payloads
 
 ## Impact
 

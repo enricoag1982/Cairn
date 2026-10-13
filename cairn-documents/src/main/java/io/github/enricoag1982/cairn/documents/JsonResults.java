@@ -24,7 +24,8 @@ import java.util.function.Function;
  * receipts, entity and relationship states, links, steps and problems.
  *
  * <p>The keys of a mapping are the names of the components of the Java record it stands for, in the order of the
- * components. A component that is an empty {@code Optional}, an empty map or an empty list is left out. IDs are strings,
+ * components. A component that is an empty {@code Optional}, an empty map or an empty list is left out, except the
+ * {@code values} of a state, which are always written. IDs are strings,
  * a temporary ID has its {@code $}, and where the kind of an ID is not fixed by the field, in a receipt, it is written as
  * {@code {"entity": "<id>"}} or {@code {"relationship": "<id>"}}. Instants are ISO 8601 strings in UTC, dates are ISO 8601
  * dates, and values are written as {@link DocumentWriter#literal} writes them.
@@ -99,8 +100,8 @@ final class JsonResults {
         problem.expected().ifPresent(expected -> mapping.put("expected", expected));
         problem.found().ifPresent(found -> mapping.put("found", found));
         problem.hint().ifPresent(hint -> mapping.put("hint", hint));
-        problem.ruleCode().ifPresent(ruleCode -> mapping.put("ruleCode", ruleCode));
         problem.location().ifPresent(location -> mapping.put("location", location(location)));
+        problem.ruleCode().ifPresent(ruleCode -> mapping.put("ruleCode", ruleCode));
         return mapping;
     }
 
@@ -124,13 +125,14 @@ final class JsonResults {
         return mapping;
     }
 
-    /** The values in the order of the map, unless there are none. */
+    /**
+     * The values in the order of the map, always: as {@code {}} when there are none, so that the {@code values} of any
+     * state can be used as the {@code values} of a {@code replace} write, which needs them.
+     */
     private static void values(Mapping owner, Map<String, Value> values) {
-        if (!values.isEmpty()) {
-            Mapping mapping = new Mapping();
-            values.forEach((name, value) -> mapping.put(name, DocumentWriter.literal(value)));
-            owner.put("values", mapping);
-        }
+        Mapping mapping = new Mapping();
+        values.forEach((name, value) -> mapping.put(name, DocumentWriter.literal(value)));
+        owner.put("values", mapping);
     }
 
     private static void ids(Mapping owner, String key, List<Id> ids) {

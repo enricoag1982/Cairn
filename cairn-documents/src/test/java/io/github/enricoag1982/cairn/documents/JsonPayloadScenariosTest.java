@@ -10,6 +10,7 @@ import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.documents.PayloadFixtures.ReferenceDomainStore;
@@ -18,6 +19,7 @@ import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Value;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -111,6 +113,59 @@ class JsonPayloadScenariosTest {
         });
     }
 
+    @Test
+    @DisplayName("Scenario: Patching a stored relationship by its ID")
+    void patchingAStoredRelationshipByItsId() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        Receipt ownership = reference.replay(ReferenceStories.rd2Ownership(
+                parties.temporaryIds().get(ReferenceStories.ACME), parties.temporaryIds().get(ReferenceStories.BETA)));
+        RelationshipId owns = (RelationshipId) ownership.temporaryIds().get(ReferenceStories.ACME_OWNS_BETA);
+        String payload = """
+                {
+                  "cairn": 1,
+                  "principal": "agent:onboarding",
+                  "writes": [
+                    { "patch": { "target": "%s", "from": "2026-02-01T00:00:00Z", "set": { "share": 55 } } }
+                  ]
+                }
+                """.formatted(owns.value());
+
+        TransactionPayload read = PayloadFixtures.read(payload, reference.schema(), IdLookup.from(reference.latest()));
+
+        assertThat(read.transaction().writes()).singleElement().isInstanceOfSatisfying(Write.Patch.class, patch -> {
+            assertThat(patch.target()).isEqualTo(owns);
+            assertThat(patch.set()).containsOnlyKeys("share");
+            assertThat(patch.set().get("share")).isInstanceOf(Value.DecimalValue.class)
+                    .isEqualTo(Value.of(new BigDecimal("55")));
+        });
+    }
+
+    @Test
+    @DisplayName("Scenario: A replace without values")
+    void aReplaceWithoutValues() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        EntityId acme = (EntityId) parties.temporaryIds().get(ReferenceStories.ACME);
+        String payload = """
+                {
+                  "cairn": 1,
+                  "principal": "agent:onboarding",
+                  "writes": [
+                    { "replace": { "target": "%s", "from": "2026-02-01T00:00:00Z" } }
+                  ]
+                }
+                """.formatted(acme.value());
+
+        PayloadReadResult result = Payloads.readTransaction(payload, reference.schema(), reference.lookup());
+
+        assertThat(result).isInstanceOf(PayloadReadResult.Invalid.class);
+        assertThat(((PayloadReadResult.Invalid) result).problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.MISSING_KEY);
+            assertThat(problem.path()).isEqualTo("@write.0");
+            assertThat(problem.expected()).contains("the key 'values'");
+            assertThat(problem.location()).contains(locationOf(payload, "{ \"target\"", "/writes/0/replace"));
+        });
+    }
+
     // ------------------------------------------------------------------ problems are located
 
     @Test
@@ -174,6 +229,20 @@ class JsonPayloadScenariosTest {
                     assertThat(replace.target()).isEqualTo(acme);
                     assertThat(replace.values()).isEqualTo(state.values());
                 });
+    }
+
+    @Test
+    @DisplayName("Scenario: A receipt as JSON")
+    void aReceiptAsJson() {
+        String payload = payload(createOrganization("acme", "ACME"));
+        TransactionPayload read = PayloadFixtures.read(payload, reference.schema(), reference.lookup());
+        Receipt receipt = reference.commit(read.transaction());
+        EntityId acme = (EntityId) receipt.temporaryIds().get(new TemporaryId("acme"));
+
+        Object json = DocumentTrees.load(Payloads.toJson(receipt));
+
+        assertThat(DocumentTrees.at(json, "temporaryIds")).isEqualTo(Map.of("$acme", Map.of("entity", acme.value())));
+        assertThat(DocumentTrees.at(json, "created")).isEqualTo(List.of(Map.of("entity", acme.value())));
     }
 
     @Test

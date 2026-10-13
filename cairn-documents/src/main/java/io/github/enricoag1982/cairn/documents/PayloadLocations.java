@@ -21,7 +21,9 @@ import java.util.regex.Pattern;
  * <p>The paths are those that the engine gives the problems of a dry run or a commit:
  *
  * <ul>
- * <li>{@code @transaction} is the root of the payload.
+ * <li>{@code @transaction} is the root of the payload. {@code @transaction.<key>}, such as
+ *     {@code @transaction.principal}, is the top-level key of the payload with that name, which is the pointer
+ *     {@code /<key>}, or the root of the payload if the payload has no such key.
  * <li>{@code @write.<n>} is the write at position {@code n}, counted from 0, which is the pointer {@code /writes/<n>};
  *     {@code @write.<n>.<attribute>} is the key of the attribute in that write's {@code values}, {@code set} or
  *     {@code clear}, or the write if it has none. The engine uses these paths for an entity or relationship that a
@@ -82,6 +84,8 @@ public final class PayloadLocations {
     }
 
     private final DocumentLocation root;
+    /** The top-level keys of the payload, each with the location of the key. */
+    private final Map<String, DocumentLocation> keys;
     private final List<WriteEntry> writes;
     /** Every temporary ID and ID that a write creates, targets or relates. */
     private final Set<String> references = new HashSet<>();
@@ -92,8 +96,9 @@ public final class PayloadLocations {
     /** For the names a create or relate gives its subject, all of them. */
     private final Map<String, Set<String>> sameSubject = new HashMap<>();
 
-    PayloadLocations(DocumentLocation root, List<WriteEntry> writes) {
+    PayloadLocations(DocumentLocation root, Map<String, DocumentLocation> keys, List<WriteEntry> writes) {
         this.root = Objects.requireNonNull(root, "root");
+        this.keys = Map.copyOf(keys);
         this.writes = List.copyOf(writes);
         for (int position = 0; position < this.writes.size(); position++) {
             WriteEntry write = this.writes.get(position);
@@ -136,11 +141,15 @@ public final class PayloadLocations {
      * problem is not considered; see {@link #locate(Problem)}.
      *
      * @param path the path of a problem, such as {@code $acme.name}
-     * @return the location, or empty if the path names no write or attribute of the payload
+     * @return the location, or empty if the path names no write or attribute of the payload; for
+     *         {@code @transaction.<key>}, the location of that top-level key, or the root if the payload has no such key
      */
     public Optional<DocumentLocation> find(String path) {
         if (path.equals(PayloadKeys.TRANSACTION_PATH)) {
             return Optional.of(root);
+        }
+        if (path.startsWith(PayloadKeys.TRANSACTION_KEY_PATH)) {
+            return Optional.of(keys.getOrDefault(path.substring(PayloadKeys.TRANSACTION_KEY_PATH.length()), root));
         }
         String base = withoutMultiplicity(path);
         if (base.startsWith(PayloadKeys.WRITE_PATH)) {
@@ -341,12 +350,13 @@ public final class PayloadLocations {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof PayloadLocations that && root.equals(that.root) && writes.equals(that.writes);
+        return other instanceof PayloadLocations that && root.equals(that.root) && keys.equals(that.keys)
+                && writes.equals(that.writes);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(root, writes);
+        return Objects.hash(root, keys, writes);
     }
 
     @Override

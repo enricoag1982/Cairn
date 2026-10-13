@@ -11,7 +11,9 @@ import java.util.Optional;
  *
  * <p>I-Regexp has no anchors: a pattern matches a value as a whole, and {@code ^} and {@code $} are ordinary
  * characters. Every use of patterns goes through this class: the validator checks patterns and matches examples with
- * it, values will be matched with it at commit, and the JSON Schema export will publish {@link #ecmaScript()}.
+ * it, and values are matched with it at commit. The JSON Schemas that {@code cairn-documents} generates publish the
+ * patterns in ECMAScript, with that module's own translation ({@code EcmaScriptPatterns}), because it does not depend
+ * on this module; tests there check that it equals {@link #ecmaScript()}.
  *
  * <p>The RFC translates an I-Regexp to other engines by replacing every unescaped {@code .} outside a character class
  * with {@code [^\n\r]}, and anchoring the result. Both translations here also write the characters {@code ^} and

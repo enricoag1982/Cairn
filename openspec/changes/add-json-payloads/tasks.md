@@ -24,8 +24,8 @@
 
 ## 5. Drift-review fixes
 
-- [ ] 5.1 Always write a state's `values`; locate `@transaction.<key>` at that top-level key; write problem JSON keys in record order
-- [ ] 5.2 Generated schemas: patterns for dates and instants, and `values` required in `create` and `relate` branches of types with required attributes
-- [ ] 5.3 Javadoc and explanations: instants accept offsets and are converted to UTC (`Payloads`, the `instant` definition of the transactions schema, `INVALID_VALUE`); `Problem.path` with `@write.<n>.<attribute>`; the stale `IRegexp` comment about exporting
-- [ ] 5.4 Tests for the new scenarios (patching a stored relationship by its ID, a replace without values, a receipt as JSON); verify `./gradlew build` passes
-
+- [x] 5.1 Always write a state's `values`; locate `@transaction.<key>` at that top-level key; write problem JSON keys in record order
+- [x] 5.2 Generated schemas: patterns for dates and instants, and `values` required in `create` and `relate` branches of types with required attributes
+- [x] 5.3 Javadoc and explanations: instants accept offsets and are converted to UTC (`Payloads`, the `instant` definition of the transactions schema, `INVALID_VALUE`); `Problem.path` with `@write.<n>.<attribute>`; the stale `IRegexp` comment about exporting
+- [x] 5.4 Tests for the new scenarios (patching a stored relationship by its ID, a replace without values, a receipt as JSON); verify `./gradlew build` passes
+- [ ] 5.5 Widen the date pattern of generated schemas to every form the reader accepts, and say in the published schema-document JSON Schema that instants with an offset are converted to UTC

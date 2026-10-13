@@ -24,7 +24,9 @@ import java.util.Optional;
  * @param path     the element concerned: a type name, or a type name and an attribute, inverse name or rule name joined by a
  *                 dot; {@code @origin} for problems with the origin itself; {@code @document} for problems with a
  *                 schema document as a whole; {@code @transaction} for problems with a transaction payload as a whole,
- *                 and {@code @write.} and a position, counted from 0, for problems with a write of one
+ *                 {@code @transaction.<key>}, such as {@code @transaction.principal}, for problems with one of its
+ *                 top-level keys, and {@code @write.<n>}, with the position {@code n} counted from 0, for problems
+ *                 with a write of one, or {@code @write.<n>.<attribute>} for problems with one of its attributes
  * @param message  a readable explanation
  * @param expected what would have been accepted, for example the form a name must have
  * @param found    what the definition contains instead, for example the offending name

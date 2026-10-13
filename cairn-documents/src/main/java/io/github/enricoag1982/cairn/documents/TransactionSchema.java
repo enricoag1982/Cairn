@@ -23,8 +23,10 @@ import java.util.TreeSet;
  * the two. The schema defines the values of each concrete entity type and each relationship type once, as
  * {@code $defs} named {@code entityValues.<type>} and {@code relationshipValues.<type>}. A {@code create} or
  * {@code relate} is a {@code oneOf} with a branch for each type, which matches the names and aliases of the type, as
- * the schema writes them, in {@code entityType} or {@code relationshipType} and checks {@code values} against the
- * values of the type. The engine also accepts other capitalizations of the names, which the schema does not.
+ * the schema writes them, in {@code entityType} or {@code relationshipType}, checks {@code values} against the
+ * values of the type, and requires {@code values} if the type has required attributes. The engine also accepts other
+ * capitalizations of the names, which the schema does not. Instants, in {@code from} and {@code until}, are checked by
+ * pattern as well as by format, as are the dates and instants among the values.
  *
  * <p>The type of a {@code patch} or {@code replace} is known only to the store, so their values are checked by name
  * only: against the union of the names and aliases of the attributes of all types.
@@ -75,11 +77,13 @@ final class TransactionSchema {
                         .put("minimum", new Plain("0"))
                         .put("maximum", new Plain(Long.toString(Long.MAX_VALUE))))
                 .put("instant", new Mapping()
-                        .put("description", "An instant in ISO 8601 form in UTC, such as 2026-01-01T00:00:00Z. "
-                                + "Microseconds are kept and finer fractions are cut off.")
+                        .put("description", "An instant in ISO 8601 form, such as 2026-01-01T00:00:00Z. An offset "
+                                + "other than Z, such as +01:00, is accepted and converted to UTC. Microseconds are "
+                                + "kept and finer fractions are cut off.")
                         .put("type", "string")
                         .put("format", "date-time")
-                        .put("examples", strings("2026-01-01T00:00:00Z")))
+                        .put("pattern", ValuesSchema.INSTANT_PATTERN)
+                        .put("examples", strings("2026-01-01T00:00:00Z", "2026-01-01T01:00:00+01:00")))
                 .put("reference", new Mapping()
                         .put("description", "A reference to an entity or a relationship: $ and the temporary ID of a "
                                 + "write earlier in this transaction, such as $acme, or an ID.")
@@ -159,7 +163,7 @@ final class TransactionSchema {
         for (EntityType type : types) {
             List<String> own = names(type.name(), type.aliases());
             names.addAll(own);
-            branches.add(branch(type.name(), "entityType", own, entityValues(type.name())));
+            branches.add(branch(type.name(), "entityType", own, entityValues(type.name()), type.attributes()));
         }
         Mapping entityType = new Mapping()
                 .put("description", "The name of a concrete entity type, or one of its aliases.")
@@ -191,7 +195,7 @@ final class TransactionSchema {
         for (RelationshipType type : types) {
             List<String> own = names(type.name(), type.aliases());
             names.addAll(own);
-            branches.add(branch(type.name(), "relationshipType", own, relationshipValues(type.name())));
+            branches.add(branch(type.name(), "relationshipType", own, relationshipValues(type.name()), type.attributes()));
         }
         Mapping relationshipType = new Mapping()
                 .put("description", "The name of a relationship type, or one of its aliases.")
@@ -222,11 +226,16 @@ final class TransactionSchema {
         return mapping;
     }
 
-    /** The branch for a type: when the type is named, the values are the values of the type. */
-    private static Mapping branch(String title, String key, List<String> names, String valuesDefinition) {
+    /**
+     * The branch for a type: when the type is named, the values are the values of the type, and they are there if the
+     * type has required attributes, because a write without {@code values} gives none of them.
+     */
+    private static Mapping branch(
+            String title, String key, List<String> names, String valuesDefinition, List<Attribute> attributes) {
+        boolean valuesRequired = attributes.stream().anyMatch(Attribute::required);
         return new Mapping()
                 .put("title", title)
-                .put("required", strings(key))
+                .put("required", valuesRequired ? strings(key, "values") : strings(key))
                 .put("properties", new Mapping()
                         .put(key, new Mapping().put("enum", strings(names.toArray(String[]::new))))
                         .put("values", ref(valuesDefinition)));

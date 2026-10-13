@@ -21,13 +21,34 @@ import java.util.Optional;
  * attribute: a {@code string}, with {@code enum} for the allowed values, a {@code pattern} translated to ECMAScript
  * ({@link EcmaScriptPatterns}), {@code minLength} and {@code maxLength}; an {@code integer} that fits 32 or 64 bits and
  * lies in the range; a {@code number} for a decimal, in the range; a {@code boolean}; a {@code string} of {@code format}
- * {@code date} or {@code date-time}. JSON Schema cannot order dates, so a range of dates or instants is said in the
- * description only. The description and the examples of the attribute are copied, and a deprecated attribute is marked.
+ * {@code date} or {@code date-time}, which also has a {@code pattern} ({@link #DATE_PATTERN}, {@link #INSTANT_PATTERN}),
+ * because validators need not check formats. JSON Schema cannot order dates, so a range of dates or instants is said in
+ * the description only. The description and the examples of the attribute are copied, and a deprecated attribute is
+ * marked.
  */
 final class ValuesSchema {
 
     /** The dialect of every generated JSON Schema. */
     static final String DIALECT = "https://json-schema.org/draft/2020-12/schema";
+
+    /**
+     * The pattern of a date, in ECMAScript, for validators that do not check {@code format}: four digits of the year,
+     * two of the month and two of the day. Whether the date exists is the reader's to say. The reader, which uses
+     * {@link java.time.LocalDate#parse}, also accepts a year with a sign or with more than four digits, which this
+     * pattern does not.
+     */
+    static final String DATE_PATTERN = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$";
+
+    /**
+     * The pattern of an instant, in ECMAScript, for validators that do not check {@code format}: the date, {@code T},
+     * the time of day with seconds and a fraction of up to nine digits if need be, and {@code Z} or an offset
+     * {@code ±hh:mm}, which the reader converts to UTC. It accepts every string that the reader accepts, which reads
+     * instants with {@link java.time.Instant#parse}: also {@code t} and {@code z}, an offset with seconds, and a year of
+     * four to ten digits with a sign. It also accepts some that the reader does not, such as a date or an offset that
+     * does not exist, or a year of five digits without a sign, which is for the reader to say.
+     */
+    static final String INSTANT_PATTERN = "^[+-]?[0-9]{4,10}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}"
+            + "(\\.[0-9]{0,9})?([Zz]|[+-][0-9]{2}:[0-9]{2}(:[0-9]{2})?)$";
 
     private static final Plain FALSE = new Plain("false");
 
@@ -100,8 +121,8 @@ final class ValuesSchema {
                 mapping.put("type", "number");
                 bounds(mapping, attribute.range(), null, null);
             }
-            case DATE -> mapping.put("type", "string").put("format", "date");
-            case INSTANT -> mapping.put("type", "string").put("format", "date-time");
+            case DATE -> mapping.put("type", "string").put("format", "date").put("pattern", DATE_PATTERN);
+            case INSTANT -> mapping.put("type", "string").put("format", "date-time").put("pattern", INSTANT_PATTERN);
         }
         if (attribute.deprecated()) {
             mapping.putTrue("deprecated");

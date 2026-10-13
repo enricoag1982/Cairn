@@ -239,6 +239,16 @@ class PayloadReadingTest {
             assertThat(onlyCreate(payload).period()).isEqualTo(EffectivePeriod.between(
                     Instant.parse("2026-01-01T10:20:30.123456Z"), Instant.parse("2026-02-01T00:00:00.500Z")));
         }
+
+        @Test
+        void anInstantWithAnOffsetIsConvertedToUtc() {
+            TransactionPayload payload = read(payload("""
+                    { "create": { "entityType": "Organization", "from": "2026-01-01T01:00:00+01:00",
+                        "until": "2026-02-01T00:00:00-02:00", "values": { "name": "ACME" } } }"""), schema);
+
+            assertThat(onlyCreate(payload).period()).isEqualTo(EffectivePeriod.between(
+                    Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2026-02-01T02:00:00Z")));
+        }
     }
 
     @Nested
@@ -389,6 +399,12 @@ class PayloadReadingTest {
                     Map.entry("amount", Value.of(new BigDecimal("7"))),
                     Map.entry("flag", Value.of(true)),
                     Map.entry("day", Value.of(LocalDate.of(1990, 5, 17))),
+                    Map.entry("moment", Value.of(Instant.parse("2026-01-05T09:00:00Z"))));
+        }
+
+        @Test
+        void aValueOfAnInstantAttributeWithAnOffsetIsConvertedToUtc() {
+            assertThat(created("{ \"moment\": \"2026-01-05T10:00:00+01:00\" }")).containsExactly(
                     Map.entry("moment", Value.of(Instant.parse("2026-01-05T09:00:00Z"))));
         }
 
