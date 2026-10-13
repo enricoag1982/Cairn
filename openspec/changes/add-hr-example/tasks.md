@@ -16,5 +16,5 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Update `docs/architecture/README.md` (testing), `AGENTS.md` (repository map) and `README.md`, and bump `last-reviewed`
+- [x] 4.1 Update `docs/architecture/README.md` (testing), `AGENTS.md` (repository map) and `README.md`, and bump `last-reviewed`
 - [ ] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

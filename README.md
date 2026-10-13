@@ -29,6 +29,7 @@ The reasoning behind all of this is in the [API research note](docs/research/202
 - [Decision log](docs/decisions/README.md): what is decided and what is still open
 - [Glossary](docs/glossary.md): the terms used in specs, code and conversation
 - [Reference domain](docs/reference/reference-domain.md): the example model used in scenarios and tests
+- [HR domain](docs/reference/hr-domain.md): a basic HR system built on Cairn, the end-to-end test
 - [Architecture](docs/architecture/README.md): how it is built
 - [Serve a store to AI agents](docs/guides/serve-a-store-to-ai-agents.md): run the agent server and connect Claude Code or another MCP client
 - [Generate Java types](docs/guides/generate-java-types.md): typed access, builders and rules from your schema documents

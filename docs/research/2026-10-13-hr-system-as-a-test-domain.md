@@ -56,6 +56,8 @@ The goal is to test the whole platform on a realistic domain: define the model, 
 
 An HR system fits Cairn's model well: employments on effective time, a hierarchy of units, positions with multiplicities, approvals as data plus Java rules, reporting as queries, and erasure as purges. The test should show this end to end, through schema documents, payloads, generated types, rules, queries, durable stores and purges, and record each gap it hits.
 
+Building the example (change `add-hr-example`) confirmed this: every story's outcome holds, and no bug was found. It also found gaps that were not expected, chiefly that a rule runs only for the one type it is named on, so a change elsewhere can break it unnoticed, that ending an entity does not end the relationships of the targets its compositions end, and that nothing is found by a unique key. The [HR domain page](../reference/hr-domain.md#gaps) lists them all.
+
 Next step: open the change `add-hr-example`, with the model and stories in `docs/reference/hr-domain.md` and the subproject `cairn-example-hr`. The gaps above become candidates for the roadmap's later changes, in the order the example shows they matter.
 
 ## Sources
