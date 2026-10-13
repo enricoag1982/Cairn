@@ -25,7 +25,8 @@ import java.util.stream.Collectors;
 /**
  * Runs the rules that apply to the entities a transaction writes, and turns what they report into problems (design D2,
  * D3 and D4 of {@code add-entity-rules}). It runs in the writer thread, one rule after another, so a slow rule slows
- * the commit. While it runs, the store refuses writes, so a rule cannot commit, run dry or register a schema.
+ * the commit. While it runs, the store refuses writes, so a rule cannot commit, run dry or register a schema; a rule
+ * that tries is reported as failed, also if it catches the refusal and returns.
  *
  * <p>For each entity it takes the effective rules of the entity's type, in the order of the schema, and runs each one
  * for each changed segment, in the order of the timeline. A rule that the store has no code for is reported for the
@@ -70,7 +71,8 @@ final class RuleRunner {
      * Runs the rules of the subjects. A rule that fails for one segment of an entity is not run for its other segments,
      * and a problem that a rule reports for several segments is reported once. Must be called with the writer lock
      * held: while the rules run, the store refuses commits, dry runs and schema registrations with an
-     * {@code IllegalStateException}, which is a failure of the rule that caused it.
+     * {@code IllegalStateException}, which is a failure of the rule that caused it, whether the rule lets the exception
+     * go or catches it.
      *
      * @param subjects the entities whose rules run
      * @return the problems, none if every rule is content
@@ -112,12 +114,15 @@ final class RuleRunner {
     /**
      * Runs a rule for one segment; tells whether it ran to its end. Anything the rule throws is a failure of the rule,
      * except a {@link VirtualMachineError}: when the virtual machine is out of resources, nothing can be said about the
-     * rule, so the error goes on.
+     * rule, so the error goes on. A rule that tried to write has failed too, even if it caught the refusal and returned:
+     * the sequence counts the refused writes, and if the count grew while the rule ran, what the rule reported is
+     * dropped, as for an exception.
      */
     private boolean check(Subject subject, Rules.Registered registered, EntityRule rule, Segment segment,
             Set<Problem> problems) {
         EntityState version = EntityStates.of(source.index(), subject.id(), subject.type().id(), segment).orElseThrow();
         Context context = new Context(source, segment.from());
+        long refusedBefore = sequence.refusedWrites();
         try {
             rule.check(version, context);
         } catch (VirtualMachineError e) {
@@ -127,6 +132,10 @@ final class RuleRunner {
             return false;
         } finally {
             context.close();
+        }
+        if (sequence.refusedWrites() != refusedBefore) {
+            problems.add(wrote(subject, registered.descriptor()));
+            return false;
         }
         for (Reported reported : context.reported) {
             problems.add(problem(subject, registered, reported));
@@ -161,6 +170,13 @@ final class RuleRunner {
                 + e.getClass().getName() + " while checking " + subject.path() + ".",
                 "a rule that checks without an exception", message != null ? message : e.getClass().getName(),
                 "Correct the rule; the transaction is not at fault.");
+    }
+
+    private static Problem wrote(Subject subject, RuleDescriptor rule) {
+        return Problems.of(ProblemCode.RULE_FAILED, subject.path(), "The rule " + name(rule) + " tried to write while "
+                + "checking " + subject.path() + ", and caught the exception that refused the write.",
+                "a rule that only reads", "a write while rules run",
+                "Correct the rule: it must not commit, run a transaction dry or register a schema.");
     }
 
     private static Problem unknownAttribute(Subject subject, RuleDescriptor rule, Reported reported) {

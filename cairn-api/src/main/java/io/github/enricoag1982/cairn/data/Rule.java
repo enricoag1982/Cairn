@@ -18,7 +18,8 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
  *
  * <p>A rule must be thread-safe. A store runs its rules one at a time, in the thread that commits, but stores that are
  * created with the same rule objects, for example from the same settings, call them at the same time from different
- * threads. A rule that keeps no state between calls is thread-safe.
+ * threads. A rule that keeps no state between calls is thread-safe. A rule must not start work on other threads and wait
+ * for it if that work writes to the store: the store holds its writer lock while it runs rules, so that deadlocks.
  *
  * <p>A rule is found by a store when the store is created with it, or through Java's {@link java.util.ServiceLoader},
  * which needs a public class with a public constructor without parameters, or a public static {@code provider()}

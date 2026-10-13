@@ -17,7 +17,14 @@ package io.github.enricoag1982.cairn.data;
  * records it (in a dry run, the time a commit would get), and never a clock.
  *
  * <p>A rule only reads. While rules run, the store refuses to commit, run dry or register a schema, and throws an
- * {@link IllegalStateException} to a rule that tries, for example through a reference to its store.
+ * {@link IllegalStateException} to a rule that tries, for example through a reference to its store. A rule that catches
+ * that exception and returns has still failed: the store notices the refused write, and rejects the transaction with a
+ * problem that names the rule.
+ *
+ * <p>A rule must not start a write on another thread and wait for it. The store holds its writer lock while rules run,
+ * so the other thread waits for the lock and the rule waits for the other thread: that deadlocks, and the store stops
+ * committing. A write on another thread that the rule does not wait for is not refused, but it only runs after the
+ * commit that runs the rule has ended.
  */
 public interface EntityRule extends Rule {
 
@@ -27,7 +34,8 @@ public interface EntityRule extends Rule {
      * <p>The rule reports every problem through {@code context}, with codes that its {@linkplain #descriptor()
      * descriptor} declares only and attributes that the entity's type has only. It does not return a result, and it
      * must not keep {@code context} or any view of it after it returns. It must not write: a commit, a dry run or a
-     * schema registration in the store while the rule runs throws an {@link IllegalStateException}.
+     * schema registration in the store while the rule runs throws an {@link IllegalStateException}, and the rule is
+     * reported as failed even if it catches that exception.
      *
      * <p>An exception or an error that the rule throws rejects the transaction with a problem that names the rule, and
      * so does a report that breaks the rules above. A {@link VirtualMachineError}, such as {@link OutOfMemoryError} or

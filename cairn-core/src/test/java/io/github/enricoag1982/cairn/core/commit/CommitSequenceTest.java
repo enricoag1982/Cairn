@@ -234,6 +234,28 @@ class CommitSequenceTest {
     }
 
     @Test
+    void everyWriteRefusedWhileRulesRunIsCountedEvenIfTheCallerCatchesTheRefusal() {
+        CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
+        assertThatThrownBy(sequence::refusedWrites).isInstanceOf(IllegalStateException.class);
+
+        sequence.underWriterLock(() -> {
+            assertThat(sequence.refusedWrites()).as("nothing refused yet").isZero();
+            sequence.whileRunningRules(() -> {
+                long before = sequence.refusedWrites();
+                assertThatThrownBy(() -> sequence.underWriterLock(() -> "inner"))
+                        .isInstanceOf(IllegalStateException.class);
+                assertThat(sequence.refusedWrites()).as("one refusal").isEqualTo(before + 1);
+                assertThatThrownBy(() -> commit(sequence)).isInstanceOf(IllegalStateException.class);
+                assertThat(sequence.refusedWrites()).as("two refusals").isEqualTo(before + 2);
+                return null;
+            });
+            assertThat(sequence.underWriterLock(() -> "inner")).as("allowed again").isEqualTo("inner");
+            assertThat(sequence.refusedWrites()).as("an allowed write is not counted").isEqualTo(2);
+            return null;
+        });
+    }
+
+    @Test
     void runningRulesNeedsTheWriterLockAndOnlyRefusesTheThreadThatHoldsIt() throws InterruptedException {
         CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
         assertThatThrownBy(() -> sequence.whileRunningRules(() -> "unlocked"))

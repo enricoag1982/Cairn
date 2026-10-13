@@ -20,7 +20,7 @@
 
 - [x] 4.1 Add `Rule context` to `docs/glossary.md` and update `Rule`
 - [x] 4.2 Update `docs/architecture/README.md` and bump `last-reviewed`
-- [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
 
 ## 5. Drift-review fixes
 

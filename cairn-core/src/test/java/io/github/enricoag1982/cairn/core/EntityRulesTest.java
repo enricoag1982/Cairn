@@ -644,6 +644,23 @@ class EntityRulesTest {
         assertThat(problem.path()).isEqualTo("$acme");
         assertThat(problem.message()).contains("store-user").contains("IllegalStateException");
         assertThat(problem.found()).hasValueSatisfying(found -> assertThat(found).contains("must not write"));
+        assertUnchangedAndWorking(reference, before);
+    }
+
+    /**
+     * Checks that a rule that wrote, and caught the refusal, was reported as failed for it, and that the store is
+     * unchanged and still works.
+     */
+    private static void assertCaughtWriteAndUnchanged(ReferenceStore reference, Problem problem, Basis before) {
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_FAILED);
+        assertThat(problem.path()).isEqualTo("$acme");
+        assertThat(problem.message()).contains("store-user").contains("tried to write");
+        assertThat(problem.found()).hasValue("a write while rules run");
+        assertThat(problem.ruleCode()).as("a failure has no rule code").isEmpty();
+        assertUnchangedAndWorking(reference, before);
+    }
+
+    private static void assertUnchangedAndWorking(ReferenceStore reference, Basis before) {
         assertThat(reference.store.latestBasis()).isEqualTo(before);
         assertThat(reference.store.transactions()).isEmpty();
         assertThat(reference.view(on(2, 1)).entities("Organization")).isEmpty();
@@ -693,6 +710,87 @@ class EntityRulesTest {
         assertThat(result).isInstanceOf(DryRunResult.Rejected.class);
         Problem problem = only(((DryRunResult.Rejected) result).problems());
         assertRefusedAndUnchanged(reference, problem, before);
+    }
+
+    @Test
+    void aRuleThatCatchesTheRefusedCommitAndReturnsIsStillReportedAsFailed() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> assertThatThrownBy(() -> store.commit(INNER))
+                .isInstanceOf(IllegalStateException.class));
+        Basis before = reference.store.latestBasis();
+
+        Problem problem = only(reference.reject(createAcme()));
+
+        assertCaughtWriteAndUnchanged(reference, problem, before);
+    }
+
+    @Test
+    void aRuleThatCatchesTheRefusedRegisterAndReturnsIsStillReportedAsFailed() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> assertThatThrownBy(
+                () -> store.schema().register(new Origin("things", "1"),
+                        SchemaDefinition.builder().entityType("Thing").build()))
+                .isInstanceOf(IllegalStateException.class));
+        Basis before = reference.store.latestBasis();
+
+        Problem problem = only(reference.reject(createAcme()));
+
+        assertCaughtWriteAndUnchanged(reference, problem, before);
+    }
+
+    @Test
+    void aRuleThatCatchesTheRefusedDryRunAndReturnsIsStillReportedAsFailedByADryRunToo() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> assertThatThrownBy(() -> store.dryRun(INNER))
+                .isInstanceOf(IllegalStateException.class));
+        Basis before = reference.store.latestBasis();
+
+        DryRunResult result = reference.store.dryRun(createAcme());
+
+        assertThat(result).isInstanceOf(DryRunResult.Rejected.class);
+        assertCaughtWriteAndUnchanged(reference, only(((DryRunResult.Rejected) result).problems()), before);
+    }
+
+    @Test
+    void aRuleThatCatchesTheRefusalIsNotRunForTheOtherSegmentsAndItsReportsAreDropped() {
+        AtomicReference<Store> self = new AtomicReference<>();
+        List<EntityState> calls = new ArrayList<>();
+        TestEntityRule rule = TestEntityRule.of("store-user", "Organization", (version, context) -> {
+            calls.add(version);
+            context.problem("early", "Reported before the write.");
+            assertThatThrownBy(() -> self.get().commit(INNER)).isInstanceOf(IllegalStateException.class);
+            context.problem("late", "Reported after the write.");
+        }, "early", "late");
+        ReferenceStore reference = storeWith(rule);
+        self.set(reference.store);
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME"))
+                .patch(ACME, from(3, 1), values("name", "ACME Two")).build());
+
+        assertThat(only(problems).code()).isEqualTo(ProblemCode.RULE_FAILED);
+        assertThat(calls).as("the rule is not run for the entity's other segments").hasSize(1);
+    }
+
+    @Test
+    void aRuleWhoseRefusedWriteIsCaughtDoesNotSuppressTheProblemsOfOtherRulesOrEntities() {
+        ReferenceStore reference = storeWhoseRuleDoes(store -> assertThatThrownBy(() -> store.commit(INNER))
+                .isInstanceOf(IllegalStateException.class));
+        Basis before = reference.store.latestBasis();
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .create(ACME, "Organization", from(1, 1), values("name", "ACME", "lei", LEI_WRONG_CHECK_DIGITS))
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma", "lei", "HWUPKR0MPOU8FGXBT393"))
+                .build());
+
+        assertThat(problems).extracting(Problem::code, Problem::path).containsExactlyInAnyOrder(
+                tuple(ProblemCode.RULE_FAILED, "$acme"),
+                tuple(ProblemCode.RULE_VIOLATION, "$acme.lei"),
+                tuple(ProblemCode.RULE_VIOLATION, "$gamma.lei"));
+        assertThat(problems).filteredOn(problem -> problem.code() == ProblemCode.RULE_VIOLATION)
+                .extracting(problem -> problem.ruleCode().orElseThrow())
+                .containsOnly("lei-checksum/invalid-check-digits");
+        assertThat(problems.getLast().path()).as("entity by entity, in the order of the transaction")
+                .isEqualTo("$gamma.lei");
+        assertThat(reference.store.latestBasis()).isEqualTo(before);
+        assertThat(reference.store.transactions()).isEmpty();
     }
 
     @Test

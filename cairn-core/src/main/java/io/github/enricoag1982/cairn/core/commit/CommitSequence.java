@@ -30,7 +30,8 @@ import java.util.function.Supplier;
  *
  * <p>While the writer {@linkplain #whileRunningRules(Supplier) runs rules}, the sequence refuses all writers: a rule
  * must not write, and the writer lock is reentrant, so without this a rule that holds the store could commit inside a
- * commit.
+ * commit. The sequence {@linkplain #refusedWrites() counts} the writes it refuses, so that the writer can tell that a
+ * rule tried to write even if the rule caught the exception and returned.
  *
  * <p>Transaction times have microsecond precision and strictly increase, even if the clock stands still or goes back.
  */
@@ -58,6 +59,8 @@ public final class CommitSequence {
     private Instant lastTime;
     /** Tells whether the writer is running rules; guarded by the writer lock. */
     private boolean runningRules;
+    /** The number of writes refused while rules ran; guarded by the writer lock, as only the lock's holder is refused. */
+    private long refusedWrites;
     private volatile Basis latest = Basis.NONE;
 
     /**
@@ -82,6 +85,7 @@ public final class CommitSequence {
         writerLock.lock();
         try {
             if (runningRules) {
+                refusedWrites++;
                 throw new IllegalStateException("The store is running rules, and a rule must not write: commits, dry "
                         + "runs and schema registrations are refused until the rules have returned.");
             }
@@ -95,7 +99,8 @@ public final class CommitSequence {
      * Runs an action in which the writer runs rules. While it runs, {@link #underWriterLock(Supplier)} throws an
      * {@code IllegalStateException} in the writer thread, so that a commit, a dry run or a schema registration that a
      * rule starts fails. Other threads wait for the writer lock as before. Reads are not affected: they take no lock.
-     * The refusal ends when the action returns or throws.
+     * The refusal ends when the action returns or throws. Each refusal is {@linkplain #refusedWrites() counted}, whether
+     * or not the rule that caused it catches the exception.
      *
      * @param action what to do while the rules run
      * @param <T>    the type of the result
@@ -111,6 +116,20 @@ public final class CommitSequence {
         } finally {
             runningRules = before;
         }
+    }
+
+    /**
+     * Returns the number of writes that {@link #underWriterLock(Supplier)} refused because rules were running, since the
+     * sequence was created. Only the thread that holds the writer lock can be refused, so a writer that reads the count
+     * before and after a rule runs, and finds that it grew, knows that the rule tried to write, whatever the rule did
+     * with the exception.
+     *
+     * @return the number of refused writes; it never decreases
+     * @throws IllegalStateException if the caller does not hold the writer lock
+     */
+    public long refusedWrites() {
+        requireWriterLock();
+        return refusedWrites;
     }
 
     /**
