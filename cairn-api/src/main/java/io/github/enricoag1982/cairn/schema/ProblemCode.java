@@ -5,8 +5,9 @@ import java.util.Objects;
 /**
  * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and
  * {@code schema-evolution}), for the reasons a schema document (capability {@code schema-documents}) or a transaction
- * payload (capability {@code json-payloads}) cannot be read, and for the reasons a data transaction is rejected
- * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}).
+ * payload (capability {@code json-payloads}) cannot be read, for the reasons a data transaction is rejected
+ * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}), and for
+ * the reasons a request of an AI agent is refused (capability {@code agent-tools}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -263,7 +264,17 @@ public enum ProblemCode {
             + "period so that they no longer overlap, or patch the existing relationship instead."),
     /** A write refers to an ID that no relationship has. */
     UNKNOWN_RELATIONSHIP("A write patches, replaces or end-dates a relationship that does not exist, by an ID that no "
-            + "relationship of the store has. Correct the ID, or relate the entities first.");
+            + "relationship of the store has. Correct the ID, or relate the entities first."),
+    /** The approval policy of the store denies an operation that an agent asked for. */
+    APPROVAL_DENIED("The approval policy of the store denies this kind of operation to agents, such as registering a "
+            + "schema or committing a transaction, so the request is refused and nothing is recorded. The message "
+            + "names the operation. Ask a person to change the policy or to make the change, or work with the "
+            + "operations that the policy allows."),
+    /** A transaction payload names another principal than the adapter that submits it acts as. */
+    PRINCIPAL_MISMATCH("An adapter records its own principal on every transaction it submits, so a payload may name "
+            + "only that principal; one that names another is refused and nothing is recorded. The expected details "
+            + "give the principal of the adapter. Set the principal of the payload to it, and name the party you act "
+            + "for in onBehalfOf, if there is one.");
 
     private final String explanation;
 

@@ -16,8 +16,12 @@ import java.util.TreeMap;
  * name or rule name joined by a dot; and {@code @origin}. A type is located at its key under {@code traits},
  * {@code entityTypes} or {@code relationshipTypes}, an attribute at its key under {@code attributes}, an inverse name
  * at the key {@code inverseName}, a rule at its entry in {@code rules} and the origin at the key {@code origin}.
- * Paths match without regard to case, as names do. A path that matches no element is located at the root of the
- * document.
+ * Paths match without regard to case, as names do.
+ *
+ * <p>A problem about an element that the document does not have, such as an attribute that a new version of the
+ * document removes, is located at the closest enclosing element that the document has: {@code Address.street} at
+ * {@code Address}. A problem whose path names no part of the document, or no element at all (a path that starts with
+ * {@code @}, such as {@code @document}), is located at the root of the document.
  */
 public final class DocumentLocations {
 
@@ -49,7 +53,7 @@ public final class DocumentLocations {
     }
 
     /**
-     * Locates a path.
+     * Locates a path exactly.
      *
      * @param path the path of an element, compared without regard to case
      * @return the location of the element, or the root of the document if there is no such element
@@ -59,17 +63,40 @@ public final class DocumentLocations {
     }
 
     /**
-     * Locates a problem by its path. A problem that is located already is returned as it is.
+     * Locates a problem by its path. A problem about an element that the document does not have is located at the
+     * closest enclosing element that it has, and at the root if no part of the path is in the document. A problem that
+     * is located already is returned as it is.
      *
      * @param problem the problem
      * @return the located problem
      */
     public Problem locate(Problem problem) {
-        return problem.location().isPresent() ? problem : problem.at(of(problem.path()));
+        return problem.location().isPresent() ? problem : problem.at(enclosing(problem.path()));
     }
 
     /**
-     * Locates problems by their paths. Problems that are located already are returned as they are.
+     * The location of an element, or of the closest element around it that the document has: the path without its
+     * last part, and so on. A path that starts with {@code @} is not shortened: it names the origin or the document,
+     * not a type.
+     */
+    private DocumentLocation enclosing(String path) {
+        String candidate = path;
+        while (true) {
+            Optional<DocumentLocation> found = find(candidate);
+            if (found.isPresent()) {
+                return found.get();
+            }
+            int dot = candidate.lastIndexOf('.');
+            if (candidate.startsWith("@") || dot <= 0) {
+                return root;
+            }
+            candidate = candidate.substring(0, dot);
+        }
+    }
+
+    /**
+     * Locates problems by their paths, as {@link #locate(Problem)} does. Problems that are located already are
+     * returned as they are.
      *
      * @param problems the problems
      * @return the located problems, in the same order

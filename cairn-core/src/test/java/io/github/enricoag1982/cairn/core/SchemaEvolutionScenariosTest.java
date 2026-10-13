@@ -14,6 +14,7 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
@@ -36,7 +37,9 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaPlan;
 import io.github.enricoag1982.cairn.schema.SchemaChange;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
+import io.github.enricoag1982.cairn.schema.SchemaTransaction;
 import io.github.enricoag1982.cairn.schema.StoredDefinition;
+import io.github.enricoag1982.cairn.schema.Submission;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import io.github.enricoag1982.cairn.schema.ValueType;
@@ -736,6 +739,70 @@ class SchemaEvolutionScenariosTest {
         assertThat(registry.storedDefinition("crm")).contains(new StoredDefinition(new Origin("crm", "2.0.0"), crm));
         assertThat(registry.storedDefinition("reference-model").orElseThrow().definition())
                 .isEqualTo(ReferenceModel.definition());
+    }
+
+    // ------------------------------------------------------------------ who and why
+
+    @Test
+    @DisplayName("Scenario: An agent's schema change in the history")
+    void anAgentsSchemaChangeInTheHistory() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        clock.advance(Duration.ofMinutes(1));
+
+        applied(registry.register(ReferenceModel.origin("1.1.0"), withEmail(),
+                new Submission("agent:modeler", Optional.empty(), Optional.of("Contact data"))));
+
+        assertThat(registry.history()).hasSize(2);
+        SchemaTransaction change = registry.history().getLast();
+        assertThat(change.origin()).isEqualTo(ReferenceModel.origin("1.1.0"));
+        assertThat(change.principal()).isEqualTo("agent:modeler");
+        assertThat(change.reason()).contains("Contact data");
+        assertThat(change.onBehalfOf()).isEmpty();
+    }
+
+    @Test
+    void aRegistrationThatNamesNoPrincipalIsRecordedAsUnknown() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+
+        assertThat(registry.history()).singleElement().satisfies(transaction -> {
+            assertThat(transaction.principal()).isEqualTo("@unknown");
+            assertThat(transaction.onBehalfOf()).isEmpty();
+            assertThat(transaction.reason()).isEmpty();
+        });
+    }
+
+    @Test
+    void aSubmissionRecordsThePartyTheAgentActsFor() {
+        applied(registry.register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition(),
+                new Submission("agent:modeler", Optional.of("alice"), Optional.of("Initial model"))));
+
+        assertThat(registry.history()).singleElement().satisfies(transaction -> {
+            assertThat(transaction.principal()).isEqualTo("agent:modeler");
+            assertThat(transaction.onBehalfOf()).contains("alice");
+            assertThat(transaction.reason()).contains("Initial model");
+        });
+    }
+
+    @Test
+    void aRegistrationThatIsNotAppliedRecordsNothing() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        Submission agent = Submission.by("agent:modeler");
+
+        unchanged(registry.register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition(), agent));
+        rejected(registry.register(ReferenceModel.origin("1.0.1"), withoutBirthDate(), agent));
+
+        assertThat(registry.history()).singleElement().satisfies(transaction ->
+                assertThat(transaction.principal()).isEqualTo("@unknown"));
+    }
+
+    @Test
+    void aRegistrationWithoutASubmissionIsRejected() {
+        assertThatThrownBy(() -> registry.register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition(), null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    private static SchemaDefinition withoutBirthDate() {
+        return changeEntityType(ReferenceModel.definition(), "Person", type -> withAttributes(type, List.of()));
     }
 
     // ------------------------------------------------------------------ a store's schema registry

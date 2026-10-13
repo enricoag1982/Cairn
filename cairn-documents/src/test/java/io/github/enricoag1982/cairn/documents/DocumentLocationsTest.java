@@ -14,6 +14,7 @@ import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import java.io.IOException;
 import java.time.InstantSource;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** Locating the problems that the engine reports for the definition of a document (design D4). */
@@ -123,6 +124,7 @@ class DocumentLocationsTest {
     }
 
     @Test
+    @DisplayName("Scenario: Locating a removed attribute")
     void aRejectedRegistrationIsLocatedToo() throws IOException {
         SchemaDocument first = valid(Documents.referenceModelText());
         registry.register(first.origin(), first.definition());
@@ -137,9 +139,55 @@ class DocumentLocationsTest {
         assertThat(problems).singleElement().satisfies(problem -> {
             assertThat(problem.code()).isEqualTo(ProblemCode.BREAKING_CHANGE);
             assertThat(problem.path()).isEqualTo("Address.street");
-            // The attribute is gone from the new document, so the problem is located at the root.
-            assertThat(problem.location()).contains(second.locations().root());
+            // The attribute is gone from the new document, so the problem is located at the type it was in.
+            assertThat(problem.location()).contains(at(text, "/entityTypes/Address", "Address:"));
+            assertThat(problem.location().orElseThrow().pointer()).isEqualTo("/entityTypes/Address");
         });
+    }
+
+    @Test
+    void aPathOfAnElementTheDocumentLacksIsLocatedAtTheClosestEnclosingElementItHas() {
+        SchemaDocument document = valid(document(
+                "entityTypes:",
+                "  Account:",
+                "    attributes:",
+                "      number: { type: string }"));
+
+        List<Problem> located = document.locate(List.of(
+                new Problem(ProblemCode.BREAKING_CHANGE, "Account.balance", "Removed attribute."),
+                new Problem(ProblemCode.BREAKING_CHANGE, "account.NUMBER", "Present attribute."),
+                new Problem(ProblemCode.BREAKING_CHANGE, "Account.number.nothing", "Below an attribute."),
+                new Problem(ProblemCode.BREAKING_CHANGE, "Account", "Present type.")));
+
+        assertThat(located).map(problem -> problem.location().orElseThrow().pointer()).containsExactly(
+                "/entityTypes/Account", "/entityTypes/Account/attributes/number",
+                "/entityTypes/Account/attributes/number", "/entityTypes/Account");
+        assertThat(located.get(0).location()).contains(new DocumentLocation("/entityTypes/Account", 4, 3));
+    }
+
+    @Test
+    void aPathWithNoPartInTheDocumentIsLocatedAtTheRoot() {
+        SchemaDocument document = valid(document("entityTypes:", "  Account: {}"));
+
+        List<Problem> located = document.locate(List.of(
+                new Problem(ProblemCode.BREAKING_CHANGE, "Party.name", "Removed type."),
+                new Problem(ProblemCode.BREAKING_CHANGE, "Party", "Removed type.")));
+
+        assertThat(located).allSatisfy(problem -> assertThat(problem.location()).contains(document.locations().root()));
+    }
+
+    @Test
+    void aPathThatNamesNoElementIsNotShortened() {
+        SchemaDocument document = valid(document("entityTypes:", "  Account: {}"));
+
+        List<Problem> located = document.locate(List.of(
+                new Problem(ProblemCode.INVALID_NAME, "@document", "Outside every element."),
+                new Problem(ProblemCode.INVALID_NAME, "@transaction.principal", "Not a document path."),
+                new Problem(ProblemCode.INVALID_ORIGIN, "@origin", "The origin.")));
+
+        assertThat(located.get(0).location()).contains(document.locations().root());
+        assertThat(located.get(1).location()).contains(document.locations().root());
+        assertThat(located.get(2).location()).contains(new DocumentLocation("/origin", 2, 1));
     }
 
     @Test

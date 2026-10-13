@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,7 @@ public final class InMemoryStore implements Store {
     private final CopyOnWriteArrayList<TransactionRecord> records = new CopyOnWriteArrayList<>();
     private final ValueChecks checks = new ValueChecks();
     private final Rules rules;
+    private final List<RuleDescriptor> declaredRules;
     /** The idempotency keys of committed transactions; guarded by the writer lock. */
     private final Map<String, Keyed> keys = new HashMap<>();
     /** The ID generator of the store, for entities and relationships alike; guarded by the writer lock. */
@@ -86,11 +88,19 @@ public final class InMemoryStore implements Store {
         List<RuleDescriptor> available = new ArrayList<>(this.rules.descriptors());
         available.addAll(declaredRules);
         this.registry = new InMemorySchemaRegistry(sequence, available);
+        this.declaredRules = declaredRules.stream()
+                .sorted(Comparator.comparing(RuleDescriptor::name).thenComparingInt(RuleDescriptor::version))
+                .toList();
     }
 
     @Override
     public SchemaRegistry schema() {
         return registry;
+    }
+
+    @Override
+    public List<RuleDescriptor> declaredRules() {
+        return declaredRules;
     }
 
     @Override

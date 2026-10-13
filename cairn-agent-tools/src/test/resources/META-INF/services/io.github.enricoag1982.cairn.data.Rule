@@ -1,0 +1,2 @@
+# The rule that CairnAgentServerTest finds on the class path, as the server finds the rules of a jar.
+io.github.enricoag1982.cairn.agents.LeadHasSourceRule

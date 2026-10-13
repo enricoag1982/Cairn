@@ -16,6 +16,7 @@ import io.github.enricoag1982.cairn.schema.SchemaPlan;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.SchemaTransaction;
 import io.github.enricoag1982.cairn.schema.StoredDefinition;
+import io.github.enricoag1982.cairn.schema.Submission;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import java.time.Instant;
 import java.time.InstantSource;
@@ -124,16 +125,17 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     }
 
     @Override
-    public RegistrationResult register(Origin origin, SchemaDefinition definition) {
+    public RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission) {
         Objects.requireNonNull(origin, "origin");
         Objects.requireNonNull(definition, "definition");
+        Objects.requireNonNull(submission, "submission");
         return sequence.underWriterLock(() -> {
             State current = state;
             Planned planned = plan(current, origin, definition);
             return switch (planned.plan().outcome()) {
                 case REJECT -> new RegistrationResult.Rejected(planned.plan().problems());
                 case UNCHANGED -> new RegistrationResult.Unchanged(current.schema());
-                case APPLY -> apply(current, origin, planned);
+                case APPLY -> apply(current, origin, submission, planned);
             };
         });
     }
@@ -148,13 +150,14 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
      * Records an accepted registration as a schema transaction. Called with the writer lock held. The new state is
      * in place before the commit is published, so whoever learns of the basis finds the schema.
      */
-    private RegistrationResult apply(State current, Origin origin, Planned planned) {
+    private RegistrationResult apply(State current, Origin origin, Submission submission, Planned planned) {
         SchemaCompiler.Result compiled = planned.compiled();
         CommitSequence.Commit commit = sequence.next();
         Basis basis = commit.basis();
         Instant time = commit.transactionTime();
         List<SchemaTransaction> history = new ArrayList<>(current.history());
-        history.add(new SchemaTransaction(basis, time, origin, compiled.schema()));
+        history.add(new SchemaTransaction(basis, time, origin, compiled.schema(), submission.principal(),
+                submission.onBehalfOf(), submission.reason()));
         state = new State(compiled.schema(), Map.copyOf(planned.origins()), List.copyOf(history), compiled.nextId());
         sequence.publish(commit);
         return new RegistrationResult.Applied(time, basis, compiled.schema());

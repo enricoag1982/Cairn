@@ -111,6 +111,21 @@ class StoresTest {
     }
 
     @Test
+    void aStoreListsTheRulesItDeclaresWithoutCode() {
+        RuleDescriptor lei = ReferenceModel.rules().getFirst();
+        RuleDescriptor ownership = ReferenceModel.rules().getLast();
+
+        Store declared = Stores.inMemory(StoreSettings.builder().declaredRules(List.of(ownership, lei)).build());
+        Store withCode = Stores.inMemory(ReferenceStore.referenceSettings().build());
+
+        assertThat(declared.declaredRules()).containsExactly(lei, ownership);
+        assertThat(declared.schema().availableRules()).containsExactly(lei, ownership);
+        assertThat(withCode.declaredRules()).isEmpty();
+        assertThat(withCode.schema().availableRules()).containsExactly(lei, ownership);
+        assertThat(Stores.inMemory().declaredRules()).isEmpty();
+    }
+
+    @Test
     void aNewStoreIsEmpty() {
         Store store = Stores.inMemory();
 

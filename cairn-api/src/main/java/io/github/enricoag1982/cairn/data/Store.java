@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.data;
 
 import io.github.enricoag1982.cairn.schema.Basis;
+import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import java.util.List;
 
@@ -61,6 +62,18 @@ public interface Store {
      * @return the basis; {@link Basis#NONE} if nothing was committed
      */
     Basis latestBasis();
+
+    /**
+     * Lists the rules that the store declares without having their code: types of the store's schema may name them,
+     * but a transaction that writes an entity or a relationship whose type names one is rejected with the problem
+     * {@code RULE_UNAVAILABLE} (capability {@code entity-rules}). With the rules of
+     * {@code schema().availableRules()} that are not listed here, which the store runs, it tells a tool which rules
+     * have code.
+     *
+     * @return the descriptors of the declared rules, sorted by name and then by version; empty if every available rule
+     *         has code
+     */
+    List<RuleDescriptor> declaredRules();
 
     /**
      * Lists the committed data transactions with their principal, party acted for and reason, together with their basis

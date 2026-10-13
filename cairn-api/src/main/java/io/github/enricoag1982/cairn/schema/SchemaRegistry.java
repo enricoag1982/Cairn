@@ -14,23 +14,43 @@ import java.util.Optional;
 public interface SchemaRegistry {
 
     /**
-     * Registers the complete set of types of an origin.
-     *
-     * <p>The definition is validated together with the types of the other origins. A valid definition that changes
-     * the stored schema compatibly is applied as a schema transaction. A definition equal to the stored one, or an
-     * older version of the origin that the stored definition evolved from compatibly, leaves the schema unchanged.
-     * Anything else is rejected with every problem found.
+     * Registers the complete set of types of an origin, without saying who submits it: the schema transaction is
+     * recorded with the principal {@value Submission#UNKNOWN_PRINCIPAL}. This is
+     * {@code register(origin, definition, Submission.unknown())}.
      *
      * @param origin     the origin, with its version
      * @param definition all types of the origin
      * @return the outcome
      * @throws IllegalStateException if the registry is the registry of a store, and a rule of that store calls this
      *                               while the store runs rules: a rule must not write
+     * @see #register(Origin, SchemaDefinition, Submission)
      */
-    RegistrationResult register(Origin origin, SchemaDefinition definition);
+    default RegistrationResult register(Origin origin, SchemaDefinition definition) {
+        return register(origin, definition, Submission.unknown());
+    }
 
     /**
-     * Finds out what {@link #register(Origin, SchemaDefinition)} would do with the same arguments, without doing it.
+     * Registers the complete set of types of an origin, for a principal.
+     *
+     * <p>The definition is validated together with the types of the other origins. A valid definition that changes
+     * the stored schema compatibly is applied as a schema transaction, which records the submission's principal, the
+     * party it acts for and its reason, and lists them in the {@linkplain #history() history}. A definition equal to
+     * the stored one, or an older version of the origin that the stored definition evolved from compatibly, leaves the
+     * schema unchanged. Anything else is rejected with every problem found. A registration that is not applied records
+     * nothing.
+     *
+     * @param origin     the origin, with its version
+     * @param definition all types of the origin
+     * @param submission who submits the registration, for whom and why
+     * @return the outcome
+     * @throws IllegalStateException if the registry is the registry of a store, and a rule of that store calls this
+     *                               while the store runs rules: a rule must not write
+     */
+    RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission);
+
+    /**
+     * Finds out what {@link #register(Origin, SchemaDefinition, Submission)} would do with the same arguments, without
+     * doing it.
      *
      * <p>The plan lists every difference from the stored definition of the origin, each classified as compatible or
      * breaking, and every problem that registering would report. It shares its code with registration, so both agree.
@@ -46,7 +66,7 @@ public interface SchemaRegistry {
     SchemaPlan plan(Origin origin, SchemaDefinition definition);
 
     /**
-     * Validates a definition as {@link #register(Origin, SchemaDefinition)} would, without checking compatibility
+     * Validates a definition as {@link #register(Origin, SchemaDefinition, Submission)} would, without checking compatibility
      * and without changing anything.
      *
      * @param origin     the origin, with its version
@@ -99,7 +119,8 @@ public interface SchemaRegistry {
     Schema asOf(Instant transactionTime);
 
     /**
-     * Lists every applied schema transaction.
+     * Lists every applied schema transaction, with the principal, the party acted for and the reason of its
+     * registration.
      *
      * @return the transactions, oldest first
      */
