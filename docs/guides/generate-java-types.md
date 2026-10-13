@@ -11,8 +11,8 @@ Types without generated code, such as those an agent registers at runtime, stay 
 
 ## What you get
 
-For each entity type, trait and relationship type, a *generated type*: an interface with an accessor per attribute, which extends the interfaces of its supertype and its traits.
-For the [reference domain](../reference/reference-model.cairn.yaml), `Person` extends `Party`, which extends `Named`:
+For each entity type, trait and relationship type, a *generated type*: an interface with an accessor per attribute, which extends the interfaces of its supertype and its traits. Entity and relationship types also get a *snapshot record* and builders.
+For the [reference domain's schema document](../reference/reference-model.cairn.yaml), `Person` extends `Party`, which extends `Named`:
 
 ```java
 public interface Person extends Party {
@@ -42,6 +42,12 @@ plugins {
     id("io.github.enricoag1982.cairn.types")
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)    // cairn-api, and so the generated code, needs Java 25
+    }
+}
+
 repositories {
     mavenCentral()    // for the generator's own dependencies, such as SnakeYAML and RE2/J
 }
@@ -57,8 +63,8 @@ dependencies {
 }
 ```
 
-The task `generateCairnTypes` writes the types to `build/generated/sources/cairn/java/main` before `compileJava`, and is up to date while the documents and the package stay the same.
-The generator runs on Java 25 in a process of its own, whatever Java runs Gradle, so the build needs a Java 25 toolchain.
+The task `generateCairnTypes` writes the types to `build/generated/sources/cairn/java/main` before `compileJava`, and is up to date while the documents, the package, the generator and its Java stay the same.
+The generator runs on Java 25 in a process of its own, whatever Java runs Gradle. The project's own code needs Java 25 too, because `cairn-api` does, hence the toolchain above.
 A document with problems fails the build, and each problem is reported with the document, line and column.
 
 > [!NOTE]
@@ -119,7 +125,7 @@ public final class LeiChecksum extends LeiChecksumRuleV1 {
 
     @Override
     protected void check(Organization organization, RuleContext context) {
-        organization.lei().filter(lei -> !validCheckDigits(lei)).ifPresent(lei ->
+        organization.lei().filter(lei -> !validCheckDigits(lei))    // validCheckDigits is yours to write.ifPresent(lei ->
                 context.problem("invalid-check-digits", "lei", "The check digits of the LEI " + lei + " are wrong."));
     }
 }
@@ -132,7 +138,7 @@ A rule that several types name is generated for their closest common supertype.
 ## Names
 
 Generated names are the names in the documents.
-A name that is a Java keyword, or that clashes with a member the generated code adds (such as `id`, `from` or `entityState`), gets the suffix `_`: an attribute `default` has the accessor `default_()`.
+A name that would not compile or would clash with what the generated code adds gets the suffix `_`: an attribute `default` has the accessor `default_()`, and an attribute `id` the accessor `id_()`. The `java-types` spec has the full rule.
 
 ## Limits
 

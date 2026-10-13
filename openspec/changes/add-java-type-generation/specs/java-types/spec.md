@@ -79,7 +79,7 @@ Every rule that the documents name SHALL get an abstract base class per name and
 
 ### Requirement: Names in Java
 
-Generated names SHALL be the names in the documents. A name that is a Java keyword, or the name of a member that generated code adds to a type itself, SHALL get the suffix `_`. Generated code SHALL compile whatever the names of the types, including names of Java library types.
+Generated names SHALL be the names in the documents. A name that would not compile or would clash SHALL get the suffix `_`, repeated until it clashes with nothing: Java keywords, restricted identifiers and the literals `true`, `false` and `null`; for attributes also the methods of `Object`, the simple names of library types that generated code uses, and the names of members that generated code adds to types and builders; and rule base class names that equal type names. Generated code SHALL compile whatever the names of the types, including names of Java library types.
 
 #### Scenario: An attribute named like a Java keyword
 
@@ -118,6 +118,11 @@ THE SYSTEM SHALL provide a Gradle plugin that, in a Java project, generates the 
 
 - **WHEN** the project is built again without changes
 - **THEN** the generation is up to date
+
+#### Scenario: Gradle on an older Java
+
+- **WHEN** the project is built with Gradle running on a Java older than 25
+- **THEN** the types are generated, and the build succeeds
 
 #### Scenario: A document with problems fails the build
 

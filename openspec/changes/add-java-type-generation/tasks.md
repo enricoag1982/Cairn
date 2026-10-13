@@ -8,7 +8,7 @@
 
 ## 2. Generator
 
-- [x] 2.1 Generate interfaces, snapshots and `from` for traits, entity types and relationship types (D3)
+- [x] 2.1 Generate interfaces, snapshot records and `from` for traits, entity types and relationship types (D3)
 - [x] 2.2 Generate the builders (D3)
 - [x] 2.3 Generate the rule base classes (D3)
 - [x] 2.4 Map names to Java (D4)
