@@ -17,6 +17,12 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
  * state. Anything that is not in the version it checks, it reads through its {@link RuleContext}. Java cannot enforce
  * this, so tests should run every rule against every storage implementation.
  *
+ * <p>A rule runs when a transaction changes the values of what it checks, and again when a transaction changes what the
+ * rule read the last time it checked a version (ADR-0025): the store records what a rule reads through its
+ * {@link RuleContext}, and runs the rule again for that version, which is called a re-check. So a rule is named only by
+ * the type it checks, however far from that type the data it reads is, and it has to read what its verdict depends on
+ * through its context and nowhere else. See {@link RuleContext}.
+ *
  * <p>A rule must be thread-safe. A store runs its rules one at a time, in the thread that commits, but stores that are
  * created with the same rule objects, for example from the same settings, call them at the same time from different
  * threads. A rule that keeps no state between calls is thread-safe. A rule must not start work on other threads and wait

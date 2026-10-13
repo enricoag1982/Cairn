@@ -39,7 +39,7 @@ A read at an effective time is hit by a change whose periods contain that time; 
 
 ### D3. The index of reads
 
-The store keeps, for each entity or relationship and each rule with code that its type names, a list of *checks*: the effective period that one run of the rule covered, and its reads. An inverse map leads from each key to the checks that read it. The index is writer-only state, beside the latest timelines; views and readers never see it.
+The store keeps, for each entity or relationship and each rule with code that its type names, a list of *checks*: the effective period that one run of the rule covered, which later writes can cut into several parts, and its reads. An inverse map leads from each key to the checks that read it. The index is writer-only state, beside the latest timelines; views and readers never see it.
 
 - A run of a rule for a version records a check for that version's period, replacing the parts of older checks of the same entity or relationship and rule that it overlaps.
 - A write that changes or ends part of a timeline removes that part from the periods of older checks; a check whose period becomes empty is dropped.

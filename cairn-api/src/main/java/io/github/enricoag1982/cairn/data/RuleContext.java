@@ -12,8 +12,20 @@ import java.time.Instant;
  * get; in a dry run, or if the transaction is rejected, that basis later names another commit, so a rule must not keep
  * it or a view.
  *
+ * <p>The store records what a rule reads through its context (ADR-0025), and runs the rule again when a transaction
+ * changes it. Every read through {@link #view()} and {@link #viewAt(Instant)} counts: an entity or a relationship, with
+ * every state that a read returns, what navigation or a traversal finds from an entity by a relationship name, and the
+ * entities of an entity type that a read or the start of a query lists, each at the effective time of the view, or
+ * across effective time for timelines. A change to any of these at an effective time that the rule read, in the values
+ * or in the existence of what was read, runs the rule again for the version whose check read it. So a rule has to read
+ * only through its context: what it reads anywhere else, the store cannot see.
+ *
+ * <p>Prefer navigating from what the rule checks to listing the entities of a type or reading timelines. A rule that
+ * lists a type, or reads a timeline, is reached by every change to any of those entities, at any time, and is run
+ * again for all of them; a rule that navigates from what it checks is reached only by changes to what it reaches.
+ *
  * <p>A context belongs to one call of a rule and is not safe for use by several threads. Reporting after the call has
- * returned throws {@link IllegalStateException}.
+ * returned throws {@link IllegalStateException}, and reads through a view after the call has returned are not recorded.
  */
 public interface RuleContext {
 

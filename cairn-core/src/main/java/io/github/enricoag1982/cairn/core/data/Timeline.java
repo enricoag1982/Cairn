@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.function.UnaryOperator;
 
 /**
@@ -327,6 +329,62 @@ final class Timeline {
             }
         }
         return false;
+    }
+
+    /**
+     * The stretches of effective time in which this timeline differs from another one: the entity exists in one and not
+     * in the other, or exists in both with other values. A boundary between segments that only splits equal values, or
+     * that two recordings made, is no difference. Adjacent differing stretches are merged. A transaction compares the
+     * timeline it would produce with the one it started from, and so finds what it changes (design D2 of
+     * {@code add-rule-rechecks}).
+     *
+     * @param other         the timeline to compare with
+     * @param existenceOnly {@code true} to leave out the stretches in which the entity exists in both and only the values
+     *                      differ
+     * @return the stretches, in order and not touching
+     */
+    List<Stretch> differences(Timeline other, boolean existenceOnly) {
+        NavigableSet<Instant> bounds = new TreeSet<>();
+        for (Segment segment : segments) {
+            bounds.add(segment.from());
+            bounds.add(segment.end());
+        }
+        for (Segment segment : other.segments) {
+            bounds.add(segment.from());
+            bounds.add(segment.end());
+        }
+        List<Stretch> stretches = new ArrayList<>();
+        int mine = 0;
+        int theirs = 0;
+        Instant previous = null;
+        for (Instant bound : bounds) {
+            if (previous != null) {
+                // The segments are in order, so the one that holds the instant is at or after the last one found.
+                while (mine < segments.size() && !segments.get(mine).end().isAfter(previous)) {
+                    mine++;
+                }
+                while (theirs < other.segments.size() && !other.segments.get(theirs).end().isAfter(previous)) {
+                    theirs++;
+                }
+                Segment here = mine < segments.size() && segments.get(mine).contains(previous)
+                        ? segments.get(mine) : null;
+                Segment there = theirs < other.segments.size() && other.segments.get(theirs).contains(previous)
+                        ? other.segments.get(theirs) : null;
+                if (differ(here, there, existenceOnly)) {
+                    add(stretches, previous, bound);
+                }
+            }
+            previous = bound;
+        }
+        return stretches;
+    }
+
+    /** Tells whether two segments that hold the same instant differ in whether the entity exists or in its values. */
+    private static boolean differ(Segment first, Segment second, boolean existenceOnly) {
+        if ((first == null) != (second == null)) {
+            return true;
+        }
+        return !existenceOnly && first != null && !first.values().equals(second.values());
     }
 
     /**

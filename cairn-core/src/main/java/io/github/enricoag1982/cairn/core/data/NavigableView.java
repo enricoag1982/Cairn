@@ -61,6 +61,30 @@ abstract class NavigableView implements View {
      */
     abstract List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end);
 
+    /**
+     * Called for every navigation from an entity, with the relationship type that the name stands for, before it reads
+     * the relationships, so that a view that records the reads of a rule can say what was read (design D1 of
+     * {@code add-rule-rechecks}). Does nothing by default.
+     *
+     * @param from        the entity navigated from
+     * @param type        the relationship type that the name resolved to
+     * @param inverse     whether the name is the inverse name of the type
+     * @param acrossTime  whether the navigation reads every effective time, as {@link #navigateTimeline} does, or the
+     *                    view's effective time
+     */
+    void navigating(EntityId from, RelationshipType type, boolean inverse, boolean acrossTime) {
+    }
+
+    /**
+     * Called for every state of a relationship that a navigation returns, for the same purpose as
+     * {@link #navigating}. Does nothing by default.
+     *
+     * @param relationship the state returned
+     * @param acrossTime   whether it is returned by a navigation across effective time
+     */
+    void navigated(RelationshipState relationship, boolean acrossTime) {
+    }
+
     @Override
     public List<Link> navigate(EntityId from, String name) {
         Objects.requireNonNull(from, "from");
@@ -70,7 +94,13 @@ abstract class NavigableView implements View {
     @Override
     public List<RelationshipState> navigateTimeline(EntityId from, String name) {
         Objects.requireNonNull(from, "from");
-        return leading(from, matches(name)).stream().map(Led::relationship).toList();
+        List<Match> matches = matches(name);
+        for (Match match : matches) {
+            navigating(from, match.type(), match.inverse(), true);
+        }
+        List<RelationshipState> versions = leading(from, matches).stream().map(Led::relationship).toList();
+        versions.forEach(version -> navigated(version, true));
+        return versions;
     }
 
     @Override
@@ -125,8 +155,12 @@ abstract class NavigableView implements View {
     /** The relationships effective now that lead away from an entity by the matched names, with the entities at the end. */
     private List<Link> links(EntityId from, List<Match> matches) {
         List<Link> links = new ArrayList<>();
+        for (Match match : matches) {
+            navigating(from, match.type(), match.inverse(), false);
+        }
         for (Led led : leading(from, matches)) {
             if (led.relationship().period().contains(effectiveAt())) {
+                navigated(led.relationship(), false);
                 entity(led.other()).ifPresent(entity -> links.add(new Link(led.relationship(), entity)));
             }
         }

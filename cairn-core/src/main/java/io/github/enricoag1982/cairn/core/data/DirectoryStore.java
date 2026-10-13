@@ -63,6 +63,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * Opening a directory whose log holds a purge that no snapshot file holds completes the purge in the same way before the
  * store opens, and also deletes the files that a purge left behind if it stopped after writing its snapshot file.
  *
+ * <p>Recovery only applies what was committed. The store's rules are run once afterwards, over every version their types
+ * name them for, only to learn what they read, so that a transaction can run them again when it changes that (ADR-0025,
+ * design D5 of {@code add-rule-rechecks}); what they report is dropped, and the files do not change.
+ *
  * <p>After {@code close}, every call but {@code close} throws an {@code IllegalStateException}, on the store and on its
  * schema registry. After a failed write, commits and registrations throw one, while reads and dry runs go on.
  */
@@ -132,6 +136,7 @@ public final class DirectoryStore implements DurableStore {
                 return null;
             });
             completePurge(directory, store, recovered);
+            store.learnReads();
             log = CommitLog.open(directory, recovered.latest().value() + 1, segmentLimit);
             DirectoryStore result = new DirectoryStore(directory, store, log, lock);
             store.attach(result.new Guard());
@@ -372,6 +377,11 @@ public final class DirectoryStore implements DurableStore {
         } finally {
             snapshotLock.unlock();
         }
+    }
+
+    /** What the store's rules read when they last checked, which is learned after recovery; for tests. */
+    ReadIndex readIndex() {
+        return store.readIndex();
     }
 
     /** The lock that serializes snapshot files and closing; for tests of what happens while it is held. */

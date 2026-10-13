@@ -31,12 +31,15 @@ import java.util.TreeSet;
  * The rule {@code vacation-within-entitlement} of the HR domain: the approved vacation days of an employment, with
  * first days in the same calendar year, add up to at most 25.
  *
- * <p>The rule is named by {@code LeaveRequest}, whose writes can break it, and checks an approved vacation only: any
- * other request adds no days. The sum is a {@link Query} that a view at one instant runs: the employment's leave
- * requests that are vacations, approved, with a first day in the year of the checked one, summing their days. The other
- * requests of the employment can start or change at any instant of the checked version's period, so the rule runs the
- * query at the start of the period and at every later instant in it at which a request of the employment, or one of
- * its versions, starts or ends, each through a view at that instant ({@link RuleContext#viewAt(Instant)}).
+ * <p>The rule is named by {@code LeaveRequest}, the type it checks, and checks an approved vacation only: any other
+ * request adds no days. It reads the employment's other requests, so a write to one of them checks it again
+ * (ADR-0025).
+ *
+ * <p>The sum is a {@link Query} that a view at one instant runs: the employment's leave requests that are vacations,
+ * approved, with a first day in the year of the checked one, summing their days. The other requests of the employment
+ * can start or change at any instant of the checked version's period, so the rule runs the query at the start of the
+ * period and at every later instant in it at which a request of the employment, or one of its versions, starts or
+ * ends, each through a view at that instant ({@link RuleContext#viewAt(Instant)}).
  */
 public final class VacationWithinEntitlement extends VacationWithinEntitlementRuleV1 {
 

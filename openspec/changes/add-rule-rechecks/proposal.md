@@ -28,8 +28,7 @@ None.
 
 ### Modified Capabilities
 
-- `entity-rules`: rules run again when what they read changes; a write that only ends something can run rules of others.
-- `relationships`: a rule whose verdict depends on other relationships no longer has to be named by the types whose writes can break it.
+- `entity-rules`: rules run again when what they read changes; a write that only ends something can run rules of others; a rule whose verdict depends on other relationships no longer has to be named by their types.
 - `transactions`: the problems of re-checks come last.
 - `durability`: after recovery, a store runs its rules once to learn what they read.
 

@@ -376,14 +376,18 @@ class HrStoriesTest {
                 .as("the same request decided by Ben, who manages Engineering above Platform")
                 .isInstanceOf(DryRunResult.WouldCommit.class);
 
-        // GAP: a rule runs only when a type that names it is written, and a rule is for one type. Cleo no longer
-        // manages Platform from 10 March, so her approval of the vacation from 16 March no longer meets
-        // decided-by-manager, yet nothing refuses the change, because ManagedBy names no rule. The assertion flips
-        // when the gap is closed.
-        assertThat(store.dryRun(Transaction.by(Brightwater.HR_ADMIN)
-                .endDate(ids.relationship("managedByPLT"), on(3, 10)).build()))
-                .as("ending Cleo's ManagedBy of PLT from 10 March is accepted")
-                .isInstanceOf(DryRunResult.WouldCommit.class);
+        // Cleo no longer manages Platform from 10 March, so her approval of the vacation from 16 March no longer meets
+        // decided-by-manager. ManagedBy names no rule, but the rule read it when it checked her decision, so the
+        // store checks the decision again when the transaction ends the ManagedBy, and rejects the transaction.
+        String decision = ids.relationship("devVacationDecision").value();
+        Problem noLongerManager = only(dryRunProblems(Transaction.by(Brightwater.HR_ADMIN)
+                .endDate(ids.relationship("managedByPLT"), on(3, 10)).build()));
+        assertThat(noLongerManager.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(noLongerManager.ruleCode()).contains("decided-by-manager/not-a-manager");
+        assertThat(noLongerManager.path()).as("Cleo's decision, which the transaction does not name")
+                .isEqualTo(decision);
+        assertThat(noLongerManager.hint()).contains("The transaction changes what the rule read when it last "
+                + "checked " + decision + ".");
     }
 
     @Test

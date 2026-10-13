@@ -10,6 +10,8 @@ import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.fixtures.Definitions;
+import io.github.enricoag1982.cairn.fixtures.EmployerHoldsAccountRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
@@ -55,6 +57,32 @@ final class DurableFixture {
         DirectoryStore store = open();
         registerReferenceModel(store);
         return store;
+    }
+
+    /** The rules of the reference domain and the test-only rule {@code employer-holds-account}, all with their code. */
+    static List<Rule> rulesWithEmployerHoldsAccount() {
+        List<Rule> rules = new ArrayList<>(ReferenceModel.executableRules());
+        rules.add(new EmployerHoldsAccountRule());
+        return rules;
+    }
+
+    /**
+     * Opens a store with the rules of the reference domain and {@code employer-holds-account}, and registers the
+     * reference model in which {@code Employs} names that rule, which is the first transaction. To open it again, call
+     * {@link #reopenWithEmployerHoldsAccount()}.
+     */
+    DirectoryStore openWithEmployerHoldsAccount() {
+        DirectoryStore store = reopenWithEmployerHoldsAccount();
+        assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), Definitions.withRule(
+                ReferenceModel.definition(), "Employs", EmployerHoldsAccountRule.DESCRIPTOR)))
+                .isInstanceOf(RegistrationResult.Applied.class);
+        return store;
+    }
+
+    /** Opens the store of {@link #openWithEmployerHoldsAccount()} again, with its rules and a new ID generator. */
+    DirectoryStore reopenWithEmployerHoldsAccount() {
+        return open(clock, IdGenerators.deterministic(), rulesWithEmployerHoldsAccount(),
+                ReferenceModel.declaredRules());
     }
 
     static void registerReferenceModel(Store store) {

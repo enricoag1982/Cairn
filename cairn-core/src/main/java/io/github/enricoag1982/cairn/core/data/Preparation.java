@@ -33,9 +33,9 @@ import java.util.Set;
  * resulting state are found too: every problem of the transaction is reported, not only the first. When the writes are
  * applied, ending an entity ends its compositions too. Problems come in a fixed order: those of the transaction
  * itself, then those of each write in the order of the writes, then those of each entity and relationship (the
- * subjects) in the order in which the writes first touched them, and last those of the rules. The problems of a
- * subject are those of its values, which follow the order of the attributes in the schema, and then those of its
- * relationships.
+ * subjects) in the order in which the writes first touched them, then those of the rules, and last those of the
+ * re-checks. The problems of a subject are those of its values, which follow the order of the attributes in the schema,
+ * and then those of its relationships.
  *
  * <p>A Preparation is used once and by one thread: the one holding the store's writer lock.
  */
@@ -66,6 +66,8 @@ final class Preparation {
     private final Cascades cascades;
     private final Validation validation;
     private final RuleStage ruleStage;
+    private final Rechecks rechecks;
+    private final ReadIndex.Stage readStage = new ReadIndex.Stage();
     private List<Id> ended = List.of();
 
     /**
@@ -86,6 +88,30 @@ final class Preparation {
     Preparation(Transaction transaction, SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
             Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedDigests, IdGenerator generator,
             CommitSequence.Commit commit, ValueChecks checks, Rules rules, CommitSequence sequence) {
+        this(transaction, index, storedEntities, storedRelationships, purgedDigests, generator, commit, checks, rules,
+                sequence, new ReadIndex());
+    }
+
+    /**
+     * Prepares a transaction against a store that remembers what its rules read.
+     *
+     * @param transaction         the transaction
+     * @param index               the schema the transaction is validated against
+     * @param storedEntities      the entities of the store, ordered by ID
+     * @param storedRelationships the relationships of the store, ordered by ID
+     * @param purgedDigests       the digests of the IDs that purges removed, which no new entity or relationship may have
+     * @param generator           a copy of the store's ID generator, which this preparation advances
+     * @param commit              the basis and transaction time the transaction would get
+     * @param checks              the value checks
+     * @param rules               the rules with code that run once the declarative checks have passed
+     * @param sequence            the store's sequence, which the caller has locked for writing and which refuses
+     *                            writes while the rules run
+     * @param reads               what the store's rules read when they last checked, which the transaction does not
+     *                            change; a commit applies {@link #readStage()} to it
+     */
+    Preparation(Transaction transaction, SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
+            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedDigests, IdGenerator generator,
+            CommitSequence.Commit commit, ValueChecks checks, Rules rules, CommitSequence sequence, ReadIndex reads) {
         this.transaction = transaction;
         this.commit = commit;
         this.workspace = new Workspace(index, storedEntities, storedRelationships, purgedDigests, generator, problems);
@@ -94,7 +120,8 @@ final class Preparation {
         this.amendments = new Amendments(workspace, writeChecks, commit);
         this.cascades = new Cascades(workspace);
         this.validation = new Validation(workspace, checks);
-        this.ruleStage = new RuleStage(workspace, commit.basis(), rules, sequence);
+        this.ruleStage = new RuleStage(workspace, commit.basis(), rules, sequence, readStage);
+        this.rechecks = new Rechecks(workspace, ruleStage, reads, readStage);
     }
 
     /** Applies and validates the transaction; returns this. */
@@ -117,7 +144,15 @@ final class Preparation {
         }
         ended = cascades.run(amendments.ended());
         checkSubjects();
+        boolean onlyRuleProblemsFollow = problems.isEmpty();
         ruleStage.run();
+        if (onlyRuleProblemsFollow) {
+            Changes changes = Changes.of(workspace);
+            rechecks.run(changes);
+            if (problems.isEmpty()) {
+                readStage.cut(changes.bySubject());
+            }
+        }
         return this;
     }
 
@@ -142,6 +177,14 @@ final class Preparation {
 
     List<Problem> problems() {
         return problems.all();
+    }
+
+    /**
+     * What the rules read in this transaction, and what its writes cut off the older checks of the index. A commit
+     * applies it to the store's index; a dry run, or a transaction with problems, drops it.
+     */
+    ReadIndex.Stage readStage() {
+        return readStage;
     }
 
     /** The ID of every entity or relationship named with a temporary ID, in the order of the writes. */

@@ -32,8 +32,9 @@ import java.util.Optional;
  * state at the start of the decision's period, which is when the request exists. Everything else it reads through
  * {@link RuleContext#viewAt(Instant)} at the request's first day, because the verdict is about who manages whom on that
  * day, whatever the decision's own period: the requester's position, its unit, the units above it and their managers.
- * The first day is the one the request has when the decision starts; a later correction of the first day does not
- * check the decision again.
+ * The first day is the one the request has when the decision starts; a correction of the request that takes effect
+ * later does not check the decision again. A change to what the rule read on the first day, such as ending the
+ * {@code ManagedBy} of a unit, does (ADR-0025).
  */
 public final class DecidedByManager extends DecidedByManagerRuleV1 {
 

@@ -3,8 +3,11 @@ package io.github.enricoag1982.cairn.core.data;
 import static io.github.enricoag1982.cairn.core.data.ReferenceTales.EFFECTIVE_TIMES;
 import static io.github.enricoag1982.cairn.core.data.ReferenceTales.entity;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1_MOVED;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
@@ -16,6 +19,7 @@ import io.github.enricoag1982.cairn.core.StoreSettings;
 import io.github.enricoag1982.cairn.core.Stores;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
+import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.DurableStore;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
@@ -222,6 +226,36 @@ class DurabilityScenariosTest {
         public IdGenerator copy() {
             return this;
         }
+    }
+
+    @Test
+    @DisplayName("Scenario: Re-checks after reopening")
+    void rechecksAfterReopening() {
+        DirectoryStore first = durable.openWithEmployerHoldsAccount();
+        Receipt parties = durable.replay(first, ReferenceStories.rd1Parties());
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        Receipt accounts = durable.replay(first, ReferenceStories.rd5Accounts(beta, acme));
+        Receipt employment = durable.replay(first, ReferenceStories.rd3Employment(beta, entity(parties, ALICE)));
+        Transaction movesA1 = Transaction.by("importer")
+                .endDate(ReferenceTales.relationship(accounts, HELD_BY_A1), on(6, 1))
+                .relate(HELD_BY_A1_MOVED, "HeldBy", entity(accounts, A1), acme, from(6, 1), values()).build();
+        durable.clock.moveTo(on(5, 20));
+        List<Problem> before = ((DryRunResult.Rejected) first.dryRun(movesA1)).problems();
+        first.close();
+
+        DirectoryStore reopened = durable.reopenWithEmployerHoldsAccount();
+        CommitResult result = reopened.commit(movesA1);
+
+        assertThat(result).isInstanceOf(CommitResult.Rejected.class);
+        List<Problem> problems = ((CommitResult.Rejected) result).problems();
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+            assertThat(problem.ruleCode()).contains("employer-holds-account/no-account");
+            assertThat(problem.path()).isEqualTo(ReferenceTales.relationship(employment,
+                    ReferenceStories.BETA_EMPLOYS_ALICE).value());
+        });
+        assertThat(problems).as("as before the store was closed").isEqualTo(before);
     }
 
     @Test

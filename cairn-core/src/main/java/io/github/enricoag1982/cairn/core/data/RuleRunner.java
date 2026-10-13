@@ -17,8 +17,10 @@ import io.github.enricoag1982.cairn.schema.EffectiveRule;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
+import io.github.enricoag1982.cairn.schema.RuleReference;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -39,6 +41,12 @@ import java.util.stream.Collectors;
  * code for is reported for the subject whatever the write changed. A rule must fit the kind of the subject's type: an
  * {@link EntityRule} checks entities, and a {@link RelationshipRule} checks relationships; any other rule that a type
  * names is reported as failed. The problems come in that order, subject by subject.
+ *
+ * <p>Every run of a rule records what the rule read, through the views of its context, and stages it for the
+ * {@link ReadIndex} (design D1 and D3 of {@code add-rule-rechecks}). The runner also runs rules again for versions that a
+ * transaction does not write, because it changes what they read: a {@linkplain #recheck re-check} reports its problems
+ * about the version it checks, with a hint that says so (D4). And it can run rules only to learn what they read, without
+ * judging the verdicts, as a durable store does when it opens (D5).
  */
 final class RuleRunner {
 
@@ -66,6 +74,21 @@ final class RuleRunner {
         }
     }
 
+    /**
+     * A rule to run again for some versions of an entity or relationship that a transaction does not write, or writes
+     * without changing the versions.
+     *
+     * @param subject  the entity or relationship, with the path its problems have
+     * @param rule     the rule, as the subject's type names it
+     * @param versions the versions to check, in the order of the timeline
+     */
+    record Recheck(Subject subject, EffectiveRule rule, List<Segment> versions) {
+    }
+
+    /** A rule that ran for a version: the entity or relationship, the rule and the start of the version's period. */
+    private record Ran(Id subject, RuleReference rule, Instant from) {
+    }
+
     /** A problem that a rule reported through its context. */
     private record Reported(String code, String attribute, String message) {
     }
@@ -73,6 +96,9 @@ final class RuleRunner {
     private final Rules rules;
     private final ProvisionalView.Source source;
     private final CommitSequence sequence;
+    private final ReadIndex.Stage stage;
+    private final Set<Ran> ran = new HashSet<>();
+    private final Set<RuleReference> reporting = new LinkedHashSet<>();
 
     /**
      * Creates a runner for one transaction.
@@ -80,11 +106,23 @@ final class RuleRunner {
      * @param rules    the rules the store has code for
      * @param source   the state the rules read
      * @param sequence the sequence of the store, which refuses writes while the rules run
+     * @param stage    where the reads of every run are staged
      */
-    RuleRunner(Rules rules, ProvisionalView.Source source, CommitSequence sequence) {
+    RuleRunner(Rules rules, ProvisionalView.Source source, CommitSequence sequence, ReadIndex.Stage stage) {
         this.rules = rules;
         this.source = source;
         this.sequence = sequence;
+        this.stage = stage;
+    }
+
+    /** Tells whether a rule ran for the version of an entity or relationship that starts at an instant. */
+    boolean ran(Id subject, RuleReference rule, Instant from) {
+        return ran.contains(new Ran(subject, rule, from));
+    }
+
+    /** The rules that reported a problem, of any kind, about a subject the runner ran rules for. */
+    Set<RuleReference> reporting() {
+        return Set.copyOf(reporting);
     }
 
     /**
@@ -103,32 +141,91 @@ final class RuleRunner {
         return sequence.whileRunningRules(() -> runAll(subjects));
     }
 
+    /**
+     * Runs the rules of the subjects only to learn what they read, as a store does after recovery (design D5 of
+     * {@code add-rule-rechecks}): what the rules report, throw or try to write is dropped, and what they read is staged.
+     * The same as {@link #run}, called with the writer lock held, for subjects whose {@code changed} are all their
+     * versions.
+     *
+     * @param subjects the entities and relationships whose rules run
+     * @throws VirtualMachineError if a rule causes one; it is not turned into a problem
+     */
+    void learn(List<Subject> subjects) {
+        run(subjects);
+    }
+
+    /**
+     * Runs rules again for versions, because a transaction changes what the rules read when they last checked them
+     * (design D4 of {@code add-rule-rechecks}). Called with the writer lock held, as {@link #run} is. A rule that the
+     * store has no code for, or that does not fit the kind of the subject, is left alone: it has no reads to be reached.
+     *
+     * @param rechecks the rules to run again, in the order in which their problems come
+     * @return the problems, which have the path of the subject and a hint that says that the transaction changed what the
+     *         rule read; none if every rule is content
+     * @throws VirtualMachineError if a rule causes one, such as an {@code OutOfMemoryError}; it is not turned into a
+     *                             problem
+     */
+    List<Problem> recheck(List<Recheck> rechecks) {
+        return sequence.whileRunningRules(() -> {
+            List<Problem> problems = new ArrayList<>();
+            for (Recheck recheck : rechecks) {
+                Optional<Rules.Registered> registered = rules.find(recheck.rule().rule());
+                if (registered.isEmpty() || !recheck.subject().fits(registered.get().rule())) {
+                    continue;
+                }
+                String hint = "The transaction changes what the rule read when it last checked "
+                        + recheck.subject().path() + ".";
+                Set<Problem> found = new LinkedHashSet<>();
+                for (Segment version : recheck.versions()) {
+                    if (!check(recheck.subject(), registered.get(), recheck.rule().rule(), version, hint, found)) {
+                        break;
+                    }
+                }
+                if (!found.isEmpty()) {
+                    reporting.add(recheck.rule().rule());
+                }
+                problems.addAll(found);
+            }
+            return problems;
+        });
+    }
+
     private List<Problem> runAll(List<Subject> subjects) {
         List<Problem> problems = new ArrayList<>();
         for (Subject subject : subjects) {
             Set<Problem> found = new LinkedHashSet<>();
             for (EffectiveRule effective : subject.type().effectiveRules()) {
-                Optional<Rules.Registered> registered = rules.find(effective.rule());
-                if (registered.isEmpty()) {
-                    found.add(unavailable(subject, effective));
-                    continue;
+                Set<Problem> mine = new LinkedHashSet<>();
+                runRule(subject, effective, mine);
+                if (!mine.isEmpty()) {
+                    reporting.add(effective.rule());
                 }
-                if (subject.changed().isEmpty()) {
-                    continue; // The rule has code, and a write that changes no values runs no rules.
-                }
-                if (!subject.fits(registered.get().rule())) {
-                    found.add(notForKind(subject, registered.get()));
-                    continue;
-                }
-                for (Segment segment : subject.changed()) {
-                    if (!check(subject, registered.get(), segment, found)) {
-                        break;
-                    }
-                }
+                found.addAll(mine);
             }
             problems.addAll(found);
         }
         return problems;
+    }
+
+    /** Runs one rule of a subject's type for the subject's changed segments, and collects what it reports. */
+    private void runRule(Subject subject, EffectiveRule effective, Set<Problem> found) {
+        Optional<Rules.Registered> registered = rules.find(effective.rule());
+        if (registered.isEmpty()) {
+            found.add(unavailable(subject, effective));
+            return;
+        }
+        if (subject.changed().isEmpty()) {
+            return; // The rule has code, and a write that changes no values runs no rules.
+        }
+        if (!subject.fits(registered.get().rule())) {
+            found.add(notForKind(subject, registered.get()));
+            return;
+        }
+        for (Segment segment : subject.changed()) {
+            if (!check(subject, registered.get(), effective.rule(), segment, null, found)) {
+                break;
+            }
+        }
     }
 
     /**
@@ -137,29 +234,49 @@ final class RuleRunner {
      * rule, so the error goes on. A rule that tried to write has failed too, even if it caught the refusal and returned:
      * the sequence counts the refused writes, and if the count grew while the rule ran, what the rule reported is
      * dropped, as for an exception.
+     *
+     * <p>What the rule read is staged either way, for the version's whole period: a transaction that is rejected stages
+     * nothing that is applied, and a store that learns what its rules read wants the reads of a rule that threw.
+     *
+     * @param hint a hint to add to every problem, or null for none; a re-check says that the transaction changed what the
+     *             rule read
      */
-    private boolean check(Subject subject, Rules.Registered registered, Segment segment, Set<Problem> problems) {
+    private boolean check(Subject subject, Rules.Registered registered, RuleReference rule, Segment segment,
+            String hint, Set<Problem> problems) {
         Consumer<RuleContext> call = call(subject, registered.rule(), segment);
-        Context context = new Context(source, segment.from());
+        Reads reads = new Reads();
+        Context context = new Context(source, segment.from(), reads);
+        ran.add(new Ran(subject.id(), rule, segment.from()));
         long refusedBefore = sequence.refusedWrites();
         try {
             call.accept(context);
         } catch (VirtualMachineError e) {
             throw e;
         } catch (Throwable e) {
-            problems.add(threw(subject, registered.descriptor(), e));
+            problems.add(withHint(threw(subject, registered.descriptor(), e), hint));
             return false;
         } finally {
             context.close();
+            stage.ran(subject.id(), rule, segment.from(), segment.end(), reads);
         }
         if (sequence.refusedWrites() != refusedBefore) {
-            problems.add(wrote(subject, registered.descriptor()));
+            problems.add(withHint(wrote(subject, registered.descriptor()), hint));
             return false;
         }
         for (Reported reported : context.reported) {
-            problems.add(problem(subject, registered, reported));
+            problems.add(withHint(problem(subject, registered, reported), hint));
         }
         return true;
+    }
+
+    /** The problem with a hint added to its own, if it has one. */
+    private static Problem withHint(Problem problem, String hint) {
+        if (hint == null) {
+            return problem;
+        }
+        String joined = problem.hint().map(own -> own + " " + hint).orElse(hint);
+        return new Problem(problem.code(), problem.path(), problem.message(), problem.expected(), problem.found(),
+                Optional.of(joined), problem.location(), problem.ruleCode());
     }
 
     /** The call of a rule that fits the subject, with the version of the subject that a segment holds. */
@@ -260,27 +377,32 @@ final class RuleRunner {
 
     // ------------------------------------------------------------------ the context
 
-    /** The context of one call of a rule: it collects the reports, and is closed when the rule returns. */
+    /**
+     * The context of one call of a rule: it collects the reports, and is closed when the rule returns. Its views record
+     * what the rule reads into the reads of the call (design D1 of {@code add-rule-rechecks}).
+     */
     private static final class Context implements RuleContext {
 
         private final ProvisionalView.Source source;
         private final Instant start;
+        private final Reads reads;
         private final List<Reported> reported = new ArrayList<>();
         private boolean closed;
 
-        Context(ProvisionalView.Source source, Instant start) {
+        Context(ProvisionalView.Source source, Instant start, Reads reads) {
             this.source = source;
             this.start = start;
+            this.reads = reads;
         }
 
         @Override
         public View view() {
-            return source.at(start);
+            return source.at(start, reads);
         }
 
         @Override
         public View viewAt(Instant effectiveAt) {
-            return source.at(effectiveAt);
+            return source.at(effectiveAt, reads);
         }
 
         @Override
@@ -305,6 +427,7 @@ final class RuleRunner {
 
         void close() {
             closed = true;
+            reads.close();
         }
     }
 }

@@ -74,6 +74,11 @@ import java.util.stream.Stream;
  * transaction and before it records it and publishes its basis, and a commit that cannot be written is not applied. The
  * package's other classes restore a store from what a log and a snapshot file hold, and read it for a snapshot file.
  * Without a journal the store behaves as it always did.
+ *
+ * <p>The store remembers what its rules read when they last checked each version, in a {@link ReadIndex} that only the
+ * writer touches (ADR-0025, design D3 of {@code add-rule-rechecks}). A commit applies the checks its preparation staged;
+ * a dry run or a rejected transaction drops them; a purge removes what mentions the IDs it removes. A durable store
+ * calls {@link #learnReads()} after recovery, because the index is not kept in its files.
  */
 public final class InMemoryStore implements Store {
 
@@ -89,6 +94,8 @@ public final class InMemoryStore implements Store {
     private final CopyOnWriteArrayList<TransactionRecord> records = new CopyOnWriteArrayList<>();
     private final ValueChecks checks = new ValueChecks();
     private final Rules rules;
+    /** What the rules read when they last checked; only the writer, holding the writer lock, uses it. */
+    private final ReadIndex reads = new ReadIndex();
     private final List<RuleDescriptor> declaredRules;
     /**
      * The idempotency keys of committed transactions. Only the writer, holding the writer lock, changes them; a snapshot
@@ -257,14 +264,15 @@ public final class InMemoryStore implements Store {
      */
     private Preparation prepare(Transaction transaction) {
         return new Preparation(transaction, new SchemaIndex(registry.current()), entities, relationships, purgedDigests,
-                generator.copy(), sequence.next(), checks, rules, sequence).run();
+                generator.copy(), sequence.next(), checks, rules, sequence, reads).run();
     }
 
     /**
      * Makes a valid preparation the store's latest state. A durable store first writes the commit to its journal, so that
      * nothing is applied if that fails; then the new timelines of entities and relationships are appended, the
-     * transaction and its idempotency key are recorded, the ID generator's advanced copy is kept, and the basis is
-     * published last, so that a reader that learns of the basis finds all of it. Called with the lock held.
+     * transaction and its idempotency key are recorded, the checks of the rules are applied to the index of reads, the
+     * ID generator's advanced copy is kept, and the basis is published last, so that a reader that learns of the basis
+     * finds all of it. Called with the lock held.
      */
     private Receipt record(Transaction transaction, Preparation preparation) {
         CommitSequence.Commit commit = preparation.commit();
@@ -299,6 +307,7 @@ public final class InMemoryStore implements Store {
         records.add(new TransactionRecord(commit.basis(), commit.transactionTime(), transaction.principal(),
                 transaction.onBehalfOf(), transaction.reason()));
         transaction.idempotencyKey().ifPresent(key -> keys.put(key, new Keyed(transaction, receipt)));
+        reads.apply(preparation.readStage());
         generator = preparation.generator();
         sequence.publish(commit);
         return receipt;
@@ -422,6 +431,7 @@ public final class InMemoryStore implements Store {
         }
         Set<Id> removed = new HashSet<>(removedRelationships);
         removed.addAll(removedEntities);
+        reads.purge(removed);
         List<String> wrote = keys.entrySet().stream().filter(entry -> wrote(entry.getValue(), removed))
                 .map(Map.Entry::getKey).toList();
         purgedKeys.addAll(wrote);
@@ -467,6 +477,47 @@ public final class InMemoryStore implements Store {
      */
     void restorePurge(PurgeRecord record) {
         purges.add(record);
+    }
+
+    // ------------------------------------------------------------------ what rules read
+
+    /**
+     * Learns what the rules read, after the store has been recovered from its files (ADR-0025, design D5 of
+     * {@code add-rule-rechecks}): runs every rule the store has code for over every version of every entity and
+     * relationship whose type names it, against the latest state with no transaction laid over it, and records the
+     * checks. What the rules report, throw or try to write is dropped: the data is what was committed, and the rules
+     * only tell what they read. Call it once, after recovery and before the store is used by other threads.
+     */
+    void learnReads() {
+        sequence.<Object>underWriterLock(() -> {
+            SchemaIndex index = new SchemaIndex(registry.current());
+            List<RuleRunner.Subject> subjects = new ArrayList<>();
+            for (StoredEntity entity : entities.values()) {
+                index.entityType(entity.type()).map(SubjectType::of).filter(type -> !type.effectiveRules().isEmpty())
+                        .ifPresent(type -> subjects.add(new RuleRunner.Subject(entity.id(), entity.id().value(), type,
+                                null, null, entity.latest().segments())));
+            }
+            for (StoredRelationship relationship : relationships.values()) {
+                index.relationshipType(relationship.type()).map(SubjectType::of)
+                        .filter(type -> !type.effectiveRules().isEmpty())
+                        .ifPresent(type -> subjects.add(new RuleRunner.Subject(relationship.id(),
+                                relationship.id().value(), type, relationship.source(), relationship.target(),
+                                relationship.latest().segments())));
+            }
+            if (!subjects.isEmpty()) {
+                ReadIndex.Stage stage = new ReadIndex.Stage();
+                ProvisionalView.Source source = new ProvisionalView.Source(sequence.latestBasis(), index, entities,
+                        Map.of(), relationships, Map.of());
+                new RuleRunner(rules, source, sequence, stage).learn(subjects);
+                reads.apply(stage);
+            }
+            return null;
+        });
+    }
+
+    /** What the rules read when they last checked, for tests of this package. */
+    ReadIndex readIndex() {
+        return reads;
     }
 
     // ------------------------------------------------------------------ durability

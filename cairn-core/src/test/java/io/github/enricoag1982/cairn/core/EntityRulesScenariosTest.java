@@ -3,9 +3,12 @@ package io.github.enricoag1982.cairn.core;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.entity;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.relationship;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1_MOVED;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
@@ -14,6 +17,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
@@ -37,6 +41,7 @@ import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -272,5 +277,101 @@ class EntityRulesScenariosTest {
         assertThat(reference.store.latestBasis()).isEqualTo(before);
         assertThat(reference.store.transactions()).isEmpty();
         assertThat(reference.view(on(2, 1)).entities("Organization")).isEmpty();
+    }
+
+    // ------------------------------------------------------------------ rules run again when what they read changes
+
+    /** The reference store in which Employs names employer-holds-account, with RD-1, RD-5 and RD-3 recorded. */
+    private record EmployerAtWork(ReferenceStore reference, EntityId acme, EntityId beta, EntityId a1,
+            RelationshipId heldByA1, RelationshipId employs) {
+
+        static EmployerAtWork start() {
+            ReferenceStore reference = ReferenceStore.withEmployerHoldsAccount();
+            Receipt accounts = reference.createAccounts();
+            Receipt employment = reference.replay(ReferenceStories.rd3Employment(
+                    entity(reference.parties, BETA), entity(reference.parties, ALICE)));
+            return new EmployerAtWork(reference, entity(reference.parties, ACME), entity(reference.parties, BETA),
+                    entity(accounts, A1), relationship(accounts, HELD_BY_A1),
+                    relationship(employment, ReferenceStories.BETA_EMPLOYS_ALICE));
+        }
+    }
+
+    @Test
+    @DisplayName("Scenario: Ending a relationship that a rule navigated")
+    void endingARelationshipThatARuleNavigated() {
+        EmployerAtWork work = EmployerAtWork.start();
+        work.reference().recordedOn(on(5, 20));
+
+        List<Problem> problems = work.reference().reject(Transaction.by("importer")
+                .endDate(work.heldByA1(), on(6, 1))
+                .relate(HELD_BY_A1_MOVED, "HeldBy", work.a1(), work.acme(), from(6, 1), values())
+                .build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("employer-holds-account/no-account");
+        assertThat(problem.path()).as("Beta's Employs of Alice, which the transaction does not name")
+                .isEqualTo(work.employs().value());
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).isEqualTo("The transaction changes "
+                + "what the rule read when it last checked " + work.employs().value() + "."));
+        assertThat(work.reference().view(on(6, 1)).navigate(work.beta(), "holds")).as("nothing was moved")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: Changing values that a rule read")
+    void changingValuesThatARuleRead() {
+        ReferenceStore reference = ReferenceStore.withControllingOwnerHasLei();
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        Receipt ownership = reference.replay(ReferenceStories.rd2Ownership(acme, entity(parties, BETA)));
+        RelationshipId acmeOwns = relationship(ownership, ReferenceStories.ACME_OWNS_BETA);
+        reference.recordedOn(on(5, 20));
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(acme, from(6, 1), values(), Set.of("lei"), ConflictCheck.none()).build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("controlling-owner-has-lei/no-lei");
+        assertThat(problem.path()).isEqualTo(acmeOwns.value());
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint)
+                .contains("The transaction changes what the rule read"));
+        assertThat(reference.view(on(7, 1)).entity(acme).orElseThrow().values()).containsKey("lei");
+    }
+
+    @Test
+    @DisplayName("Scenario: One problem from a rule")
+    void oneProblemFromARule() {
+        ReferenceStore reference = new ReferenceStore();
+        Receipt parties = reference.createParties();
+        EntityId beta = entity(parties, BETA);
+        Receipt ownership = reference.replay(ReferenceStories.rd2Ownership(entity(parties, ACME), beta));
+        RelationshipId acmeOwns = relationship(ownership, ReferenceStories.ACME_OWNS_BETA);
+
+        List<Problem> problems = reference.rejectReplay(ReferenceStories.rd13GammaOwnsBeta(beta));
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("total-ownership-at-most-100/over-100-percent");
+        assertThat(problem.path()).as("Gamma's Owns, not ACME's").isEqualTo("$gammaOwnsBeta");
+        assertThat(problem.hint()).as("the rule ran for what the transaction writes").isEmpty();
+        assertThat(problems).extracting(Problem::path).doesNotContain(acmeOwns.value());
+    }
+
+    @Test
+    @DisplayName("Scenario: No re-checks after other problems")
+    void noRechecksAfterOtherProblems() {
+        EmployerAtWork work = EmployerAtWork.start();
+        work.reference().recordedOn(on(5, 20));
+
+        List<Problem> problems = work.reference().reject(Transaction.by("importer")
+                .endDate(work.heldByA1(), on(6, 1)).build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.TOO_FEW_RELATIONSHIPS);
+        assertThat(problem.path()).as("A-1 and HeldBy").isEqualTo(work.a1().value() + "[HeldBy]");
+        assertThat(problems).as("no problem from the rule").noneMatch(found -> found.ruleCode().isPresent());
     }
 }

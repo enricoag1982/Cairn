@@ -13,6 +13,9 @@ import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.fixtures.ControllingOwnerHasLeiRule;
+import io.github.enricoag1982.cairn.fixtures.Definitions;
+import io.github.enricoag1982.cairn.fixtures.EmployerHoldsAccountRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
@@ -89,6 +92,27 @@ final class ReferenceStore {
     static StoreSettings.Builder referenceSettings() {
         return StoreSettings.builder().rules(ReferenceModel.executableRules())
                 .declaredRules(ReferenceModel.declaredRules());
+    }
+
+    /**
+     * A store of the reference domain in which {@code Employs} names the test-only rule {@code employer-holds-account},
+     * which reads the accounts of the employer, and which the store has the code of.
+     */
+    static ReferenceStore withEmployerHoldsAccount() {
+        return withRules(Definitions.withRule(ReferenceModel.definition(), "Employs",
+                EmployerHoldsAccountRule.DESCRIPTOR), rulesWith(new EmployerHoldsAccountRule()),
+                ReferenceModel.declaredRules());
+    }
+
+    /**
+     * A store of the reference domain in which {@code Owns} names the test-only rule
+     * {@code controlling-owner-has-lei}, which reads the owner, and which the store has the code of. {@code Owns} names
+     * {@code total-ownership-at-most-100} too.
+     */
+    static ReferenceStore withControllingOwnerHasLei() {
+        return withRules(Definitions.withRule(ReferenceModel.definition(), "Owns",
+                ControllingOwnerHasLeiRule.DESCRIPTOR), rulesWith(new ControllingOwnerHasLeiRule()),
+                ReferenceModel.declaredRules());
     }
 
     /** The rules of the reference domain, which have code, and the given rules besides. */

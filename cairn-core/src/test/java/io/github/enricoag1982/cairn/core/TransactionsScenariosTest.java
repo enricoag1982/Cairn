@@ -1,12 +1,15 @@
 package io.github.enricoag1982.cairn.core;
 
 import static io.github.enricoag1982.cairn.core.ReferenceStore.assertProblem;
+import static io.github.enricoag1982.cairn.core.ReferenceStore.entity;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.id;
+import static io.github.enricoag1982.cairn.core.ReferenceStore.relationship;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI_WRONG_CHECK_DIGITS;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
@@ -17,10 +20,12 @@ import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
+import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -299,5 +304,28 @@ class TransactionsScenariosTest {
         assertThat(store.dryRun(onboard)).isInstanceOf(DryRunResult.WouldCommit.class);
         assertThat(store.latestBasis()).isEqualTo(before);
         assertThat(store.transactions()).hasSize(recorded);
+    }
+
+    @Test
+    @DisplayName("Scenario: Problems of re-checks come last")
+    void problemsOfRechecksComeLast() {
+        ReferenceStore owners = ReferenceStore.withControllingOwnerHasLei();
+        Receipt parties = owners.createParties();
+        EntityId acme = entity(parties, ACME);
+        owners.replay(ReferenceStories.rd9AcmeLei(acme));
+        Receipt ownership = owners.replay(ReferenceStories.rd2Ownership(acme, entity(parties, BETA)));
+        RelationshipId acmeOwns = relationship(ownership, ReferenceStories.ACME_OWNS_BETA);
+        owners.recordedOn(on(5, 20));
+
+        List<Problem> problems = owners.reject(Transaction.by("importer")
+                .patch(acme, from(6, 1), values(), Set.of("lei"), ConflictCheck.none())
+                .create(GAMMA, "Organization", from(6, 1), values("name", "Gamma", "lei", LEI_WRONG_CHECK_DIGITS))
+                .build());
+
+        assertThat(problems).hasSize(2);
+        assertThat(problems.get(0).ruleCode()).contains("lei-checksum/invalid-check-digits");
+        assertThat(problems.get(0).path()).as("Gamma, though the write of ACME comes first").isEqualTo("$gamma.lei");
+        assertThat(problems.get(1).ruleCode()).contains("controlling-owner-has-lei/no-lei");
+        assertThat(problems.get(1).path()).as("the re-check").isEqualTo(acmeOwns.value());
     }
 }

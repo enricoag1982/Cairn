@@ -3,6 +3,8 @@ package io.github.enricoag1982.cairn.fixtures;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
+import io.github.enricoag1982.cairn.schema.RuleDescriptor;
+import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import java.util.ArrayList;
@@ -63,6 +65,27 @@ public final class Definitions {
                 definition.entityTypes(),
                 definition.traits(),
                 replace(definition.relationshipTypes(), name, RelationshipTypeDefinition::name, change));
+    }
+
+    /**
+     * Makes a relationship type name a rule, as its description says: the rule's name and version are added to the rules
+     * the type names.
+     *
+     * @param definition       the definition to change
+     * @param relationshipType the name of the relationship type that names the rule
+     * @param rule             the description of the rule to name
+     * @return the changed definition
+     */
+    public static SchemaDefinition withRule(
+            SchemaDefinition definition, String relationshipType, RuleDescriptor rule) {
+        return changeRelationshipType(definition, relationshipType, type -> {
+            List<RuleReference> rules = new ArrayList<>(type.rules());
+            rules.add(new RuleReference(rule.name(), rule.version()));
+            return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
+                    type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
+                    type.supertype(), type.attributes(), type.aliases(), type.deprecated(), type.description(),
+                    rules);
+        });
     }
 
     /**

@@ -8,8 +8,8 @@ import java.util.List;
 /**
  * The problems a {@link Preparation} finds, in the order in which its parts report them (design D5 and D6 of
  * {@code add-entity-versions}): those of the transaction itself, then those of each write in the order of the writes,
- * then those of each entity and relationship (the subjects) in the order in which the writes first touched them, and
- * last those of the rules. The parts append in that order, so the log never sorts.
+ * then those of each entity and relationship (the subjects) in the order in which the writes first touched them, then
+ * those of the rules, and last those of the re-checks. The parts append in that order, so the log never sorts.
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.
  */
@@ -23,6 +23,11 @@ final class ProblemLog {
 
     void addAll(Collection<? extends Problem> found) {
         problems.addAll(found);
+    }
+
+    /** Tells whether no problem was found so far. */
+    boolean isEmpty() {
+        return problems.isEmpty();
     }
 
     /** A copy of the problems so far, in order. */

@@ -352,8 +352,13 @@ class DurableStoreTest {
         }
     }
 
+    /**
+     * Recovery applies what was committed, and asks neither the clock nor the ID generator. The store's rules run once
+     * afterwards, only to learn what they read (ADR-0025): the rule finds every organization wrong, and the store
+     * opens all the same.
+     */
     @Test
-    void recoveryNeverAsksTheClockOrTheIdGeneratorOrRunsARuleAndDoesNotValidate() {
+    void recoveryNeverAsksTheClockOrTheIdGeneratorAndDoesNotValidateButRulesRunAfterwardsToLearnWhatTheyRead() {
         DirectoryStore store = durable.openWithReferenceModel();
         ReferenceTales.Told told = ReferenceTales.everyStory(store, durable.clock);
         StoreEquivalence.Observation before = StoreEquivalence.observe(store, told.ids(), EFFECTIVE_TIMES, List.of());
@@ -365,7 +370,8 @@ class DurableStoreTest {
         DirectoryStore reopened = durable.open(FORBIDDEN_CLOCK, new ForbiddenGenerator(),
                 List.of(strict, new TotalOwnershipRule()), List.of());
 
-        assertThat(strict.calls).hasValue(0);
+        assertThat(strict.calls.get()).as("the rule ran after recovery, for the versions of the organizations")
+                .isPositive();
         assertThat(reopened.latestBasis()).isEqualTo(new Basis(before.latest().value() + 1));
         assertThat(reopened.view(Coordinates.effectiveAt(on(2, 1))).entities("Organization")).isNotEmpty();
     }
