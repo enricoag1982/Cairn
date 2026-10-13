@@ -107,7 +107,7 @@ ADR-0010 (proposed) decides that schema identifiers are local to the store, neve
 - Transaction time comes from an injected `java.time.InstantSource` and is truncated to microseconds. If the clock has not moved forward, the next microsecond is used, so transaction times strictly increase.
 - The basis is a `long` counter. It will be shared with data transactions once they exist.
 - An `Origin` is a name and a version. The version is parsed into numbers and compared one number at a time.
-- Each type records the origin, name and version, that last changed it.
+- Each type records its origin, with the version of that origin's latest applied registration.
 - In `add-durable-commit-log`, a schema transaction becomes a commit-log record and the schema is stored as data in the key-value store (ADR-0011). The `SchemaRegistry` API stays the same.
 - Alternative: building directly on the key-value interface now. Rejected, because that interface does not exist yet, and building it here would pull ADR-0011's work into this change.
 

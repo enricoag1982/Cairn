@@ -41,11 +41,16 @@ The system SHALL give every entity type, trait, relationship type and attribute 
 
 ### Requirement: Unchanged registrations
 
-WHEN a registration's definition is equal to the stored definition of its origin, THE SYSTEM SHALL report the registration as unchanged and SHALL NOT record a transaction.
+WHEN a registration's definition is equal to the stored definition of its origin, THE SYSTEM SHALL report the registration as unchanged and SHALL NOT record a transaction. Definitions are equal when they contain the same elements, whatever the order in which types, attributes, traits and aliases are listed.
 
 #### Scenario: Registering the same model twice
 
 - **WHEN** the origin `reference-model` registers version `1.0.0` again with the same definition
+- **THEN** the result is "unchanged" and no transaction is recorded
+
+#### Scenario: Same model in a different order
+
+- **WHEN** the origin `reference-model` registers version `1.0.0` again with the same types listed in a different order
 - **THEN** the result is "unchanged" and no transaction is recorded
 
 ### Requirement: Schema history in transaction time

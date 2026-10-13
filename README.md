@@ -5,7 +5,7 @@ You define typed entities and relationships, with inheritance. An engine embedde
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** early. The first change, `add-type-model` (the schema API), is being implemented in `openspec/changes/`. The core design is in `proposed` decision records, open for review.
+> **Status:** early. The schema API (defining, validating, registering and evolving types) is built; entities, storage and queries are not. The core design is in `proposed` decision records, open for review.
 
 ## Ideas in one page
 

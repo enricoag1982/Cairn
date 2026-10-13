@@ -146,7 +146,8 @@ class SchemaEvolutionScenariosTest {
     }
 
     @Test
-    void theOrderOfDeclarationsDoesNotMatter() {
+    @DisplayName("Scenario: Same model in a different order")
+    void sameModelInADifferentOrder() {
         applied(register("1.0.0", ReferenceModel.definition()));
         SchemaDefinition reordered = new SchemaDefinition(
                 ReferenceModel.definition().entityTypes().reversed(),

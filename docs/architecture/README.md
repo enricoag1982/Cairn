@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-12
+last-reviewed: 2026-10-13
 owner: ""
 ---
 
@@ -9,7 +9,7 @@ This page describes the system as it is now, using the [arc42](https://arc42.org
 It is a living document: update it in the same pull request that changes the architecture, and bump `last-reviewed`.
 
 > [!NOTE]
-> **Current state:** nothing is built yet. The intended design is in `proposed` ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md). Fill in each section once the first capabilities are specified and built. Write "n/a" for sections that do not apply yet instead of deleting them.
+> **Current state:** only the schema API is built: defining, validating, registering and evolving types (the OpenSpec change `add-type-model`). Entities, relationships, storage and queries are not built yet. The intended design is in `proposed` ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md). Write "n/a" for sections that do not apply yet instead of deleting them.
 > Split a section into its own file in this folder when it outgrows a screen, and link it from here.
 
 ## 1. Introduction and goals
@@ -32,9 +32,11 @@ It is a living document: update it in the same pull request that changes the arc
 
 ```mermaid
 flowchart LR
-    user([User]) -->|uses| system[System<br/>tbd]
-    system -->|calls| ext[(External system<br/>tbd)]
+    app([Application on the JVM]) -->|embeds and calls| sysrec[sysRec engine<br/>sysrec-api + sysrec-core]
+    model([Model module<br/>types of one origin]) -->|registered by the application| sysrec
 ```
+
+sysRec runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md), proposed). It has no external systems yet.
 
 ## 4. Solution strategy
 
@@ -56,7 +58,16 @@ Proposed, not yet accepted:
 
 | Building block | Responsibility | Capabilities (specs) |
 | --- | --- | --- |
-| *tbd* | | |
+| `sysrec-api` | Public types: schema definitions and their builders, the resolved schema, problems, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model. | `type-model`, `schema-evolution` |
+| `sysrec-core` | The engine. Validates definitions, compiles them into a resolved schema with schema identifiers, checks compatibility, and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. | `type-model`, `schema-evolution` |
+| `build-logic` | The Gradle convention plugin shared by all Java modules ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)). | none |
+
+```mermaid
+flowchart LR
+    core[sysrec-core<br/>validator, compiler,<br/>compatibility checker,<br/>in-memory registry] -->|implements| api[sysrec-api<br/>definitions, schema,<br/>SchemaRegistry]
+    app([Application]) -->|uses| api
+    app -->|creates a registry with| core
+```
 
 ## 6. Runtime view
 
@@ -69,6 +80,11 @@ Proposed, not yet accepted:
 ## 8. Cross-cutting concepts
 
 <!-- Error handling, security, observability, persistence, configuration, testing strategy. -->
+
+- **Errors:** invalid input is never thrown. Registrations return a result that lists every problem, each with a stable code and a path; exceptions mean programming errors, such as a missing value.
+- **Concurrency:** registrations are serialized (the single writer). Each one publishes a new immutable state, so reads never lock.
+- **Time:** transaction times come from an injected clock, have microsecond precision and strictly increase.
+- **Testing:** each spec scenario has one test whose display name is the scenario's name. `ReferenceModelTest` keeps the reference model fixture in step with the [reference domain](../reference/reference-domain.md). Tests run with compact object headers on.
 
 ## 9. Architecture decisions
 

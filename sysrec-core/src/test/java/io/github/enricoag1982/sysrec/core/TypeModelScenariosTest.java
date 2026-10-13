@@ -171,16 +171,36 @@ class TypeModelScenariosTest {
     }
 
     @Test
-    void emptyAndMismatchedRangesAreReported() {
+    @DisplayName("Scenario: Range bound of the wrong value type")
+    void rangeBoundOfTheWrongValueType() {
         SchemaDefinition definition = SchemaDefinition.builder()
-                .entityType("Account", e -> e
-                        .attribute("limit", ValueType.INT, a -> a.range(
-                                Range.between(Bound.inclusive(Literal.of(10)), Bound.exclusive(Literal.of(10)))))
-                        .attribute("opened", ValueType.DATE, a -> a.range(Range.atLeast(Bound.inclusive(Literal.of(1))))))
+                .entityType("Account", e -> e.attribute("opened", ValueType.DATE,
+                        a -> a.range(Range.atLeast(Bound.inclusive(Literal.of(1))))))
                 .build();
 
-        assertThat(validate(definition)).map(Problem::code)
-                .containsExactlyInAnyOrder(ProblemCode.RANGE_EMPTY, ProblemCode.RANGE_LITERAL_MISMATCH);
+        assertSingleProblem(validate(definition), ProblemCode.RANGE_LITERAL_MISMATCH, "Account");
+    }
+
+    @Test
+    @DisplayName("Scenario: Empty range")
+    void emptyRange() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Account", e -> e.attribute("limit", ValueType.INT, a -> a.range(
+                        Range.between(Bound.inclusive(Literal.of(10)), Bound.exclusive(Literal.of(10))))))
+                .build();
+
+        assertSingleProblem(validate(definition), ProblemCode.RANGE_EMPTY, "Account");
+    }
+
+    @Test
+    void narrowerNumbersFitWiderAttributes() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Account", e -> e
+                        .attribute("balance", ValueType.DECIMAL, a -> a.range(Range.atLeast(Bound.inclusive(Literal.of(0L)))))
+                        .attribute("count", ValueType.LONG, a -> a.range(Range.atMost(Bound.inclusive(Literal.of(10))))))
+                .build();
+
+        assertThat(validate(definition)).isEmpty();
     }
 
     // ------------------------------------------------------------------ relationship types

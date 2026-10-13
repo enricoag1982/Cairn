@@ -54,7 +54,7 @@ The system SHALL support traits that declare attributes for entity types to incl
 
 Every attribute SHALL have a name and exactly one value type from: string, boolean, int (32-bit), long (64-bit), decimal, date and instant.
 An attribute MAY be marked required or unique. Attributes of type int, long, decimal, date or instant MAY declare a range, with a lower and an upper bound, each optional and each inclusive or exclusive.
-Attribute names MUST be unique across an entity type, its supertypes and the traits they include. A range MUST NOT be declared on a string or boolean attribute, and its lower bound MUST NOT exceed its upper bound.
+Attribute names MUST be unique across an entity type, its supertypes and the traits they include. A range MUST NOT be declared on a string or boolean attribute. Its bounds MUST fit the attribute's value type, where an int fits a long or decimal attribute and a long fits a decimal attribute. At least one value MUST fit the range: the lower bound is below the upper bound, or equal to it with both bounds inclusive.
 
 #### Scenario: Name declared twice in a hierarchy
 
@@ -69,6 +69,16 @@ Attribute names MUST be unique across an entity type, its supertypes and the tra
 #### Scenario: Range on an unordered value type
 
 - **WHEN** a boolean attribute declares a range
+- **THEN** validation fails with a problem located at that attribute
+
+#### Scenario: Range bound of the wrong value type
+
+- **WHEN** a date attribute declares a range whose lower bound is the int 1
+- **THEN** validation fails with a problem located at that attribute
+
+#### Scenario: Empty range
+
+- **WHEN** an int attribute declares a range from 10 (inclusive) to 10 (exclusive)
 - **THEN** validation fails with a problem located at that attribute
 
 #### Scenario: Valid range
