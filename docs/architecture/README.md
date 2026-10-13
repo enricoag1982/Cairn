@@ -9,7 +9,7 @@ This page describes the system as it is now, using the [arc42](https://arc42.org
 It is a living document: update it in the same pull request that changes the architecture, and bump `last-reviewed`.
 
 > [!NOTE]
-> **Current state:** only the schema API is built: defining, validating, registering and evolving types (the `type-model` and `schema-evolution` capabilities). Entities, relationships, storage and queries are not built yet. The intended design is in accepted ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](../research/2026-10-13-ai-native-schema-and-rules.md). Write "n/a" for sections that do not apply yet instead of deleting them.
+> **Current state:** only the schema API is built: defining, validating, planning, registering and evolving types (the `type-model` and `schema-evolution` capabilities), and schema documents (`schema-documents`). Entities, relationships, storage and queries are not built yet. The intended design is in accepted ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](../research/2026-10-13-ai-native-schema-and-rules.md). Write "n/a" for sections that do not apply yet instead of deleting them.
 > Split a section into its own file in this folder when it outgrows a screen, and link it from here.
 
 ## 1. Introduction and goals
@@ -63,13 +63,16 @@ Accepted, and built one change at a time:
 | --- | --- | --- |
 | `cairn-api` | Public types: schema definitions and their builders, the resolved schema with descriptions, constraints and rule references, rule descriptors, problems with their details and explained codes, plans, identifiers, origins and the `SchemaRegistry` interface. No dependencies. Its test fixtures hold the reference domain model and its rules. | `type-model`, `schema-evolution` |
 | `cairn-core` | The engine. Validates definitions against each other and the available rules, compiles them into a resolved schema with schema identifiers, checks compatibility, plans registrations, checks and matches patterns (I-Regexp, with RE2/J), and keeps the in-memory schema registry with its history. Exports only `SchemaRegistries`; everything else is internal. Its only runtime dependency is RE2/J ([ADR-0020](../decisions/0020-write-attribute-patterns-as-i-regexp-and-match-them-in-linear-time.md)). | `type-model`, `schema-evolution` |
-| `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `cairn.java-library` for every Java module, and `cairn.reference-domain-tests` for modules whose tests read the reference domain page. | none |
+| `cairn-documents` | Schema documents ([ADR-0012](../decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)): reads YAML 1.2 (and JSON) strictly into an origin and a schema definition, locates every problem in the document, writes definitions as YAML or JSON, and publishes the JSON Schema of the format. Depends on `cairn-api` and SnakeYAML Engine, not on `cairn-core`. | `schema-documents` |
+| `build-logic` | Gradle convention plugins ([ADR-0015](../decisions/0015-build-the-java-code-with-gradle.md)): `cairn.java-library` for every Java module, and `cairn.reference-domain-tests` for modules whose tests read the reference domain page or its schema document. Modules with a `module-info.java` get their whole compile classpath as module path, so that automatic modules such as RE2/J are found. | none |
 
 ```mermaid
 flowchart LR
     core[cairn-core<br/>validator, compiler,<br/>compatibility checker,<br/>planner, in-memory registry] -->|implements| api[cairn-api<br/>definitions, schema,<br/>rules, plans, SchemaRegistry]
-    app([Application]) -->|uses| api
+    docs[cairn-documents<br/>reader, writer,<br/>JSON Schema] -->|produces definitions for| api
+    app([Application, tool or agent]) -->|uses| api
     app -->|creates a registry with| core
+    app -->|reads and writes documents with| docs
 ```
 
 ## 6. Runtime view
