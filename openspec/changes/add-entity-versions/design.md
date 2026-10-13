@@ -12,6 +12,7 @@ Constraints that shape the approach:
 - ADR-0013: reads go through immutable views.
 - ADR-0017: dry runs, idempotency keys, principal, party acted for and reason.
 - ADR-0019: opaque IDs, one generator per store, UUIDv7 by default, temporary and supplied IDs.
+- ADR-0020: values are checked against patterns with the I-Regexp matcher that `cairn-core` already has.
 - ADR-0011 (storage behind an ordered key-value store and a commit log) is not built here. The in-memory store is shaped so the engine logic can later move onto that interface.
 
 ## Goals / Non-Goals
@@ -38,7 +39,7 @@ Constraints that shape the approach:
 ### D2. The public API, package `io.github.enricoag1982.cairn.data`
 
 - `Store`: `schema()` (its `SchemaRegistry`), `commit(Transaction)`, `dryRun(Transaction)`, `view(Coordinates)`, `latestBasis()`, and `transactions()` (the history of data transactions with who and why).
-- `Stores.inMemory()` and `Stores.inMemory(StoreSettings)` in `cairn-core`. `StoreSettings` holds the clock (`InstantSource`), the ID generator and the available rules (passed on to the schema registry), built through a builder with defaults.
+- `Stores.inMemory()` and `Stores.inMemory(StoreSettings)` in `cairn-core`, package `io.github.enricoag1982.cairn.core`. `StoreSettings` holds the clock (`InstantSource`), the ID generator and the available rules as `RuleDescriptor`s (passed on to the schema registry; `add-entity-rules` adds executable rules), built through a builder with defaults. `cairn-api`'s module exports the new package.
 - `Transaction(String principal, Optional<String> onBehalfOf, Optional<String> reason, Optional<String> idempotencyKey, List<Write> writes)`, built with `Transaction.by(principal)`, which offers `onBehalfOf`, `reason`, `idempotencyKey`, `create`, `patch`, `replace` and `endDate`.
 - `Write` is sealed:
   - `Create(Optional<TemporaryId> temporaryId, Optional<EntityId> id, String entityType, EffectivePeriod period, Map<String, Value> values)`
