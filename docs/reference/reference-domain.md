@@ -86,8 +86,9 @@ Scenarios reuse these stories and cite them by ID. Dates are in 2026 unless stat
 | RD-9 | Recorded 5 January: ACME has the LEI `5493001KJTIIGC8Y1R12` from 1 January. Recorded 1 February: creating Gamma, another organization, with the same LEI from 1 March is rejected while ACME's LEI is effective. | Uniqueness over time |
 | RD-10 | Effective 31 March, querying `Party` returns ACME, Beta and Alice; querying `Organization` returns ACME and Beta. | Polymorphic queries |
 | RD-11 | Purging Alice removes her facts from all of history and leaves a record that a purge happened. | Purge |
+| RD-12 | Recorded 1 March: creating Gamma, an organization with the LEI `5493001KJTIIGC8Y1R13`, is rejected, because its check digits are wrong. | Rules |
 
-The test fixture `ReferenceStories` builds the stories that need neither relationships nor queries (RD-1, RD-5, RD-7 and RD-9), and the scenario tests replay them in date order.
+The test fixture `ReferenceStories` builds the stories that need neither relationships nor queries (RD-1, RD-5, RD-7, RD-9 and RD-12), and the scenario tests replay them in date order.
 
 ## Datasets
 
