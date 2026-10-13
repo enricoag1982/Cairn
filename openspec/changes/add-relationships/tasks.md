@@ -22,6 +22,6 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Add `Link` and `Traversal` to `docs/glossary.md`, and update `Relationship`
+- [x] 4.1 Add `Link` and `Traversal` to `docs/glossary.md`, and update `Relationship`
 - [ ] 4.2 Update `docs/architecture/README.md`, `AGENTS.md` and `README.md` status, and bump `last-reviewed`
 - [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

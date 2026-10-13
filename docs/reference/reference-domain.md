@@ -87,6 +87,7 @@ Scenarios reuse these stories and cite them by ID. Dates are in 2026 unless stat
 | RD-10 | Effective 31 March, querying `Party` returns ACME, Beta and Alice; querying `Organization` returns ACME and Beta. | Polymorphic queries |
 | RD-11 | Purging Alice removes her facts from all of history and leaves a record that a purge happened. | Purge |
 | RD-12 | Recorded 1 March: creating Gamma, an organization with the LEI `5493001KJTIIGC8Y1R13`, is rejected, because its check digits are wrong. | Rules |
+| RD-13 | Recorded 1 April: Gamma, an organization, is created and owns 50% of Beta from 1 April. It is rejected, because together with ACME's 55% the owners of Beta would hold 105%. | Rules on relationships |
 
 The test fixture `ReferenceStories` builds the stories that need neither relationships nor queries (RD-1, RD-5, RD-7, RD-9 and RD-12), and the scenario tests replay them in date order.
 

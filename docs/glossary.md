@@ -21,6 +21,7 @@ These come with the template. Add domain terms in their own section below.
 | Capability | A cohesive area of behavior with its own spec in `openspec/specs/<capability>/spec.md`. |
 | Change | A proposed modification in `openspec/changes/<change-id>/`: proposal, delta specs, optional design, tasks. Archived when done. |
 | Delta spec | The part of a change that says which requirements are ADDED, MODIFIED, REMOVED or RENAMED. Merged into the main specs on archive. |
+| Link | One result of navigating from an entity: the relationship followed and the entity at its other end. See the `relationships` spec. |
 | Living document | A document describing the current state. It is edited in place and carries `last-reviewed`. |
 | Requirement | A normative statement (SHALL/MUST) inside a spec, with at least one scenario. |
 | Research note | Non-normative exploration in `docs/research/`. Its conclusions move into an ADR or a spec. |
@@ -81,7 +82,7 @@ Each definition links to the ADR or spec that defines the concept. Some describe
 | Receipt | The result of a committed transaction: its basis and transaction time, the IDs of the entities it created, and who and why. See the `transactions` spec. |
 | Reference domain | The made-up enterprise model used in scenarios, tests and examples. See [reference domain](reference/reference-domain.md). |
 | Registration | Submitting the complete set of one origin's types to a schema registry. It is applied as a schema transaction, reported as unchanged, or rejected with every problem. See the `schema-evolution` spec. |
-| Relationship | A first-class, directed link between two entities, with its own identity, attributes and effective timeline. Stored once and navigable in both directions. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
+| Relationship | A first-class, directed link between two entities, with its own identity, attributes and effective timeline. Stored once and navigable in both directions. It must lie within the lifetimes of both entities it links. See the `relationships` spec and [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Relationship type | The definition of a kind of relationship: source and target entity types, two multiplicities, inverse name, and composition or association. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Replace | A write that sets the complete state for an effective period. Attributes not mentioned are removed. See the `entity-versions` spec. |
 | Role | An entity that models something another entity is only for a while, such as being a customer. It is linked by a relationship with its own effective period. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
@@ -105,6 +106,7 @@ Each definition links to the ADR or spec that defines the concept. Some describe
 | Trait | A named set of attribute declarations that entity types can include. It has no entities and no storage of its own. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Transaction | An atomic set of writes, committed by the single writer. It gets a transaction time and a basis. See the `transactions` spec and [ADR-0007](decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md). |
 | Transaction time | When Cairn recorded a fact. The engine sets it at commit, and it only increases. See [ADR-0008](decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md). |
+| Traversal | Navigating relationships recursively from an entity, by one name, following only relationships that meet a condition, up to a maximum depth and visiting each entity once. See the `relationships` spec. |
 | Value type | The kind of value an attribute holds: string, boolean, int, long, decimal, date or instant. See the `type-model` spec. |
 | View | An immutable read handle created from a context. Its effective time, basis and meaning of "now" are fixed when it is created, so every read through it is repeatable. See the `views` spec and [ADR-0013](decisions/0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md). |
 | Write | One change in a transaction: create, patch, replace or end-date, each for an effective period. See the `entity-versions` spec. |
