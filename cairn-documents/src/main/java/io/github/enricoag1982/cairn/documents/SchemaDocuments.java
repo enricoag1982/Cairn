@@ -13,7 +13,9 @@ import java.util.Objects;
  *
  * <p>A schema document is YAML 1.2, or JSON, which is valid YAML 1.2: a mapping with the key {@code cairn}, whose
  * value is the format version 1, the key {@code origin}, and the optional keys {@code traits}, {@code entityTypes}
- * and {@code relationshipTypes}. A type definition uses the names of the schema definition's properties.
+ * and {@code relationshipTypes}, and {@code $schema}, which names the published JSON Schema for editors (reading
+ * ignores it and writing leaves it out). A type definition uses the names of the schema definition's properties.
+ * Numbers are written as JSON numbers.
  */
 public final class SchemaDocuments {
 
@@ -27,8 +29,10 @@ public final class SchemaDocuments {
      *
      * <p>Reading is strict. It reports every problem it finds, each with its location in the text, and returns no
      * definition if there is one: an unknown key (with the closest known key as a hint), a missing key that is
-     * required, a value of the wrong kind, a multiplicity or range written in another form, and YAML features outside
-     * the supported subset (anchors, aliases, explicit tags, merge keys, duplicate keys and more than one document).
+     * required, a value of the wrong kind (a number written in a form that only YAML knows, such as {@code 0x10},
+     * {@code 0o17}, {@code +1}, {@code .5}, {@code 1.} or {@code 01}, is one), a multiplicity or range written in
+     * another form, and YAML features outside the supported subset (anchors, aliases, explicit tags, merge keys,
+     * duplicate keys and more than one document).
      * A YAML syntax error stops reading and is the only problem reported. A format version other than 1 also ends
      * reading with that problem alone, because the keys of other versions are not known.
      *
@@ -49,12 +53,15 @@ public final class SchemaDocuments {
      * {@code relationshipTypes}; types and attributes are in the order of the definition, and the properties of an
      * element are in a fixed order. A property that has its default is left out: a boolean that is {@code false}, a
      * list that is empty, an optional that is absent and a relationship kind that is an association. Strings are
-     * quoted only where YAML 1.2 would read them as another type or where they contain special characters, and the
-     * version of the origin and the multiplicities always are. The text ends in a line break.
+     * quoted only where YAML 1.2 would read them as another type, where YAML 1.1 tools would read them as a boolean
+     * ({@code yes}, {@code no}, {@code on}, {@code off}, {@code y}, {@code n} and their variants in case), or where
+     * they contain special characters, and the version of the origin and the multiplicities always are. The text ends
+     * in a line break.
      *
      * <p>{@linkplain #read(String) Reading} the text gives back an equal origin and an equal definition, provided
      * that every literal has the value type of its attribute: a literal of another type is written as its own type
-     * and may be read as a literal of the attribute's type. Writing does not validate the definition; a definition
+     * and may be read as a literal of the attribute's type, so an int bound of a decimal attribute comes back as a
+     * decimal bound. Writing does not validate the definition; a definition
      * with two types of the same name is written as it is, and reading the text then reports the duplicate.
      *
      * @param origin     the origin, with its version

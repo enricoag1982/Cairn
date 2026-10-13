@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class DocumentReaderTest {
@@ -65,6 +66,7 @@ class DocumentReaderTest {
     @Test
     void everyPropertyIsRead() {
         String text = """
+                $schema: "urn:cairn:schema-document:1"
                 cairn: 1
                 origin: { name: kitchen-sink, version: "3.0" }
                 traits:
@@ -133,7 +135,8 @@ class DocumentReaderTest {
 
         assertThat(List.of(Keys.DOCUMENT, Keys.ORIGIN, Keys.TRAIT, Keys.ENTITY_TYPE, Keys.RELATIONSHIP_TYPE, Keys.ATTRIBUTE,
                 Keys.RANGE, Keys.RULE)).allSatisfy(keys -> assertThat(keys).allSatisfy(key ->
-                        assertThat(text).as("the document uses the key %s", key).containsPattern("\\b" + key + ":")));
+                        assertThat(text).as("the document uses the key %s", key)
+                                .containsPattern("(?<![\\w$])" + Pattern.quote(key) + ":")));
         assertThat(definition.traits()).containsExactly(new TraitDefinition("Named",
                 List.of(AttributeDefinition.builder("name", STRING).required().build()), List.of("Labelled"), true,
                 Optional.of("Something with a name.")));

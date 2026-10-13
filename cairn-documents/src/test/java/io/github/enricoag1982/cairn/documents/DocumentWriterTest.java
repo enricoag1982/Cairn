@@ -304,8 +304,10 @@ class DocumentWriterTest {
                 Arguments.of("1.0.0", "1.0.0"),
                 Arguments.of("2026-01-05", "2026-01-05"),
                 Arguments.of("2026-01-05T09:00:00Z", "2026-01-05T09:00:00Z"),
-                Arguments.of("yes", "yes"),
-                Arguments.of("NO", "NO"),
+                Arguments.of("yesterday", "yesterday"),
+                Arguments.of("no one", "no one"),
+                Arguments.of("Offset", "Offset"),
+                Arguments.of("yEs", "yEs"),
                 Arguments.of("1_000", "1_000"),
                 Arguments.of("é and 日本語", "é and 日本語"),
                 Arguments.of("", "\"\""),
@@ -314,6 +316,22 @@ class DocumentWriterTest {
                 Arguments.of("~", "\"~\""),
                 Arguments.of("true", "\"true\""),
                 Arguments.of("FALSE", "\"FALSE\""),
+                Arguments.of("y", "\"y\""),
+                Arguments.of("Y", "\"Y\""),
+                Arguments.of("yes", "\"yes\""),
+                Arguments.of("Yes", "\"Yes\""),
+                Arguments.of("YES", "\"YES\""),
+                Arguments.of("n", "\"n\""),
+                Arguments.of("N", "\"N\""),
+                Arguments.of("no", "\"no\""),
+                Arguments.of("No", "\"No\""),
+                Arguments.of("NO", "\"NO\""),
+                Arguments.of("on", "\"on\""),
+                Arguments.of("On", "\"On\""),
+                Arguments.of("ON", "\"ON\""),
+                Arguments.of("off", "\"off\""),
+                Arguments.of("Off", "\"Off\""),
+                Arguments.of("OFF", "\"OFF\""),
                 Arguments.of("123", "\"123\""),
                 Arguments.of("-5", "\"-5\""),
                 Arguments.of("1.5", "\"1.5\""),
@@ -361,6 +379,21 @@ class DocumentWriterTest {
 
         assertThat(SchemaDocuments.writeYaml(ORIGIN, definition)).contains("      " + written + ":\n");
         assertRoundTrip(ORIGIN, definition);
+    }
+
+    @Test
+    void wordsThatYaml11ReadsAsBooleansAreQuotedEverywhereAStringIsWritten() {
+        for (String word : List.of("y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "true", "True", "TRUE",
+                "false", "False", "FALSE", "on", "On", "ON", "off", "Off", "OFF")) {
+            AttributeDefinition note = AttributeDefinition.builder("note", ValueType.STRING).description(word)
+                    .examples(Literal.of(word)).allowedValues(word).aliases(word).build();
+            SchemaDefinition definition = definition(note);
+
+            assertThat(SchemaDocuments.writeYaml(ORIGIN, definition))
+                    .as(word).contains("description: \"" + word + "\"\n").contains("- \"" + word + "\"\n")
+                    .doesNotContain("- " + word + "\n").doesNotContain("description: " + word + "\n");
+            assertRoundTrip(ORIGIN, definition);
+        }
     }
 
     // ------------------------------------------------------------------ literals

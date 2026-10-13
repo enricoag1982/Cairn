@@ -3,8 +3,9 @@ package io.github.enricoag1982.cairn.documents;
 import java.util.List;
 
 /**
- * The keys of schema documents of format version 1, per position, in the order of the properties of the schema
- * definition. The reader accepts exactly these keys; the published JSON Schema declares the same ones (design D5, D8).
+ * The keys of schema documents of format version 1, per position, in the order in which the writer writes them: a type
+ * has its {@code description} first, then its other properties, and an attribute has its {@code type} first. The
+ * reader accepts exactly these keys; the published JSON Schema declares the same ones (design D5, D8).
  */
 final class Keys {
 
@@ -14,8 +15,11 @@ final class Keys {
     /** The path of problems about the origin. */
     static final String ORIGIN_PATH = "@origin";
 
-    /** The keys of the document. */
-    static final List<String> DOCUMENT = List.of("cairn", "origin", "traits", "entityTypes", "relationshipTypes");
+    /** The key that names the published JSON Schema for editors: the reader checks it is a string and ignores it. */
+    static final String SCHEMA = "$schema";
+
+    /** The keys of the document; {@value #SCHEMA} comes last because the writer never writes it. */
+    static final List<String> DOCUMENT = List.of("cairn", "origin", "traits", "entityTypes", "relationshipTypes", SCHEMA);
     /** The keys the document must have. */
     static final List<String> DOCUMENT_REQUIRED = List.of("cairn", "origin");
 

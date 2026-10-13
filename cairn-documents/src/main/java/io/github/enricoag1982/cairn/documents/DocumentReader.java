@@ -100,6 +100,7 @@ final class DocumentReader {
         List<RelationshipTypeDefinition> relationshipTypes = new ArrayList<>();
         for (Entry entry : top.get().values()) {
             switch (entry.key()) {
+                case Keys.SCHEMA -> string(entry, DOCUMENT_PATH, "value of '$schema'");
                 case "origin" -> origin = origin(entry);
                 case "traits" -> types(entry).forEach(type -> traits.add(trait(type)));
                 case "entityTypes" -> types(entry).forEach(type -> entityTypes.add(entityType(type)));
@@ -141,7 +142,7 @@ final class DocumentReader {
         if (root instanceof MappingNode mapping) {
             for (NodeTuple tuple : mapping.getValue()) {
                 if (tuple.getKeyNode() instanceof ScalarNode key && key.getValue().equals("cairn")
-                        && tuple.getValueNode() instanceof ScalarNode value && Scalars.isInteger(value)
+                        && tuple.getValueNode() instanceof ScalarNode value && Scalars.isJsonInteger(value)
                         && !Scalars.integerValue(value).equals(BigInteger.ONE)) {
                     return Optional.of(new Problem(ProblemCode.UNSUPPORTED_FORMAT_VERSION, DOCUMENT_PATH,
                             "This reader knows schema documents of format version 1, but the document declares version "
@@ -157,7 +158,7 @@ final class DocumentReader {
 
     /** Checks that the format version is an integer; its value was checked by {@link #unsupportedVersion}. */
     private void formatVersion(Entry cairn) {
-        if (cairn != null && !(cairn.value() instanceof ScalarNode scalar && Scalars.isInteger(scalar))) {
+        if (cairn != null && !(cairn.value() instanceof ScalarNode scalar && Scalars.isJsonInteger(scalar))) {
             invalidKind(cairn.value(), cairn.pointer(), DOCUMENT_PATH, "value of 'cairn'", "the integer 1");
         }
     }
@@ -375,7 +376,7 @@ final class DocumentReader {
                 return literal;
             }
         }
-        invalidKind(node, pointer, path, what, "a number, true or false, or a string");
+        invalidKind(node, pointer, path, what, "a number written as in JSON, true or false, or a string");
         return Optional.empty();
     }
 
@@ -618,12 +619,25 @@ final class DocumentReader {
 
     private void invalidKind(Node node, String pointer, String path, String what, String expected) {
         String found = describe(node);
-        String hint = null;
-        if (expected.equals("a string") && node instanceof ScalarNode scalar && !Scalars.isNull(scalar)) {
-            hint = "Put the value in quotes: \"" + scalar.getValue() + "\".";
-        }
         add(ProblemCode.INVALID_VALUE, path, capitalize("the " + what) + " must be " + expected + ", but it is " + found + ".",
-                expected, found, hint, location(pointer, node));
+                expected, found, hintForKind(node, expected), location(pointer, node));
+    }
+
+    /**
+     * How to fix a value of the wrong kind, if a hint helps: a number that only YAML knows is written as JSON writes it,
+     * and a scalar that is no string is put in quotes where a string is expected.
+     */
+    private static String hintForKind(Node node, String expected) {
+        if (!(node instanceof ScalarNode scalar)) {
+            return null;
+        }
+        if (Scalars.isYamlOnlyNumber(scalar) && (expected.contains("number") || expected.contains("integer"))) {
+            return Scalars.jsonForm(scalar).map(json -> "Write it as a JSON number, such as " + json + ".").orElse(null);
+        }
+        if (expected.equals("a string") && !Scalars.isNull(scalar)) {
+            return "Put the value in quotes: \"" + scalar.getValue() + "\".";
+        }
+        return null;
     }
 
     private void add(ProblemCode code, String path, String message, String expected, String found, String hint,
@@ -646,6 +660,8 @@ final class DocumentReader {
                 ? scalar.getValue().substring(0, SHOWN_LENGTH) + "..." : scalar.getValue();
         if (Scalars.isNull(scalar)) {
             return "empty (null)";
+        } else if (Scalars.isYamlOnlyNumber(scalar)) {
+            return "the number " + text + ", which JSON does not write like that";
         } else if (Scalars.isInteger(scalar) || Scalars.isFloat(scalar)) {
             return "the number " + text;
         } else if (Scalars.isBoolean(scalar)) {

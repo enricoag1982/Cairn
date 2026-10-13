@@ -24,7 +24,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Round trips over definitions that a seeded generator produces (design D7): what the writer writes, the reader reads
  * back as an equal origin and definition, in both formats, and the documents are valid against the published JSON
- * Schema.
+ * Schema. The one difference is that a number of a narrower type than its attribute's, such as an int bound of a decimal
+ * attribute, comes back in the attribute's type.
  */
 class RoundTripTest {
 
@@ -61,7 +62,7 @@ class RoundTripTest {
                 SchemaDocument document = ((DocumentReadResult.Read) result).document();
                 assertThat(document.origin()).as("seed %d origin of:%n%s", seed, text).isEqualTo(generated.origin());
                 assertThat(document.definition()).as("seed %d definition of:%n%s", seed, text)
-                        .isEqualTo(generated.definition());
+                        .isEqualTo(generated.readBack());
             }
         }
     }
@@ -91,10 +92,40 @@ class RoundTripTest {
             String yaml = SchemaDocuments.writeYaml(generated.origin(), generated.definition());
             String json = SchemaDocuments.writeJson(generated.origin(), generated.definition());
 
-            assertThat(JsonSchemas.errors(yaml)).as("seed %d as YAML:%n%s", seed, yaml).isEmpty();
-            assertThat(JsonSchemas.errors(json)).as("seed %d as JSON, converted:%n%s", seed, json).isEmpty();
-            assertThat(JsonSchemas.errorsOfJson(json)).as("seed %d as JSON:%n%s", seed, json).isEmpty();
+            assertThat(PublishedSchemaCheck.errors(yaml)).as("seed %d as YAML:%n%s", seed, yaml).isEmpty();
+            assertThat(PublishedSchemaCheck.errors(json)).as("seed %d as JSON, converted:%n%s", seed, json).isEmpty();
+            assertThat(PublishedSchemaCheck.errorsOfJson(json)).as("seed %d as JSON:%n%s", seed, json).isEmpty();
         }
+    }
+
+    @Test
+    @DisplayName("Widened numbers come back in the attribute's type, and everything else is equal")
+    void widenedNumbersComeBackInTheAttributesType() {
+        int widened = 0;
+        for (int seed = 0; seed < SEEDS; seed++) {
+            Generated generated = GeneratedDefinitions.generate(seed);
+            widened += (int) attributes(generated.definition()).filter(RoundTripTest::hasNarrowerNumber).count();
+            for (String text : List.of(
+                    SchemaDocuments.writeYaml(generated.origin(), generated.definition()),
+                    SchemaDocuments.writeJson(generated.origin(), generated.definition()))) {
+                SchemaDefinition definition = Documents.valid(text).definition();
+
+                attributes(definition).forEach(attribute -> {
+                    assertThat(attribute.examples()).allSatisfy(example ->
+                            assertThat(example.valueType()).isEqualTo(attribute.valueType()));
+                    assertThat(bounds(attribute).toList()).allSatisfy(bound ->
+                            assertThat(bound.value().valueType()).isEqualTo(attribute.valueType()));
+                });
+                assertThat(definition).as("seed %d", seed).isEqualTo(generated.readBack());
+            }
+        }
+        assertThat(widened).as("attributes with a number of a narrower type").isPositive();
+    }
+
+    /** Tells whether an attribute has an example or a bound that is a number of a narrower type than the attribute. */
+    private static boolean hasNarrowerNumber(AttributeDefinition attribute) {
+        return Stream.concat(attribute.examples().stream(), bounds(attribute).map(Bound::value))
+                .anyMatch(literal -> literal.valueType() != attribute.valueType());
     }
 
     @Test
@@ -182,14 +213,33 @@ class RoundTripTest {
     }
 
     @Test
-    void everyBoundAndExampleHasTheValueTypeOfItsAttribute() {
+    void theGeneratedNumbersOfANarrowerTypeAreWidenedByReadBack() {
         for (Generated generated : GENERATED) {
-            attributes(generated.definition()).forEach(attribute -> {
+            attributes(generated.readBack()).forEach(attribute -> {
                 assertThat(attribute.examples()).allSatisfy(example ->
                         assertThat(example.valueType()).isEqualTo(attribute.valueType()));
                 assertThat(bounds(attribute).toList()).allSatisfy(bound ->
                         assertThat(bound.value().valueType()).isEqualTo(attribute.valueType()));
             });
+        }
+    }
+
+    @Test
+    void theGeneratedAttributesHaveNumbersOfNarrowerTypes() {
+        // The attribute's type and the type of the number written for it.
+        List<List<ValueType>> widenings = List.of(
+                List.of(ValueType.LONG, ValueType.INT),
+                List.of(ValueType.DECIMAL, ValueType.INT),
+                List.of(ValueType.DECIMAL, ValueType.LONG));
+        for (List<ValueType> widening : widenings) {
+            ValueType attributeType = widening.get(0);
+            ValueType literalType = widening.get(1);
+            assertSomeAttribute("an example of the type " + literalType + " on an attribute of the type " + attributeType,
+                    a -> a.valueType() == attributeType
+                            && a.examples().stream().anyMatch(example -> example.valueType() == literalType));
+            assertSomeAttribute("a bound of the type " + literalType + " on an attribute of the type " + attributeType,
+                    a -> a.valueType() == attributeType
+                            && bounds(a).anyMatch(bound -> bound.value().valueType() == literalType));
         }
     }
 

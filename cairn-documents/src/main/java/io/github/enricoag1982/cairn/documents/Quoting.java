@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.documents;
 
 import java.util.HexFormat;
+import java.util.Set;
 import org.snakeyaml.engine.v2.nodes.Tag;
 import org.snakeyaml.engine.v2.resolver.ScalarResolver;
 import org.snakeyaml.engine.v2.schema.CoreSchema;
@@ -9,13 +10,23 @@ import org.snakeyaml.engine.v2.schema.CoreSchema;
  * How strings are written (design D7): in double quotes, with escapes that mean the same in JSON and in YAML 1.2, or,
  * in YAML, plain where that is safe.
  *
- * <p>A string is written plain only if it is made of characters that cannot be mistaken for YAML syntax, and the YAML
- * 1.2 core schema, which the reader uses too, resolves it to a string rather than to a number, a boolean or null.
+ * <p>A string is written plain only if it is made of characters that cannot be mistaken for YAML syntax, the YAML 1.2
+ * core schema, which the reader uses too, resolves it to a string rather than to a number, a boolean or null, and it is
+ * no word that YAML 1.1 tools read as a boolean ({@code yes}, {@code no}, {@code on}, {@code off}, {@code y} and
+ * {@code n}), so that those tools read it as a string as well.
  */
 final class Quoting {
 
     private static final ScalarResolver RESOLVER = new CoreSchema().getScalarResolver();
     private static final HexFormat HEX = HexFormat.of();
+
+    /**
+     * The words that YAML 1.1 reads as a boolean. The ones that YAML 1.2 reads as a boolean or as null too ({@code true},
+     * {@code false}, {@code null}, {@code ~}) are quoted because of the core schema.
+     */
+    private static final Set<String> YAML_1_1_BOOLEANS = Set.of(
+            "y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO",
+            "true", "True", "TRUE", "false", "False", "FALSE", "on", "On", "ON", "off", "Off", "OFF");
 
     /** The characters other than letters and digits that a plain string may contain. */
     private static final String PLAIN_PUNCTUATION = " _-.,()/+=;:'?!%&*@$<>^";
@@ -35,7 +46,7 @@ final class Quoting {
             return false;
         }
         boolean safe = text.codePoints().allMatch(Quoting::isPlainCharacter);
-        return safe && Tag.STR.equals(RESOLVER.resolve(text, true));
+        return safe && !YAML_1_1_BOOLEANS.contains(text) && Tag.STR.equals(RESOLVER.resolve(text, true));
     }
 
     private static boolean startsPlain(int codePoint) {

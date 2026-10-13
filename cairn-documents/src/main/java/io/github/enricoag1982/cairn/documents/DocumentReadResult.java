@@ -27,8 +27,8 @@ public sealed interface DocumentReadResult {
     /**
      * The text has problems, so there is no definition. Every problem is located in the text.
      *
-     * @param problems every problem found, in the order of the text; a syntax error is the only problem, because it
-     *                 stops reading
+     * @param problems every problem found, in the order of the text; a syntax error or a format version other than 1 is
+     *                 the only problem, because it stops reading
      */
     record Invalid(List<Problem> problems) implements DocumentReadResult {
         /**

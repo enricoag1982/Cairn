@@ -40,19 +40,30 @@ class LiteralReadingTest {
 
     @Test
     void numbersAreReadByTheValueTypeOfTheAttribute() {
-        assertThat(examples("int", "[0, 7, -3, +5]")).containsExactly(
-                Literal.of(0), Literal.of(7), Literal.of(-3), Literal.of(5));
+        assertThat(examples("int", "[0, 7, -3, 12]")).containsExactly(
+                Literal.of(0), Literal.of(7), Literal.of(-3), Literal.of(12));
         assertThat(examples("long", "[0, 7, 3000000000, -9223372036854775808]")).containsExactly(
                 Literal.of(0L), Literal.of(7L), Literal.of(3000000000L), Literal.of(Long.MIN_VALUE));
-        assertThat(examples("decimal", "[0, 7, 1.5, -0.25, .5, 1e3]")).containsExactly(
+        assertThat(examples("decimal", "[0, 7, 1.5, -0.25, 0.5, 1e3]")).containsExactly(
                 Literal.of(new BigDecimal("0")), Literal.of(new BigDecimal("7")), Literal.of(new BigDecimal("1.5")),
                 Literal.of(new BigDecimal("-0.25")), Literal.of(new BigDecimal("0.5")), Literal.of(new BigDecimal("1E+3")));
     }
 
     @Test
-    void hexadecimalAndOctalIntegersAreIntegers() {
-        assertThat(examples("int", "[0x1F, 0o17]")).containsExactly(Literal.of(31), Literal.of(15));
-        assertThat(examples("decimal", "[0x10]")).containsExactly(Literal.of(new BigDecimal("16")));
+    void hexadecimalAndOctalIntegersAreNoNumbersOfADocument() {
+        for (String example : List.of("0x1F", "0o17")) {
+            for (String type : List.of("int", "long", "decimal")) {
+                Problem problem = problem(document(
+                        "entityTypes:",
+                        "  Thing:",
+                        "    attributes:",
+                        "      value: { type: " + type + ", examples: [" + example + "] }"));
+
+                assertThat(problem.code()).as(example + " " + type).isEqualTo(ProblemCode.INVALID_VALUE);
+                assertThat(problem.location().orElseThrow().pointer()).as(example + " " + type)
+                        .isEqualTo("/entityTypes/Thing/attributes/value/examples/0");
+            }
+        }
     }
 
     @Test

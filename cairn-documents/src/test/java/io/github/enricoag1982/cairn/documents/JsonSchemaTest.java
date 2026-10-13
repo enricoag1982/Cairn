@@ -32,6 +32,7 @@ class JsonSchemaTest {
     static Stream<Arguments> validDocuments() {
         return Stream.of(
                 Arguments.of("only the required keys", HEADER),
+                Arguments.of("a $schema key", "$schema: \"urn:cairn:schema-document:1\"\n" + HEADER),
                 Arguments.of("every section empty", document("traits: {}", "entityTypes: {}", "relationshipTypes: {}")),
                 Arguments.of("types with all defaults", document("traits:", "  Named: {}", "entityTypes:", "  Thing: {}")),
                 Arguments.of("an entity type with every property", document(
@@ -83,7 +84,7 @@ class JsonSchemaTest {
                         "  A2: { source: A, target: B, inverseName: a2, targetsPerSource: \"0..*\", sourcesPerTarget: \"1..*\" }")),
                 Arguments.of("examples of any scalar", attribute("type: date, examples: [1, 1.5, abc, true, 2026-01-05]")),
                 Arguments.of("string constraints", attribute(
-                        "type: string, allowedValues: [a, b], pattern: \"[a-z]+\", minLength: 0, maxLength: 0x10")),
+                        "type: string, allowedValues: [a, b], pattern: \"[a-z]+\", minLength: 0, maxLength: 16")),
                 Arguments.of("an empty range", attribute("type: int, range: {}")),
                 Arguments.of("a range with one bound", attribute("type: int, range: { lessThan: 99999999999999999999 }")),
                 Arguments.of("a range with both bounds", attribute("type: decimal, range: { greaterThan: 0, atMost: 1.5 }")),
@@ -136,6 +137,8 @@ class JsonSchemaTest {
                 Arguments.of("a format version in quotes", "cairn: \"1\"\norigin: { name: test-model, version: \"1\" }\n"),
                 Arguments.of("a format version that is no integer", "cairn: 1.5\norigin: { name: test-model, version: \"1\" }\n"),
                 // values of the wrong kind
+                Arguments.of("a $schema that is a number", "$schema: 5\n" + HEADER),
+                Arguments.of("a $schema that is empty", "$schema:\n" + HEADER),
                 Arguments.of("a version that is a number", "cairn: 1\norigin: { name: test-model, version: 1.10 }\n"),
                 Arguments.of("a version that is an integer", "cairn: 1\norigin: { name: test-model, version: 1 }\n"),
                 Arguments.of("an origin name that is a boolean", "cairn: 1\norigin: { name: true, version: \"1\" }\n"),
@@ -177,25 +180,25 @@ class JsonSchemaTest {
     @MethodSource("validDocuments")
     void aDocumentThatTheReaderAcceptsIsValid(String name, String text) {
         assertThat(SchemaDocuments.read(text)).as("reading").isInstanceOf(DocumentReadResult.Read.class);
-        assertThat(JsonSchemas.errors(text)).as("errors of the JSON Schema").isEmpty();
+        assertThat(PublishedSchemaCheck.errors(text)).as("errors of the JSON Schema").isEmpty();
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidDocuments")
     void aDocumentWithAProblemIsInvalidAndTheReaderRejectsIt(String name, String text) {
         assertThat(SchemaDocuments.read(text)).as("reading").isInstanceOf(DocumentReadResult.Invalid.class);
-        assertThat(JsonSchemas.errors(text)).as("errors of the JSON Schema").isNotEmpty();
+        assertThat(PublishedSchemaCheck.errors(text)).as("errors of the JSON Schema").isNotEmpty();
     }
 
     @Test
     void theErrorNamesTheUnknownKey() {
-        assertThat(JsonSchemas.errors(attribute("type: string, requird: true")))
+        assertThat(PublishedSchemaCheck.errors(attribute("type: string, requird: true")))
                 .anySatisfy(error -> assertThat(error.getMessage()).contains("requird"));
     }
 
     @Test
     void theErrorNamesTheMissingKey() {
-        assertThat(JsonSchemas.errors("cairn: 1\norigin: { name: test-model }\n"))
+        assertThat(PublishedSchemaCheck.errors("cairn: 1\norigin: { name: test-model }\n"))
                 .anySatisfy(error -> assertThat(error.getMessage()).contains("version"));
     }
 
@@ -204,17 +207,17 @@ class JsonSchemaTest {
         String yaml = SchemaDocuments.writeYaml(ReferenceModel.origin("1.0.0"), ReferenceModel.definition());
         String json = SchemaDocuments.writeJson(ReferenceModel.origin("1.0.0"), ReferenceModel.definition());
 
-        assertThat(JsonSchemas.errors(yaml)).isEmpty();
-        assertThat(JsonSchemas.errors(json)).isEmpty();
-        assertThat(JsonSchemas.errorsOfJson(json)).isEmpty();
+        assertThat(PublishedSchemaCheck.errors(yaml)).isEmpty();
+        assertThat(PublishedSchemaCheck.errors(json)).isEmpty();
+        assertThat(PublishedSchemaCheck.errorsOfJson(json)).isEmpty();
     }
 
     @Test
     void theReferenceDocumentIsValidAsItIsAndAsJson() throws IOException {
         SchemaDocument document = Documents.valid(Documents.referenceModelText());
 
-        assertThat(JsonSchemas.errors(Documents.referenceModelText())).isEmpty();
-        assertThat(JsonSchemas.errorsOfJson(SchemaDocuments.writeJson(document.origin(), document.definition()))).isEmpty();
+        assertThat(PublishedSchemaCheck.errors(Documents.referenceModelText())).isEmpty();
+        assertThat(PublishedSchemaCheck.errorsOfJson(SchemaDocuments.writeJson(document.origin(), document.definition()))).isEmpty();
     }
 
     @Test

@@ -56,7 +56,8 @@ ADR-0012 makes YAML 1.2 schema documents the canonical definition of types, with
 
 ### D6. Literals in documents
 
-- Numbers follow the JSON number grammar; YAML-only forms (`0x10`, `0o17`, `+1`, `.5`) are `INVALID_VALUE`, so that every document is also valid JSON in meaning.
+- Numbers follow the JSON number grammar; YAML-only forms (`0x10`, `0o17`, `+1`, `.5`, `1.`, `01`, `.inf`, `.nan`) are `INVALID_VALUE`, so that every document is also valid JSON in meaning. Booleans are read as the YAML 1.2 core schema reads them (`true`, `True`, `TRUE`, and the same for false); the writer writes `true` and `false`.
+- A top-level `$schema` key is accepted and ignored, so that JSON editors can find the published JSON Schema.
 - A scalar is converted by the attribute's value type: an int, long or decimal from a plain (unquoted) number, a boolean from plain `true` or `false`, a string, date or instant from any string scalar.
 - When the scalar does not fit the value type, the reader keeps it as a literal of its own YAML type (string, boolean, integer as int or long, or decimal), so that validation reports `INVALID_EXAMPLE` or `RANGE_LITERAL_MISMATCH` with the expected and found types. Validation stays in one place, the engine.
 - A range is a mapping with at most one of `atLeast` and `greaterThan`, and at most one of `atMost` and `lessThan`; both forms of the same side are an `INVALID_VALUE`.

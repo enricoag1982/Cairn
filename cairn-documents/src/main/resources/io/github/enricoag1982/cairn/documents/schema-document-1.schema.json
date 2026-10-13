@@ -7,6 +7,10 @@
   "additionalProperties": false,
   "required": ["cairn", "origin"],
   "properties": {
+    "$schema": {
+      "description": "The location of the JSON Schema that describes this document, for editors that look for it. Cairn does not read it and does not write it.",
+      "type": "string"
+    },
     "cairn": {
       "description": "The version of the document format. It must be the integer 1.",
       "type": "integer",

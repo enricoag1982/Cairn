@@ -8,12 +8,12 @@ import com.networknt.schema.SpecificationVersion;
 import java.util.List;
 
 /** Checks documents against the published JSON Schema with json-schema-validator. */
-final class JsonSchemas {
+final class PublishedSchemaCheck {
 
     private static final Schema SCHEMA = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
             .getSchema(SchemaDocuments.jsonSchema(), InputFormat.JSON);
 
-    private JsonSchemas() {
+    private PublishedSchemaCheck() {
     }
 
     /**

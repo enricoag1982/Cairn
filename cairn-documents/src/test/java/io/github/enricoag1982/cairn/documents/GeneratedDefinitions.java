@@ -35,6 +35,10 @@ import java.util.Set;
  * supertypes, traits, compositions, symmetric types, inverse aliases and all four multiplicities. They are not
  * registered, so they need not be valid in every respect. Strings are chosen to be awkward for YAML and JSON: words that
  * read as numbers, booleans or null, syntax characters, escapes, control characters and non-ASCII text.
+ *
+ * <p>Some examples and bounds of long and decimal attributes are numbers of a narrower type, an int on a long or a
+ * decimal attribute and a long on a decimal one. A document does not tell them apart from numbers of the attribute's
+ * type, so reading the written document gives them back in the attribute's type ({@link Generated#readBack()}).
  */
 final class GeneratedDefinitions {
 
@@ -42,10 +46,23 @@ final class GeneratedDefinitions {
      * One generated document.
      *
      * @param origin     the origin
-     * @param definition the schema definition
+     * @param definition the schema definition, as it is written: a number may be of a narrower type than its attribute
      */
     record Generated(Origin origin, SchemaDefinition definition) {
+
+        /**
+         * The definition as reading the written document gives it back: every number of a narrower type than its
+         * attribute's is in the attribute's type, and everything else is as generated.
+         *
+         * @return the definition with widened numbers
+         */
+        SchemaDefinition readBack() {
+            return widened(definition);
+        }
     }
+
+    /** The share of examples and bounds of long and decimal attributes that are numbers of a narrower type. */
+    private static final double NARROWER = 0.3;
 
     private static final List<String> AWKWARD_STRINGS = List.of(
             "", " ", " leading", "trailing ", "null", "Null", "~", "true", "False", "yes", "NO", "123", "-1", "+5", "1.5",
@@ -172,7 +189,7 @@ final class GeneratedDefinitions {
         boolean string = type == ValueType.STRING;
         List<Literal> examples = new ArrayList<>();
         for (int i = between(0, 3); i > 0; i--) {
-            examples.add(literal(type));
+            examples.add(written(type));
         }
         List<String> allowedValues = new ArrayList<>();
         if (string && chance(0.3)) {
@@ -198,22 +215,44 @@ final class GeneratedDefinitions {
 
     /** A range whose bounds have the attribute's value type; each bound is optional, so a range may have none. */
     private Range range(ValueType type) {
-        Optional<Bound> lower = chance(0.6) ? Optional.of(new Bound(literal(type), chance(0.5))) : Optional.empty();
-        Optional<Bound> upper = chance(0.6) ? Optional.of(new Bound(literal(type), chance(0.5))) : Optional.empty();
+        Optional<Bound> lower = chance(0.6) ? Optional.of(new Bound(written(type), chance(0.5))) : Optional.empty();
+        Optional<Bound> upper = chance(0.6) ? Optional.of(new Bound(written(type), chance(0.5))) : Optional.empty();
         return new Range(lower, upper);
+    }
+
+    /**
+     * A literal as it is written for an attribute: of the attribute's value type, or, for a long or a decimal attribute,
+     * now and then a number of a narrower type.
+     */
+    private Literal written(ValueType type) {
+        if (type == ValueType.LONG && chance(NARROWER)) {
+            return Literal.of(intValue());
+        }
+        if (type == ValueType.DECIMAL && chance(NARROWER)) {
+            return chance(0.5) ? Literal.of(intValue()) : Literal.of(longValue());
+        }
+        return literal(type);
     }
 
     private Literal literal(ValueType type) {
         return switch (type) {
             case STRING -> Literal.of(text());
             case BOOLEAN -> Literal.of(random.nextBoolean());
-            case INT -> Literal.of(pick(List.of(0, 1, -1, 100, Integer.MIN_VALUE, Integer.MAX_VALUE, random.nextInt())));
-            case LONG -> Literal.of(pick(List.of(0L, -1L, 3_000_000_000L, Long.MIN_VALUE, Long.MAX_VALUE, random.nextLong(),
-                    (long) random.nextInt())));
+            case INT -> Literal.of(intValue());
+            case LONG -> Literal.of(longValue());
             case DECIMAL -> Literal.of(decimal());
             case DATE -> Literal.of(LocalDate.ofEpochDay(between(-1_000_000, 3_000_000)));
             case INSTANT -> Literal.of(instant());
         };
+    }
+
+    private int intValue() {
+        return pick(List.of(0, 1, -1, 100, Integer.MIN_VALUE, Integer.MAX_VALUE, random.nextInt()));
+    }
+
+    private long longValue() {
+        return pick(List.of(0L, -1L, 3_000_000_000L, Long.MIN_VALUE, Long.MAX_VALUE, random.nextLong(),
+                (long) random.nextInt()));
     }
 
     /** A decimal with a scale from -3 to 10: a negative scale is a value like 1E+3, a scale of 2 keeps 1.50 apart from 1.5. */
@@ -310,5 +349,47 @@ final class GeneratedDefinitions {
             }
         }
         return chosen;
+    }
+
+    // ------------------------------------------------------------------ what reading gives back
+
+    /** The definition with every number in the value type of its attribute; everything else is as it is. */
+    static SchemaDefinition widened(SchemaDefinition definition) {
+        return new SchemaDefinition(
+                definition.entityTypes().stream().map(type -> new EntityTypeDefinition(type.name(), type.isAbstract(),
+                        type.supertype(), type.traits(), widened(type.attributes()), type.aliases(), type.deprecated(),
+                        type.description(), type.rules())).toList(),
+                definition.traits().stream().map(trait -> new TraitDefinition(trait.name(), widened(trait.attributes()),
+                        trait.aliases(), trait.deprecated(), trait.description())).toList(),
+                definition.relationshipTypes().stream().map(type -> new RelationshipTypeDefinition(type.name(),
+                        type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
+                        type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(), widened(type.attributes()),
+                        type.aliases(), type.deprecated(), type.description(), type.rules())).toList());
+    }
+
+    private static List<AttributeDefinition> widened(List<AttributeDefinition> attributes) {
+        return attributes.stream().map(GeneratedDefinitions::widened).toList();
+    }
+
+    private static AttributeDefinition widened(AttributeDefinition attribute) {
+        ValueType type = attribute.valueType();
+        return new AttributeDefinition(attribute.name(), type, attribute.required(), attribute.unique(),
+                attribute.range().map(range -> new Range(
+                        range.lower().map(bound -> new Bound(widened(bound.value(), type), bound.inclusive())),
+                        range.upper().map(bound -> new Bound(widened(bound.value(), type), bound.inclusive())))),
+                attribute.aliases(), attribute.deprecated(), attribute.description(),
+                attribute.examples().stream().map(example -> widened(example, type)).toList(), attribute.allowedValues(),
+                attribute.pattern(), attribute.minLength(), attribute.maxLength());
+    }
+
+    /** A number in the value type of its attribute: an int becomes a long or a decimal, and a long a decimal. */
+    private static Literal widened(Literal literal, ValueType type) {
+        return switch (literal) {
+            case Literal.IntLiteral integer when type == ValueType.LONG -> Literal.of((long) integer.value());
+            case Literal.IntLiteral integer when type == ValueType.DECIMAL ->
+                    Literal.of(BigDecimal.valueOf(integer.value()));
+            case Literal.LongLiteral number when type == ValueType.DECIMAL -> Literal.of(BigDecimal.valueOf(number.value()));
+            default -> literal;
+        };
     }
 }

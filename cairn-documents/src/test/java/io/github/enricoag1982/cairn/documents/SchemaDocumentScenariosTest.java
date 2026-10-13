@@ -174,6 +174,19 @@ class SchemaDocumentScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Problem outside every element")
+    void problemOutsideEveryElement() {
+        Problem problem = problem(document(
+                "entityType:",
+                "  Address:",
+                "    attributes:",
+                "      street: { type: string, required: true }"));
+
+        assertProblem(problem, ProblemCode.UNKNOWN_KEY, "@document", "/entityType", 3, 1);
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("entityTypes"));
+    }
+
+    @Test
     @DisplayName("Scenario: Locating an attribute problem")
     void locatingAnAttributeProblem() throws IOException {
         String text = Documents.referenceModelText().replace("balance: { type: decimal, required: true }",
@@ -201,6 +214,35 @@ class SchemaDocumentScenariosTest {
         assertThat(fromYaml.definition()).isEqualTo(definition);
         assertThat(fromJson.origin()).isEqualTo(origin);
         assertThat(fromJson.definition()).isEqualTo(definition);
+    }
+
+    @Test
+    @DisplayName("Scenario: Widened numbers come back in the attribute's type")
+    void widenedNumbersComeBackInTheAttributesType() {
+        Origin origin = new Origin("test-model", "1.0.0");
+        SchemaDefinition written = account(Literal.of(0));
+        SchemaDefinition expected = account(Literal.of(new BigDecimal("0")));
+
+        for (String text : List.of(SchemaDocuments.writeYaml(origin, written), SchemaDocuments.writeJson(origin, written))) {
+            SchemaDocument document = valid(text);
+
+            assertThat(document.definition().entityTypes()).singleElement().satisfies(account ->
+                    assertThat(account.attributes().getLast().range())
+                            .contains(Range.atLeast(Bound.inclusive(Literal.of(new BigDecimal("0"))))));
+            assertThat(document.definition()).isEqualTo(expected);
+            assertThat(document.definition()).isNotEqualTo(written);
+        }
+    }
+
+    /** An entity type Account whose decimal attribute balance has a range from a bound, included. */
+    private static SchemaDefinition account(Literal lowerBound) {
+        return SchemaDefinition.builder()
+                .entityType("Account", e -> e
+                        .description("Holds a balance.")
+                        .attribute("currency", ValueType.STRING, a -> a.required().pattern("[A-Z]{3}"))
+                        .attribute("balance", ValueType.DECIMAL, a -> a.required()
+                                .range(Range.atLeast(Bound.inclusive(lowerBound)))))
+                .build();
     }
 
     @Test
@@ -235,7 +277,7 @@ class SchemaDocumentScenariosTest {
     @Test
     @DisplayName("Scenario: The reference document is valid")
     void theReferenceDocumentIsValid() throws IOException {
-        assertThat(JsonSchemas.errors(Documents.referenceModelText())).isEmpty();
+        assertThat(PublishedSchemaCheck.errors(Documents.referenceModelText())).isEmpty();
     }
 
     @Test
@@ -244,7 +286,7 @@ class SchemaDocumentScenariosTest {
         String text = Documents.referenceModelText().replace("number: { type: string, required: true, unique: true }",
                 "number: { type: string, requird: true, unique: true }");
 
-        assertThat(JsonSchemas.errors(text)).isNotEmpty()
+        assertThat(PublishedSchemaCheck.errors(text)).isNotEmpty()
                 .anySatisfy(error -> assertThat(error.getMessage()).contains("requird"));
     }
 }
