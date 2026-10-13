@@ -121,7 +121,7 @@ SirixDB is an embeddable, append-only, bitemporal store written in Java. It vers
   - CEL expressions need their own ADR.
 - Next steps, as OpenSpec changes in this order. This replaces the list in the [API research note](2026-10-12-graph-system-of-record-api.md#conclusion):
   1. Accept or reject the proposed ADRs that `add-type-model` relies on, then archive it.
-  2. `add-schema-documents`: the YAML 1.2 format and its JSON Schema; descriptions, examples, allowed values, patterns and lengths; rule references checked against registered rules; planning a schema change; problems with expected and actual values and hints, and the catalog of codes. The reference model becomes a document.
+  2. `add-schema-documents`: the YAML 1.2 format and its JSON Schema; descriptions, examples, allowed values, patterns and lengths; rule references checked against registered rules; planning a schema change; problems with expected and actual values and hints, and the catalog of codes. The reference model becomes a document. Later the same day this step was split: `add-self-describing-schema` (descriptions, constraints, rule references, plans and problem details) comes first, and `add-schema-documents` keeps the format.
   3. An ADR on entity IDs, then `add-entity-versions`: entities on two time axes, in memory; the generic API with JSON payloads and a JSON Schema per entity type; dry runs, idempotency keys, principal and reason; rules run at commit.
   4. `add-relationships`: relationships as data, integrity at both ends, navigation and traversal, and rules spanning several entities.
   5. `add-agent-tools`: the MCP adapter, the approval policy and the agent task suite.

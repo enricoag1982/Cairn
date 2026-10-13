@@ -77,8 +77,9 @@ ADR-0012 makes YAML 1.2 schema documents the canonical definition of types, with
 
 ### D10. The reference model as a document
 
-- `docs/reference/reference-model.cairn.yaml` holds the reference domain model, with descriptions. The page stays canonical: a test reads the document and compares it with the `ReferenceModel` fixture, which `ReferenceModelTest` already compares with the page. The page links the document.
+- `docs/reference/reference-model.cairn.yaml` holds the reference domain model, with YAML comments for readers but no descriptions, so that it equals the `ReferenceModel` fixture. The page stays canonical: a test reads the document and compares it with the `ReferenceModel` fixture, which `ReferenceModelTest` already compares with the page. The page links the document.
 - The convention plugin `cairn.reference-domain-tests` adds the document as a test input, so tests rerun when it changes.
+- The `Owns.share` range bounds in the `ReferenceModel` fixture become decimal values, because a document reads bounds by the attribute's value type and decimal values compare by scale.
 
 ## Risks / Trade-offs
 

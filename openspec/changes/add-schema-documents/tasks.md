@@ -21,7 +21,7 @@
 
 ## 4. Reference model and tests
 
-- [ ] 4.1 Write `docs/reference/reference-model.cairn.yaml` and link it from the reference domain page (D10)
+- [x] 4.1 Write `docs/reference/reference-model.cairn.yaml` and link it from the reference domain page (D10)
 - [ ] 4.2 One test per scenario of `schema-documents` and of the new `schema-evolution` requirement, named `Scenario: <name>`
 - [ ] 4.3 Round-trip tests over generated definitions, and the test that compares the JSON Schema's keys with the reader's (D7, D8)
 - [ ] 4.4 Verify `./gradlew build` passes

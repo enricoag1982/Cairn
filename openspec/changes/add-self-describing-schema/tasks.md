@@ -35,3 +35,12 @@
 - [x] 5.1 Add `Plan` and `Available rule` to `docs/glossary.md`, and update the `Problem` and `Rule` entries
 - [x] 5.2 Update the building blocks in `docs/architecture/README.md` and bump `last-reviewed`
 - [ ] 5.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+
+## 6. Drift-review fixes
+
+- [ ] 6.1 Check patterns against the I-Regexp grammar with replacement hints for multi-character escapes, and match them with RE2/J; add RE2/J 1.8 to the version catalog and to `cairn-core` (ADR-0020, D4)
+- [ ] 6.2 Reject rules with invalid names or versions when creating a registry (D3)
+- [ ] 6.3 List new declarations on existing traits and abstract types as compatible changes, compare examples as sets, and drop hints from rejected rollbacks (D6, D7)
+- [ ] 6.4 One test per new scenario (pattern outside the portable syntax, two versions of a rule in a hierarchy, rule with an invalid name, same allowed values in a different order, and the plan scenarios), plus tests that produce `NOT_A_TRAIT`, `SUPERTYPE_NOT_RELATIONSHIP_TYPE` and `COMPOSITION_SYMMETRIC`
+- [ ] 6.5 Reword the `range` Javadoc of `Attribute` and `AttributeDefinition` so it does not clash with allowed values; verify `./gradlew build` passes
+

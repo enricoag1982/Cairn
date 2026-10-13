@@ -58,7 +58,7 @@ The system SHALL reject a registration whose differences from the stored definit
 - adding a relationship type that requires at least one relationship for a concrete entity type that already exists
 - adding a unique constraint to an existing attribute
 - tightening a string constraint: giving allowed values, a pattern or a length to an existing attribute that had none, removing an allowed value, changing a pattern, raising a minimum length, or lowering a maximum length
-- adding a rule to an existing type, or changing the version of a rule it names
+- adding a rule to an entity type or relationship type that the stored schema already has, abstract or not, or changing the version of a rule it names
 - extending an existing required or unique attribute to more existing types, for example by moving it to a supertype or by including its trait in another type
 - widening a relationship source or target that requires a relationship (a minimum of 1) to concrete entity types that already exist
 - adding, removing or changing an entity type's or relationship type's supertype
@@ -108,12 +108,32 @@ The system SHALL reject a registration whose differences from the stored definit
 - **THEN** the registration is rejected, listing both breaking changes
 - **AND** the stored schema is unchanged
 
+### Requirement: Unchanged registrations
+
+WHEN a registration's definition is equal to the stored definition of its origin, THE SYSTEM SHALL report the registration as unchanged and SHALL NOT record a transaction. Definitions are equal when they contain the same elements, whatever the order in which types, attributes, traits, aliases, allowed values, rule references and examples are listed. Numeric range bounds are equal when they have the same value, such as 100 and 100.0.
+
+#### Scenario: Registering the same model twice
+
+- **WHEN** the origin `reference-model` registers version `1.0.0` again with the same definition
+- **THEN** the result is "unchanged" and no transaction is recorded
+
+#### Scenario: Same model in a different order
+
+- **WHEN** the origin `reference-model` registers version `1.0.0` again with the same types listed in a different order
+- **THEN** the result is "unchanged" and no transaction is recorded
+
+#### Scenario: Same allowed values in a different order
+
+- **WHEN** the origin `reference-model` registers version `1.0.0` again with the allowed values of `segment` listed as `Retail` and `Corporate`
+- **THEN** the result is "unchanged" and no transaction is recorded
+
 ## ADDED Requirements
 
 ### Requirement: Planning a registration
 
 THE SYSTEM SHALL plan a registration without applying it. A plan SHALL state whether the registration would be applied, leave the schema unchanged, or be rejected. It SHALL list every difference from the stored definition of the origin, each with its path, a description and whether it is compatible, and every problem that registering would report.
 Planning MUST NOT record a schema transaction or change the stored schema.
+For an origin's first registration, every type it defines SHALL be listed as a compatible difference. For an invalid definition, the plan SHALL list the problems and no differences. For a lower version that the stored definition evolved from compatibly, the plan SHALL say the schema would be unchanged, and SHALL list the differences from the submitted version to the stored one, which are what the stored version adds. For a changed definition with the same version as the stored one, the plan SHALL say the registration would be rejected, with the problem that the version did not increase, and SHALL still list the differences.
 
 #### Scenario: Plan of a compatible change
 
@@ -130,3 +150,28 @@ Planning MUST NOT record a schema transaction or change the stored schema.
 
 - **WHEN** version `1.0.0` of `reference-model` is stored, and registering the same version again is planned
 - **THEN** the plan says the schema would be unchanged, and lists no differences
+
+#### Scenario: Plan of a first registration
+
+- **WHEN** an empty store plans the registration of the reference domain model
+- **THEN** the plan says the registration would be applied, and lists every type of the model as a compatible difference
+
+#### Scenario: Plan of an invalid definition
+
+- **WHEN** a registration whose definition declares two types named Party is planned
+- **THEN** the plan says the registration would be rejected, lists the problem, and lists no differences
+
+#### Scenario: Plan of a rollback
+
+- **WHEN** versions `1.0.0` and `1.1.0` of `reference-model` were registered, where `1.1.0` adds the optional attribute `email` to Person, and registering `1.0.0` again is planned
+- **THEN** the plan says the schema would be unchanged, and lists a compatible difference located at `Person.email`
+
+#### Scenario: Plan of a changed definition with the same version
+
+- **WHEN** version `1.0.0` of `reference-model` is stored, and a registration of version `1.0.0` that adds the optional attribute `email` to Person is planned
+- **THEN** the plan says the registration would be rejected with the problem that the version did not increase, and lists a compatible difference located at `Person.email`
+
+#### Scenario: Plan of an attribute added to a trait
+
+- **WHEN** version `1.0.0` of `reference-model` is stored, and a registration of version `1.1.0` that adds the optional attribute `nickname` to the trait Named is planned
+- **THEN** the plan lists a compatible difference located at `Named.nickname`

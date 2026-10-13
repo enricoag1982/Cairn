@@ -9,6 +9,8 @@ Constraints that shape the approach:
 - ADR-0017, commitments 2 to 4: the model describes itself, changes can be previewed, problems explain themselves.
 - ADR-0018: rules are Java code named from the schema by name and version, checked when a schema is registered, and run at commit. Only the check at registration is built here.
 - ADR-0012: schema documents (next change, `add-schema-documents`) are read into the definitions extended here, so every new property must be plain data.
+- ADR-0012 expected `add-schema-documents` to add descriptions, examples, constraints and rule references to the definitions. That work moved here, so that schema documents only add a text format. The definition records change shape without compatibility constructors, because Cairn has no released users.
+- ADR-0020: patterns are I-Regexp (RFC 9485), matched in linear time with RE2/J.
 - The existing design still holds: validation reports every problem (D3 of `add-type-model`), compatibility is a classified diff in which a property without a rule is breaking (D6), and identifiers are matched by name and alias (D5).
 
 ## Goals / Non-Goals
@@ -22,7 +24,7 @@ Constraints that shape the approach:
 
 **Non-Goals:**
 
-- Executing rules, the rule interface with a `check` method, and `ServiceLoader` discovery: `add-entity-versions`.
+- Executing rules, the rule interface with a `check` method, and `ServiceLoader` discovery: `add-entity-rules`.
 - Text formats and locations in documents: `add-schema-documents`.
 
 ## Decisions
@@ -47,14 +49,15 @@ Constraints that shape the approach:
 - `RuleDescriptor(String name, int version, String description, String appliesTo, List<RuleCode> codes)` and `RuleCode(String code, String explanation)` live in `cairn-api`. `appliesTo` is a type name, matched by name or alias like any reference.
 - `SchemaRegistries.inMemory(InstantSource clock, Collection<RuleDescriptor> rules)` creates a registry with available rules. The existing factories create one with none. Two descriptors with the same name and version throw `IllegalArgumentException`, because this is a programming error in the application.
 - `SchemaRegistry.availableRules()` lists the descriptors, sorted by name and version.
-- A rule's problem codes are qualified by the rule's name when reported (`lei-checksum/invalid-check-digits`). That happens in `add-entity-versions`; here the codes are only listed.
+- A rule's problem codes are qualified by the rule's name when reported (`lei-checksum/invalid-check-digits`). That happens in `add-entity-rules`; here the codes are only listed.
+- Creating a registry with a rule whose name or version breaks the rules for rule references also throws `IllegalArgumentException`. Whether `appliesTo` names a type can only be checked against a schema, so a reference to such a rule is reported as `RULE_TYPE_MISMATCH`.
 - The executable rule (ADR-0018) will be an interface whose implementations return a `RuleDescriptor`. Keeping the description a plain record lets tools, documents and tests use it without loading rule code.
 
 ### D4. Validation of the new properties
 
 - New problem codes:
   - `TEXT_CONSTRAINT_NOT_ALLOWED`: allowed values, a pattern or a length on an attribute that is not a string
-  - `INVALID_PATTERN`: a pattern that `java.util.regex.Pattern` does not compile
+  - `INVALID_PATTERN`: a pattern that is not a valid I-Regexp (ADR-0020); for a multi-character escape such as `\d`, the hint gives the replacement from RFC 9485, such as `[0-9]`
   - `INVALID_LENGTH`: a negative length, or a minimum above the maximum
   - `DUPLICATE_ALLOWED_VALUE`: an allowed value listed twice
   - `INVALID_EXAMPLE`: an example that does not fit the value type or breaks a constraint
@@ -63,7 +66,8 @@ Constraints that shape the approach:
   - `RULE_TYPE_MISMATCH`: the available rule applies to a type that is neither the naming type nor one of its supertypes
   - `DUPLICATE_RULE`: a type names a rule that it or a supertype already names
 - The path of a rule reference is the type name and the rule name joined by a dot (`Organization.lei-checksum`). Rule names contain hyphens and attribute names cannot, so the two never clash.
-- A pattern matches a value as a whole (`Matcher.matches`). Patterns should stay within the syntax that Java and JSON Schema (ECMA-262) share, so that `add-schema-documents` can publish them; that is advice, not checked.
+- Patterns follow ADR-0020: an internal checker parses them against the I-Regexp grammar of RFC 9485, and RE2/J (`com.google.re2j:re2j` 1.8, a new runtime dependency of `cairn-core`) matches them after the RFC's translation to RE2. A pattern matches a value as a whole. `add-json-payloads` publishes them with the RFC's translation to ECMAScript.
+- `DUPLICATE_RULE` compares rule names only: a type must not name a rule, in any version, that it or a supertype already names.
 - Lengths count Unicode code points (`String.codePointCount`).
 
 ### D5. Problem details and the code catalog
@@ -93,8 +97,9 @@ Constraints that shape the approach:
   - pattern: compatible when removed or unchanged; breaking when added or changed
   - minimum length: compatible when lowered or removed; maximum length: compatible when raised or removed; otherwise breaking
   - rules: compatible when the new list is a subset of the old one, matched by name and version; breaking when a rule is added or its version changes
-- `BREAKING_CHANGE` problems take their hint from the change, so `Change` gains an optional hint.
-- `Canonical`, which decides whether a registration is unchanged, compares allowed values and rule references as sets and examples as lists.
+- `BREAKING_CHANGE` problems take their hint from the change: `SchemaChange` has an optional hint, set through the internal factory `Changes`. Hints are given for removed types and attributes, renames without an alias, and new or tightened constraints and rules. Problems of a rejected rollback carry no hints, because the forward hints would point the wrong way.
+- `Canonical`, which decides whether a registration is unchanged, compares allowed values, rule references and examples as sets.
+- New declarations on existing elements, such as an attribute added to a trait or to an abstract type without concrete subtypes, are listed as compatible changes at the declaring element, so that a plan lists every difference.
 
 ### D7. Planning shares the registration path
 
@@ -103,6 +108,7 @@ Constraints that shape the approach:
 - `register` becomes "plan, then apply if the outcome is `APPLY`", inside the same lock, so that a plan and a registration of the same input always agree.
 - For a rollback to an earlier compatible version, the outcome is `UNCHANGED` and the changes are those of the reversed comparison, so the caller sees what the stored version adds.
 - A plan for an origin's first registration lists every type it adds as a compatible change.
+- For an invalid definition, the plan lists the problems and no changes. For a changed definition with the same version, the outcome is `REJECT` with `VERSION_NOT_INCREASED`, and the changes are still listed.
 
 ### D8. Resolved schema
 
@@ -117,6 +123,6 @@ Constraints that shape the approach:
 ## Risks / Trade-offs
 
 - [Definition records grow to many components] → Builders are the documented way to create them, and schema documents will be the usual way.
-- [Java and JSON Schema regular expressions differ in details] → Documented advice to stay in the shared subset; `add-schema-documents` can warn later.
-- [Hints are English text that agents parse] → Hints are for reading. Anything a program needs is in the code, path, expected and found fields.
+- [I-Regexp lacks shortcuts people know, such as `\d`] → The problem's hint gives the replacement.
+- [Hints, expected and found values are English text] → They are for reading. Programs act on the code and the path.
 - [Removing a rule is compatible although data written under it may be checked differently later] → Removing a check never makes existing data invalid, which is what compatibility protects.

@@ -5,7 +5,7 @@
 Every attribute SHALL have a name and exactly one value type from: string, boolean, int (32-bit), long (64-bit), decimal, date and instant.
 An attribute MAY be marked required or unique. Attributes of type int, long, decimal, date or instant MAY declare a range, with a lower and an upper bound, each optional and each inclusive or exclusive. Attributes of type string MAY declare allowed values, a pattern, a minimum length and a maximum length: a value MUST then be one of the allowed values, match the pattern as a whole, and have a length, counted in Unicode code points, within the bounds.
 Attribute names MUST be unique across an entity type, its supertypes and the traits they include, and no element may declare the same name twice. A range MUST NOT be declared on a string or boolean attribute. Its bounds MUST fit the attribute's value type, where an int fits a long or decimal attribute and a long fits a decimal attribute. At least one value MUST fit the range: the lower bound is below the upper bound, or equal to it with both bounds inclusive.
-Allowed values, patterns and lengths MUST NOT be declared on attributes of other value types than string. A pattern MUST be a valid regular expression in the syntax of the Java platform. Lengths MUST NOT be negative, and a minimum length MUST NOT exceed a maximum length. Allowed values MUST be distinct.
+Allowed values, patterns and lengths MUST NOT be declared on attributes of other value types than string. A pattern MUST be a valid I-Regexp (RFC 9485), and matching it SHALL take time linear in the length of the value. Lengths MUST NOT be negative, and a minimum length MUST NOT exceed a maximum length. Allowed values MUST be distinct.
 
 #### Scenario: Name declared twice in a hierarchy
 
@@ -56,6 +56,11 @@ Allowed values, patterns and lengths MUST NOT be declared on attributes of other
 
 - **WHEN** the attribute `currency` of Account declares the pattern `[A-Z`
 - **THEN** validation fails with a problem located at `Account.currency`
+
+#### Scenario: Pattern outside the portable syntax
+
+- **WHEN** the attribute `currency` of Account declares the pattern `\d{3}`
+- **THEN** validation fails with a problem located at `Account.currency`, whose hint suggests `[0-9]` instead of `\d`
 
 #### Scenario: Minimum length above maximum length
 
@@ -113,7 +118,7 @@ Every example MUST fit the attribute's value type, as a range bound must, and MU
 ### Requirement: Rule references
 
 Entity types and relationship types MAY name rules, each by a name and a version. A rule name SHALL consist of lowercase ASCII letters, digits and hyphens, start with a letter, and have at most 128 characters. A version SHALL be a whole number of at least 1.
-Every named rule MUST be available to the schema registry in that version, for the type that names it or for one of that type's supertypes. A type MUST NOT name a rule that it or one of its supertypes already names.
+Every named rule MUST be available to the schema registry in that version, for the type that names it or for one of that type's supertypes. A type MUST NOT name a rule, in any version, that it or one of its supertypes already names.
 A rule named by a type SHALL also apply to the type's subtypes. The schema SHALL report, for each type, the rules it names and the rules it inherits.
 
 #### Scenario: Naming an available rule
@@ -141,9 +146,14 @@ A rule named by a type SHALL also apply to the type's subtypes. The schema SHALL
 - **WHEN** Party and its subtype Organization both name the rule `name-not-blank`
 - **THEN** validation fails with a problem located at `Organization.name-not-blank`
 
+#### Scenario: Two versions of a rule in a hierarchy
+
+- **WHEN** versions 1 and 2 of the rule `name-not-blank` are available for Party, Party names version 1, and Organization names version 2
+- **THEN** validation fails with a problem located at `Organization.name-not-blank`
+
 ### Requirement: Available rules are listed
 
-THE SYSTEM SHALL list the rules available to a schema registry, each with its name, version, description, the type it applies to, and the problem codes it can report, each code with an explanation. A registry MUST NOT be given two rules with the same name and version.
+THE SYSTEM SHALL list the rules available to a schema registry, each with its name, version, description, the type it applies to, and the problem codes it can report, each code with an explanation. A registry MUST NOT be given two rules with the same name and version, or a rule whose name or version breaks the rules for rule references.
 
 #### Scenario: Listing available rules
 
@@ -153,6 +163,11 @@ THE SYSTEM SHALL list the rules available to a schema registry, each with its na
 #### Scenario: Same rule given twice
 
 - **WHEN** a registry is created with version 1 of the rule `lei-checksum` twice
+- **THEN** creating the registry fails
+
+#### Scenario: Rule with an invalid name
+
+- **WHEN** a registry is created with a rule named `Lei_Checksum`
 - **THEN** creating the registry fails
 
 ### Requirement: Problem codes are explained
