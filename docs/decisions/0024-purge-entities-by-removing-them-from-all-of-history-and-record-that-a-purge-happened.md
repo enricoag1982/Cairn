@@ -32,9 +32,9 @@ A purge contradicts the immutability that everything else relies on, in memory a
 
 Chosen option: "Remove the entities from all of history, rewrite the files, and record the purge", because it is the only option that erases the data itself with no machinery that every other read and write would pay for.
 
-- **What a purge removes.** The given entities with every version at every basis, every relationship from or to them with all its versions, and, as end-dating does, the targets of their compositions. Their IDs are kept as purged and are never given out or accepted again.
+- **What a purge removes.** The given entities with every version at every basis, every relationship from or to them with all its versions, and, as end-dating does, the targets of their compositions. Their IDs are never given out or accepted again; the store keeps only digests of them for that.
 - **When a purge is refused.** If what remains would break a relationship type's minimum at the other end, such as an account left without a holder, the purge is rejected with problems that name the entities to purge too. Rules do not run: a purge writes no versions.
-- **A record of the purge.** A purge is a transaction of its own, with a basis and a transaction time, a principal, a party acted for and a reason, which every store lists with the purged IDs. Transaction records of earlier transactions stay; only their data goes.
+- **A record of the purge.** A purge is a transaction of its own, with a basis and a transaction time, a principal, a party acted for and a reason, which every store lists with the numbers it removed, but not what it removed, as [ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md) says. The caller gets the removed IDs back once. Transaction records of earlier transactions stay; only their data goes.
 - **History changes, once.** After a purge, views at every basis, including views already open, read as if the purged entities had never been recorded. This is the one exception to immutability, and it is visible as a purge record.
 - **Idempotency keys** of transactions that wrote purged data stay used, and a transaction that repeats such a key is rejected with a problem, so that a retry cannot bring the data back.
 - **Durable stores** write the purge to the log, then a snapshot file without the purged data, and then delete every older snapshot file and log segment, before the purge returns.
@@ -47,7 +47,9 @@ Chosen option: "Remove the entities from all of history, rewrite the files, and 
 - Good, because stores that never purge pay nothing.
 - Bad, because a view at an old basis can read differently after a purge than before it, so results that were reported earlier cannot always be reproduced.
 - Bad, because a purge in a durable store rewrites the whole store's files, which takes time proportional to the store's size, under the writer lock.
-- Bad, because copies outside the store, such as backups, change feeds and data read before, keep the data; purging them is the operator's task.
+- Bad, because copies outside the store, such as backups, change feeds, approval requests that agents submitted, and data read before, keep the data; purging them is the operator's task.
+- Bad, because the who-and-why of transactions and purges stays, so callers must not put the data subject's identity there.
+- Bad, because right after a purge a durable store has one snapshot file, so damage to it stops the store from opening until it is restored from a backup.
 
 ### Confirmation
 
@@ -76,4 +78,5 @@ Chosen option: "Remove the entities from all of history, rewrite the files, and 
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, with the proposal of `add-purge`.
 - A purge tool for agents, behind the approval policy, can follow later.
-- This decision is an exception to [ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md) and [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md), which stay in force for everything else and refer to it.
+- This decision is an exception to [ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md) (readers on immutable snapshots), [ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md) and [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md), which stay in force for everything else and refer to it.
+- Revised on 2026-10-13, before `add-purge` was archived, after its drift review: the record keeps numbers and digests instead of the purged IDs, as ADR-0008 requires, and the bad consequences above were added.

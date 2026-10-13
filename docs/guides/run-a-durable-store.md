@@ -43,7 +43,7 @@ Forcing every commit to disk costs time: a durable store commits as fast as its 
 Recovery reads the newest snapshot file and then the log after it, so the longer the log since the last snapshot, the longer opening takes.
 The store writes a snapshot file when it is closed. A long-running application should also call `writeSnapshot()` now and then, for example once an hour or after every few thousand commits; commits go on while it writes.
 
-The store keeps its two newest snapshot files and the log needed to recover from the older one, and deletes the rest. If the newest snapshot file is damaged, recovery uses the older one.
+The store keeps its two newest snapshot files and the log needed to recover from the older one, and deletes the rest. If the newest snapshot file is damaged, recovery uses the older one. Right after a purge there is only one (see [Purges](#purges)).
 
 ## The directory
 
@@ -57,10 +57,15 @@ Do not change the files. To back a store up, close it and copy the directory. Co
 
 ## Purges
 
-`store.purge(Purge.by("dpo").reason("Erasure request").entity(aliceId).build())` removes Alice from all of history ([ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md)): every version of her at every basis, her relationships, and the targets of her compositions.
+`store.purge(Purge.by("dpo").reason("Ticket DPO-1234").entity(aliceId).build())` removes Alice from all of history ([ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md), the `purge` spec): every version of her at every basis, her relationships, and the targets of her compositions that only she composed.
 A durable store writes the purge to its log, then a snapshot file without the purged data, and deletes every older snapshot file and log segment before `purge` returns, so no file of the store holds the data any more. Commits wait while it rewrites the files.
-If the store stops during a purge, opening it completes the purge. The store lists its purges with `purges()`.
-Backups and other copies keep the data: purge them yourself.
+The store lists its purge records with `purges()`, which say how much was removed but not what; `wasPurged(id)` tells whether an ID was purged.
+
+- **Who and why stay.** Purge records and the records of earlier transactions keep their principals, parties acted for and reasons. Put a ticket reference there, never the identity of the person whose data you erase.
+- **Views across a purge.** A view that reads while a purge runs may see part of it, and every view reads the purged state afterwards. Do not rely on results read before a purge.
+- **If the store stops during a purge** after the purge reached its log, opening the store completes the purge. If writing the snapshot file or deleting fails, `purge` throws `UncheckedIOException`; the purge is applied in memory, the store refuses commits, and opening it again completes the purge.
+- **One snapshot file until the next.** A purge leaves one snapshot file. If it is damaged, the store refuses to open rather than open without the data the deleted files held, so take a backup after a purge.
+- **Copies elsewhere** keep the data: backups, change feeds, approval requests that agents submitted, and data read before. Purge them yourself.
 
 ## After a crash
 
@@ -72,4 +77,3 @@ Damage anywhere else in the log stops the store from opening with an `IllegalSta
 
 - All data is held in memory as well. A durable store suits data that fits in the heap; a key-value store comes later ([ADR-0011](../decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md)).
 - The log and snapshot files keep each entity's whole timeline at every basis, so entities with very many versions make them large.
-- Copying the files of an open store is not supported.

@@ -20,28 +20,29 @@ ADR-0024 decides that a purge removes entities, their relationships and the targ
 ### D1. API
 
 - `cairn-api`, package `data`: `Purge(String principal, Optional<String> onBehalfOf, String reason, List<EntityId> entities)`, built with `Purge.by(principal).onBehalfOf(…).reason(…).entity(id)…build()`; a blank principal or reason, or an empty list, throws `IllegalArgumentException`, as other builders do for programming errors; duplicate IDs count once.
-- `PurgeResult`, sealed: `Purged(PurgeRecord record)` and `Rejected(List<Problem> problems)`.
-- `PurgeRecord(Basis basis, Instant transactionTime, String principal, Optional<String> onBehalfOf, String reason, List<EntityId> entities, List<RelationshipId> relationships)`, where `entities` includes the composition targets that the purge removed with the named ones.
-- `Store.purge(Purge)` and `Store.purges()`, the purge records, oldest first. `Store.transactions()` keeps listing data transactions only.
+- `PurgeResult`, sealed: `Purged(PurgeRecord record, List<EntityId> entities, List<RelationshipId> relationships)`, which returns the removed IDs to the caller once, and `Rejected(List<Problem> problems)`.
+- `PurgeRecord(Basis basis, Instant transactionTime, String principal, Optional<String> onBehalfOf, String reason, int entities, int relationships)`: the numbers it removed, including composition targets, but not their IDs (ADR-0008: a record that a purge happened, not what was purged).
+- `Store.purge(Purge)`, `Store.purges()`, the purge records, oldest first, and `Store.wasPurged(Id)`. `Store.transactions()` keeps listing data transactions only.
 
 ### D2. Checking
 
-Under the writer lock: every named ID must be an entity of the store (`UNKNOWN_ENTITY`, path `@purge.<n>`). The set to remove is the named entities, then the targets of their compositions, transitively, then every relationship from or to any of them. For every entity that remains and had a relationship removed, the relationship type's minimum at its end must still hold at every point in effective time where the entity is effective; otherwise `TOO_FEW_RELATIONSHIPS` with the path of that entity's ID alone, so that a caller can add it to the purge, and a hint to purge it too. Rules do not run.
+Under the writer lock: every named ID must be an entity of the store (`UNKNOWN_ENTITY`, path `@purge.<n>`). The set to remove is the named entities, then, transitively, the targets of their compositions whose every composing relationship, at any basis, has a source in the set, then every relationship from or to any of them. A target that another entity composed too stays, and the minimum check reports it, since a composition needs a source while its target is effective. For every entity that remains and had a relationship removed, the relationship type's minimum at its end must still hold, as known at the latest basis, at every point in effective time where the entity is effective; otherwise `TOO_FEW_RELATIONSHIPS` with the path of that entity's ID alone, so that a caller can add it to the purge, and a hint to purge it too. Rules do not run.
 
 ### D3. Removing
 
 - The purge takes the next basis and transaction time from the commit sequence, as a commit does.
-- Removal order keeps every read sound: relationships first, then entities, so that a reader never finds a relationship whose end is missing. A view that reads while a purge runs may see part of it; once the purge returns, every view reads the purged state.
-- The store keeps the purged IDs in a set that ID generation skips and that supplied IDs are checked against (`ENTITY_EXISTS`, with a message that says the ID was purged).
-- Idempotency keys whose stored transaction wrote a purged entity or relationship (its receipt created or ended one, or a write targets one by ID) lose the stored transaction and are marked purged; a commit that repeats such a key is rejected with the new code `IDEMPOTENCY_KEY_PURGED`, at `@transaction.idempotencyKey`.
+- Removal order: relationships first, then entities, so that a single lookup never finds a relationship whose end is missing. A view that reads while a purge runs may see part of it, for example a relationship read before its end is removed; once the purge returns, every view reads the purged state.
+- The store keeps SHA-256 digests of the purged IDs, never the IDs: ID generation skips them, supplied IDs are checked against them (`ENTITY_EXISTS`, with a message that says the ID was purged), and `wasPurged` answers from them.
+- Idempotency keys whose stored transaction wrote a purged entity or relationship (its receipt created or ended one, or a write targets one by ID) lose the stored transaction and are marked purged; a commit or dry run that repeats such a key is rejected with the new code `IDEMPOTENCY_KEY_PURGED`, at `@transaction`, like `IDEMPOTENCY_KEY_REUSED`.
 - The purge record is added, and the basis published. A view known at a purge's transaction time reads at the purge's basis.
 
 ### D4. Durable stores
 
 - The purge is logged as a record of its own kind, with the purge record's fields and the removed IDs, and forced to disk.
-- The purge takes the snapshot lock before the writer lock, as `close` does, so that no snapshot file of an earlier basis is written after the files are deleted. Then, under both, the store writes a snapshot file at the purge's basis, and deletes every older snapshot file and every log segment that holds records at or below that basis. A new segment starts after it.
+- A purge called while rules run, or from the thread that holds the writer lock, is refused before any lock is taken. The purge takes the snapshot lock before the writer lock, as `close` does, so that no snapshot file of an earlier basis is written after the files are deleted. Then, under both, the store writes a snapshot file at the purge's basis, and deletes every older snapshot file and every log segment that holds records at or below that basis. A new segment starts after it.
 - Recovery applies a purge record by removing the IDs it lists. If the newest valid snapshot file is older than a purge record in the log, recovery writes a snapshot file at the end of recovery and deletes the older files before the store opens, completing an interrupted purge; if the snapshot file was written but older files remain, recovery deletes them. If writing the snapshot file or deleting fails after the purge was logged, the purge stays applied, the call throws `UncheckedIOException`, the store refuses further writes, and the next opening completes it.
-- A snapshot file holds the purge records, from which the purged IDs follow, and the purged idempotency keys.
+- A snapshot file and a purge log record hold the purge records, the digests of purged IDs and the purged idempotency keys; no file holds a purged ID in clear text.
+- After a purge a store has one snapshot file until the next one is written. If no snapshot file is valid and the log does not start at the first basis, recovery refuses to open the store rather than open it without what the deleted files held.
 - The log's format version stays 1: nothing is released yet.
 
 ### D5. Tests
@@ -52,5 +53,7 @@ Under the writer lock: every named ID must be an entity of the store (`UNKNOWN_E
 ## Risks / Trade-offs
 
 - [Purging rewrites every file of a durable store under the writer lock] → Purges are rare and privileged; the guide says that commits wait while a purge runs.
-- [A view open during a purge may see part of it] → Removal order keeps reads sound; the guide tells applications not to rely on views across a purge.
+- [A view open during a purge may see part of it] → Removal order keeps single lookups sound; the guide tells applications not to rely on views across a purge.
+- [After a purge, one damaged snapshot file stops the store from opening] → The store refuses to open instead of losing data silently; the guide advises a backup after a purge.
+- [The who-and-why fields of purge records and earlier transactions survive a purge] → The guide and the Javadoc tell callers to use ticket references there, never the data subject's identity.
 - [Results reported before a purge cannot be reproduced after it] → The purge record says when and why history changed.

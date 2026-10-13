@@ -69,3 +69,4 @@ Chosen option: "Embedded engine on one node, with a single writer and snapshot r
 ## More Information
 
 - Revisit when a real workload needs more write throughput than one writer gives, or when several applications must share one store.
+- A purge is the one exception to readers working on immutable snapshots: it removes entities from views already open. See [ADR-0024](0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md).

@@ -11,7 +11,7 @@ The API hides the storage implementation: the same behavior in memory or in a ke
 
 ## Ideas in one page
 
-- **Two time axes.** Every fact has an *effective time* (when it is true in the real world, past or future) and a *transaction time* (when Cairn recorded it). Any past answer can be reproduced, even after corrections. [ADR-0008](docs/decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)
+- **Two time axes.** Every fact has an *effective time* (when it is true in the real world, past or future) and a *transaction time* (when Cairn recorded it). Any past answer can be reproduced, even after corrections, unless a purge has since removed the data for legal erasure ([ADR-0024](docs/decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md)). [ADR-0008](docs/decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)
 - **A typed graph.** Entity types with single inheritance and traits; first-class, directed relationships with their own attributes and history. [ADR-0010](docs/decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md)
 - **Whole-entity versions.** Each change records a new version of the entity for an effective period; nothing is overwritten. [ADR-0009](docs/decisions/0009-version-whole-entities-rather-than-single-attributes.md)
 - **Embedded, single writer.** One writer orders all commits; any number of readers work on immutable snapshots. [ADR-0007](docs/decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)

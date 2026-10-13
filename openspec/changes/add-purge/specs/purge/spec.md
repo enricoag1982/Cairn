@@ -8,7 +8,7 @@ Defines purges: removing entities, their relationships and the targets of their 
 
 ### Requirement: Purging entities
 
-THE SYSTEM SHALL purge the entities that a purge names, with a principal, optionally a party acted for, and a reason that MUST NOT be blank. A purge SHALL remove every version of those entities at every basis, every relationship from or to them with all its versions, and the targets of their compositions, as end-dating ends them, with their own relationships. After a purge, every view, at every basis and including views opened before it, and every timeline and query SHALL read as if the purged entities and relationships had never been recorded. Nothing else SHALL change.
+THE SYSTEM SHALL purge the entities that a purge names, with a principal, optionally a party acted for, and a reason that MUST NOT be blank. A purge SHALL remove every version of those entities at every basis, every relationship from or to them with all its versions, and the targets of their compositions that no other entity ever composed, with their own relationships. After a purge, every view, at every basis and including views opened before it, and every timeline and query SHALL read as if the purged entities and relationships had never been recorded; this overrides every other requirement that recorded history, or what a view reads, never changes. A purge writes no versions, so rules SHALL NOT run. Nothing else SHALL change.
 
 #### Scenario: Purging Alice
 
@@ -22,26 +22,31 @@ THE SYSTEM SHALL purge the entities that a purge names, with a principal, option
 
 ### Requirement: Refused purges
 
-WHEN a purge names an ID that no entity of the store has, or when what would remain after it breaks the minimum of a relationship type at the other end, such as an entity left without a relationship that its type requires, THE SYSTEM SHALL reject the purge with problems, SHALL change nothing, and SHALL use no basis. A problem about a minimum SHALL name the entity that would break it, so that the caller can purge it too.
+WHEN a purge names an ID that no entity of the store has, or when what would remain after it, as known at the latest basis, breaks the minimum of a relationship type at the other end, such as an entity left without a relationship that its type requires, or the target of a composition that another entity composed too, left without a source for a while, THE SYSTEM SHALL reject the purge with problems, SHALL change nothing, and SHALL use no basis. A problem about a minimum SHALL name the entity that would break it, so that the caller can purge it too.
 
 #### Scenario: An account left without a holder
 
 - **WHEN** the transactions of RD-1 and RD-5 are recorded, and Beta is purged alone
 - **THEN** the purge is rejected with a problem that names A-1, which must have a holder, and Beta still exists
 
+#### Scenario: A target that another party composed too
+
+- **WHEN** the transactions of RD-1 are recorded, an Address belongs to Alice through `HasAddress` until 1 March and to ACME from 1 March, and Alice is purged
+- **THEN** the purge is rejected with a problem that names the Address, and Alice still exists
+
 #### Scenario: Purging a holder with its account
 
 - **WHEN** the transactions of RD-1 and RD-5 are recorded, and Beta and A-1 are purged together
 - **THEN** the purge succeeds, and A-2 and ACME are unchanged
 
-### Requirement: The record of a purge
+### Requirement: Purge records
 
-A purge SHALL be recorded as a transaction of its own, with a basis and a transaction time, its principal, the party acted for, its reason, and the IDs of every entity and relationship it removed. A store SHALL list its purges. The records of earlier transactions SHALL remain, with their principals and reasons.
+A purge SHALL be recorded as a transaction of its own, with a basis and a transaction time, its principal, the party acted for, its reason, and the numbers of entities and relationships it removed, but not what it removed. A store SHALL list its purge records, and SHALL tell whether an ID was purged without listing the purged IDs. A purge SHALL return the IDs it removed to its caller, once. The records of earlier transactions SHALL remain, with their principals and reasons.
 
 #### Scenario: The record of Alice's purge
 
 - **WHEN** the transactions of RD-1 and RD-3 are recorded, and the principal `dpo` purges Alice with the reason "Erasure request"
-- **THEN** the store lists a purge by `dpo` with that reason, Alice's ID and the ID of the `Employs` relationship, at the basis after RD-3's, and still lists the transactions of RD-1 and RD-3
+- **THEN** the purge returns Alice's ID and the ID of the `Employs` relationship, the store lists a purge record by `dpo` with that reason, one entity and one relationship, at the basis after RD-3's, the store tells that Alice's ID was purged, and it still lists the transactions of RD-1 and RD-3
 
 ### Requirement: What a purge leaves unusable
 
