@@ -21,7 +21,7 @@
 
 ## 3. Reference domain
 
-- [ ] 3.1 Add the string constraints and the rules table to `docs/reference/reference-domain.md` (D9)
+- [x] 3.1 Add the string constraints and the rules table to `docs/reference/reference-domain.md` (D9)
 - [ ] 3.2 Update `ReferenceModel` and `ReferenceModelTest`, add `ReferenceModel.rules()`, and create registries with these rules wherever tests register the reference model
 
 ## 4. Scenario tests
