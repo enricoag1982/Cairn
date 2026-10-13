@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-12
+status: accepted
+date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
 informed: []
@@ -32,7 +32,7 @@ See the [API research note](../research/2026-10-12-graph-system-of-record-api.md
 
 ## Decision Outcome
 
-Proposed option: "Immutable views bound to a context, with flags resolved by the caller".
+Chosen option: "Immutable views bound to a context, with flags resolved by the caller".
 
 ### The context
 

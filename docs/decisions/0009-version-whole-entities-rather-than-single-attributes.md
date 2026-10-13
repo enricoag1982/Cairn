@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-12
+status: accepted
+date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
 informed: []
@@ -31,7 +31,7 @@ See the [API research note](../research/2026-10-12-graph-system-of-record-api.md
 
 ## Decision Outcome
 
-Proposed option: "A: one version per entity", because it is the simplest model to build and to reason about, and its costs can be contained.
+Chosen option: "A: one version per entity", because it is the simplest model to build and to reason about, and its costs can be contained.
 
 An **entity version** is the complete state of one entity for one effective period, as recorded by one transaction.
 Relationships are versioned the same way.

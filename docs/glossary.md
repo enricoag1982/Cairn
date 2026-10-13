@@ -29,7 +29,7 @@ These come with the template. Add domain terms in their own section below.
 
 ## Domain terms
 
-Several definitions link to ADRs that are still `proposed`, or name specs that the OpenSpec change `add-type-model` proposes. The terms are agreed even where the design is not.
+Each definition links to the ADR or spec that defines the concept. Some describe parts of the accepted design that are not built yet.
 
 | Term | Meaning |
 | --- | --- |
@@ -73,7 +73,7 @@ Several definitions link to ADRs that are still `proposed`, or name specs that t
 | Rule | Validation logic written in Java, with a name, a version and a description, that a schema document attaches to an entity type or relationship type by name. Rules run at commit and report problems. Compare *constraint*. See [ADR-0018](decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md). |
 | Schema | The entity types, traits and relationship types of a store. Stored as data and versioned in transaction time. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Schema definition | A schema written as plain data, before it is validated and registered. Compare *schema*. See the `type-model` spec. |
-| Schema document | The canonical text form of one origin's schema definition, written in YAML by people or exchanged as JSON by tools, and described by a published JSON Schema. See [ADR-0012](decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md). |
+| Schema document | The canonical text form of one origin's schema definition, in YAML 1.2 (which includes JSON), described by a published JSON Schema. See [ADR-0012](decisions/0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md). |
 | Schema identifier | The number a store gives a type or attribute when it is first registered. It never changes, is never reused, and is local to the store. Not to be confused with entity IDs. See [ADR-0010](decisions/0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md). |
 | Schema registry | What validates and registers schema definitions, and keeps the history of the schema in transaction time. See the `schema-evolution` spec. |
 | Schema transaction | A transaction that changes the schema. Like any transaction, it gets a transaction time and a basis. See the `schema-evolution` spec. |

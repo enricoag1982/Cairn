@@ -45,7 +45,7 @@ Schema documents are read into the same definitions.
 | A language of our own | best | not at all | a plugin we write | fully | yes |
 | Annotated Java interfaces | good, for Java developers | well | full | fully | an annotation processor |
 
-YAML for people and JSON for tools, with Cairn's own vocabulary and a published JSON Schema, gives a readable format that agents know well, with editor support and no parser of our own.
+YAML 1.2, with Cairn's own vocabulary and a published JSON Schema, gives a readable format that agents know well, with editor support and no parser of our own. JSON is valid YAML 1.2, so tools can send the same documents as JSON: one format, not two.
 A document for part of the [reference domain](../reference/reference-domain.md) could look like this, with the descriptions, examples, patterns, lengths and rules proposed here. The exact format is for the change that builds it:
 
 ```yaml
@@ -110,18 +110,18 @@ SirixDB is an embeddable, append-only, bitemporal store written in Java. It vers
 
 ## Conclusion
 
-- Proposed: ADR-0017 (agents as first-class users), ADR-0012 revised (schema documents, generated Java types) and ADR-0018 (declarative constraints and named Java rules).
+- Proposed: ADR-0017 (agents as first-class users), ADR-0012 revised (schema documents, generated Java types) and ADR-0018 (declarative constraints and named Java rules). They were accepted later the same day, together with ADR-0007 to ADR-0013.
 - ADR-0005 still holds: the engine, the generated types and the rules are Java.
 - Assumptions, until the user says otherwise:
   - Agents use a running store through tools first. Coding agents that write Java work through pull requests as usual.
   - Agents may apply compatible schema changes directly. Breaking changes stay rejected for everyone until migrations exist; then they need a person.
 - Open:
-  - The library for reading JSON and YAML (for example Jackson, or SnakeYAML Engine with a JSON library) is a new runtime dependency, to be agreed with `add-schema-documents`.
+  - Agreed later the same day: one format, YAML 1.2, read with SnakeYAML Engine, which also reads JSON. ADR-0012 records it.
   - The MCP SDK for Java is a dependency of the agent adapter only.
   - CEL expressions need their own ADR.
 - Next steps, as OpenSpec changes in this order. This replaces the list in the [API research note](2026-10-12-graph-system-of-record-api.md#conclusion):
   1. Accept or reject the proposed ADRs that `add-type-model` relies on, then archive it.
-  2. `add-schema-documents`: the YAML and JSON format and its JSON Schema; descriptions, examples, allowed values, patterns and lengths; rule references checked against registered rules; planning a schema change; problems with expected and actual values and hints, and the catalog of codes. The reference model becomes a document.
+  2. `add-schema-documents`: the YAML 1.2 format and its JSON Schema; descriptions, examples, allowed values, patterns and lengths; rule references checked against registered rules; planning a schema change; problems with expected and actual values and hints, and the catalog of codes. The reference model becomes a document.
   3. An ADR on entity IDs, then `add-entity-versions`: entities on two time axes, in memory; the generic API with JSON payloads and a JSON Schema per entity type; dry runs, idempotency keys, principal and reason; rules run at commit.
   4. `add-relationships`: relationships as data, integrity at both ends, navigation and traversal, and rules spanning several entities.
   5. `add-agent-tools`: the MCP adapter, the approval policy and the agent task suite.

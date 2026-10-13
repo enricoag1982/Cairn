@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
@@ -32,7 +32,7 @@ See the [AI-native research note](../research/2026-10-13-ai-native-schema-and-ru
 
 ## Decision Outcome
 
-Proposed option: "Agents as first-class users of the core API", because the properties agents need (machine-readable contracts, validation with explanations, previews) also make the API better for people, and are much cheaper to build in from the start than to add later.
+Chosen option: "Agents as first-class users of the core API", because the properties agents need (machine-readable contracts, validation with explanations, previews) also make the API better for people, and are much cheaper to build in from the start than to add later.
 
 ### Candidate principle
 
@@ -42,7 +42,7 @@ It does not conflict with the working principle "Agents are contributors, not au
 
 ### Commitments
 
-1. **Definitions are data with a published format.** Types are defined in schema documents, written in YAML or JSON and described by a published JSON Schema ([ADR-0012](0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)). Types registered at runtime are the normal case, not a follow-up.
+1. **Definitions are data with a published format.** Types are defined in schema documents, written in YAML 1.2, which includes JSON, and described by a published JSON Schema ([ADR-0012](0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md)). Types registered at runtime are the normal case, not a follow-up.
 2. **The model describes itself.** Types, attributes, relationship types and rules carry descriptions and examples. Allowed values, patterns and lengths are declared, not hidden in code. An introspection API returns the whole schema, the available rules ([ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md)), and the options and storage capabilities a store supports.
 3. **Every change can be previewed.** Planning a schema change returns the classified differences and the problems without applying anything. Transactions on entities have a dry run that validates without committing.
 4. **Problems explain themselves.** Every problem has a stable code, the path of the element concerned and a message. Where it applies, it also says what was expected, what was found and how to fix it. Every code Cairn defines is listed in a catalog with an explanation; codes that rules define are listed with their rule ([ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md)).

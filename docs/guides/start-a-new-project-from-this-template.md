@@ -23,7 +23,7 @@ Cairn was created from this template on 2026-10-10. Where each step stands, chec
 | 8. Check the agent setup | Done: Claude Code |
 | 9. Set ownership | Open. `CODEOWNERS` is commented out and living documents have an empty `owner` |
 | 10. Protect `main` | Open. `main` exists; add branch protection in GitHub |
-| 11. Write the first change | Done: `add-type-model` is implemented. It is archived once the ADRs it relies on are decided |
+| 11. Write the first change | Done: `add-type-model` is implemented and archived; its specs are `type-model` and `schema-evolution` |
 | 12. Rewrite `README.md` | Done |
 
 The steps below are the template's generic instructions.

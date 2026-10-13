@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-12
+status: accepted
+date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
 informed: []
@@ -31,7 +31,7 @@ That decides whether the API is an in-process interface or a wire protocol, and 
 
 ## Decision Outcome
 
-Proposed option: "Embedded engine on one node, with a single writer and snapshot readers", because it gives the strongest consistency for the least machinery, and keeps the other options open.
+Chosen option: "Embedded engine on one node, with a single writer and snapshot readers", because it gives the strongest consistency for the least machinery, and keeps the other options open.
 
 - The engine is a library that runs inside the application's JVM.
 - Every commit goes through one writer. It validates the transaction, appends it to the commit log and publishes a new snapshot. Transactions are therefore serializable without locks.

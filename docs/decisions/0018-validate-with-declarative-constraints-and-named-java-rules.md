@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
@@ -33,7 +33,7 @@ See the [AI-native research note](../research/2026-10-13-ai-native-schema-and-ru
 
 ## Decision Outcome
 
-Proposed option: "Declarative constraints in the document, plus named Java rules", because it keeps logic in reviewed Java code while agents compose it by name.
+Chosen option: "Declarative constraints in the document, plus named Java rules", because it keeps logic in reviewed Java code while agents compose it by name.
 
 Validation has three levels:
 

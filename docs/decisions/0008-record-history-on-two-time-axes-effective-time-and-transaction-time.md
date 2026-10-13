@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-12
+status: accepted
+date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
 informed: []
@@ -31,7 +31,7 @@ See the [API research note](../research/2026-10-12-graph-system-of-record-api.md
 
 ## Decision Outcome
 
-Proposed option: "Two time axes", because it is the only option that answers both questions directly.
+Chosen option: "Two time axes", because it is the only option that answers both questions directly.
 
 - **Effective time** is when a fact is true in the real world. The writer sets it, in the past or in the future.
 - **Transaction time** is when Cairn recorded the fact. The engine sets it at commit; callers never set it. It only increases.

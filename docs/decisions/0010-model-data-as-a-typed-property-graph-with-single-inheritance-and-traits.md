@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-10-12
+status: accepted
+date: 2026-10-13
 decision-makers: [enricoag1982]
 consulted: []
 informed: []
@@ -32,7 +32,7 @@ See the [API research note](../research/2026-10-12-graph-system-of-record-api.md
 
 ## Decision Outcome
 
-Proposed option: "Typed property graph with single inheritance and traits", because it matches how enterprise data is usually modeled and keeps inheritance unambiguous.
+Chosen option: "Typed property graph with single inheritance and traits", because it matches how enterprise data is usually modeled and keeps inheritance unambiguous.
 
 ### Entities and entity types
 

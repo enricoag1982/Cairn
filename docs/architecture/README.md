@@ -9,7 +9,7 @@ This page describes the system as it is now, using the [arc42](https://arc42.org
 It is a living document: update it in the same pull request that changes the architecture, and bump `last-reviewed`.
 
 > [!NOTE]
-> **Current state:** only the schema API is built: defining, validating, registering and evolving types (the OpenSpec change `add-type-model`). Entities, relationships, storage and queries are not built yet. The intended design is in `proposed` ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](../research/2026-10-13-ai-native-schema-and-rules.md). Write "n/a" for sections that do not apply yet instead of deleting them.
+> **Current state:** only the schema API is built: defining, validating, registering and evolving types (the `type-model` and `schema-evolution` capabilities). Entities, relationships, storage and queries are not built yet. The intended design is in accepted ADRs, listed under [solution strategy](#4-solution-strategy), and explored in the [API research note](../research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](../research/2026-10-13-ai-native-schema-and-rules.md). Write "n/a" for sections that do not apply yet instead of deleting them.
 > Split a section into its own file in this folder when it outgrows a screen, and link it from here.
 
 ## 1. Introduction and goals
@@ -36,14 +36,14 @@ flowchart LR
     model([Schema definition<br/>types of one origin]) -->|registered by the application| cairn
 ```
 
-Cairn runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md), proposed). It has no external systems yet.
-AI agents are planned to reach it through tools over the same API ([ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md), proposed); nothing for them is built yet.
+Cairn runs inside the application's JVM ([ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)). It has no external systems yet.
+AI agents are planned to reach it through tools over the same API ([ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md)); nothing for them is built yet.
 
 ## 4. Solution strategy
 
 <!-- The handful of fundamental choices (style, stack, key patterns), each linking to its ADR. -->
 
-Proposed, not yet accepted:
+Accepted, and built one change at a time:
 
 - An embedded engine on one node, with a single writer and snapshot readers: [ADR-0007](../decisions/0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md)
 - History on two time axes, effective time and transaction time: [ADR-0008](../decisions/0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md)
