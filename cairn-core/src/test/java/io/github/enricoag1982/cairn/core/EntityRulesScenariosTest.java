@@ -105,9 +105,7 @@ class EntityRulesScenariosTest {
         ReferenceStore reference = new ReferenceStore();
         Receipt parties = reference.createParties();
         EntityId beta = entity(parties, BETA);
-        reference.recordedOn(on(2, 10));
-        reference.commit(Transaction.by("importer")
-                .relate("Owns", entity(parties, ACME), beta, from(2, 1), values("share", 55)).build());
+        reference.replay(ReferenceStories.rd2Ownership(entity(parties, ACME), beta));
 
         List<Problem> problems = reference.rejectReplay(ReferenceStories.rd13GammaOwnsBeta(beta));
 
@@ -115,7 +113,7 @@ class EntityRulesScenariosTest {
         assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
         assertThat(problem.ruleCode()).contains("total-ownership-at-most-100/over-100-percent");
         assertThat(problem.path()).isEqualTo("$gammaOwnsBeta");
-        assertThat(problem.message()).contains("105");
+        assertThat(problem.message()).as("ACME's 60% as known on 1 April, and Gamma's 50%").contains("110");
         assertThat(reference.view(on(5, 1)).entities("Organization")).as("Gamma was not created").hasSize(2);
     }
 

@@ -162,9 +162,10 @@ public enum ProblemCode {
             + "same point in effective time. The check covers all entities or relationships whose type has the "
             + "attribute, including subtypes. Use another value, or change the other one's value, or end it, so that "
             + "the periods no longer overlap."),
-    /** A write refers to an ID that no entity has. */
-    UNKNOWN_ENTITY("A write patches, replaces or end-dates an entity that does not exist, by an ID that no entity of "
-            + "the store has. Correct the ID, or create the entity first."),
+    /** A write refers to an ID that no entity has, to change the entity or to relate it. */
+    UNKNOWN_ENTITY("A write patches, replaces or end-dates an entity, or relates one as the source or target of a "
+            + "relationship, by an ID that no entity of the store has; the ID of a relationship is not the ID of an "
+            + "entity. Correct the ID, or create the entity first."),
     /**
      * A patch or replace covers a period in which the entity or relationship does not exist, or an end-date is at or
      * before its start.
@@ -231,14 +232,14 @@ public enum ProblemCode {
             + "right types."),
     /** A relationship exists at a time at which one of its ends does not. */
     END_NOT_EFFECTIVE("Both ends of a relationship must exist at every point of the relationship's effective period, "
-            + "so a write never relates an entity outside its lifetime. The found details name the end and the "
-            + "period in which it does not exist. Shorten the relationship's period, or create the entity for the "
-            + "period first."),
+            + "so a write never relates an entity outside its lifetime. The message names the end and the period in "
+            + "which it does not exist, and the found details give the relationship's lifetime. Shorten the "
+            + "relationship's period, or create the entity for the period first."),
     /** An entity ends, or has been shortened, while a relationship to it continues. */
     RELATIONSHIP_OUTLIVES_END("A relationship cannot continue after one of its ends has ended. A transaction that "
-            + "ends an entity must end, from the same instant, every relationship that has the entity as an end; "
-            + "compositions end by themselves. End the relationship in the same transaction, or end the entity "
-            + "later."),
+            + "ends an entity must end every relationship that has the entity as an end, from the same instant or "
+            + "from an earlier one; compositions end by themselves. End the relationship in the same transaction, at "
+            + "or before the instant at which the entity ends, or end the entity later."),
     /** An entity has fewer relationships of a type than the minimum, at some point in effective time. */
     TOO_FEW_RELATIONSHIPS("An entity must have at least the minimum number of relationships that a relationship type "
             + "declares for its end, counting the relationships of the type and of its subtypes, at every point in "

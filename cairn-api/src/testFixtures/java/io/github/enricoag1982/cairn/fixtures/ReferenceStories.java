@@ -17,8 +17,9 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The stories of the reference domain ({@code docs/reference/reference-domain.md}) that need no aggregation, as the
- * transactions that tell them, with the dates at which they are recorded.
+ * The stories of the reference domain ({@code docs/reference/reference-domain.md}) as the transactions that tell them,
+ * with the dates at which they are recorded. It builds every story except RD-6, RD-10 and RD-11: the query with
+ * aggregation, the listing and the purge, which need features that do not exist yet.
  *
  * <p>Stories are in 2026 unless they say otherwise. "Recorded" is the transaction time: a {@link Recording} is
  * replayed on a store with a {@link TestClock} moved to its recording date, at midnight UTC. Effective dates are at
@@ -306,8 +307,8 @@ public final class ReferenceStories {
 
     /**
      * RD-13. Recorded 1 April: Gamma, an organization named by {@link #GAMMA}, is created and owns 50% of Beta from
-     * 1 April, through a relationship named by {@link #GAMMA_OWNS_BETA}. It is rejected while ACME owns 55% of Beta,
-     * because the owners of Beta would hold 105%.
+     * 1 April, through a relationship named by {@link #GAMMA_OWNS_BETA}. It is rejected, because of the share of ACME
+     * as known on 1 April, which the page of the reference domain states together with the total that results.
      *
      * @param beta Beta
      * @return the recording

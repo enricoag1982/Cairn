@@ -21,9 +21,10 @@ import java.util.Optional;
  * @param created         the ID of every entity and relationship the transaction created, in the order of the writes
  * @param ended           the ID of every relationship and entity that the engine ended because a composition ends with
  *                        its source (capability {@code relationships}), and that none of the transaction's own
- *                        writes ended: for each entity that a write ended, in the order of the writes, each of its
- *                        composition relationships in the order of their IDs followed by its target, and then the
- *                        compositions of that target, each ID once
+ *                        writes ended, in the order in which the cascades reached them, depth first: for each entity
+ *                        that a write ended, in the order of the writes, each of its composition relationships in the
+ *                        order of their IDs, every one followed by its target and then by the compositions of that
+ *                        target in the same way, before the next relationship; each ID once
  * @param principal       who submitted the transaction
  * @param onBehalfOf      the party the principal acted for, if given
  * @param reason          why the transaction was submitted, if given

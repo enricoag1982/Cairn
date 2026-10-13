@@ -10,6 +10,8 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA_EMPLOYS_ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.CUSTOMER_ROLE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA_OWNS_BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.PLAYED_BY;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
@@ -17,6 +19,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
@@ -353,6 +356,32 @@ class RelationshipsScenariosTest {
             assertThat(link.relationship().relationshipType()).isEqualTo("PlayedBy");
         });
         assertThat(inNovember).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Scenario: Every owner of Beta over time")
+    void everyOwnerOfBetaOverTime() {
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        reference.recordedOn(on(2, 10));
+        RelationshipId acmeOwns = relationship(reference.commit(Transaction.by("importer")
+                .relate(OWNS, "Owns", acme, beta, from(2, 1), values("share", 40)).build()), OWNS);
+        reference.recordedOn(on(4, 1));
+        Receipt withGamma = reference.commit(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(4, 1), values("name", "Gamma"))
+                .relate(GAMMA_OWNS_BETA, "Owns", GAMMA, beta, from(4, 1), values("share", 50)).build());
+        EntityId gamma = entity(withGamma, GAMMA);
+        RelationshipId gammaOwns = relationship(withGamma, GAMMA_OWNS_BETA);
+
+        List<RelationshipState> history = reference.view(on(5, 1)).navigateTimeline(beta, "ownedBy");
+
+        assertThat(history).extracting(RelationshipState::id, RelationshipState::source,
+                state -> state.period().from(), state -> share(state).intValueExact())
+                .containsExactly(tuple(acmeOwns, acme, on(2, 1), 40), tuple(gammaOwns, gamma, on(4, 1), 50));
+        assertThat(history).extracting(RelationshipState::relationshipType).containsOnly("Owns");
+        assertThat(reference.view(on(1, 1)).navigateTimeline(beta, "ownedBy")).as("the effective time does not matter")
+                .isEqualTo(history);
     }
 
     // ------------------------------------------------------------------ traversal

@@ -176,6 +176,17 @@ class ReferenceStoriesTest {
     }
 
     @Test
+    void rd13StatesTheTotalOfTheSharesThatTheFixturesWrite() {
+        BigDecimal acme = shareOf(ReferenceStories.rd2Ownership(ReferenceStories.ACME, ReferenceStories.BETA));
+        BigDecimal gamma = shareOf(ReferenceStories.rd13GammaOwnsBeta(ReferenceStories.BETA));
+
+        assertThat(rows.get("RD-13")).as("ACME's share as RD-2 first records it, Gamma's share, and their total")
+                .containsPattern(stated(number(acme) + "%")).containsPattern(stated(number(gamma) + "%"))
+                .containsPattern(stated(number(acme.add(gamma)) + "%")).contains("see RD-2");
+        assertThat(acme.add(gamma)).as("together they exceed 100").isGreaterThan(BigDecimal.valueOf(100));
+    }
+
+    @Test
     void rd2RelatesAcmeToBetaWithOwnsAndRd4GivesBetaACustomerRole() {
         assertThat(ReferenceStories.rd2Ownership(ReferenceStories.ACME, ReferenceStories.BETA).transaction().writes())
                 .singleElement().isInstanceOfSatisfying(Write.Relate.class, relate -> {
@@ -318,6 +329,17 @@ class ReferenceStoriesTest {
 
     private static void values(List<String> facts, Map<String, Value> values) {
         values.values().forEach(value -> facts.add(text(value)));
+    }
+
+    /** The share that the first relationship of a recording sets. */
+    private static BigDecimal shareOf(ReferenceStories.Recording recording) {
+        Write.Relate relate = recording.transaction().writes().stream().filter(Write.Relate.class::isInstance)
+                .map(Write.Relate.class::cast).findFirst().orElseThrow();
+        return switch (relate.values().get("share")) {
+            case Value.IntValue number -> BigDecimal.valueOf(number.value());
+            case Value.DecimalValue decimal -> decimal.value();
+            default -> throw new IllegalArgumentException("Not a share: " + relate.values().get("share"));
+        };
     }
 
     /** A date as the page writes it: "16 March", with the year only if it is not the year of the stories. */
