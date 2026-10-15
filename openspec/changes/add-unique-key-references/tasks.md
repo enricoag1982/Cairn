@@ -5,7 +5,8 @@
 - [ ] 1.1 `UniqueKey` as a `Ref`, `View.entity(UniqueKey)`, the problem codes `INVALID_UNIQUE_KEY` and `UNIQUE_KEY_NOT_FOUND` (D1)
 - [ ] 1.2 Resolving keys in transactions (D2)
 - [ ] 1.3 Finding by key in views, recorded as rule reads (D3)
-- [ ] 1.4 Keys in the log codec (D4)
+- [ ] 1.4 Keys in the log codec, and key resolutions in receipts (D2, D4)
+- [ ] 1.5 Purges drop transactions that named a purged entity by key (D4a)
 
 ## 2. Documents, tools and generated types
 

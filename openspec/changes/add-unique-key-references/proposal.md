@@ -7,7 +7,8 @@ ADR-0026 decides that a *unique key*, an entity type with one of its unique attr
 
 ## What Changes
 
-- Writes name existing entities by unique keys as well as by IDs and temporary IDs; the store resolves a key at the start of the write's period, against the store as committed, and rejects a key that is invalid or names no entity.
+- Writes name existing entities by unique keys as well as by IDs and temporary IDs; the store resolves a key at the start of the write's period, against the store as committed, and rejects a key that is invalid or names no entity. The receipt lists what each key resolved to.
+- A purge drops the stored writes of every transaction that named a purged entity by key, as it does for those that named it by ID, so that no key value of purged data stays.
 - Views find the entity that has a unique key at their effective time.
 - Payloads write a key as `{ entityType: Account, key: { number: A-1 } }`; `cairn_read_entity`, `cairn_navigate` and `cairn_traverse` take a key in place of an ID.
 - Generated Java types get a `by<Attribute>` method for each unique attribute, such as `Account.byNumber("A-1")`.
@@ -34,9 +35,10 @@ None.
 - `agent-tools`: keys in the read tools.
 - `java-types`: a method per unique attribute that makes a key.
 - `entity-rules`: a lookup by key is a read of the entities of the type.
+- `purge`: transactions that named a purged entity by key count as having written purged data.
 
 ## Impact
 
 - **Decisions:** ADR-0026, accepted under the standing approval with this proposal. It relies on ADR-0019 (IDs stay the identity), ADR-0007 (resolution inside the single writer), ADR-0022 (the log keeps the transaction as submitted) and ADR-0025 (reads of rules).
-- **Code:** `cairn-api` gains `UniqueKey`, a third kind of `Ref`, `View.entity(UniqueKey)` and two problem codes; `cairn-core` resolves keys in transactions, finds them in views, records them in the log and records rule reads; `cairn-documents` reads keys in payloads and locates their problems; `cairn-agent-tools` takes keys in three tools; `cairn-codegen` generates the `by` methods. No new dependencies.
+- **Code:** `cairn-api` gains `UniqueKey`, a third kind of `Ref`, `View.entity(UniqueKey)`, the key resolutions of a `Receipt` and two problem codes; `cairn-core` resolves keys in transactions, finds them in views, records them in the log and records rule reads; `cairn-documents` reads keys in payloads and locates their problems; `cairn-agent-tools` takes keys in three tools; `cairn-codegen` generates the `by` methods. No new dependencies.
 - **Docs:** the glossary (unique key), the guides for payloads and agents, generated types and queries, the architecture page and the HR domain page.

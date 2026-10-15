@@ -21,6 +21,7 @@ References are `Ref`s: an `Id` (entity or relationship) or a `TemporaryId`. `Wor
 ### D2. Resolving keys in a transaction
 
 Before a write is applied, `Workspace` resolves each key it names at the start of the write's period: a patch, replace or end-date at its `from`, a relate's source and target at its `from`. It checks the key against the transaction's schema, then scans the committed entities of the type and its subtypes for the one whose latest timeline has the value at that instant; uniqueness over effective time makes it at most one. Then it continues as for that entity's ID. Problems have the path `@write.<position>` and name the key and, for an invalid one, the type's unique attributes. Resolving against the committed state, not the transaction's own writes, makes the result independent of the order of writes; temporary IDs name what the transaction creates.
+The receipt lists each resolution, `KeyResolution(int write, UniqueKey key, EntityId entity)`, in the order of the writes, so that a caller learns which entity a key named; the same key can resolve to different entities in writes with different periods.
 
 ### D3. Views and rule reads
 
@@ -28,7 +29,11 @@ Before a write is applied, `Workspace` resolves each key it names at the start o
 
 ### D4. The log of durable stores
 
-The transaction codec gains a tag for unique keys, with the type, the attribute and the value as values are encoded. Files keep format version 1: no release of Cairn has written them, and a log without keys reads as before.
+The transaction codec gains a tag for unique keys, with the type, the attribute and the value as values are encoded. Receipts, which the log records, gain their key resolutions. Files keep format version 1: no release of Cairn has written them, and a log without keys reads as before.
+
+### D4a. Purges
+
+A purge decides which stored idempotent transactions wrote purged data from their receipts and writes. It counts the receipt's key resolutions too, so a transaction that named a purged entity by key is dropped like one that named it by ID, and its key, whose value may be personal data, leaves memory and, through the rewritten files, the disk (ADR-0024).
 
 ### D5. Payloads
 
