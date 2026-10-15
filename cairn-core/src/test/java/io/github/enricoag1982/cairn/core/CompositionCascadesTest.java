@@ -40,7 +40,8 @@ import org.junit.jupiter.api.Test;
  * of compositions: North has the sites Depot and Dock, South has Annex and Yard. Depot has a room, which is the target
  * of a composition too, and relationships of other types at both of its ends: Alice inspects it, it has Annex and Yard
  * and Dock as neighbours, in a symmetric type, and it is tagged. Alice cleans the room. Everything exists from 1 January
- * and goes on, so ending North from 1 June cascades.
+ * and goes on, so ending North from 1 June cascades. Some tests relate North, which a write ends, to a target of its
+ * cascade and to something that is no target, and Dock, a target, to a tag.
  */
 class CompositionCascadesTest {
 
@@ -81,6 +82,12 @@ class CompositionCascadesTest {
                 .relationshipType("Tagged", r -> r.from("Site").to("Tag")
                         .targetsPerSource(Multiplicity.ZERO_OR_MORE).sourcesPerTarget(sitesPerTag)
                         .inverse("tags"))
+                .relationshipType("Audits", r -> r.from("Region").to("Site")
+                        .targetsPerSource(Multiplicity.ZERO_OR_MORE).sourcesPerTarget(Multiplicity.ZERO_OR_MORE)
+                        .inverse("auditedBy"))
+                .relationshipType("Funds", r -> r.from("Region").to("Tag")
+                        .targetsPerSource(Multiplicity.ZERO_OR_MORE).sourcesPerTarget(Multiplicity.ZERO_OR_MORE)
+                        .inverse("fundedBy"))
                 .relationshipType("Neighbours", r -> r.from("Site").to("Site").symmetric()
                         .targetsPerSource(Multiplicity.ZERO_OR_MORE).sourcesPerTarget(Multiplicity.ZERO_OR_MORE)
                         .inverse("neighbouringSites"))
@@ -336,6 +343,68 @@ class CompositionCascadesTest {
 
         assertThat(receipt.ended()).as("only the composition and the relationships of its target")
                 .containsExactly(world.rel("hasRoom"), world.id(ROOM), world.rel("cleans"));
+    }
+
+    @Test
+    void anAssociationBetweenAnEntityThatAWriteEndsAndATargetOfItsCascadeEndsWithTheTargetButNotOtherOnes() {
+        World world = new World();
+        Receipt later = world.store.commit(transaction()
+                .relate(new TemporaryId("audits"), "Audits", world.north, world.id(DEPOT), from(1, 1), values())
+                .relate(new TemporaryId("funds"), "Funds", world.north, world.id(TAG), from(1, 1), values()).build());
+        RelationshipId audits = relationship(later, new TemporaryId("audits"));
+        RelationshipId funds = relationship(later, new TemporaryId("funds"));
+
+        List<Problem> withoutEndingFunds = world.store.reject(transaction().endDate(world.north, on(6, 1)).build());
+        Receipt receipt = world.store.commit(transaction().endDate(world.north, on(6, 1))
+                .endDate(funds, on(6, 1)).build());
+
+        assertProblem(only(withoutEndingFunds), ProblemCode.RELATIONSHIP_OUTLIVES_END, funds.value());
+        assertThat(receipt.ended()).as("one of the relationships of Depot, a target, after the ones with lower IDs")
+                .contains(audits).doesNotContain(world.north, funds);
+        assertThat(receipt.ended().indexOf(audits)).isGreaterThan(receipt.ended().indexOf(world.rel("tagged")))
+                .isLessThan(receipt.ended().indexOf(world.rel("hasDock")));
+        assertThat(world.existsOn(audits, 5, 31)).isTrue();
+        assertThat(world.existsOn(audits, 6, 1)).isFalse();
+    }
+
+    @Test
+    void anEntityThatAWriteEndsLaterThanTheInstantIsATargetThatIsCutToTheInstantAndLosesItsRelationships() {
+        for (boolean laterWriteFirst : List.of(true, false)) {
+            World world = new World();
+            RelationshipId dockTagged = relationship(world.store.commit(transaction()
+                    .relate(new TemporaryId("dockTagged"), "Tagged", world.id(DOCK), world.id(TAG), from(1, 1),
+                            values()).build()), new TemporaryId("dockTagged"));
+            Transaction.Builder ending = transaction();
+            if (laterWriteFirst) {
+                ending.endDate(world.id(DOCK), on(9, 1)).endDate(world.north, on(6, 1));
+            } else {
+                ending.endDate(world.north, on(6, 1)).endDate(world.id(DOCK), on(9, 1));
+            }
+
+            Receipt receipt = world.store.commit(ending.build());
+
+            assertThat(receipt.ended()).as("Dock first, then its other relationship").endsWith(world.rel("hasDock"),
+                    world.id(DOCK), dockTagged);
+            assertThat(world.store.view(on(5, 31)).entity(world.id(DOCK))).isPresent();
+            assertThat(world.store.view(on(6, 1)).entity(world.id(DOCK))).as("cut to 1 June, not 1 September")
+                    .isEmpty();
+            assertThat(world.existsOn(dockTagged, 5, 31)).isTrue();
+            assertThat(world.existsOn(dockTagged, 6, 1)).isFalse();
+        }
+    }
+
+    @Test
+    void anEntityThatAWriteEndsEarlierThanTheInstantIsNotATargetSoItsRelationshipsStayProblems() {
+        World world = new World();
+        RelationshipId dockTagged = relationship(world.store.commit(transaction()
+                .relate(new TemporaryId("dockTagged"), "Tagged", world.id(DOCK), world.id(TAG), from(1, 1), values())
+                .build()), new TemporaryId("dockTagged"));
+
+        List<Problem> problems = world.store.reject(transaction().endDate(world.id(DOCK), on(5, 1))
+                .endDate(world.north, on(6, 1)).build());
+
+        assertThat(problems).extracting(Problem::code).containsOnly(ProblemCode.RELATIONSHIP_OUTLIVES_END);
+        assertThat(problems).extracting(Problem::path).contains(dockTagged.value());
     }
 
     // ------------------------------------------------------------------ checks and re-checks

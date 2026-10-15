@@ -13,4 +13,4 @@
 ## 3. Documentation
 
 - [x] 3.1 Update the HR domain page (HR-11, gaps) and any guide or glossary entry that describes cascades, and bump `last-reviewed`
-- [ ] 3.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 3.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

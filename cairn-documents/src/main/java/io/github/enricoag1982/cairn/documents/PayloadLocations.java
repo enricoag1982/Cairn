@@ -44,10 +44,10 @@ import java.util.regex.Pattern;
  * </ul>
  *
  * <p>A temporary ID and the ID that the same create gives the entity name the same subject. A problem whose path names
- * no write (a stored relationship that outlives an entity the payload ends, a target a cascade ends, an end touched only
- * through a relationship) is located at the last write that is about a subject its message, found value or expected
- * value names, by the subject's temporary ID or ID as a word of its own, or as {@code @write.<n>}. A problem that names
- * none is located at the root of the payload.
+ * no write (a stored relationship that outlives an entity the payload ends, a target or a relationship a cascade ends,
+ * an end touched only through a relationship) is located at the last write that is about a subject its message, found
+ * value or expected value names, by the subject's temporary ID or ID as a word of its own, or as
+ * {@code @write.<n>}. A problem that names none is located at the root of the payload.
  */
 public final class PayloadLocations {
 

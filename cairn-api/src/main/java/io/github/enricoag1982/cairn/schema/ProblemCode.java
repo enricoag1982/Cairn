@@ -285,8 +285,9 @@ public enum ProblemCode {
     /** An entity ends, or has been shortened, while a relationship to it continues. */
     RELATIONSHIP_OUTLIVES_END("A relationship cannot continue after one of its ends has ended. A transaction that "
             + "ends an entity must end every relationship that has the entity as an end, from the same instant or "
-            + "from an earlier one; compositions end by themselves. End the relationship in the same transaction, at "
-            + "or before the instant at which the entity ends, or end the entity later."),
+            + "from an earlier one; compositions, their targets and the targets' other relationships end by "
+            + "themselves. End the relationship in the same transaction, at or before the instant at which the "
+            + "entity ends, or end the entity later."),
     /** An entity has fewer relationships of a type than the minimum, at some point in effective time. */
     TOO_FEW_RELATIONSHIPS("An entity must have at least the minimum number of relationships that a relationship type "
             + "declares for its end, counting the relationships of the type and of its subtypes, at every point in "

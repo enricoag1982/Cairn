@@ -17,12 +17,18 @@ import java.util.Set;
  * relationships with the entity as their source end from the same instant, and so do their targets, recursively. A
  * target ends with its source, so every other relationship of a target that the cascade ends ends with it too, at
  * either end and of any type, once the target's own compositions have ended (design D1 of
- * {@code change-composition-cascades}). The entities at the other ends of such a relationship become touched, as the
- * ends of a relationship are, so that their multiplicities are checked; nothing else is validated again. An entity that
- * a write ends is not a target: its relationships that continue stay the writer's to end. The added ends are part of
- * the transaction. Only what exists before the instant and goes on past it is ended; a relationship or target that
- * starts at or after the instant is left as it is, for the integrity checks to report, because ending it would erase
- * it, and so is a relationship that the transaction already ends from the instant or earlier.
+ * {@code change-composition-cascades}), including one that the transaction itself relates or ends later.
+ *
+ * <p>An entity that a write ends from that instant or earlier is not a target: its other relationships, except those
+ * with a target, stay the writer's to end, for the integrity checks to report. An entity that a write ends later than
+ * the instant is a target, and is cut to the instant. The added ends are part of the transaction, and a relationship
+ * that a cascade ends counts as written by it, as one that a write ends does: it is checked as an explicit end of it
+ * is. The entities at its other ends become touched, as the ends of a relationship are, but only for their
+ * multiplicities and lifetimes; nothing else is validated again.
+ *
+ * <p>Only what exists before the instant and goes on past it is ended; a relationship or target that starts at or after
+ * the instant is left as it is, for the integrity checks to report, because ending it would erase it, and so is a
+ * relationship that the transaction already ends from the instant or earlier.
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.
  */

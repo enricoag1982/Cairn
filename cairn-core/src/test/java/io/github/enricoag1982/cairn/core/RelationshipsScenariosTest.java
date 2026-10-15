@@ -489,7 +489,10 @@ class RelationshipsScenariosTest {
                 .build());
     }
 
-    /** Ends Beta and its own relationships from 1 June: A-1 moves to ACME, and the cascade ends the rest. */
+    /**
+     * From 1 June, ends Beta and moves A-1 to ACME, as in RD-8: it ends A-1's HeldBy of Beta and relates A-1 to ACME
+     * with HeldBy. The cascade ends the rest: Beta's address, and the relationships of the address.
+     */
     private static Transaction endBeta(Receipt parties, Receipt accounts) {
         return Transaction.by("importer")
                 .endDate(entity(parties, BETA), on(6, 1))
