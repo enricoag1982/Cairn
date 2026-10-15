@@ -271,7 +271,7 @@ public final class Payloads {
      * {@code {entity | relationship, type, created, periods}} with the ID under {@code entity} or {@code relationship}, the
      * name of the type at the change's basis, and each period as {@code {from, until}}, {@code until} left out for a
      * period without an end. {@code created} is always written. Details without a value and empty lists, such as the
-     * {@code changed} of a transaction that purges have left empty, are left out.
+     * {@code changed} of a transaction that purges have left empty or one that changed nothing, are left out.
      *
      * @param change the change
      * @return the JSON text

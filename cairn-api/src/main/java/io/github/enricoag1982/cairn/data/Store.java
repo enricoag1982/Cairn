@@ -8,8 +8,8 @@ import java.util.concurrent.Flow;
 
 /**
  * A system of record: a schema, and the entities and relationships written under it, with history on two time axes
- * (ADR-0007, ADR-0008, capabilities {@code transactions}, {@code entity-versions}, {@code relationships},
- * {@code views} and {@code purge}).
+ * (ADR-0007, ADR-0008, ADR-0029, capabilities {@code transactions}, {@code entity-versions}, {@code relationships},
+ * {@code views}, {@code purge} and {@code change-feed}).
  *
  * <p>One writer orders all commits, schema transactions and data transactions alike; they share one sequence of bases
  * and transaction times. Reads never wait: they go through {@linkplain View views}.
@@ -178,9 +178,10 @@ public interface Store {
      * <p>A subscription ends when the subscriber cancels it; when it requests fewer than one change, which ends it with
      * {@code onError} of an {@link IllegalArgumentException}; when {@code onNext} throws, which cancels it and goes no
      * further, so that commits go on; or when the store is closed, which completes it after the {@code onNext} that is
-     * running returns. A subscription to a store that is closed or closing completes at once. A store that is not kept on
-     * disk is never closed, so its subscriptions end only in the other ways. A read that fails ends the subscription with
-     * {@code onError}.
+     * running returns. A subscriber that subscribes to a publisher that this method returned before the store was closed,
+     * or while it is closing, is completed at once; calling this method on a store that is closed throws. A store that is
+     * not kept on disk is never closed, so its subscriptions end only in the other ways. A read that fails ends the
+     * subscription with {@code onError}.
      *
      * @param after the basis to follow from, which is not included: {@link Basis#NONE} follows from the first change
      * @return the publisher

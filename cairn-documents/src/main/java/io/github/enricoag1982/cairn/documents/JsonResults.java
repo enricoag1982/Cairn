@@ -40,7 +40,8 @@ import java.util.function.Function;
  * receipts, entity and relationship states, links, steps, problems, query results and the changes of the change feed.
  *
  * <p>The keys of a mapping are the names of the components of the Java record it stands for, in the order of the
- * components. A component that is an empty {@code Optional}, an empty map or an empty list is left out, except the
+ * components. A change is the exception: it has the field {@code kind} besides, and the {@code principal},
+ * {@code onBehalfOf}, {@code reason} and {@code origin} of its record are at its own level. A component that is an empty {@code Optional}, an empty map or an empty list is left out, except the
  * {@code values} of a state, which are always written. IDs are strings,
  * a temporary ID has its {@code $}, and where the kind of an ID is not fixed by the field, in a receipt, it is written as
  * {@code {"entity": "<id>"}} or {@code {"relationship": "<id>"}}. Instants are ISO 8601 strings in UTC, dates are ISO 8601

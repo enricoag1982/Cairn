@@ -17,8 +17,10 @@ import java.util.TreeSet;
  * or none. A stretch is changed if one timeline has a segment there and the other none, or both have one and the segments
  * are not the same version. Two segments are the same version if they have the same values and were recorded by the same
  * transaction, which is its transaction time and its basis, whatever their periods are: a segment that was only cut, by an
- * end-date or by a write in another stretch, is still the version it was. A version that a transaction records again with
- * the same values is another version, because another transaction records it. Neighboring changed stretches are merged.
+ * end-date or by a write in another stretch, is still the version it was. A write that leaves a period's values as they
+ * were records no new version there, so that period is not changed. Versions are compared by their values and the
+ * transaction time and basis that recorded them, not by their bounds (ADR-0029). Neighboring changed stretches are
+ * merged.
  */
 final class ChangedPeriods {
 

@@ -37,8 +37,9 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * The tools that read a store through a view (design D2 of {@code add-agent-tools}): an entity, a relationship, the
  * entities of a type, a timeline, navigation and traversal, and queries; and the one that reads the store's changes
- * (design D7 of {@code add-change-feed}). Every result reports the coordinates it was read at, as
- * {@code {effectiveAt, basis, result}}; a timeline has no effective time, so it reports the basis only.
+ * (design D7 of {@code add-change-feed}). Every result of a read through a view reports the coordinates it was read at,
+ * as {@code {effectiveAt, basis, result}}; a timeline has no effective time, so it reports the basis only. The tool that
+ * reads the changes reads no view, and returns {@code {changes, next, latestBasis}}.
  *
  * <p>The tools that start from an entity, {@code cairn_read_entity}, {@code cairn_navigate} and {@code cairn_traverse},
  * name it by its ID ({@code id}) or by a unique key ({@code key}, in the form of payloads), exactly one of the two. A key

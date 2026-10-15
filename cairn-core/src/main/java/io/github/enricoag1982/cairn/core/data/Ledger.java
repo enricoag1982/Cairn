@@ -46,8 +46,8 @@ import java.util.stream.Stream;
  * its ends, and each value of a unique attribute that the entity or relationship has and the index does not hold for it
  * yet is added, with the commit's basis. Nothing is written for what a commit leaves as it was.
  *
- * <p><b>Changes.</b> Whenever a commit writes an entity or relationship, it also writes one {@code CHANGE} key, by the
- * commit's basis and the identifier, which says whether it is a relationship, its type, whether the commit created it, and
+ * <p><b>Changes.</b> When a commit writes an entity or relationship that changed in some effective period, it also writes
+ * one {@code CHANGE} key, by the commit's basis and the identifier, which says whether it is a relationship, its type, whether the commit created it, and
  * the effective periods in which it changed ({@link ChangedPeriods}); recovery writes them again as it writes the rest
  * (ADR-0029, design D2 and D6 of {@code add-change-feed}). {@link #changes} reads them, and a purge deletes the ones of
  * what it removes, at every basis that inserted a row of it or superseded one.

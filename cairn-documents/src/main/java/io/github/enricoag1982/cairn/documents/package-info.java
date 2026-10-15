@@ -27,7 +27,9 @@
  *
  * <p>{@link io.github.enricoag1982.cairn.documents.Payloads#toJson(io.github.enricoag1982.cairn.data.Receipt)} and its
  * overloads write receipts, entity and relationship states, links, steps, problems and the changes of the change feed
- * as JSON, with the field names of the Java records, so that the values of an entity state can be used as the values of a {@code replace} write.
+ * as JSON, with the field names of the Java records, so that the values of an entity state can be used as the values of
+ * a {@code replace} write. A change is written with the field {@code kind} besides, and with the {@code principal},
+ * {@code onBehalfOf}, {@code reason} and {@code origin} of its record at its own level, not in a nested object.
  * {@link io.github.enricoag1982.cairn.documents.JsonSchemas#values(io.github.enricoag1982.cairn.schema.Schema, String)}
  * generates the JSON Schema (draft 2020-12) for the values of an entity type or relationship type, and
  * {@link io.github.enricoag1982.cairn.documents.JsonSchemas#transactions(io.github.enricoag1982.cairn.schema.Schema)}

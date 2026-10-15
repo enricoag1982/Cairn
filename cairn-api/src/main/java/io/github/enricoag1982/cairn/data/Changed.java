@@ -6,8 +6,10 @@ import java.util.Objects;
 /**
  * An entity or relationship that a data transaction changed (ADR-0029, capability {@code change-feed}): its ID, the name
  * of its type, whether the transaction created it, and the effective periods in which a view at the transaction's basis
- * and a view at the basis before read different versions of it, absent included. A version that is recorded again with
- * the same values is a different version. The change names no values: read them through those two views.
+ * and a view at the basis before read different versions of it, absent included. A write that leaves a period's values
+ * as they were records no new version there, so that period is not changed. Versions are compared by their values and the
+ * transaction time and basis that recorded them, not by their bounds (ADR-0029). The change names no values: read them
+ * through those two views.
  *
  * @param id      the ID of the entity or relationship: an {@link EntityId} or a {@link RelationshipId}
  * @param type    the name of its type in the schema at the transaction's basis; a consumer that compares names across a
