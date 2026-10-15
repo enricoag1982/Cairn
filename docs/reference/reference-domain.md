@@ -74,6 +74,13 @@ Scenarios that validate or register the reference model assume a registry with t
 
 The last three read other entities and relationships, so writes to those run them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)).
 
+Scenarios of the `checks`, `schema-documents` and `schema-evolution` specs also declare test-only *checks*, which the reference model does not declare ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)):
+
+- `balance-not-negative` on Account: `self.balance >= 0.0`.
+- `name-not-empty` on Party: `size(self.name) > 0`.
+- `born-before-2026` on Person: `self.birthDate < timestamp('2026-01-01T00:00:00Z')`, and with `!has(self.birthDate) ||` in front.
+- `title-not-blank` on Employs: `!has(self.title) || size(self.title) > 0`.
+
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 
 ## Stories

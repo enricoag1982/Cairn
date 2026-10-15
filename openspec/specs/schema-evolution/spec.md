@@ -119,6 +119,7 @@ The system SHALL apply a registration whose differences from the stored definiti
 - relaxing a string constraint: adding allowed values to an attribute that already has some, removing all allowed values, removing a pattern, lowering or removing a minimum length, or raising or removing a maximum length
 - adding, changing or removing a description or examples
 - removing a rule from a type
+- removing a check from a type, or adding, changing or removing a check's message
 - moving an optional attribute without a unique constraint to a supertype, keeping its definition
 - marking an attribute or type as deprecated
 - making an abstract entity type concrete
@@ -155,6 +156,11 @@ The system SHALL apply a registration whose differences from the stored definiti
 - **WHEN** a later version of `reference-model` no longer names the rule `lei-checksum` on Organization
 - **THEN** the registration is applied
 
+#### Scenario: Removing a check
+
+- **WHEN** the stored model declares the check `balance-not-negative` on Account, and a later version of the origin no longer declares it
+- **THEN** the registration is applied
+
 ### Requirement: Breaking changes are rejected
 
 The system SHALL reject a registration whose differences from the stored definition of its origin include any breaking change. The rejection SHALL list every breaking change with its path and reason, and a hint for fixing it where one applies, and MUST NOT change the stored schema. In these rules, an existing type is a concrete entity type or a relationship type that the stored schema already has: abstract types have no entities of their own. These changes are breaking:
@@ -166,6 +172,7 @@ The system SHALL reject a registration whose differences from the stored definit
 - adding a unique constraint to an existing attribute
 - tightening a string constraint: giving allowed values, a pattern or a length to an existing attribute that had none, removing an allowed value, changing a pattern, raising a minimum length, or lowering a maximum length
 - adding a rule to an entity type or relationship type that the stored schema already has, abstract or not, or changing the version of a rule it names
+- adding a check to an entity type or relationship type that the stored schema already has, abstract or not, or changing the expression of a check it declares
 - extending an existing required or unique attribute to more existing types, for example by moving it to a supertype or by including its trait in another type
 - widening a relationship source or target that requires a relationship (a minimum of 1) to concrete entity types that already exist
 - adding, removing or changing an entity type's or relationship type's supertype
@@ -214,6 +221,11 @@ The system SHALL reject a registration whose differences from the stored definit
 - **WHEN** a later version removes `birthDate` from Person and makes Organization abstract
 - **THEN** the registration is rejected, listing both breaking changes
 - **AND** the stored schema is unchanged
+
+#### Scenario: Adding a check to an existing type
+
+- **WHEN** the stored model has Account without checks, and a later version of the origin declares the check `balance-not-negative` on Account
+- **THEN** the registration is rejected with a breaking change at `Account.balance-not-negative`
 
 ### Requirement: Aliases resolve to renamed elements
 

@@ -12,9 +12,13 @@ generatedTypes {
 
 dependencies {
     cairnCodegen(project(":cairn-codegen"))
+    // The generator checks the document with its registry, which compiles the check leave-dates-in-order (ADR-0030).
+    cairnCodegen(project(":cairn-cel"))
     api(project(":cairn-api"))
     api(project(":cairn-documents"))
     testImplementation(project(":cairn-core"))
     testImplementation(project(":cairn-agent-tools"))
     testImplementation(testFixtures(project(":cairn-api")))
+    // The check leave-dates-in-order runs in the tests' stores; the module is found through ServiceLoader.
+    testRuntimeOnly(project(":cairn-cel"))
 }

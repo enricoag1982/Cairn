@@ -25,6 +25,9 @@ import java.util.Optional;
  * @param rules            the rules the type names itself
  * @param effectiveRules   the rules that apply to the type: those it names itself, then those of its supertypes,
  *                         nearest supertype first, each with the type that names it
+ * @param checks           the checks the type declares itself (capability {@code checks})
+ * @param effectiveChecks  the checks that apply to the type: those it declares itself, then those of its supertypes,
+ *                         nearest supertype first, each with the type that declares it
  * @param origin           the origin that registered the type
  */
 public record RelationshipType(
@@ -46,6 +49,8 @@ public record RelationshipType(
         List<Attribute> attributes,
         List<RuleReference> rules,
         List<EffectiveRule> effectiveRules,
+        List<Check> checks,
+        List<EffectiveCheck> effectiveChecks,
         Origin origin) {
 
     /**
@@ -59,6 +64,8 @@ public record RelationshipType(
         attributes = List.copyOf(attributes);
         rules = List.copyOf(rules);
         effectiveRules = List.copyOf(effectiveRules);
+        checks = List.copyOf(checks);
+        effectiveChecks = List.copyOf(effectiveChecks);
     }
 
     /**

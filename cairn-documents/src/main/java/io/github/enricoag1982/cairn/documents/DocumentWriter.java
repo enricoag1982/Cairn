@@ -6,6 +6,7 @@ import io.github.enricoag1982.cairn.documents.WrittenNode.Quoted;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Sequence;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Text;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Range;
@@ -16,6 +17,7 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
@@ -92,6 +94,7 @@ final class DocumentWriter {
         strings(mapping, "aliases", type.aliases());
         flag(mapping, "deprecated", type.deprecated());
         rules(mapping, type.rules());
+        checks(mapping, type.checks());
         return mapping;
     }
 
@@ -113,6 +116,7 @@ final class DocumentWriter {
         strings(mapping, "aliases", type.aliases());
         flag(mapping, "deprecated", type.deprecated());
         rules(mapping, type.rules());
+        checks(mapping, type.checks());
         return mapping;
     }
 
@@ -187,6 +191,19 @@ final class DocumentWriter {
             owner.put("rules", new Sequence(rules.stream().<WrittenNode>map(rule -> new Mapping()
                     .put("name", rule.name())
                     .put("version", new Plain(Integer.toString(rule.version())))).toList()));
+        }
+    }
+
+    /** The checks of a type, as a mapping from their names to their expressions and messages, in the order of the names. */
+    private static void checks(Mapping owner, List<Check> checks) {
+        if (!checks.isEmpty()) {
+            Mapping section = new Mapping();
+            checks.stream().sorted(Comparator.comparing(Check::name)).forEach(check -> {
+                Mapping mapping = new Mapping().put("expression", check.expression());
+                check.message().ifPresent(message -> mapping.put("message", message));
+                section.put(check.name(), mapping);
+            });
+            owner.put("checks", section);
         }
     }
 

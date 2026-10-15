@@ -13,6 +13,7 @@ import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.fixtures.ControllingOwnerHasLeiRule;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.EmployerHoldsAccountRule;
@@ -27,6 +28,7 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A store with the reference model registered and a clock that the test moves, with shortcuts to commit,
@@ -59,14 +61,29 @@ final class ReferenceStore {
 
     private ReferenceStore(IdGenerator generator, SchemaDefinition definition, List<Rule> rules,
             List<RuleDescriptor> declaredRules) {
-        store = TestBackend.open(StoreSettings.builder()
+        this(generator, definition, rules, declaredRules, Optional.empty());
+    }
+
+    private ReferenceStore(IdGenerator generator, SchemaDefinition definition, List<Rule> rules,
+            List<RuleDescriptor> declaredRules, Optional<ExpressionLanguage> language) {
+        StoreSettings.Builder settings = StoreSettings.builder()
                 .clock(clock)
                 .idGenerator(generator)
                 .rules(rules)
-                .declaredRules(declaredRules)
-                .build());
+                .declaredRules(declaredRules);
+        language.ifPresent(settings::expressionLanguage);
+        store = TestBackend.open(settings.build());
         assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), definition))
                 .isInstanceOf(RegistrationResult.Applied.class);
+    }
+
+    /**
+     * A store with deterministic IDs and the rules of the reference domain, in which a schema was registered, and an
+     * expression language that the test gives, instead of the one that the engine would find.
+     */
+    static ReferenceStore withExpressionLanguage(SchemaDefinition definition, ExpressionLanguage language) {
+        return new ReferenceStore(IdGenerators.deterministic(), definition, ReferenceModel.executableRules(),
+                ReferenceModel.declaredRules(), Optional.of(language));
     }
 
     /** A store with deterministic IDs in which another schema than the reference model was registered. */

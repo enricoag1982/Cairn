@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.schema.AttributeBuilder;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
+import io.github.enricoag1982.cairn.schema.Check;
+import io.github.enricoag1982.cairn.schema.Multiplicity;
+import io.github.enricoag1982.cairn.schema.RelationshipKind;
 import io.github.enricoag1982.cairn.schema.EntityTypeBuilder;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -250,7 +253,112 @@ class PropertyRulesTest {
         }
     }
 
+    @Nested
+    class Checks {
+
+        private final Check balance = new Check("balance-not-negative", "self.balance >= 0.0");
+        private final Check notEmpty = new Check("name-not-empty", "size(self.name) > 0");
+
+        @Test
+        void removingACheckIsCompatibleAndLocatedAtTheCheck() {
+            assertThat(checks(List.of(balance, notEmpty), List.of(notEmpty))).singleElement().satisfies(change -> {
+                assertThat(change.compatible()).isTrue();
+                assertThat(change.path()).isEqualTo("Account.balance-not-negative");
+                assertThat(change.description()).contains("removed", "balance-not-negative");
+            });
+        }
+
+        @Test
+        void addingACheckIsBreakingWithAHintAndLocatedAtTheCheck() {
+            assertThat(checks(List.of(notEmpty), List.of(notEmpty, balance))).singleElement().satisfies(change -> {
+                assertThat(change.compatible()).isFalse();
+                assertThat(change.path()).isEqualTo("Account.balance-not-negative");
+                assertThat(change.hint()).isPresent();
+            });
+        }
+
+        @Test
+        void changingTheExpressionIsBreakingAndNamesBoth() {
+            Check changed = new Check("balance-not-negative", "self.balance > 0.0");
+
+            assertThat(checks(List.of(balance), List.of(changed))).singleElement().satisfies(change -> {
+                assertThat(change.compatible()).isFalse();
+                assertThat(change.path()).isEqualTo("Account.balance-not-negative");
+                assertThat(change.description()).contains("self.balance >= 0.0", "self.balance > 0.0");
+            });
+        }
+
+        @Test
+        void addingChangingOrRemovingOnlyTheMessageIsCompatible() {
+            Check described = new Check(balance.name(), balance.expression(), Optional.of("No overdrafts."));
+            Check reworded = new Check(balance.name(), balance.expression(), Optional.of("A balance cannot be negative."));
+
+            assertThat(checks(List.of(balance), List.of(described))).singleElement()
+                    .satisfies(change -> assertThat(change.compatible()).isTrue());
+            assertThat(checks(List.of(described), List.of(reworded))).singleElement()
+                    .satisfies(change -> assertThat(change.compatible()).isTrue());
+            assertThat(checks(List.of(reworded), List.of(balance))).singleElement()
+                    .satisfies(change -> assertThat(change.compatible()).isTrue());
+        }
+
+        @Test
+        void changingTheExpressionAndTheMessageTogetherIsBreaking() {
+            Check changed = new Check(balance.name(), "self.balance > 0.0", Optional.of("Positive balances only."));
+
+            assertThat(checks(List.of(balance), List.of(changed))).singleElement()
+                    .satisfies(change -> assertThat(change.compatible()).isFalse());
+        }
+
+        @Test
+        void everyAddedCheckIsReported() {
+            assertThat(checks(List.of(), List.of(balance, notEmpty))).hasSize(2)
+                    .allMatch(change -> !change.compatible());
+        }
+
+        @Test
+        void listingTheSameChecksInAnotherOrderIsNoChange() {
+            assertThat(checks(List.of(balance, notEmpty), List.of(notEmpty, balance))).isEmpty();
+        }
+
+        @Test
+        void relationshipTypesAreComparedTheSame() {
+            RelationshipTypeDefinition before = relationshipWithChecks(List.of(balance));
+            RelationshipTypeDefinition after = relationshipWithChecks(List.of(balance, notEmpty));
+
+            assertThat(PropertyRules.compare("relationship", before, after, "Employs", CompiledSchema.EMPTY,
+                    CompiledSchema.EMPTY)).singleElement().satisfies(change -> {
+                        assertThat(change.compatible()).isFalse();
+                        assertThat(change.path()).isEqualTo("Employs.name-not-empty");
+                    });
+            assertThat(PropertyRules.compare("relationship", after, before, "Employs", CompiledSchema.EMPTY,
+                    CompiledSchema.EMPTY)).singleElement()
+                    .satisfies(change -> assertThat(change.compatible()).isTrue());
+        }
+
+        @Test
+        void checksHaveARuleOfTheirOwnForEntityAndRelationshipTypes() {
+            assertThat(PropertyRules.hasRule("entity", "checks")).isTrue();
+            assertThat(PropertyRules.hasRule("relationship", "checks")).isTrue();
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static List<SchemaChange> checks(List<Check> before, List<Check> after) {
+        return PropertyRules.compare("entity", withChecks(before), withChecks(after), "Account", CompiledSchema.EMPTY,
+                CompiledSchema.EMPTY);
+    }
+
+    private static EntityTypeDefinition withChecks(List<Check> checks) {
+        return new EntityTypeDefinition("Account", false, Optional.empty(), List.of(), List.of(), List.of(), false,
+                Optional.empty(), List.of(), checks);
+    }
+
+    private static RelationshipTypeDefinition relationshipWithChecks(List<Check> checks) {
+        return new RelationshipTypeDefinition("Employs", "Organization", "Person", Multiplicity.ZERO_OR_MORE,
+                Multiplicity.ZERO_OR_MORE, "employedBy", List.of(), RelationshipKind.ASSOCIATION, false,
+                Optional.empty(), List.of(), List.of(), false, Optional.empty(), List.of(), checks);
+    }
 
     private static List<String> rulesMissingFor(String elementKind, Class<? extends Record> type) {
         return Arrays.stream(type.getRecordComponents())

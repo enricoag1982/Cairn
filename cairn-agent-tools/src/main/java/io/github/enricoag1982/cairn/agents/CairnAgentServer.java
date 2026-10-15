@@ -162,8 +162,8 @@ public final class CairnAgentServer {
     }
 
     /**
-     * Creates the store with the rules that the class path provides, and declares without code the rules that the
-     * documents name and the class path does not provide.
+     * Creates the store with the rules and the expression language (checks) that the class path provides, and declares
+     * without code the rules that the documents name and the class path does not provide.
      */
     private static Store createStore(List<SchemaDocument> documents, List<Path> files) throws StartFailure {
         try {
@@ -173,7 +173,7 @@ public final class CairnAgentServer {
                 known.add(new RuleReference(rule.descriptor().name(), rule.descriptor().version()));
             }
             return Stores.inMemory(new StoreSettings(provided.clock(), provided.idGenerator(), provided.rules(),
-                    DeclaredRules.namedBy(files, documents, known)));
+                    DeclaredRules.namedBy(files, documents, known), provided.expressionLanguage()));
         } catch (ServiceConfigurationError | IllegalArgumentException | NullPointerException e) {
             throw new StartFailure("The rules on the class path cannot be used: " + e.getMessage());
         }

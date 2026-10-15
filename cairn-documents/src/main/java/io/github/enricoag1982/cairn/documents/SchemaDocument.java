@@ -27,11 +27,12 @@ public record SchemaDocument(Origin origin, SchemaDefinition definition, Documen
 
     /**
      * Locates problems in this document: the problems that validating, planning or registering its definition
-     * reports. A problem about a type, attribute, inverse name or rule is located at that element, a problem about the
-     * origin at the key {@code origin}, a problem about an element that the document does not have, such as an
-     * attribute that a new version removes, at the closest enclosing element that the document has, and a problem
-     * whose path names no element of the document at the root of the document. A problem that is located already
-     * keeps its location.
+     * reports. A problem about a type, attribute, inverse name, rule or check is located at that element, a problem
+     * about the expression of a check at the key {@code expression} of the check, with the position in the document of
+     * the position in the expression where it is known, a problem about the origin at the key {@code origin}, a problem
+     * about an element that the document does not have, such as an attribute that a new version removes, at the closest
+     * enclosing element that the document has, and a problem whose path names no element of the document at the root of
+     * the document. A problem that is located already keeps its location.
      *
      * @param problems the problems, for example those of {@code SchemaRegistry.validate} or of a rejected registration
      * @return the same problems, in the same order, each with its location

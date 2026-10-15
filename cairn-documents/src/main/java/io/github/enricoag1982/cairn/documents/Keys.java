@@ -33,12 +33,12 @@ final class Keys {
 
     /** The keys of an entity type. */
     static final List<String> ENTITY_TYPE = List.of(
-            "description", "abstract", "supertype", "traits", "attributes", "aliases", "deprecated", "rules");
+            "description", "abstract", "supertype", "traits", "attributes", "aliases", "deprecated", "rules", "checks");
 
     /** The keys of a relationship type. */
     static final List<String> RELATIONSHIP_TYPE = List.of(
             "description", "source", "target", "targetsPerSource", "sourcesPerTarget", "inverseName", "inverseAliases",
-            "kind", "symmetric", "supertype", "attributes", "aliases", "deprecated", "rules");
+            "kind", "symmetric", "supertype", "attributes", "aliases", "deprecated", "rules", "checks");
     /** The keys a relationship type must have. */
     static final List<String> RELATIONSHIP_TYPE_REQUIRED = List.of(
             "source", "target", "targetsPerSource", "sourcesPerTarget", "inverseName");
@@ -57,6 +57,11 @@ final class Keys {
     static final List<String> RULE = List.of("name", "version");
     /** The keys a rule reference must have. */
     static final List<String> RULE_REQUIRED = List.of("name", "version");
+
+    /** The keys of a check. */
+    static final List<String> CHECK = List.of("expression", "message");
+    /** The keys a check must have. */
+    static final List<String> CHECK_REQUIRED = List.of("expression");
 
     /** The names of the value types, as written in the key {@code type}. */
     static final List<String> VALUE_TYPES = List.of("string", "boolean", "int", "long", "decimal", "date", "instant");

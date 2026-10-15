@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.schema.Attribute;
+import io.github.enricoag1982.cairn.schema.EffectiveCheck;
 import io.github.enricoag1982.cairn.schema.EffectiveRule;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
@@ -10,24 +11,27 @@ import java.util.Optional;
 
 /**
  * What the writes of a transaction need to know about the type of the thing they write, whether it is an entity or a
- * relationship (design D5 of {@code add-relationships}): its identifier, name, attributes and rules. The two kinds of
- * type are records of the API without a common interface, so this holds what they share.
+ * relationship (design D5 of {@code add-relationships}): its identifier, name, attributes, rules and checks. The two
+ * kinds of type are records of the API without a common interface, so this holds what they share.
  *
- * @param id             the type's identifier
- * @param name           the type's name
- * @param relationship   {@code true} for a relationship type, {@code false} for an entity type
- * @param attributes     all attributes, including inherited ones
- * @param effectiveRules the rules that apply to the type
+ * @param id              the type's identifier
+ * @param name            the type's name
+ * @param relationship    {@code true} for a relationship type, {@code false} for an entity type
+ * @param attributes      all attributes, including inherited ones
+ * @param effectiveRules  the rules that apply to the type
+ * @param effectiveChecks the checks that apply to the type
  */
 record SubjectType(TypeId id, String name, boolean relationship, List<Attribute> attributes,
-        List<EffectiveRule> effectiveRules) {
+        List<EffectiveRule> effectiveRules, List<EffectiveCheck> effectiveChecks) {
 
     static SubjectType of(EntityType type) {
-        return new SubjectType(type.id(), type.name(), false, type.attributes(), type.effectiveRules());
+        return new SubjectType(type.id(), type.name(), false, type.attributes(), type.effectiveRules(),
+                type.effectiveChecks());
     }
 
     static SubjectType of(RelationshipType type) {
-        return new SubjectType(type.id(), type.name(), true, type.attributes(), type.effectiveRules());
+        return new SubjectType(type.id(), type.name(), true, type.attributes(), type.effectiveRules(),
+                type.effectiveChecks());
     }
 
     /** Finds an attribute by name or alias, compared without regard to case. */

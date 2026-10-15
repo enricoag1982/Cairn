@@ -1,0 +1,2 @@
+# The Common Expression Language for the checks of schema definitions (ADR-0030), found by the engine with ServiceLoader.
+io.github.enricoag1982.cairn.cel.CelLanguage

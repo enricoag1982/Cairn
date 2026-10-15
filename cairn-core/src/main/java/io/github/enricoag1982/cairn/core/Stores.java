@@ -34,7 +34,9 @@ public final class Stores {
      * commits, runs dry or registers a schema in its store gets an {@code IllegalStateException}, and its transaction
      * is rejected.
      *
-     * @param settings the clock, ID generator and rules; the store works on a copy of the generator
+     * @param settings the clock, ID generator, rules and expression language; the store works on a copy of the generator.
+     *                 The expression language compiles and runs the checks of the store's schema (capability
+     *                 {@code checks}); without one, the store rejects definitions that declare checks
      * @return the store
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references (requirement
      *                                  "Rule references" of the {@code type-model} spec), or if two rules, whether
@@ -44,7 +46,7 @@ public final class Stores {
     public static Store inMemory(StoreSettings settings) {
         Objects.requireNonNull(settings, "settings");
         return new InMemoryStore(settings.clock(), settings.idGenerator().copy(), settings.rules(),
-                settings.declaredRules());
+                settings.declaredRules(), settings.expressionLanguage());
     }
 
     /**
@@ -86,7 +88,10 @@ public final class Stores {
      * name, is not run: a write that needs it is rejected, as with an in-memory store, whatever the store recorded.
      *
      * @param directory the directory, which is created if it does not exist
-     * @param settings  the clock, ID generator and rules; the store works on a copy of the generator
+     * @param settings  the clock, ID generator, rules and expression language; the store works on a copy of the generator.
+     *                  The checks of the recovered schema are compiled again with the expression language: without one,
+     *                  or with one that cannot compile a recorded check, the store rejects writes to the types the checks
+     *                  apply to
      * @return the open store, which the caller closes
      * @throws java.io.UncheckedIOException if reading or writing the directory fails
      * @throws IllegalStateException        if another open store holds the directory, if the directory holds a RocksDB
@@ -107,6 +112,6 @@ public final class Stores {
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(settings, "settings");
         return DirectoryStore.open(directory, settings.clock(), settings.idGenerator().copy(), settings.rules(),
-                settings.declaredRules());
+                settings.declaredRules(), settings.expressionLanguage());
     }
 }

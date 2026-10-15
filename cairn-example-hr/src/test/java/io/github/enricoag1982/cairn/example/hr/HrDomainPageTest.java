@@ -9,6 +9,7 @@ import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleCode;
@@ -42,15 +43,15 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Keeps {@code docs/reference/hr-domain.md} and the example in step, as {@code ReferenceModelTest} does for the
- * reference domain: the page's tables of entity types, relationship types and rules against the schema document
+ * reference domain: the page's tables of entity types, relationship types, rules and checks against the schema document
  * {@code hr-model.cairn.yaml} and the descriptors of the rules, and its table of people against
  * {@link Brightwater#EMPLOYEES} and the structure payload of HR-1.
  *
  * <p>The comparison reads the page by the headers of its tables and the words of its cells, so that it does not
  * depend on column widths, the order of rows, or the Markdown around a name. It is strict on what the page says: the
  * names, the attributes with whether they are required and unique, their allowed values and patterns, the kind,
- * source, target, multiplicities and inverse name of each relationship type, and the version, type, description and
- * codes of each rule.
+ * source, target, multiplicities and inverse name of each relationship type, the version, type, description and
+ * codes of each rule, and the type, expression and message of each check.
  */
 class HrDomainPageTest {
 
@@ -317,6 +318,42 @@ class HrDomainPageTest {
         }
         assertThat(model.entityTypes().stream().flatMap(type -> type.rules().stream()).map(RuleReference::name))
                 .as("rules named by entity types").isSubsetOf(onPage);
+    }
+
+    // ------------------------------------------------------------------ checks
+
+    @Test
+    @DisplayName("The checks of the page are those of the schema document")
+    void checksMatchThePage() {
+        Table page = table("Check");
+        Map<String, List<String>> declaredBy = new TreeMap<>();
+        Map<String, Check> checks = new TreeMap<>();
+        for (EntityTypeDefinition type : model.entityTypes()) {
+            for (Check check : type.checks()) {
+                declaredBy.computeIfAbsent(check.name(), k -> new ArrayList<>()).add(type.name());
+                checks.put(check.name(), check);
+            }
+        }
+        for (RelationshipTypeDefinition type : model.relationshipTypes()) {
+            for (Check check : type.checks()) {
+                declaredBy.computeIfAbsent(check.name(), k -> new ArrayList<>()).add(type.name());
+                checks.put(check.name(), check);
+            }
+        }
+        List<String> onPage = page.rows().stream().map(row -> plain(row.get("Check"))).toList();
+        assertThat(checks.keySet()).as("the checks the schema document declares")
+                .containsExactlyInAnyOrderElementsOf(onPage);
+
+        for (Map<String, String> row : page.rows()) {
+            String name = plain(row.get("Check"));
+            Check check = checks.get(name);
+            assertThat(declaredBy.get(name)).as("the types that declare %s", name)
+                    .containsExactly(plain(page.cell(row, "Type")));
+            assertThat(plain(page.cell(row, "Expression"))).as("%s expression", name)
+                    .isEqualTo(check.expression().replaceAll("\\s+", " ").trim());
+            assertThat(plain(page.cell(row, "Message"))).as("%s message", name)
+                    .isEqualTo(plain(check.message().orElse("")));
+        }
     }
 
     // ------------------------------------------------------------------ people

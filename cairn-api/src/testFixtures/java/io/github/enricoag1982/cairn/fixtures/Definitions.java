@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.fixtures;
 
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
@@ -9,6 +10,7 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 /**
@@ -84,7 +86,40 @@ public final class Definitions {
             return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
                     type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
                     type.supertype(), type.attributes(), type.aliases(), type.deprecated(), type.description(),
-                    rules);
+                    rules, type.checks());
+        });
+    }
+
+    /**
+     * Makes an entity type or relationship type declare a check: the check is added to the checks the type declares.
+     *
+     * @param definition the definition to change
+     * @param type       the name of the entity type or relationship type that declares the check
+     * @param name       the check's name
+     * @param expression the check's expression
+     * @param message    the check's message, or {@code null} for none
+     * @return the changed definition
+     */
+    public static SchemaDefinition withCheck(
+            SchemaDefinition definition, String type, String name, String expression, String message) {
+        Check check = new Check(name, expression, Optional.ofNullable(message));
+        if (definition.entityTypes().stream().anyMatch(candidate -> candidate.name().equals(type))) {
+            return changeEntityType(definition, type, entity -> {
+                List<Check> checks = new ArrayList<>(entity.checks());
+                checks.add(check);
+                return new EntityTypeDefinition(entity.name(), entity.isAbstract(), entity.supertype(), entity.traits(),
+                        entity.attributes(), entity.aliases(), entity.deprecated(), entity.description(),
+                        entity.rules(), checks);
+            });
+        }
+        return changeRelationshipType(definition, type, relationship -> {
+            List<Check> checks = new ArrayList<>(relationship.checks());
+            checks.add(check);
+            return new RelationshipTypeDefinition(relationship.name(), relationship.source(), relationship.target(),
+                    relationship.targetsPerSource(), relationship.sourcesPerTarget(), relationship.inverseName(),
+                    relationship.inverseAliases(), relationship.kind(), relationship.symmetric(),
+                    relationship.supertype(), relationship.attributes(), relationship.aliases(),
+                    relationship.deprecated(), relationship.description(), relationship.rules(), checks);
         });
     }
 
@@ -125,7 +160,7 @@ public final class Definitions {
      */
     public static EntityTypeDefinition withAttributes(EntityTypeDefinition type, List<AttributeDefinition> attributes) {
         return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), type.traits(), attributes,
-                type.aliases(), type.deprecated(), type.description(), type.rules());
+                type.aliases(), type.deprecated(), type.description(), type.rules(), type.checks());
     }
 
     /**

@@ -22,6 +22,7 @@ import java.util.Optional;
  * @param deprecated       {@code true} if the type should no longer be used
  * @param description      what the type means, if described
  * @param rules            the rules that apply to the type and its subtypes
+ * @param checks           the checks that apply to the type and its subtypes (capability {@code checks})
  */
 public record RelationshipTypeDefinition(
         String name,
@@ -38,7 +39,35 @@ public record RelationshipTypeDefinition(
         List<String> aliases,
         boolean deprecated,
         Optional<String> description,
-        List<RuleReference> rules) {
+        List<RuleReference> rules,
+        List<Check> checks) {
+
+    /**
+     * Creates the definition of a relationship type that declares no checks.
+     *
+     * @param name             the type name, which also names navigation from source to target
+     * @param source           the name of the source entity type
+     * @param target           the name of the target entity type
+     * @param targetsPerSource how many targets each source can have
+     * @param sourcesPerTarget how many sources each target can have
+     * @param inverseName      the name of navigation from target to source
+     * @param inverseAliases   previous inverse names
+     * @param kind             composition or association
+     * @param symmetric        {@code true} if the two ends are interchangeable
+     * @param supertype        the name of the relationship supertype, if any
+     * @param attributes       the attributes the type declares itself
+     * @param aliases          previous names of the type
+     * @param deprecated       {@code true} if the type should no longer be used
+     * @param description      what the type means, if described
+     * @param rules            the rules that apply to the type and its subtypes
+     */
+    public RelationshipTypeDefinition(String name, String source, String target, Multiplicity targetsPerSource,
+            Multiplicity sourcesPerTarget, String inverseName, List<String> inverseAliases, RelationshipKind kind,
+            boolean symmetric, Optional<String> supertype, List<AttributeDefinition> attributes,
+            List<String> aliases, boolean deprecated, Optional<String> description, List<RuleReference> rules) {
+        this(name, source, target, targetsPerSource, sourcesPerTarget, inverseName, inverseAliases, kind, symmetric,
+                supertype, attributes, aliases, deprecated, description, rules, List.of());
+    }
 
     /**
      * Rejects null components and copies the lists.
@@ -57,5 +86,6 @@ public record RelationshipTypeDefinition(
         attributes = List.copyOf(attributes);
         aliases = List.copyOf(aliases);
         rules = List.copyOf(rules);
+        checks = List.copyOf(checks);
     }
 }

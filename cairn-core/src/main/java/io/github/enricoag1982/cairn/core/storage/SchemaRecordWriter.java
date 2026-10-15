@@ -2,7 +2,8 @@ package io.github.enricoag1982.cairn.core.storage;
 
 /**
  * Writes a {@link SchemaRecord} in format version 1: the basis, the transaction time, the submission, the origin, the
- * definition field by field, and the identifiers that the registration assigned.
+ * definition field by field, and the identifiers that the registration assigned. If any type declares checks, they
+ * follow, as the last of the record.
  */
 final class SchemaRecordWriter {
 
@@ -30,5 +31,6 @@ final class SchemaRecordWriter {
             encoder.writeLong(attribute.id().value());
         });
         out.writeLong(identifiers.nextId());
+        DefinitionCodec.writeChecks(out, record.definition());
     }
 }

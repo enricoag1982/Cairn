@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.documents;
 import io.github.enricoag1982.cairn.documents.NodeReader.Entry;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
@@ -47,13 +48,20 @@ final class DocumentReader {
 
     private final NodeReader nodes = new NodeReader();
     private final Map<String, DocumentLocation> elements = new HashMap<>();
+    private final Map<String, ExpressionPlace> expressions = new HashMap<>();
+    private final String text;
+    private int[] codePoints;
+
+    private DocumentReader(String text) {
+        this.text = text;
+    }
 
     /** Reads a schema document. */
     static DocumentReadResult read(String text) {
         return switch (YamlTree.compose(text)) {
             case YamlTree.Failed failed ->
                     new DocumentReadResult.Invalid(List.of(NodeReader.syntax(failed, DOCUMENT_PATH)));
-            case YamlTree.Composed composed -> new DocumentReader().readDocument(composed);
+            case YamlTree.Composed composed -> new DocumentReader(text).readDocument(composed);
         };
     }
 
@@ -98,7 +106,7 @@ final class DocumentReader {
         }
         SchemaDefinition definition = new SchemaDefinition(entityTypes, traits, relationshipTypes);
         return new DocumentReadResult.Read(
-                new SchemaDocument(origin, definition, new DocumentLocations(rootLocation, elements)));
+                new SchemaDocument(origin, definition, new DocumentLocations(rootLocation, elements, expressions)));
     }
 
     private DocumentReadResult invalid() {
@@ -119,7 +127,8 @@ final class DocumentReader {
             return DOCUMENT_PATH;
         }
         String type = tokens.get(1);
-        return tokens.size() >= 4 && tokens.get(2).equals("attributes") ? type + "." + tokens.get(3) : type;
+        return tokens.size() >= 4 && (tokens.get(2).equals("attributes") || tokens.get(2).equals("checks"))
+                ? type + "." + tokens.get(3) : type;
     }
 
     private Origin origin(Entry entry) {
@@ -166,19 +175,23 @@ final class DocumentReader {
                 Keys.ENTITY_TYPE, List.of());
         if (properties.isEmpty()) {
             return new EntityTypeDefinition(path, false, Optional.empty(), List.of(), List.of(), List.of(), false,
-                    Optional.empty(), List.of());
+                    Optional.empty(), List.of(), List.of());
         }
         Map<String, Entry> p = properties.get();
+        // The order matters if a path names more than one element: the first one read keeps it.
+        List<AttributeDefinition> attributes = attributes(p.get("attributes"), path);
+        List<RuleReference> rules = rules(p.get("rules"), path);
         return new EntityTypeDefinition(
                 path,
                 nodes.bool(p.get("abstract"), path),
                 nodes.string(p.get("supertype"), path, "value of 'supertype'"),
                 nodes.strings(p.get("traits"), path, "'traits'"),
-                attributes(p.get("attributes"), path),
+                attributes,
                 nodes.strings(p.get("aliases"), path, "'aliases'"),
                 nodes.bool(p.get("deprecated"), path),
                 nodes.string(p.get("description"), path, "value of 'description'"),
-                rules(p.get("rules"), path));
+                rules,
+                checks(p.get("checks"), path));
     }
 
     private RelationshipTypeDefinition relationshipType(Entry type) {
@@ -189,7 +202,7 @@ final class DocumentReader {
         if (properties.isEmpty()) {
             return new RelationshipTypeDefinition(path, "", "", Multiplicity.ZERO_OR_MORE, Multiplicity.ZERO_OR_MORE,
                     "", List.of(), RelationshipKind.ASSOCIATION, false, Optional.empty(), List.of(), List.of(), false,
-                    Optional.empty(), List.of());
+                    Optional.empty(), List.of(), List.of());
         }
         Map<String, Entry> p = properties.get();
         // The order matters if a path names more than one element: the first one read keeps it.
@@ -200,6 +213,7 @@ final class DocumentReader {
             elements.putIfAbsent(DocumentLocations.key(path + "." + inverseName), location(entry.pointer(), entry.keyNode()));
         }
         List<RuleReference> rules = rules(p.get("rules"), path);
+        List<Check> checks = checks(p.get("checks"), path);
         return new RelationshipTypeDefinition(
                 path,
                 nodes.string(p.get("source"), path, "value of 'source'").orElse(""),
@@ -215,7 +229,8 @@ final class DocumentReader {
                 nodes.strings(p.get("aliases"), path, "'aliases'"),
                 nodes.bool(p.get("deprecated"), path),
                 nodes.string(p.get("description"), path, "value of 'description'"),
-                rules);
+                rules,
+                checks);
     }
 
     private void locateType(Entry type) {
@@ -367,6 +382,45 @@ final class DocumentReader {
             }
         }
         return Optional.empty();
+    }
+
+    // ------------------------------------------------------------------ checks
+
+    private List<Check> checks(Entry entry, String typePath) {
+        if (entry == null) {
+            return List.of();
+        }
+        List<Check> result = new ArrayList<>();
+        List<Entry> declared = nodes.named(entry.value(), entry.pointer(), typePath, "'checks'",
+                "a mapping from check names to checks", key -> typePath + "." + key);
+        for (Entry check : declared) {
+            result.add(check(check, typePath + "." + check.key()));
+        }
+        return result;
+    }
+
+    private Check check(Entry check, String path) {
+        elements.putIfAbsent(DocumentLocations.key(path), location(check.pointer(), check.keyNode()));
+        Optional<Map<String, Entry>> properties = nodes.properties(check.value(), check.pointer(), path,
+                "check " + path, Keys.CHECK, Keys.CHECK_REQUIRED);
+        if (properties.isEmpty()) {
+            return new Check(check.key(), "", Optional.empty());
+        }
+        Map<String, Entry> p = properties.get();
+        Entry expression = p.get("expression");
+        String text = nodes.string(expression, path, "value of 'expression'").orElse("");
+        if (expression != null && expression.value() instanceof ScalarNode scalar && Scalars.isString(scalar)) {
+            expressions.putIfAbsent(DocumentLocations.key(path), ExpressionPlace.of(codePoints(), expression, scalar));
+        }
+        return new Check(check.key(), text, nodes.string(p.get("message"), path, "value of 'message'"));
+    }
+
+    /** The text of the document as code points, which the marks of the nodes index; made on first use. */
+    private int[] codePoints() {
+        if (codePoints == null) {
+            codePoints = text.codePoints().toArray();
+        }
+        return codePoints;
     }
 
     private Multiplicity multiplicity(Entry entry, String path) {

@@ -207,7 +207,7 @@ class HrStoriesTest {
         assertThat(registration).isInstanceOf(RegistrationResult.Applied.class);
         assertRecordedOn(((RegistrationResult.Applied) registration).transactionTime(), on(1, 2));
         assertThat(store.schema().availableRules()).extracting(RuleDescriptor::name).containsExactlyInAnyOrder(
-                "decided-by-manager", "leave-dates-in-order", "no-unit-cycles", "vacation-within-entitlement");
+                "decided-by-manager", "no-unit-cycles", "vacation-within-entitlement");
         assertThat(store.declaredRules()).as("every rule of the model has its code").isEmpty();
 
         Receipt structure = commit(Brightwater.hr1Structure(store.schema().current()));
@@ -356,7 +356,8 @@ class HrStoriesTest {
         assertThat(view(on(3, 2)).timeline(request)).extracting(state -> LeaveRequest.from(state).status())
                 .containsExactly("requested", "approved");
 
-        // The rule leave-dates-in-order: a request whose last day is before its first day is refused.
+        // The check leave-dates-in-order, written in the schema document: a request whose last day is before its first
+        // day is refused.
         Transaction backwards = Transaction.by(Brightwater.HR_ADMIN)
                 .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 3, 23))
                         .lastDay(LocalDate.of(2026, 3, 20)).days(new BigDecimal("1")).status("requested")
@@ -365,9 +366,9 @@ class HrStoriesTest {
                         .effectiveFrom(on(3, 2)))
                 .build();
         Problem outOfOrder = only(dryRunProblems(backwards));
-        assertThat(outOfOrder.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
-        assertThat(outOfOrder.ruleCode()).contains("leave-dates-in-order/last-before-first");
-        assertThat(outOfOrder.path()).endsWith(".lastDay");
+        assertThat(outOfOrder.code()).isEqualTo(ProblemCode.CHECK_VIOLATED);
+        assertThat(outOfOrder.message()).contains("leave-dates-in-order").contains("The last day is before the first day.");
+        assertThat(outOfOrder.path()).isEqualTo("$backwards");
 
         // The rule decided-by-manager: nobody decides their own request, even a manager of their own unit.
         Problem ownRequest = only(dryRunProblems(Brightwater.cleoVacationDecidedBy(ids, "e003").transaction()));
@@ -608,7 +609,7 @@ class HrStoriesTest {
         assertThat(description).contains("\"principal\":\"agent:hr-assistant\"").contains("\"name\":\"hr-model\"")
                 .contains("\"dataCommits\":\"requireApproval\"").contains("decided-by-manager/not-a-manager")
                 .contains("vacation-within-entitlement/over-entitlement").contains("no-unit-cycles/cycle")
-                .contains("leave-dates-in-order/last-before-first");
+                .contains("leave-dates-in-order").contains("self.lastDay >= self.firstDay");
         assertThat(description).as("every rule has its code").doesNotContain("\"hasCode\":false");
         String payloadSchema = tools.call("cairn_json_schema", arguments("kind", "payload"));
         assertThat(payloadSchema).contains("\"writes\"").contains("LeaveRequest").contains("E-[0-9]{3}");

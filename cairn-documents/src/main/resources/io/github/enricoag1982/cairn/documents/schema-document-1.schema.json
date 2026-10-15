@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:cairn:schema-document:1",
   "title": "Cairn schema document, format version 1",
-  "description": "A Cairn schema document defines the traits, entity types and relationship types of one origin. Write it as YAML 1.2 or as JSON. The same keys are used in both. A key that is left out takes its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, aliases, inverse aliases, constraints, examples, description or rules. Anchors, aliases, explicit tags, merge keys, duplicate keys and several documents in one stream are not part of the format.",
+  "description": "A Cairn schema document defines the traits, entity types and relationship types of one origin. Write it as YAML 1.2 or as JSON. The same keys are used in both. A key that is left out takes its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, aliases, inverse aliases, constraints, examples, description, rules or checks. Anchors, aliases, explicit tags, merge keys, duplicate keys and several documents in one stream are not part of the format.",
   "type": "object",
   "additionalProperties": false,
   "required": ["cairn", "origin"],
@@ -115,6 +115,10 @@
         "rules": {
           "description": "The rules that apply to the entity type and its subtypes.",
           "$ref": "#/$defs/rules"
+        },
+        "checks": {
+          "description": "The checks that apply to the entity type and its subtypes: expressions over the values of one version of an entity, by name.",
+          "$ref": "#/$defs/checks"
         }
       }
     },
@@ -182,6 +186,10 @@
         "rules": {
           "description": "The rules that apply to the relationship type and its subtypes.",
           "$ref": "#/$defs/rules"
+        },
+        "checks": {
+          "description": "The checks that apply to the relationship type and its subtypes: expressions over the values of one version of a relationship, by name.",
+          "$ref": "#/$defs/checks"
         }
       }
     },
@@ -297,6 +305,30 @@
       "description": "A list of rule references.",
       "type": "array",
       "items": { "$ref": "#/$defs/ruleReference" }
+    },
+    "checks": {
+      "description": "A mapping from check names to checks. A check name is lowercase ASCII letters, digits and hyphens, starting with a letter, at most 128 characters.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+      "additionalProperties": { "$ref": "#/$defs/check" }
+    },
+    "check": {
+      "description": "A check: an expression in the Common Expression Language (CEL) over self, the values of one version of an entity or relationship, that every version must make true.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expression"],
+      "properties": {
+        "expression": {
+          "description": "The CEL expression, at most 4,000 characters, whose result is a boolean. Read an attribute as self.name, and test an optional attribute with has(self.name) before reading it. For example: self.lastDay >= self.firstDay.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "message": {
+          "description": "What to tell whoever breaks the check. Without a message, the problem names the expression.",
+          "type": "string"
+        }
+      }
     },
     "strings": {
       "description": "A list of strings.",

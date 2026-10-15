@@ -27,6 +27,7 @@ public final class RelationshipTypeBuilder {
     private boolean deprecated;
     private String description;
     private final List<RuleReference> rules = new ArrayList<>();
+    private final List<Check> checks = new ArrayList<>();
 
     RelationshipTypeBuilder(String name) {
         this.name = Objects.requireNonNull(name, "name");
@@ -200,6 +201,31 @@ public final class RelationshipTypeBuilder {
     }
 
     /**
+     * Declares a check, without a message, that applies to the type and its subtypes (capability {@code checks}).
+     *
+     * @param name       the check's name
+     * @param expression the CEL expression over {@code self}, the version's values
+     * @return this builder
+     */
+    public RelationshipTypeBuilder check(String name, String expression) {
+        checks.add(new Check(name, expression));
+        return this;
+    }
+
+    /**
+     * Declares a check with a message that applies to the type and its subtypes (capability {@code checks}).
+     *
+     * @param name       the check's name
+     * @param expression the CEL expression over {@code self}, the version's values
+     * @param message    what to tell whoever breaks the check
+     * @return this builder
+     */
+    public RelationshipTypeBuilder check(String name, String expression, String message) {
+        checks.add(new Check(name, expression, Optional.of(Objects.requireNonNull(message, "message"))));
+        return this;
+    }
+
+    /**
      * Builds the definition.
      *
      * @return the relationship type definition
@@ -207,6 +233,6 @@ public final class RelationshipTypeBuilder {
     public RelationshipTypeDefinition build() {
         return new RelationshipTypeDefinition(name, source, target, targetsPerSource, sourcesPerTarget, inverseName,
                 inverseAliases, kind, symmetric, Optional.ofNullable(supertype), attributes, aliases, deprecated,
-                Optional.ofNullable(description), rules);
+                Optional.ofNullable(description), rules, checks);
     }
 }

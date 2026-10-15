@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.core.SchemaRegistries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -25,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.InstantSource;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -68,6 +70,20 @@ class SchemaDocumentScenariosTest {
         Problem problem = problem(text);
 
         assertProblem(problem, ProblemCode.UNSUPPORTED_FORMAT_VERSION, "@document", "/cairn", 3, 1);
+    }
+
+    @Test
+    @DisplayName("Scenario: Reading a check")
+    void readingACheck() {
+        SchemaDocument document = valid(document(
+                "entityTypes:",
+                "  Account:",
+                "    checks: { balance-not-negative: { expression: \"self.balance >= 0.0\", "
+                        + "message: \"A balance cannot be negative.\" } }"));
+
+        assertThat(document.definition().entityTypes()).singleElement().satisfies(account ->
+                assertThat(account.checks()).containsExactly(new Check("balance-not-negative", "self.balance >= 0.0",
+                        Optional.of("A balance cannot be negative."))));
     }
 
     @Test
@@ -197,6 +213,22 @@ class SchemaDocumentScenariosTest {
 
         assertThat(problems).singleElement().satisfies(problem ->
                 assertThat(problem.location().orElseThrow().pointer()).isEqualTo("/entityTypes/Account/attributes/balance"));
+    }
+
+    @Test
+    @DisplayName("Scenario: Locating a check problem")
+    void locatingACheckProblem() throws IOException {
+        String text = Documents.referenceModelText().replace("  Account:\n",
+                "  Account:\n    checks:\n      balance-not-negative:\n        expression: self.amount >= 0.0\n");
+        SchemaDocument document = valid(text);
+
+        List<Problem> problems = document.locate(registry.validate(document.origin(), document.definition()));
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_CHECK);
+            assertThat(problem.location().orElseThrow().pointer())
+                    .isEqualTo("/entityTypes/Account/checks/balance-not-negative/expression");
+        });
     }
 
     // ------------------------------------------------------------------ writing

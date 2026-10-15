@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.core.schema;
 
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RuleReference;
@@ -65,6 +66,7 @@ final class PropertyRules {
             Map.entry("entity.deprecated", MAY_BECOME_TRUE),
             Map.entry("entity.description", PropertyRules::description),
             Map.entry("entity.rules", PropertyRules::rules),
+            Map.entry("entity.checks", PropertyRules::checks),
             Map.entry("trait.name", NAME),
             Map.entry("trait.aliases", ALIASES),
             Map.entry("trait.attributes", SKIP),
@@ -85,6 +87,7 @@ final class PropertyRules {
             Map.entry("relationship.deprecated", MAY_BECOME_TRUE),
             Map.entry("relationship.description", PropertyRules::description),
             Map.entry("relationship.rules", PropertyRules::rules),
+            Map.entry("relationship.checks", PropertyRules::checks),
             Map.entry("attribute.name", NAME),
             Map.entry("attribute.aliases", ALIASES),
             Map.entry("attribute.valueType", PropertyRules::widenedValueType),
@@ -386,6 +389,42 @@ final class PropertyRules {
             if (newRules.stream().map(RuleReference.class::cast).noneMatch(candidate -> candidate.name().equals(rule.name()))) {
                 changes.add(Changes.compatible(Names.path(context.path(), rule.name()), "removed the rule " + rule.name()
                         + " in version " + rule.version()));
+            }
+        }
+        return changes;
+    }
+
+    /**
+     * Checks may be removed, and their messages may change. Adding one, or changing the expression of one, would check
+     * existing data in a new way (design D5 of {@code add-cel-expressions}). One change is reported for each check,
+     * located at the type and the check's name.
+     */
+    private static List<SchemaChange> checks(Context context) {
+        List<?> oldChecks = (List<?>) context.oldValue();
+        List<?> newChecks = (List<?>) context.newValue();
+        List<SchemaChange> changes = new ArrayList<>();
+        for (Object element : newChecks) {
+            Check check = (Check) element;
+            if (oldChecks.contains(check)) {
+                continue;
+            }
+            String path = Names.path(context.path(), check.name());
+            Optional<Check> previous = oldChecks.stream().map(Check.class::cast)
+                    .filter(candidate -> candidate.name().equals(check.name())).findFirst();
+            if (previous.isEmpty()) {
+                changes.add(Changes.breaking(path, "added the check " + check.name(), Changes.KEEP_UNCONSTRAINED));
+            } else if (!previous.get().expression().equals(check.expression())) {
+                changes.add(Changes.breaking(path, "changed the expression of the check " + check.name() + " from "
+                        + previous.get().expression() + " to " + check.expression(), Changes.KEEP_UNCONSTRAINED));
+            } else {
+                changes.add(Changes.compatible(path, "changed the message of the check " + check.name()));
+            }
+        }
+        for (Object element : oldChecks) {
+            Check check = (Check) element;
+            if (newChecks.stream().map(Check.class::cast).noneMatch(candidate -> candidate.name().equals(check.name()))) {
+                changes.add(Changes.compatible(Names.path(context.path(), check.name()),
+                        "removed the check " + check.name()));
             }
         }
         return changes;

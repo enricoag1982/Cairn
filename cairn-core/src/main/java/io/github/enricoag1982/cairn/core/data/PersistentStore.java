@@ -21,6 +21,7 @@ import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
@@ -107,11 +108,33 @@ public final class PersistentStore implements DurableStore {
      */
     public static PersistentStore open(PersistentKeyValueStore persistent, InstantSource clock, IdGenerator generator,
             Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules) {
+        return open(persistent, clock, generator, rules, declaredRules, Optional.empty());
+    }
+
+    /**
+     * Opens the store over a key-value store, as {@link #open(PersistentKeyValueStore, InstantSource, IdGenerator,
+     * Collection, Collection)} does, with an expression language that compiles and runs the checks of the store's
+     * schema. The checks are compiled again when the schema is loaded.
+     *
+     * @param persistent    the key-value store, which no one else writes to
+     * @param clock         the source of transaction times
+     * @param generator     the ID generator of the store, which the store owns from now on
+     * @param rules         the rules with code, which the store runs at commit
+     * @param declaredRules the descriptions of rules that the store has no code for
+     * @param language      the expression language, if there is one
+     * @return the open store
+     * @throws java.io.UncheckedIOException as for the method without a language
+     * @throws IllegalStateException        as for the method without a language
+     * @throws IllegalArgumentException     as for the method without a language
+     */
+    public static PersistentStore open(PersistentKeyValueStore persistent, InstantSource clock, IdGenerator generator,
+            Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules,
+            Optional<ExpressionLanguage> language) {
         Objects.requireNonNull(persistent, "persistent");
         boolean opened = false;
         try {
             Keys keys = new Keys(persistent);
-            InMemoryStore store = new InMemoryStore(keys, clock, generator, rules, declaredRules);
+            InMemoryStore store = new InMemoryStore(keys, clock, generator, rules, declaredRules, language);
             requireFormat(persistent);
             finishCompaction(persistent);
             StoredMetadata.load(persistent, new Restorer(store));

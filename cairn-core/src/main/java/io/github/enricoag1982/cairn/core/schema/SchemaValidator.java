@@ -1,7 +1,9 @@
 package io.github.enricoag1982.cairn.core.schema;
 
+import io.github.enricoag1982.cairn.expressions.CheckCompilationException;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -29,11 +31,15 @@ import java.util.stream.Collectors;
 /**
  * Validates a complete schema definition and reports every problem (capability {@code type-model}, design D3).
  *
- * <p>Phases: names and syntax, references, hierarchies, attributes, relationship rules, rule references. A later
+ * <p>Phases: names and syntax, references, hierarchies, attributes, relationship rules, rule references, checks. A later
  * phase skips only the elements an earlier phase found broken, so one mistake does not cause a cascade of follow-up
  * problems.
  */
 final class SchemaValidator {
+
+    /** The form of the expression of a check, as text for problem details. */
+    private static final String EXPRESSION_FORM =
+            "a non-blank expression over self with at most 4,000 characters, whose result is a boolean";
 
     private record TypeRef(Kind kind, String name) {
     }
@@ -53,6 +59,9 @@ final class SchemaValidator {
 
     private final SchemaDefinition definition;
     private final List<RuleDescriptor> availableRules;
+    private final CheckCompiler checkCompiler;
+    /** The keys of the names of the types whose checks need a language, or null if all of them do. */
+    private final Set<String> checkedTypes;
     private final List<Problem> problems = new ArrayList<>();
     private final Map<String, TypeRef> types = new HashMap<>();
     private final Map<String, String> entitySupertype = new HashMap<>();
@@ -63,9 +72,12 @@ final class SchemaValidator {
     private final Map<String, Map<String, Declared>> effective = new HashMap<>();
     private final Set<String> reportedConflicts = new HashSet<>();
 
-    private SchemaValidator(SchemaDefinition definition, List<RuleDescriptor> availableRules) {
+    private SchemaValidator(SchemaDefinition definition, List<RuleDescriptor> availableRules,
+            CheckCompiler checkCompiler, Set<String> checkedTypes) {
         this.definition = definition;
         this.availableRules = availableRules;
+        this.checkCompiler = checkCompiler;
+        this.checkedTypes = checkedTypes;
     }
 
     /**
@@ -76,7 +88,37 @@ final class SchemaValidator {
      * @return every problem found
      */
     static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules) {
-        return new SchemaValidator(definition, availableRules).run();
+        return validate(definition, availableRules, CheckCompiler.NONE);
+    }
+
+    /**
+     * Validates a definition, compiling its checks.
+     *
+     * @param definition     the types of every origin
+     * @param availableRules the rules that types may name
+     * @param checkCompiler  compiles the expressions of checks; without an expression language, a check is a problem
+     * @return every problem found
+     */
+    static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules,
+            CheckCompiler checkCompiler) {
+        return validate(definition, availableRules, checkCompiler, null);
+    }
+
+    /**
+     * Validates a definition, compiling its checks, of which a registry without an expression language reports only those
+     * of some types: the types of the origin that is registered. The types of other origins were validated when those
+     * origins were registered, so their checks do not stop this registration.
+     *
+     * @param definition     the types of every origin
+     * @param availableRules the rules that types may name
+     * @param checkCompiler  compiles the expressions of checks
+     * @param checkedTypes   the keys of the names of the types whose checks are a problem if there is no expression
+     *                       language; {@code null} for every type
+     * @return every problem found
+     */
+    static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules,
+            CheckCompiler checkCompiler, Set<String> checkedTypes) {
+        return new SchemaValidator(definition, availableRules, checkCompiler, checkedTypes).run();
     }
 
     private List<Problem> run() {
@@ -87,6 +129,7 @@ final class SchemaValidator {
         checkAttributes();
         checkRelationships();
         checkRules();
+        checkChecks();
         return List.copyOf(problems);
     }
 
@@ -754,6 +797,169 @@ final class SchemaValidator {
             String name = kind == Kind.ENTITY_TYPE ? entityType(current).name() : relationshipType(current).name();
             List<RuleReference> named = kind == Kind.ENTITY_TYPE ? entityType(current).rules() : relationshipType(current).rules();
             if (named.stream().anyMatch(reference -> reference.name().equals(rule))) {
+                return Optional.of(name);
+            }
+            current = supertypes.get(current);
+        }
+        return Optional.empty();
+    }
+
+    // ------------------------------------------------------------------ phase 7: checks
+
+    private void checkChecks() {
+        for (EntityTypeDefinition type : definition.entityTypes()) {
+            checkChecks(type.name(), Kind.ENTITY_TYPE, type.checks(), entitySupertype);
+        }
+        for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
+            checkChecks(type.name(), Kind.RELATIONSHIP_TYPE, type.checks(), relationshipSupertype);
+        }
+    }
+
+    /**
+     * Checks the checks a type declares: their names, that neither the type nor a supertype declares the name already
+     * or uses it for an attribute or a rule, their expressions' length, and that the expressions compile against the
+     * attributes of the type. Checks whose name or expression is malformed are not compiled. The checks that need the
+     * supertypes or the attributes are skipped if the hierarchy is broken.
+     */
+    private void checkChecks(String typeName, Kind kind, List<Check> declared, Map<String, String> supertypes) {
+        String key = Names.key(typeName);
+        boolean hierarchyUsable = !isBroken(key, supertypes);
+        Set<String> named = new HashSet<>();
+        for (Check check : declared) {
+            String path = Names.path(typeName, check.name());
+            if (!Names.isValidRuleName(check.name())) {
+                problems.add(Problems.of(ProblemCode.INVALID_CHECK_NAME, path, "The check name '" + check.name()
+                        + "' declared by " + typeName + " must be lowercase letters, digits and hyphens, starting with "
+                        + "a letter (at most 128).", Names.RULE_NAME_FORM, check.name(), null));
+                continue;
+            }
+            if (!named.add(check.name())) {
+                problems.add(Problems.of(ProblemCode.DUPLICATE_CHECK, path, "The check " + check.name()
+                        + " is declared more than once by " + typeName + ".", null, check.name(), null));
+                continue;
+            }
+            Optional<String> supertype = hierarchyUsable
+                    ? nearestSupertypeDeclaring(check.name(), kind, key, supertypes) : Optional.empty();
+            if (supertype.isPresent()) {
+                problems.add(Problems.of(ProblemCode.DUPLICATE_CHECK, path, "The check " + check.name()
+                        + " declared by " + typeName + " already applies through its supertype " + supertype.get()
+                        + ", which declares it.", null, check.name(),
+                        "Remove the check from " + typeName + " or from " + supertype.get() + "."));
+                continue;
+            }
+            Optional<String> taken = nameTakenBy(check.name(), kind, key, supertypes, hierarchyUsable);
+            if (taken.isPresent()) {
+                problems.add(Problems.of(ProblemCode.DUPLICATE_CHECK, path, "The check name '" + check.name()
+                        + "' declared by " + typeName + " is already taken by " + taken.get() + ".",
+                        "a name that no attribute, rule or check of " + typeName + " and its supertypes has",
+                        check.name(), "Rename the check."));
+                continue;
+            }
+            checkExpression(typeName, check, path, hierarchyUsable ? effective.get(key) : null,
+                    checkedTypes == null || checkedTypes.contains(key));
+        }
+    }
+
+    /**
+     * Tells what a check name is taken by, if a type or one of its supertypes uses it for an attribute (or an alias of
+     * one, compared without regard to case) or for a rule. The supertypes are looked at only if the hierarchy is usable.
+     *
+     * @return what takes the name, such as {@code an attribute: balance, declared by entity type Account}
+     */
+    private Optional<String> nameTakenBy(String name, Kind kind, String key, Map<String, String> supertypes,
+            boolean hierarchyUsable) {
+        Declared attribute = hierarchyUsable && effective.get(key) != null ? effective.get(key).get(Names.key(name)) : null;
+        if (attribute != null) {
+            return Optional.of("an attribute: " + attribute.attribute().name() + ", declared by "
+                    + attribute.declarerLabel());
+        }
+        List<AttributeDefinition> own = kind == Kind.ENTITY_TYPE ? entityType(key).attributes()
+                : relationshipType(key).attributes();
+        if (!hierarchyUsable) {
+            for (AttributeDefinition candidate : own) {
+                if (Names.same(candidate.name(), name) || Names.contains(candidate.aliases(), name)) {
+                    return Optional.of("an attribute: " + candidate.name() + ", declared by "
+                            + (kind == Kind.ENTITY_TYPE ? entityType(key).name() : relationshipType(key).name()));
+                }
+            }
+        }
+        List<RuleReference> ownRules = kind == Kind.ENTITY_TYPE ? entityType(key).rules() : relationshipType(key).rules();
+        if (ownRules.stream().anyMatch(rule -> rule.name().equals(name))) {
+            return Optional.of("a rule: " + name + ", which the type names");
+        }
+        if (hierarchyUsable) {
+            return nearestSupertypeNaming(name, kind, key, supertypes)
+                    .map(supertype -> "a rule: " + name + ", which its supertype " + supertype + " names");
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Reports an expression that is blank, too long, or does not compile against the attributes of its type, or reports
+     * that there is no expression language to compile it with.
+     *
+     * @param attributes the attributes of the type; null if the type's attributes cannot be known
+     * @param needsLanguage whether a missing expression language is a problem of this type's checks
+     */
+    private void checkExpression(String typeName, Check check, String path, Map<String, Declared> attributes,
+            boolean needsLanguage) {
+        String expression = check.expression();
+        if (expression.isBlank()) {
+            problems.add(Problems.of(ProblemCode.INVALID_CHECK, path, "The expression of the check " + check.name()
+                    + " of " + typeName + " is blank.", EXPRESSION_FORM, "a blank expression", null));
+            return;
+        }
+        int length = expression.codePointCount(0, expression.length());
+        if (length > Check.MAXIMUM_EXPRESSION_LENGTH) {
+            problems.add(Problems.of(ProblemCode.INVALID_CHECK, path, "The expression of the check " + check.name()
+                    + " of " + typeName + " has " + length + " characters, but at most "
+                    + Check.MAXIMUM_EXPRESSION_LENGTH + " are allowed.", EXPRESSION_FORM, length + " characters",
+                    null));
+            return;
+        }
+        if (!checkCompiler.available()) {
+            if (needsLanguage) {
+                problems.add(Problems.of(ProblemCode.CHECKS_UNAVAILABLE, path, "The check " + check.name() + " of "
+                        + typeName + " cannot be compiled: this schema registry has no expression language.",
+                        "a schema registry with an expression language", "no expression language",
+                        "Put the module cairn-cel on the class path, or give the store settings an "
+                        + "expression language, or remove the checks from the definition."));
+            }
+            return;
+        }
+        if (attributes == null) {
+            return;
+        }
+        Map<String, ValueType> types = new LinkedHashMap<>();
+        attributes.values().forEach(declared -> types.put(declared.attribute().name(), declared.attribute().valueType()));
+        try {
+            checkCompiler.compile(expression, types);
+        } catch (CheckCompilationException e) {
+            String position = e.line().isPresent() && e.column().isPresent()
+                    ? " at line " + e.line().getAsInt() + ", column " + e.column().getAsInt() : "";
+            problems.add(Problems.of(ProblemCode.INVALID_CHECK, path, "The expression of the check " + check.name()
+                    + " of " + typeName + " does not compile" + position + ": " + e.getMessage(), EXPRESSION_FORM,
+                    expression, attributesHint(typeName, types)));
+        }
+    }
+
+    /** What an expression may read, as a hint for an expression that does not compile. */
+    private static String attributesHint(String typeName, Map<String, ValueType> attributes) {
+        return attributes.isEmpty()
+                ? typeName + " has no attributes to read."
+                : "Read the attributes of " + typeName + " as self.<name>, and test an optional one with has(self.<name>): "
+                        + String.join(", ", attributes.keySet()) + ".";
+    }
+
+    /** The name of the nearest supertype of a type that declares a check, if any. */
+    private Optional<String> nearestSupertypeDeclaring(String check, Kind kind, String key,
+            Map<String, String> supertypes) {
+        Set<String> seen = new HashSet<>(Set.of(key));
+        String current = supertypes.get(key);
+        while (current != null && seen.add(current)) {
+            String name = kind == Kind.ENTITY_TYPE ? entityType(current).name() : relationshipType(current).name();
+            List<Check> declared = kind == Kind.ENTITY_TYPE ? entityType(current).checks() : relationshipType(current).checks();
+            if (declared.stream().anyMatch(candidate -> candidate.name().equals(check))) {
                 return Optional.of(name);
             }
             current = supertypes.get(current);

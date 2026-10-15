@@ -23,8 +23,8 @@ import java.util.Optional;
  * the rule's name, such as {@code lei-checksum/invalid-check-digits}.
  *
  * @param code     a stable code
- * @param path     the element concerned: a type name, or a type name and an attribute, inverse name or rule name joined by a
- *                 dot; {@code @origin} for problems with the origin itself; {@code @document} for problems with a
+ * @param path     the element concerned: a type name, or a type name and an attribute, inverse name, rule name or check
+ *                 name joined by a dot; {@code @origin} for problems with the origin itself; {@code @document} for problems with a
  *                 schema document as a whole; {@code @transaction} for problems with a transaction payload as a whole,
  *                 {@code @transaction.<key>}, such as {@code @transaction.principal}, for problems with one of its
  *                 top-level keys, and {@code @write.<n>}, with the position {@code n} counted from 0, for problems

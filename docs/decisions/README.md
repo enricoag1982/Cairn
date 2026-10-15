@@ -44,5 +44,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0027](0027-encode-bitemporal-data-as-keys-over-an-ordered-key-value-interface.md) | Encode bitemporal data as keys over an ordered key-value interface | accepted | 2026-10-15 |
 | [ADR-0028](0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) | Keep a store in RocksDB with its metadata as keys and its write-ahead log as the commit log | accepted | 2026-10-15 |
 | [ADR-0029](0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md) | Feed changes from an index of what each basis changed, read from a basis | accepted | 2026-10-15 |
+| [ADR-0030](0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md) | Write checks within one version in CEL, evaluated by an optional module | accepted | 2026-10-15 |
 
 <!-- decision-log:end -->

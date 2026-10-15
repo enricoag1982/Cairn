@@ -12,6 +12,7 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.changeTrait;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.plus;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
+import static io.github.enricoag1982.cairn.fixtures.Definitions.withCheck;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -405,6 +406,18 @@ class SchemaEvolutionScenariosTest {
         assertThat(after.entityType("Organization").orElseThrow().rules()).isEmpty();
     }
 
+    @Test
+    @DisplayName("Scenario: Removing a check")
+    void removingACheck() {
+        applied(register("1.0.0", withCheck(ReferenceModel.definition(), "Account", "balance-not-negative",
+                "self.balance >= 0.0", null)));
+
+        Schema after = applied(register("1.1.0", ReferenceModel.definition())).schema();
+
+        assertThat(after.entityType("Account").orElseThrow().checks()).isEmpty();
+        assertThat(after.entityType("Account").orElseThrow().effectiveChecks()).isEmpty();
+    }
+
     // ------------------------------------------------------------------ breaking changes
 
     @Test
@@ -514,6 +527,20 @@ class SchemaEvolutionScenariosTest {
 
         assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Person");
         assertThat(problems.getFirst().path()).isEqualTo("Person.birth-date-in-past");
+    }
+
+    @Test
+    @DisplayName("Scenario: Adding a check to an existing type")
+    void addingACheckToAnExistingType() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition withCheck = withCheck(ReferenceModel.definition(), "Account", "balance-not-negative",
+                "self.balance >= 0.0", null);
+
+        List<Problem> problems = rejected(register("1.1.0", withCheck));
+
+        assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Account");
+        assertThat(problems.getFirst().path()).isEqualTo("Account.balance-not-negative");
+        assertThat(registry.current().entityType("Account").orElseThrow().checks()).as("nothing changed").isEmpty();
     }
 
     @Test

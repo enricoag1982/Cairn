@@ -9,7 +9,10 @@ import java.util.Optional;
  * (capability {@code schema-evolution}). Registrations are applied one at a time; reads never wait.
  *
  * <p>A registry is created with the rules that are available to it (capability {@code type-model}); types may name
- * only those.
+ * only those. Types may also declare {@linkplain Check checks} (capability {@code checks}), which the registry compiles
+ * with an {@linkplain io.github.enricoag1982.cairn.expressions.ExpressionLanguage expression language} when it
+ * validates, plans or registers a definition. A registry that has none rejects every definition that declares checks,
+ * with the problem {@code CHECKS_UNAVAILABLE}.
  */
 public interface SchemaRegistry {
 

@@ -3,13 +3,13 @@ package io.github.enricoag1982.cairn.schema;
 import java.util.Objects;
 
 /**
- * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model} and
- * {@code schema-evolution}), for the reasons a schema document (capability {@code schema-documents}) or a transaction
- * payload (capability {@code json-payloads}) cannot be read, for the reasons a data transaction is rejected
- * (capabilities {@code transactions}, {@code entity-versions}, {@code entity-rules} and {@code relationships}), for
- * the reasons a purge is refused (capability {@code purge}), and for the reasons a request of an AI agent is refused
- * (capability {@code agent-tools}), and for the reasons a query does not fit the schema of the view that runs it
- * (capability {@code queries}).
+ * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model},
+ * {@code checks} and {@code schema-evolution}), for the reasons a schema document (capability
+ * {@code schema-documents}) or a transaction payload (capability {@code json-payloads}) cannot be read, for the
+ * reasons a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions},
+ * {@code entity-rules}, {@code checks} and {@code relationships}), for the reasons a purge is refused (capability
+ * {@code purge}), for the reasons a request of an AI agent is refused (capability {@code agent-tools}), and for the
+ * reasons a query does not fit the schema of the view that runs it (capability {@code queries}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -101,6 +101,27 @@ public enum ProblemCode {
     /** A type names a rule that it or one of its supertypes already names. */
     DUPLICATE_RULE("A rule that a type names also applies to its subtypes, so a type and its supertypes cannot name "
             + "the same rule twice. Remove the repeated reference."),
+    /** A check name breaks the naming rule for checks. */
+    INVALID_CHECK_NAME("A check name consists of lowercase ASCII letters, digits and hyphens, starts with a letter and "
+            + "has at most 128 characters, as a rule name does. Rename the check."),
+    /** A type declares a check whose name it, or one of its supertypes, already uses for a check, an attribute or a rule. */
+    DUPLICATE_CHECK("A check that a type declares also applies to its subtypes, so its name must be used once in the "
+            + "hierarchy: a type cannot declare two checks with the same name, neither can a type and one of its "
+            + "supertypes, and a check cannot be named like an attribute or a rule of the type or of one of its "
+            + "supertypes. The message says what takes the name. Rename or remove the check."),
+    /** The expression of a check is blank, too long, does not compile, reads an attribute the type lacks, or is no boolean. */
+    INVALID_CHECK("The expression of a check must be an expression of the Common Expression Language (CEL) with at "
+            + "most 4,000 characters that compiles, reads the version's attributes only as self.<name> with names the "
+            + "type has, and whose result is a boolean. The message gives the error and, where it is known, the line "
+            + "and column in the expression, counted from 1, as \"at line L, column C\"; the found details give the "
+            + "expression. For a check in a schema document, the problem is also located in the document, at that "
+            + "position where the text allows it. Correct the expression."),
+    /** A registry or a store has no expression language, so it cannot compile or run checks. */
+    CHECKS_UNAVAILABLE("A definition declares checks, or a write concerns a type to which checks apply, but there is "
+            + "no expression language to compile or run them. Put the module cairn-cel on the class path, "
+            + "or give the settings an expression language; until then a schema registry rejects definitions that "
+            + "declare checks, and a store rejects every write of an entity or relationship of a type to which a "
+            + "check applies, whatever the write changes."),
     /** A schema document or a transaction payload is not valid YAML 1.2, or JSON. */
     DOCUMENT_SYNTAX("The text of a schema document or of a transaction payload is not valid YAML 1.2 or JSON, so it "
             + "cannot be read at all. Reading stops at the first syntax error; fix the syntax at the given line and "
@@ -266,6 +287,21 @@ public enum ProblemCode {
             + "or relationship of that type, or of one of its subtypes, is rejected, whatever the write changes. "
             + "Create the store with the rule's code, or register a schema in which the type no longer names the "
             + "rule."),
+    /** A check found that a version of an entity or of a relationship breaks it. */
+    CHECK_VIOLATED("A check that the type of an entity or relationship, or one of its supertypes, declares is false for "
+            + "a version of the entity or relationship that the transaction writes. The problem names the check, and "
+            + "gives its message or its expression; the path is that of the write or of the entity, and the message "
+            + "names the start of the version when the write covers several versions. Change the values so that the "
+            + "check holds."),
+    /** A check gave no result: its evaluation failed. */
+    CHECK_FAILED("A check gave no result for a version that the transaction writes: its evaluation failed, for "
+            + "example because the expression reads an attribute that has no value without testing it with has(), or "
+            + "because it exceeded the cost limit of 10,000 evaluation steps. It also gives no result if the store's "
+            + "expression language could not compile the recorded check when the store was opened, for example "
+            + "because it is another version of the language; every write to the types the check applies to then "
+            + "fails. The problem names the check and gives the error. Test optional attributes with has(self.name) in "
+            + "the expression, or correct the expression in a new version of the schema, or open the store with an "
+            + "expression language that compiles it."),
     /** A write relates entities with a name that is not a relationship type. */
     UNKNOWN_RELATIONSHIP_TYPE("A write relates two entities with a type name that the schema does not have as a "
             + "relationship type. Type names and aliases are compared without regard to case. Correct the name, which "

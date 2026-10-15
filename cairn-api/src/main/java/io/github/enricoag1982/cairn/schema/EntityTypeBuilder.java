@@ -20,6 +20,7 @@ public final class EntityTypeBuilder {
     private boolean deprecated;
     private String description;
     private final List<RuleReference> rules = new ArrayList<>();
+    private final List<Check> checks = new ArrayList<>();
 
     EntityTypeBuilder(String name) {
         this.name = Objects.requireNonNull(name, "name");
@@ -139,6 +140,31 @@ public final class EntityTypeBuilder {
     }
 
     /**
+     * Declares a check, without a message, that applies to the type and its subtypes (capability {@code checks}).
+     *
+     * @param name       the check's name
+     * @param expression the CEL expression over {@code self}, the version's values
+     * @return this builder
+     */
+    public EntityTypeBuilder check(String name, String expression) {
+        checks.add(new Check(name, expression));
+        return this;
+    }
+
+    /**
+     * Declares a check with a message that applies to the type and its subtypes (capability {@code checks}).
+     *
+     * @param name       the check's name
+     * @param expression the CEL expression over {@code self}, the version's values
+     * @param message    what to tell whoever breaks the check
+     * @return this builder
+     */
+    public EntityTypeBuilder check(String name, String expression, String message) {
+        checks.add(new Check(name, expression, Optional.of(Objects.requireNonNull(message, "message"))));
+        return this;
+    }
+
+    /**
      * Builds the definition.
      *
      * @return the entity type definition
@@ -146,6 +172,6 @@ public final class EntityTypeBuilder {
     public EntityTypeDefinition build() {
         return new EntityTypeDefinition(
                 name, isAbstract, Optional.ofNullable(supertype), traits, attributes, aliases, deprecated,
-                Optional.ofNullable(description), rules);
+                Optional.ofNullable(description), rules, checks);
     }
 }
