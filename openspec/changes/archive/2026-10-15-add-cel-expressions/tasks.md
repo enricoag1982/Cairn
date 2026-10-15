@@ -25,4 +25,4 @@
 
 - [x] 4.1 A guide to writing checks, and the glossary (Check)
 - [x] 4.2 Update the architecture page, the HR domain page, the reference domain page, AGENTS.md (overview, repository map), README.md and `openspec/config.yaml` (ADR-0030), and bump `last-reviewed`; point ADR-0018 to ADR-0030
-- [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
