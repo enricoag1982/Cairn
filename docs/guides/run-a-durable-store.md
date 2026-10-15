@@ -77,5 +77,5 @@ Damage anywhere else in the log stops the store from opening with an `IllegalSta
 
 ## Limits
 
-- All data is held in memory as well. A durable store suits data that fits in the heap; a key-value store on disk comes later ([ADR-0027](../decisions/0027-encode-bitemporal-data-as-keys-over-an-ordered-key-value-interface.md), [ADR-0011](../decisions/0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md)).
+- All data is held in memory as well. A durable store suits data that fits in the heap; for more, [keep the store in RocksDB](keep-a-store-in-rocksdb.md).
 - The log and snapshot files keep each entity's whole timeline at every basis, so entities with very many versions make them large.

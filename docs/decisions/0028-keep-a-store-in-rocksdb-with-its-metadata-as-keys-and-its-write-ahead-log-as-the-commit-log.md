@@ -71,3 +71,8 @@ Chosen option: "RocksDB holds the key layout and the metadata as keys, and each 
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, with the proposal of `add-rocksdb-store`; the user agreed to the RocksDB store and its native dependency on 2026-10-15.
 - A change feed can read transaction records by basis later; grouping commits, backups through RocksDB checkpoints and a cache of decoded timelines can follow when needed.
+- Revised on 2026-10-15, before `add-rocksdb-store` was archived, after building it:
+  - The metadata also keeps the idempotency keys whose transactions a purge dropped, so that a retry stays refused after the store is reopened, and a key that marks a purge whose compaction has not finished.
+  - RocksDB's MANIFEST records the smallest and largest key of every data file, which can be a purged ID or unique value, until RocksDB rewrites it when it opens the database. So a purge also closes and opens the database again after compacting, before it returns.
+  - Opening a store that holds the mark of an unfinished compaction, because it stopped during a purge or a compaction failed, compacts before the store opens, as recovery completes a purge in a directory store.
+  - The database lives in the subdirectory `rocksdb` of the store's directory, because RocksDB's lock file `LOCK` and the directory's `lock` are the same file on file systems that ignore case.

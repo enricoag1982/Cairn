@@ -12,7 +12,7 @@ context: |
   Architecture (current state): docs/architecture/README.md.
   Implementation language: Java 25 (ADR-0005), built with Gradle (ADR-0015), both accepted.
   Core design (accepted): ADR-0007 to ADR-0013, ADR-0017 (AI agents as first-class users), ADR-0018 (rules in Java),
-    ADR-0019 (entity IDs), ADR-0020 (patterns as I-Regexp), ADR-0021 (generated Java types), ADR-0022 (durable stores), ADR-0023 (queries as data), ADR-0024 (purge), ADR-0025 (rules run again when what they read changes), ADR-0026 (unique keys resolved at commit) and ADR-0027 (bitemporal data as keys over an ordered key-value interface).
+    ADR-0019 (entity IDs), ADR-0020 (patterns as I-Regexp), ADR-0021 (generated Java types), ADR-0022 (durable stores), ADR-0023 (queries as data), ADR-0024 (purge), ADR-0025 (rules run again when what they read changes), ADR-0026 (unique keys resolved at commit) ADR-0027 (bitemporal data as keys over an ordered key-value interface) and ADR-0028 (stores kept in RocksDB).
     Types are defined in YAML 1.2 schema documents (ADR-0012).
     Build and test with ./gradlew build; shared build configuration only in build-logic/, versions in gradle/libs.versions.toml.
   Spec scenarios use the reference domain in docs/reference/reference-domain.md (cite stories by ID, RD-n);
