@@ -62,7 +62,8 @@ public interface DurableStore extends Store, AutoCloseable {
 
     /**
      * Writes a snapshot file of the latest state, like {@link #writeSnapshot()}, then releases the directory so that
-     * another store can be opened on it. Commits that are running finish first. Calling it again does nothing.
+     * another store can be opened on it. Commits that are running finish first. Closing completes the subscriptions to the
+     * store's {@linkplain Store#changeFeed(Basis) change feed} (ADR-0029). Calling it again does nothing.
      *
      * @throws java.io.UncheckedIOException if writing the snapshot fails; the directory is released all the same, and
      *                                      the log has every committed transaction, so opening the directory again

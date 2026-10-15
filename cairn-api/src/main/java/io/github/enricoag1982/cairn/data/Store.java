@@ -4,11 +4,12 @@ import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import java.util.List;
+import java.util.concurrent.Flow;
 
 /**
  * A system of record: a schema, and the entities and relationships written under it, with history on two time axes
- * (ADR-0007, ADR-0008, capabilities {@code transactions}, {@code entity-versions}, {@code relationships},
- * {@code views} and {@code purge}).
+ * (ADR-0007, ADR-0008, ADR-0029, capabilities {@code transactions}, {@code entity-versions}, {@code relationships},
+ * {@code views}, {@code purge} and {@code change-feed}).
  *
  * <p>One writer orders all commits, schema transactions and data transactions alike; they share one sequence of bases
  * and transaction times. Reads never wait: they go through {@linkplain View views}.
@@ -142,4 +143,49 @@ public interface Store {
      * @return {@code true} if a purge removed what had this ID
      */
     boolean wasPurged(Id id);
+
+    /**
+     * Reads the changes of the bases after a basis, in basis order (ADR-0029, capability {@code change-feed}): for each
+     * basis one {@link Change}, a data transaction with what it changed, a schema registration or a purge. A consumer
+     * that handled the changes up to a basis keeps it, and reads the next ones from it, after its own restart or the
+     * store's, without missing or repeating a change.
+     *
+     * <p>The read goes up to the latest published basis when it starts, and takes no lock: commits do not wait for it. A
+     * change read before a {@linkplain #purge(Purge) purge} can list more than the same change read after it, because a
+     * purge removes the entries of what it removes.
+     *
+     * @param after the basis to read from, which is not included: {@link Basis#NONE} reads from the first change. A basis
+     *              after the latest gives no change
+     * @param limit the largest number of changes to return, at least 1
+     * @return the changes at the bases after {@code after}, at most {@code limit} of them, oldest first; empty if there are
+     *         none
+     * @throws IllegalArgumentException if the limit is less than 1
+     * @throws IllegalStateException    if the store is closed, for a store that can be
+     */
+    List<Change> changes(Basis after, int limit);
+
+    /**
+     * Follows the changes after a basis, as they are committed (ADR-0029, capability {@code change-feed}): a publisher of
+     * the same changes that {@link #changes(Basis, int)} reads, which waits for further commits once it has delivered
+     * them all. Each {@link Flow.Subscriber} that subscribes gets its own subscription, which starts after the basis that
+     * was given, delivers each change once, in basis order, and only as many as the subscriber requested.
+     *
+     * <p>{@code onSubscribe} is called on the thread that subscribes. Everything else is called on a thread of the
+     * subscription, never on the one that commits, one signal at a time. The subscription reads the changes at the pace of
+     * the subscriber, in chunks of at most 256, and keeps no buffer of them: commits never wait for it, however slow
+     * the subscriber is, and a subscriber that was away resumes from the basis of the last change it handled.
+     *
+     * <p>A subscription ends when the subscriber cancels it; when it requests fewer than one change, which ends it with
+     * {@code onError} of an {@link IllegalArgumentException}; when {@code onNext} throws, which cancels it and goes no
+     * further, so that commits go on; or when the store is closed, which completes it after the {@code onNext} that is
+     * running returns. A subscriber that subscribes to a publisher that this method returned before the store was closed,
+     * or while it is closing, is completed at once; calling this method on a store that is closed throws. A store that is
+     * not kept on disk is never closed, so its subscriptions end only in the other ways. A read that fails ends the
+     * subscription with {@code onError}.
+     *
+     * @param after the basis to follow from, which is not included: {@link Basis#NONE} follows from the first change
+     * @return the publisher
+     * @throws IllegalStateException if the store is closed, for a store that can be
+     */
+    Flow.Publisher<Change> changeFeed(Basis after);
 }

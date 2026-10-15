@@ -1,15 +1,22 @@
 package io.github.enricoag1982.cairn.documents;
 
+import io.github.enricoag1982.cairn.data.Change;
+import io.github.enricoag1982.cairn.data.Changed;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Link;
+import io.github.enricoag1982.cairn.data.PurgeChange;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
+import io.github.enricoag1982.cairn.data.SchemaChange;
 import io.github.enricoag1982.cairn.data.Step;
+import io.github.enricoag1982.cairn.data.TransactionChange;
+import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Mapping;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Plain;
@@ -20,18 +27,21 @@ import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.query.Row;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.Problem;
+import io.github.enricoag1982.cairn.schema.SchemaTransaction;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 /**
  * Builds the {@linkplain WrittenNode tree} of the JSON forms of results (capability {@code json-payloads}, design D4):
- * receipts, entity and relationship states, links, steps and problems.
+ * receipts, entity and relationship states, links, steps, problems, query results and the changes of the change feed.
  *
  * <p>The keys of a mapping are the names of the components of the Java record it stands for, in the order of the
- * components. A component that is an empty {@code Optional}, an empty map or an empty list is left out, except the
+ * components. A change is the exception: it has the field {@code kind} besides, and the {@code principal},
+ * {@code onBehalfOf}, {@code reason} and {@code origin} of its record are at its own level. A component that is an empty {@code Optional}, an empty map or an empty list is left out, except the
  * {@code values} of a state, which are always written. IDs are strings,
  * a temporary ID has its {@code $}, and where the kind of an ID is not fixed by the field, in a receipt, it is written as
  * {@code {"entity": "<id>"}} or {@code {"relationship": "<id>"}}. Instants are ISO 8601 strings in UTC, dates are ISO 8601
@@ -114,6 +124,66 @@ final class JsonResults {
                 .put("entity", entityState(step.entity()))
                 .put("depth", plain(step.depth()))
                 .put("via", relationshipState(step.via()));
+    }
+
+    /**
+     * A change of the change feed (ADR-0029, design D7 of {@code add-change-feed}): {@code basis}, {@code transactionTime}
+     * and {@code kind} ({@code transaction}, {@code schema} or {@code purge}), then the {@code principal},
+     * {@code onBehalfOf} and {@code reason} of its record; for a schema registration its {@code origin} with {@code name}
+     * and {@code version}; for a purge the numbers of {@code entities} and {@code relationships} it removed; for a data
+     * transaction {@code changed}, a list of {@code {entity | relationship, type, created, periods}} with each period as
+     * {@code {from, until}}. {@code created} is always written, as {@code false} too.
+     */
+    static Mapping change(Change change) {
+        Mapping mapping = new Mapping()
+                .put("basis", plain(change.basis().value()))
+                .put("transactionTime", change.transactionTime().toString());
+        switch (change) {
+            case TransactionChange transaction -> {
+                TransactionRecord record = transaction.transaction();
+                mapping.put("kind", "transaction");
+                record(mapping, record.principal(), record.onBehalfOf(), record.reason());
+                if (!transaction.changed().isEmpty()) {
+                    mapping.put("changed", list(transaction.changed(), JsonResults::changed));
+                }
+            }
+            case SchemaChange schema -> {
+                SchemaTransaction registration = schema.registration();
+                mapping.put("kind", "schema");
+                record(mapping, registration.principal(), registration.onBehalfOf(), registration.reason());
+                mapping.put("origin", new Mapping()
+                        .put("name", registration.origin().name())
+                        .put("version", registration.origin().version()));
+            }
+            case PurgeChange purge -> {
+                PurgeRecord record = purge.purge();
+                mapping.put("kind", "purge");
+                record(mapping, record.principal(), record.onBehalfOf(), Optional.of(record.reason()));
+                mapping.put("entities", plain(record.entities()));
+                mapping.put("relationships", plain(record.relationships()));
+            }
+        }
+        return mapping;
+    }
+
+    private static void record(Mapping owner, String principal, Optional<String> onBehalfOf,
+            Optional<String> reason) {
+        owner.put("principal", principal);
+        onBehalfOf.ifPresent(party -> owner.put("onBehalfOf", party));
+        reason.ifPresent(text -> owner.put("reason", text));
+    }
+
+    /** An entity or relationship that a transaction changed: {@code {entity | relationship, type, created, periods}}. */
+    private static Mapping changed(Changed changed) {
+        Mapping mapping = new Mapping();
+        switch (changed.id()) {
+            case EntityId entity -> mapping.put("entity", entity.value());
+            case RelationshipId relationship -> mapping.put("relationship", relationship.value());
+        }
+        return mapping
+                .put("type", changed.type())
+                .put("created", new Plain(Boolean.toString(changed.created())))
+                .put("periods", list(changed.periods(), JsonResults::period));
     }
 
     static Mapping problem(Problem problem) {

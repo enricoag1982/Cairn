@@ -4,6 +4,7 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 
 - **New decision:** `npm run adr:new -- "Short title of problem and solution"` creates the next number from [the template](../templates/decision.md) with status `proposed`.
 - **Change a decision:** write a new ADR, then set the old one to `superseded by ADR-NNNN`. Never rewrite an accepted decision.
+- **Revise before archiving:** an ADR accepted with the proposal of an OpenSpec change may be revised while that change is open, when building it shows the decision was wrong in a detail, with a dated line under its "More Information" that says what changed. After the change is archived, write a new ADR instead.
 - **Replace part of a decision:** write a new ADR, and add a line under the old one's "More Information" that names the new ADR and the part it replaces; the old one stays accepted for the rest. Read an accepted ADR together with the ADRs its "More Information" points to.
 - **Open questions:** every `proposed` entry below is a decision still to be made.
 
@@ -42,5 +43,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0026](0026-refer-to-entities-by-unique-keys-resolved-at-commit.md) | Refer to entities by unique keys, resolved at commit | accepted | 2026-10-15 |
 | [ADR-0027](0027-encode-bitemporal-data-as-keys-over-an-ordered-key-value-interface.md) | Encode bitemporal data as keys over an ordered key-value interface | accepted | 2026-10-15 |
 | [ADR-0028](0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) | Keep a store in RocksDB with its metadata as keys and its write-ahead log as the commit log | accepted | 2026-10-15 |
+| [ADR-0029](0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md) | Feed changes from an index of what each basis changed, read from a basis | accepted | 2026-10-15 |
 
 <!-- decision-log:end -->

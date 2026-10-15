@@ -106,6 +106,7 @@ class LedgerPurgeTest {
             case TYPE -> List.of(LedgerCodec.entityOfTypeKey(key));
             case END -> List.of(LedgerCodec.parseEndKey(key).relationship());
             case UNIQUE -> List.of(LedgerCodec.idOfUniqueKey(key));
+            case CHANGE -> List.of(LedgerCodec.parseChangeKey(key).id());
         };
     }
 
@@ -157,7 +158,7 @@ class LedgerPurgeTest {
         assertThat(removed.keySet().stream().map(key -> LedgerCodec.kindOf(HEX.parseHex(key))).distinct())
                 .as("of every kind that Alice and her employment have")
                 .containsExactlyInAnyOrder(LedgerCodec.Kind.CURRENT, LedgerCodec.Kind.ROW, LedgerCodec.Kind.TYPE,
-                        LedgerCodec.Kind.END);
+                        LedgerCodec.Kind.END, LedgerCodec.Kind.CHANGE);
         assertThat(after).as("Beta's end of the employment is gone").doesNotContainKey(HEX.formatHex(
                 LedgerCodec.endKey(beta.value(), schema.relationshipType("Employs").orElseThrow().id(), true,
                         employs.value())));

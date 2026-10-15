@@ -18,6 +18,13 @@
  * {@linkplain io.github.enricoag1982.cairn.data.Coordinates coordinates}: an effective time, and a basis or
  * transaction time to read as of (capability {@code views}).
  *
+ * <p>What each basis changed is read with {@link io.github.enricoag1982.cairn.data.Store#changes} or followed with
+ * {@link io.github.enricoag1982.cairn.data.Store#changeFeed}: a {@link io.github.enricoag1982.cairn.data.Change} for each
+ * basis, which is a {@link io.github.enricoag1982.cairn.data.TransactionChange} with the
+ * {@linkplain io.github.enricoag1982.cairn.data.Changed entities and relationships} that it changed and the effective
+ * periods in which they changed, a {@link io.github.enricoag1982.cairn.data.SchemaChange} or a
+ * {@link io.github.enricoag1982.cairn.data.PurgeChange} (ADR-0029, capability {@code change-feed}).
+ *
  * <p>Effective times are UTC instants with microsecond precision, and effective periods are half-open
  * (ADR-0008). Problems are reported as {@link io.github.enricoag1982.cairn.schema.Problem}s.
  */

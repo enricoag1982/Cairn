@@ -124,7 +124,7 @@ class StoredMetadataTest {
         store.apply(batch);
 
         assertThat(StoredMetadata.isEmpty(store)).isFalse();
-        assertThat(StoredMetadata.formatVersion(store)).isEqualTo(OptionalInt.of(1));
+        assertThat(StoredMetadata.formatVersion(store)).isEqualTo(OptionalInt.of(2));
         assertThat(StoredMetadata.latest(store)).contains(new StoredMetadata.Latest(new Basis(12), T1));
     }
 

@@ -8,26 +8,36 @@ import static io.github.enricoag1982.cairn.schema.ValueType.INT;
 import static io.github.enricoag1982.cairn.schema.ValueType.LONG;
 import static io.github.enricoag1982.cairn.schema.ValueType.STRING;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.enricoag1982.cairn.data.Change;
+import io.github.enricoag1982.cairn.data.Changed;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Link;
+import io.github.enricoag1982.cairn.data.PurgeChange;
+import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
+import io.github.enricoag1982.cairn.data.SchemaChange;
 import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.TemporaryId;
+import io.github.enricoag1982.cairn.data.TransactionChange;
+import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
+import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.SchemaTransaction;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -520,6 +530,116 @@ class JsonResultsTest {
                         assertThat(replace.target()).isEqualTo(new RelationshipId("r-1"));
                         assertThat(replace.values()).isEmpty();
                     });
+        }
+    }
+
+    /** The changes of the change feed (ADR-0029, design D7 of {@code add-change-feed}). */
+    @Nested
+    class Changes {
+
+        private final Instant mar1 = Instant.parse("2026-03-01T00:00:00Z");
+        private final Instant oct1 = Instant.parse("2026-10-01T00:00:00Z");
+
+        private TransactionChange transaction(List<Changed> changed) {
+            return new TransactionChange(new TransactionRecord(new Basis(6), RECORDED, "importer",
+                    Optional.of("hr"), Optional.of("Month end")), changed);
+        }
+
+        @Test
+        void aTransactionChangeHasItsBasisTimeKindRecordAndWhatItChangedInTheOrderOfThoseFields() {
+            Change change = transaction(List.of(
+                    new Changed(new EntityId("e-1"), "CustomerRole", true,
+                            List.of(EffectivePeriod.between(mar1, oct1))),
+                    new Changed(new RelationshipId("r-1"), "PlayedBy", false,
+                            List.of(EffectivePeriod.between(JAN_1, mar1), EffectivePeriod.from(oct1)))));
+
+            Object json = DocumentTrees.load(Payloads.toJson(change));
+
+            assertThat(DocumentTrees.keysOf(json)).containsExactly("basis", "transactionTime", "kind", "principal",
+                    "onBehalfOf", "reason", "changed");
+            assertThat(DocumentTrees.at(json, "basis")).isEqualTo(6);
+            assertThat(DocumentTrees.at(json, "transactionTime")).isEqualTo("2026-01-05T09:00:00.123456Z");
+            assertThat(DocumentTrees.at(json, "kind")).isEqualTo("transaction");
+            assertThat(DocumentTrees.at(json, "principal")).isEqualTo("importer");
+            assertThat(DocumentTrees.at(json, "onBehalfOf")).isEqualTo("hr");
+            assertThat(DocumentTrees.at(json, "reason")).isEqualTo("Month end");
+            assertThat(DocumentTrees.listAt(json, "changed")).hasSize(2);
+            assertThat(DocumentTrees.keysOf(DocumentTrees.listAt(json, "changed").get(0))).containsExactly("entity",
+                    "type", "created", "periods");
+            assertThat(DocumentTrees.keysOf(DocumentTrees.listAt(json, "changed").get(1))).containsExactly(
+                    "relationship", "type", "created", "periods");
+            assertThat(DocumentTrees.listAt(json, "changed")).containsExactly(
+                    Map.of("entity", "e-1", "type", "CustomerRole", "created", true,
+                            "periods", List.of(Map.of("from", "2026-03-01T00:00:00Z", "until", "2026-10-01T00:00:00Z"))),
+                    Map.of("relationship", "r-1", "type", "PlayedBy", "created", false,
+                            "periods", List.of(Map.of("from", "2026-01-01T00:00:00Z", "until", "2026-03-01T00:00:00Z"),
+                                    Map.of("from", "2026-10-01T00:00:00Z"))));
+        }
+
+        @Test
+        void aPeriodWithoutAnEndHasNoUntilAndCreatedIsWrittenWhateverItsValue() {
+            Change change = transaction(List.of(new Changed(new EntityId("e-1"), "Account", false,
+                    List.of(EffectivePeriod.from(mar1)))));
+
+            Object json = DocumentTrees.load(Payloads.toJson(change));
+
+            Object changed = DocumentTrees.listAt(json, "changed").getFirst();
+            assertThat(DocumentTrees.at(changed, "created")).isEqualTo(false);
+            assertThat(DocumentTrees.keysOf(DocumentTrees.listAt(changed, "periods").getFirst())).containsExactly("from");
+        }
+
+        @Test
+        void aTransactionThatChangedNothingAndHasNoPartyOrReasonLeavesOutTheFieldsWithoutAValue() {
+            Change change = new TransactionChange(new TransactionRecord(new Basis(2), RECORDED, "importer",
+                    Optional.empty(), Optional.empty()), List.of());
+
+            Object json = DocumentTrees.load(Payloads.toJson(change));
+
+            assertThat(DocumentTrees.keysOf(json)).containsExactly("basis", "transactionTime", "kind", "principal");
+        }
+
+        @Test
+        void aSchemaChangeHasItsOriginAndTheRecordOfItsRegistration() {
+            Schema schema = PayloadFixtures.schemaOf(SchemaDefinition.builder()
+                    .entityType("Thing", e -> e.attribute("text", STRING)).build());
+            Change change = new SchemaChange(new SchemaTransaction(new Basis(1), RECORDED,
+                    new Origin("hr-model", "1.2.0"), schema, "hr-admin", Optional.empty(), Optional.of("Adds Thing")));
+
+            Object json = DocumentTrees.load(Payloads.toJson(change));
+
+            assertThat(DocumentTrees.keysOf(json)).containsExactly("basis", "transactionTime", "kind", "principal",
+                    "reason", "origin");
+            assertThat(DocumentTrees.at(json, "kind")).isEqualTo("schema");
+            assertThat(DocumentTrees.at(json, "principal")).isEqualTo("hr-admin");
+            assertThat(DocumentTrees.at(json, "reason")).isEqualTo("Adds Thing");
+            assertThat(DocumentTrees.at(json, "origin")).isEqualTo(Map.of("name", "hr-model", "version", "1.2.0"));
+        }
+
+        @Test
+        void aPurgeChangeHasTheNumbersOfWhatItRemovedAndNoIds() {
+            Change change = new PurgeChange(new PurgeRecord(new Basis(9), RECORDED, "dpo", Optional.of("DSR-1"),
+                    "Erasure request", 3, 6));
+
+            Object json = DocumentTrees.load(Payloads.toJson(change));
+
+            assertThat(DocumentTrees.keysOf(json)).containsExactly("basis", "transactionTime", "kind", "principal",
+                    "onBehalfOf", "reason", "entities", "relationships");
+            assertThat(DocumentTrees.at(json, "kind")).isEqualTo("purge");
+            assertThat(DocumentTrees.at(json, "reason")).isEqualTo("Erasure request");
+            assertThat(DocumentTrees.at(json, "entities")).isEqualTo(3);
+            assertThat(DocumentTrees.at(json, "relationships")).isEqualTo(6);
+        }
+
+        @Test
+        void changesAreAListInTheOrderGivenAndAnEmptyListIsWrittenAsOne() {
+            Change first = transaction(List.of());
+            Change second = new PurgeChange(new PurgeRecord(new Basis(7), RECORDED, "dpo", Optional.empty(), "r", 0, 0));
+
+            assertThat(DocumentTrees.listOf(DocumentTrees.load(Payloads.changesToJson(List.of(first, second)))))
+                    .extracting(item -> DocumentTrees.at(item, "kind")).containsExactly("transaction", "purge");
+            assertThat(Payloads.changesToJson(List.of())).isEqualToIgnoringWhitespace("[]");
+            assertThatThrownBy(() -> Payloads.toJson((Change) null)).isInstanceOf(NullPointerException.class);
+            assertThatThrownBy(() -> Payloads.changesToJson(null)).isInstanceOf(NullPointerException.class);
         }
     }
 }

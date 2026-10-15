@@ -23,6 +23,7 @@ import io.github.enricoag1982.cairn.core.storage.LedgerCodec;
 import io.github.enricoag1982.cairn.core.storage.LedgerCodec.Kind;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.DryRunResult;
+import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.Receipt;
@@ -145,10 +146,12 @@ class LedgerWritesTest {
 
         assertThat(keys.batches()).as("one batch for the whole commit").hasSize(1);
         assertThat(counts(last())).containsEntry(Kind.CURRENT, 3L).containsEntry(Kind.ROW, 3L)
-                .containsEntry(Kind.TYPE, 3L).hasSize(3);
+                .containsEntry(Kind.TYPE, 3L).containsEntry(Kind.CHANGE, 3L).hasSize(4);
         assertThat(puts(last())).containsExactlyInAnyOrder(
                 hex(LedgerCodec.currentKey(acme.value())), hex(LedgerCodec.currentKey(beta.value())),
                 hex(LedgerCodec.currentKey(alice.value())),
+                hex(LedgerCodec.changeKey(basis, acme.value())), hex(LedgerCodec.changeKey(basis, beta.value())),
+                hex(LedgerCodec.changeKey(basis, alice.value())),
                 hex(LedgerCodec.rowKey(acme.value(), basis, on(1, 1))),
                 hex(LedgerCodec.rowKey(beta.value(), basis, on(1, 1))),
                 hex(LedgerCodec.rowKey(alice.value(), basis, on(1, 1))),
@@ -182,6 +185,7 @@ class LedgerWritesTest {
         assertThat(keys.batches()).hasSize(2);
         assertThat(puts(last())).containsExactlyInAnyOrder(
                 hex(LedgerCodec.currentKey(owns.value())),
+                hex(LedgerCodec.changeKey(basis, owns.value())),
                 hex(LedgerCodec.rowKey(owns.value(), basis, on(2, 1))),
                 hex(LedgerCodec.endKey(acme.value(), relationshipType("Owns"), true, owns.value())),
                 hex(LedgerCodec.endKey(beta.value(), relationshipType("Owns"), false, owns.value())));
@@ -205,9 +209,10 @@ class LedgerWritesTest {
         Basis then = ownership.basis();
         Basis now = correction.basis();
         assertThat(counts(last())).containsEntry(Kind.CURRENT, 1L).containsEntry(Kind.ROW, 1L)
-                .containsEntry(Kind.SUPERSEDED, 1L).hasSize(3);
+                .containsEntry(Kind.SUPERSEDED, 1L).containsEntry(Kind.CHANGE, 1L).hasSize(4);
         assertThat(puts(last())).containsExactlyInAnyOrder(
                 hex(LedgerCodec.currentKey(owns.value())),
+                hex(LedgerCodec.changeKey(now, owns.value())),
                 hex(LedgerCodec.rowKey(owns.value(), now, on(2, 1))),
                 hex(LedgerCodec.supersededKey(owns.value(), then, on(2, 1))));
         assertThat(LedgerCodec.decodeBasis(valueOf(last(), LedgerCodec.supersededKey(owns.value(), then, on(2, 1)))))
@@ -233,6 +238,7 @@ class LedgerWritesTest {
         assertThat(puts(last())).as("the segment before 15 March is as it was: no row, no marker")
                 .containsExactlyInAnyOrder(
                         hex(LedgerCodec.currentKey(a1.value())),
+                        hex(LedgerCodec.changeKey(second.basis(), a1.value())),
                         hex(LedgerCodec.rowKey(a1.value(), second.basis(), on(3, 15))),
                         hex(LedgerCodec.rowKey(a1.value(), second.basis(), on(6, 1))),
                         hex(LedgerCodec.supersededKey(a1.value(), first.basis(), on(3, 15))));
@@ -253,7 +259,7 @@ class LedgerWritesTest {
 
         EntityId id = entity(receipt, bob);
         assertThat(counts(last())).containsEntry(Kind.CURRENT, 1L).containsEntry(Kind.ROW, 2L)
-                .containsEntry(Kind.TYPE, 1L).hasSize(3);
+                .containsEntry(Kind.TYPE, 1L).containsEntry(Kind.CHANGE, 1L).hasSize(4);
         assertThat(insertedAt(currentOf(last(), id))).containsExactly(receipt.basis(), receipt.basis());
     }
 
@@ -342,7 +348,7 @@ class LedgerWritesTest {
                 .endDate(relationship(accounts, HELD_BY_A1), on(6, 1)).build());
 
         Map<Kind, Long> counts = counts(last());
-        assertThat(counts).containsOnlyKeys(Kind.CURRENT, Kind.ROW, Kind.SUPERSEDED, Kind.END);
+        assertThat(counts).containsOnlyKeys(Kind.CURRENT, Kind.ROW, Kind.SUPERSEDED, Kind.END, Kind.CHANGE);
         assertThat(counts.get(Kind.SUPERSEDED)).as("one cut segment each for Beta and the old HeldBy").isEqualTo(2L);
         assertThat(counts.get(Kind.END)).as("the new HeldBy at its two ends").isEqualTo(2L);
         assertThat(ending.ended()).isEmpty();
@@ -351,6 +357,58 @@ class LedgerWritesTest {
                 hex(LedgerCodec.supersededKey(beta.value(), parties.basis(), on(1, 1))));
         assertThat(LedgerCodec.decodeRow(on(1, 1), valueOf(last(), LedgerCodec.rowKey(beta.value(), ending.basis(),
                 on(1, 1)))).end()).isEqualTo(on(6, 1));
+    }
+
+    // ------------------------------------------------------------------ the index of changes
+
+    private LedgerCodec.ChangeValue changeOf(Batch batch, Basis basis, Id id) {
+        return LedgerCodec.decodeChange(valueOf(batch, LedgerCodec.changeKey(basis, id.value())));
+    }
+
+    @Test
+    void aChangeKeyHoldsWhetherItIsARelationshipItsTypeWhetherTheCommitCreatedItAndThePeriodsItChangedIn() {
+        Receipt parties = replay(ReferenceStories.rd1Parties());
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        Receipt ownership = replay(ReferenceStories.rd2Ownership(acme, beta));
+        RelationshipId owns = relationship(ownership, ACME_OWNS_BETA);
+        assertThat(changeOf(last(), ownership.basis(), owns)).isEqualTo(new LedgerCodec.ChangeValue(true,
+                relationshipType("Owns"), true, List.of(EffectivePeriod.from(on(2, 1)))));
+
+        Receipt correction = replay(ReferenceStories.rd2ShareCorrection(owns));
+
+        assertThat(changeOf(last(), correction.basis(), owns)).as("a correction is not a creation")
+                .isEqualTo(new LedgerCodec.ChangeValue(true, relationshipType("Owns"), false,
+                        List.of(EffectivePeriod.from(on(2, 1)))));
+        assertThat(keys.get(LedgerCodec.changeKey(ownership.basis(), owns.value()))).as("the earlier key stays")
+                .isPresent();
+        assertThat(keys.get(LedgerCodec.changeKey(correction.basis(), acme.value()))).as("what was not changed has none")
+                .isEmpty();
+    }
+
+    @Test
+    void aWriteThatCutsATimelineNamesOnlyThePeriodThatChanged() {
+        Receipt parties = replay(ReferenceStories.rd1Parties());
+        Receipt accounts = replay(ReferenceStories.rd5Accounts(entity(parties, BETA), entity(parties, ACME)));
+        EntityId a1 = entity(accounts, A1);
+        replay(ReferenceStories.rd5BalancePatch(a1));
+
+        Receipt middle = commit(on(6, 20), Transaction.by(PRINCIPAL)
+                .patch(a1, EffectivePeriod.between(on(5, 1), on(6, 1)), values("balance", money("900"))).build());
+
+        assertThat(changeOf(last(), middle.basis(), a1).periods())
+                .containsExactly(EffectivePeriod.between(on(5, 1), on(6, 1)));
+    }
+
+    @Test
+    void aTransactionThatRecordsTheSameValuesAgainWritesNoChangeKeyBecauseItRecordsNothing() {
+        Receipt parties = replay(ReferenceStories.rd1Parties());
+        EntityId alice = entity(parties, ALICE);
+        int batches = keys.batches().size();
+
+        commit(on(2, 1), Transaction.by(PRINCIPAL).patch(alice, from(1, 1), values("name", "Alice")).build());
+
+        assertThat(keys.batches()).hasSize(batches);
     }
 
     @Test

@@ -84,7 +84,7 @@ class AgentQueryTest {
         assertThat(schema.get("properties").get("query").get("type").stringValue()).isEqualTo("string");
         assertThat(description).contains("cairn_json_schema").contains("located").contains("{columns, rows}");
         assertThat(AgentTools.toolDescriptions()).map(AgentTools.ToolDescription::name)
-                .containsSubsequence("cairn_traverse", "cairn_query", "cairn_approval_status");
+                .containsSubsequence("cairn_traverse", "cairn_query", "cairn_list_changes", "cairn_approval_status");
     }
 
     @Test

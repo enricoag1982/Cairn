@@ -67,7 +67,7 @@ All employments are permanent, 40 hours a week, effective from 1 January 2026. L
 
 ## Stories
 
-Dates are in 2026. Each story has a test whose display name starts with its ID; the tests replay the stories in the order of their recording dates, and the queries HR-9 and HR-10 before HR-4.
+Dates are in 2026. Each story has a test whose display name starts with its ID; the tests replay the stories in the order of their recording dates, and the queries HR-9 and HR-10 before HR-4; HR-14 and HR-15 run on stores of their own.
 
 | ID | Story | Exercises |
 | --- | --- | --- |
@@ -85,11 +85,12 @@ Dates are in 2026. Each story has a test whose display name starts with its ID; 
 | HR-12 | Recorded 1 October: the principal `dpo` erases Gus's personal data under ticket `DSR-2026-0042`. Purging his person alone is refused, because his employment requires one (`TOO_FEW_RELATIONSHIPS`); his person and employment are purged together, and with them his sick leave and its decision by Fay. Afterwards, the headcount of `SAL` effective 31 March is 1, and P-301 still exists. | Purges, cascades to compositions, what a purge changes |
 | HR-13 | Recorded 1 August: an agent acting as `agent:hr-assistant` hires Hana Kim, E-008, as a Software Engineer in a new position P-213 in `PLT`, in Berlin at Brightwater GmbH for 72,000 EUR from 1 August, through the agent tools, naming the unit, the location, the employer and the job by their unique keys; the commit waits for a person's approval, and after approval Hana exists. | Agent tools, payloads, unique keys, the approval policy |
 | HR-14 | A generated company of 40 employees, in a larger organization than the one above (with the units `OPS` and `QA`, Lisbon, Brightwater Lda in `PT` and the job `SPC`), with a year of hires, transfers, pay changes, leave and terminations, from a fixed seed, reads the same from a durable store after reopening as from an in-memory store, and its headcount equals its active employments at every month end. | Durable stores, scale, consistency |
+| HR-15 | Recorded 1 March: when Dev requests vacation (HR-5), a notifier that follows the change feed tells Cleo, who manages Dev's unit on the request's first day, that a request waits for her. | The change feed, reading what changed through views |
 
 ## Gaps
 
 What the example could not express directly, found while building it. Each is a candidate for a later change.
-The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request (see the `relationships` spec).
+The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request (see the `relationships` spec). And the fourth: approvers no longer poll, because a notifier follows the change feed (HR-15, [ADR-0029](../decisions/0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md)).
 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |
@@ -103,4 +104,4 @@ The first gap it found is closed: a rule ran only when a type that names it was 
 | Traversals need a maximum depth | Queries cap the unit hierarchy at 20 levels, so a deeper one would be cut off without notice; rules pass `Integer.MAX_VALUE` and a condition that always holds to `View.traverse` | Traversals to the end, and a `traverse` without a condition |
 | Relationships that record past facts end with their ends | The generated company never ends a manager's employment, because that would end every `DecidedBy` pointing to it, and past decisions would drop out of current views | Relationships that may outlive an end that they only record, such as who decided |
 | Derived values | A person's full name is composed by the caller; a leave's `days` is entered, not derived from its dates | Derived attributes, on the [roadmap](../research/2026-10-13-ai-native-schema-and-rules.md#conclusion) |
-| Notifications and access | Approvers learn of a waiting request by polling; every reader, agents included, reads pay | A change feed, on the [roadmap](../research/2026-10-13-ai-native-schema-and-rules.md#conclusion); field-level access control, which no roadmap names yet |
+| Access | Every reader, agents included, reads pay | Field-level access control, which no roadmap names yet |

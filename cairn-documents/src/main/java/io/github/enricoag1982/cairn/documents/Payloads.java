@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.documents;
 
+import io.github.enricoag1982.cairn.data.Change;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
 import io.github.enricoag1982.cairn.data.Receipt;
@@ -259,6 +260,35 @@ public final class Payloads {
      */
     public static String stepsToJson(List<Step> steps) {
         return JsonText.render(JsonResults.list(Objects.requireNonNull(steps, "steps"), JsonResults::step));
+    }
+
+    /**
+     * Writes a change of the change feed as JSON (ADR-0029, capability {@code json-payloads}): {@code basis},
+     * {@code transactionTime} and {@code kind}, which is {@code transaction}, {@code schema} or {@code purge}; then the
+     * {@code principal}, {@code onBehalfOf} and {@code reason} of the change's record. A schema registration has its
+     * {@code origin}, with {@code name} and {@code version}; a purge has the numbers of {@code entities} and
+     * {@code relationships} it removed; a data transaction has {@code changed}, a list of
+     * {@code {entity | relationship, type, created, periods}} with the ID under {@code entity} or {@code relationship}, the
+     * name of the type at the change's basis, and each period as {@code {from, until}}, {@code until} left out for a
+     * period without an end. {@code created} is always written. Details without a value and empty lists, such as the
+     * {@code changed} of a transaction that purges have left empty or one that changed nothing, are left out.
+     *
+     * @param change the change
+     * @return the JSON text
+     */
+    public static String toJson(Change change) {
+        return JsonText.render(JsonResults.change(Objects.requireNonNull(change, "change")));
+    }
+
+    /**
+     * Writes changes of the change feed as a JSON list in the order given. The list is {@code []} if there are none.
+     *
+     * @param changes the changes
+     * @return the JSON text
+     * @see #toJson(Change)
+     */
+    public static String changesToJson(List<Change> changes) {
+        return JsonText.render(JsonResults.list(Objects.requireNonNull(changes, "changes"), JsonResults::change));
     }
 
     /**

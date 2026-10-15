@@ -36,7 +36,7 @@ Closing writes what RocksDB holds in memory to its files and releases the direct
 
 Opening replays nothing: RocksDB replays its own write-ahead log, and the store then reads what it records beside the data (the schema and its history, transaction records, the receipts of idempotency keys and purge records) into memory.
 Then it runs each rule it has code for once over the data, without judging the results, to learn what the rules read ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), so opening takes longer the more data the rules' types hold.
-A directory written in a format version this version of Cairn does not know stops the store from opening, with an exception that names the version.
+A directory written in a format version this version of Cairn does not know stops the store from opening, with an exception that names the version. RocksDB stores written before the change feed, in format version 1, are refused this way; there is no migration ([ADR-0029](../decisions/0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md)).
 
 ## What a commit guarantees
 

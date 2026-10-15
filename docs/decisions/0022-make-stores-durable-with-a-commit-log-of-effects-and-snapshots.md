@@ -80,3 +80,4 @@ Chosen option: "A log of the effects of each commit, with snapshots", because it
 - Grouping commits before forcing them to disk, a change feed, and replicas build on the same log later.
 - [ADR-0028](0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) keeps stores in RocksDB, with the same codecs for their records but without a commit log of effects or snapshot files; this decision stays in force for stores kept in a directory.
 - After recovery, a store runs its rules once, without judging their verdicts, to learn what they read; recovery itself still only applies effects. See [ADR-0025](0025-run-a-rule-again-when-the-data-it-read-changes.md).
+- [ADR-0029](0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md) builds the change feed from an index of what each basis changed, kept by every kind of store, instead of from the commit log.

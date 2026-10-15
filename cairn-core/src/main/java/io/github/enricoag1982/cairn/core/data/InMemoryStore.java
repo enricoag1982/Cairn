@@ -11,6 +11,8 @@ import io.github.enricoag1982.cairn.core.storage.Journal;
 import io.github.enricoag1982.cairn.core.storage.KeyedTransaction;
 import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
 import io.github.enricoag1982.cairn.core.storage.StoredMetadata;
+import io.github.enricoag1982.cairn.data.Change;
+import io.github.enricoag1982.cairn.data.Changed;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -19,21 +21,27 @@ import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.KnownAt;
 import io.github.enricoag1982.cairn.data.Purge;
+import io.github.enricoag1982.cairn.data.PurgeChange;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
+import io.github.enricoag1982.cairn.data.SchemaChange;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.TransactionChange;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.Basis;
+import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.RelationshipType;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
+import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.SchemaTransaction;
 import java.time.Instant;
@@ -45,10 +53,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Flow;
 import java.util.function.Supplier;
+import java.util.function.ToLongFunction;
 import java.util.stream.Stream;
 
 /**
@@ -97,6 +109,12 @@ import java.util.stream.Stream;
  * writer touches (ADR-0025, design D3 of {@code add-rule-rechecks}). A commit applies the checks its preparation staged;
  * a dry run or a rejected transaction drops them; a purge removes what mentions the IDs it removes. A durable store
  * calls {@link #learnReads()} after recovery, because the index is not kept in its files.
+ *
+ * <p>The store's changes (ADR-0029, design of {@code add-change-feed}) are the keys of the ledger's index of what each
+ * basis changed, merged by basis with the transaction records, the schema history and the purge records, which the store
+ * keeps in basis order. {@link #changes(Basis, int)} reads them up to the latest published basis without a lock, and
+ * {@link #changeFeed(Basis)} follows them: a {@link ChangeFeed} learns of each published basis from the commit sequence.
+ * A durable store closes the feed when it closes ({@link #closeFeed()}).
  */
 public final class InMemoryStore implements Store {
 
@@ -131,6 +149,10 @@ public final class InMemoryStore implements Store {
      * transactions, so a transaction that repeats one of these keys is rejected. A key is in this set or in {@link #keys}.
      */
     private final Set<String> purgedKeys = ConcurrentHashMap.newKeySet();
+    /** The publisher of the changes, which the commit sequence tells of each published basis. */
+    private final ChangeFeed feed = new ChangeFeed(this::changes);
+    /** The schema that {@link #changeIndex} was made for, which only changes when a schema is registered. */
+    private volatile ChangeSchema changeSchema = new ChangeSchema(null, null);
     /** The ID generator of the store, for entities and relationships alike; guarded by the writer lock. */
     private IdGenerator generator;
     /** Where commits are written before they are recorded; null for a store that is not a directory store. */
@@ -171,6 +193,7 @@ public final class InMemoryStore implements Store {
             Collection<RuleDescriptor> declaredRules) {
         this.ledger = new Ledger(Objects.requireNonNull(keys, "keys"));
         this.sequence = new CommitSequence(Objects.requireNonNull(clock, "clock"));
+        this.sequence.afterPublish(feed::published);
         this.generator = Objects.requireNonNull(generator, "generator");
         this.rules = new Rules(rules);
         List<RuleDescriptor> available = new ArrayList<>(this.rules.descriptors());
@@ -255,6 +278,128 @@ public final class InMemoryStore implements Store {
     public List<TransactionRecord> transactions() {
         Basis latest = sequence.latestBasis();
         return records.stream().filter(record -> record.basis().compareTo(latest) <= 0).toList();
+    }
+
+    // ------------------------------------------------------------------ changes
+
+    /** A schema with the lookups of its types by identifier, which reading changes names types with. */
+    private record ChangeSchema(Schema schema, SchemaIndex index) {
+    }
+
+    @Override
+    public List<Change> changes(Basis after, int limit) {
+        Objects.requireNonNull(after, "after");
+        if (limit < 1) {
+            throw new IllegalArgumentException("The limit of changes is at least 1, but it is " + limit + ".");
+        }
+        long latest = sequence.latestBasis().value();
+        long start = Math.max(after.value(), Basis.NONE.value());
+        if (start >= latest) {
+            return List.of();
+        }
+        long first = start + 1;
+        long last = latest - first < limit ? latest : first + limit - 1;
+        // Everything up to the latest published basis is in place: the records are added before the basis is published.
+        List<Ledger.ChangeEntry> entries = ledger.changes(new Basis(start), new Basis(last));
+        Map<Long, List<Ledger.ChangeEntry>> byBasis = new TreeMap<>();
+        for (Ledger.ChangeEntry entry : entries) {
+            byBasis.computeIfAbsent(entry.basis().value(), key -> new ArrayList<>()).add(entry);
+        }
+        Change[] changes = new Change[(int) (last - first + 1)];
+        for (TransactionRecord record : within(records, record -> record.basis().value(), first, last)) {
+            List<Ledger.ChangeEntry> changed = byBasis.getOrDefault(record.basis().value(), List.of());
+            changes[(int) (record.basis().value() - first)] = new TransactionChange(record,
+                    changed(record.basis(), changed));
+        }
+        for (SchemaTransaction transaction : within(registry.history(), transaction -> transaction.basis().value(), first, last)) {
+            changes[(int) (transaction.basis().value() - first)] = new SchemaChange(transaction);
+        }
+        for (PurgeRecord record : within(purges, record -> record.basis().value(), first, last)) {
+            changes[(int) (record.basis().value() - first)] = new PurgeChange(record);
+        }
+        for (int i = 0; i < changes.length; i++) {
+            if (changes[i] == null) {
+                throw new IllegalStateException("The store has no transaction record, schema transaction or purge "
+                        + "record for basis " + (first + i) + ".");
+            }
+        }
+        return List.of(changes);
+    }
+
+    /**
+     * The items of a list that is in the order of their bases whose bases are in a range. The list only grows, at its end,
+     * so a search finds the start while the writer adds to it.
+     */
+    private static <T> List<T> within(List<T> items, ToLongFunction<T> basis, long first, long last) {
+        int low = 0;
+        int high = items.size();
+        while (low < high) {
+            int middle = (low + high) >>> 1;
+            if (basis.applyAsLong(items.get(middle)) < first) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        List<T> found = new ArrayList<>();
+        for (int i = low; i < items.size() && basis.applyAsLong(items.get(i)) <= last; i++) {
+            found.add(items.get(i));
+        }
+        return found;
+    }
+
+    /** What a transaction changed, with the names of the types as they were at its basis, ordered by ID as text. */
+    private List<Changed> changed(Basis basis, List<Ledger.ChangeEntry> entries) {
+        if (entries.isEmpty()) {
+            return List.of();
+        }
+        SchemaIndex index = changeIndex(basis);
+        List<Changed> changed = new ArrayList<>(entries.size());
+        for (Ledger.ChangeEntry entry : entries) {
+            String type = typeName(index, entry).orElseThrow(() -> new IllegalStateException("The schema at basis "
+                    + basis.value() + " has no type with the identifier " + entry.type().value() + ", which "
+                    + entry.id().value() + " has."));
+            changed.add(new Changed(entry.id(), type, entry.created(), entry.periods()));
+        }
+        changed.sort(Comparator.comparing(item -> item.id().value()));
+        return changed;
+    }
+
+    private static Optional<String> typeName(SchemaIndex index, Ledger.ChangeEntry entry) {
+        return switch (entry.id()) {
+            case EntityId ignored -> index.entityType(entry.type()).map(EntityType::name);
+            case RelationshipId ignored -> index.relationshipType(entry.type()).map(RelationshipType::name);
+        };
+    }
+
+    /** The lookups of the schema at a basis; the last one is kept, as reads of nearby bases use the same schema. */
+    private SchemaIndex changeIndex(Basis basis) {
+        Schema schema = registry.asOf(basis);
+        ChangeSchema known = changeSchema;
+        if (known.schema() == schema) {
+            return known.index();
+        }
+        SchemaIndex index = new SchemaIndex(schema);
+        changeSchema = new ChangeSchema(schema, index);
+        return index;
+    }
+
+    @Override
+    public Flow.Publisher<Change> changeFeed(Basis after) {
+        return feed.publisher(after);
+    }
+
+    /**
+     * Completes the subscriptions of the change feed, and makes the ones that come later complete at once: a durable store
+     * calls it when it closes, once it refuses calls, and before it releases what the changes are read from.
+     */
+    void closeFeed() {
+        feed.close();
+    }
+
+    /** The change feed, for tests. */
+    ChangeFeed feed() {
+        return feed;
     }
 
     /**

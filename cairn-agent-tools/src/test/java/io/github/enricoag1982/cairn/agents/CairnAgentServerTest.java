@@ -59,7 +59,7 @@ class CairnAgentServerTest {
 
             assertThat(initialized.get("serverInfo").get("name").stringValue()).isEqualTo("cairn-agent-tools");
             assertThat(initialized.get("instructions").stringValue()).contains("cairn_describe");
-            assertThat(tools.get("tools")).hasSize(15);
+            assertThat(tools.get("tools")).hasSize(16);
             assertThat(session.finish()).isZero();
         }
     }
