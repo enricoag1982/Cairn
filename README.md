@@ -7,7 +7,7 @@ You, or your AI agents, define typed entities and relationships, with inheritanc
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which runs Java rules and checks in CEL at commit, and rules again when what they read changes, are built; so are transaction payloads and JSON results, tools that serve a store to AI agents over the Model Context Protocol, Java types generated from schema documents with a Gradle plugin, stores kept on disk that recover after a crash, queries with aggregation, purges for legal erasure, and a change feed that applications and agents follow; the engine keeps its data in an ordered key-value store, in memory or in RocksDB. The core design is recorded in accepted decision records.
+> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which derives attributes and runs Java rules and checks in CEL at commit, and rules again when what they read changes, are built; so are transaction payloads and JSON results, tools that serve a store to AI agents over the Model Context Protocol, Java types generated from schema documents with a Gradle plugin, stores kept on disk that recover after a crash, queries with aggregation, purges for legal erasure, and a change feed that applications and agents follow; the engine keeps its data in an ordered key-value store, in memory or in RocksDB. The core design is recorded in accepted decision records.
 
 ## Ideas in one page
 
@@ -37,6 +37,7 @@ The reasoning behind all of this is in the [API research note](docs/research/202
 - [Keep a store in RocksDB](docs/guides/keep-a-store-in-rocksdb.md): data larger than memory, native access, purges and limits
 - [Follow the changes of a store](docs/guides/follow-the-changes-of-a-store.md): read or subscribe to what each transaction changed, from a basis
 - [Write checks](docs/guides/write-checks.md): CEL expressions in schema documents that every version must satisfy
+- [Derive attributes](docs/guides/derive-attributes.md): values computed from the rest of a version, at commit
 - [Query a store](docs/guides/query-a-store.md): filters, relationships, traversals and totals, in Java or JSON
 - [Setup status](docs/guides/start-a-new-project-from-this-template.md#status-in-cairn): the template setup steps that are still open
 

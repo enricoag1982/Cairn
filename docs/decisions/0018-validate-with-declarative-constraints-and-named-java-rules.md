@@ -113,3 +113,4 @@ Expressions in the Common Expression Language (CEL) are a later, optional additi
 - ISO 17442 (LEI) check digits use ISO 7064 MOD 97-10.
 - A rule runs again when a transaction changes the data it read, so it no longer needs to be attached to the types whose writes can break it. See [ADR-0025](0025-run-a-rule-again-when-the-data-it-read-changes.md).
 - [ADR-0030](0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md) decides the expressions of the third level: checks in CEL over one version, run by the optional module `cairn-cel`.
+- [ADR-0031](0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md) derives attributes from a version's own values with the same expressions, computed at commit and stored.
