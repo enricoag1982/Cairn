@@ -67,7 +67,7 @@ The store lists its purge records with `purges()`, which say how much was remove
 - **If the store stops during a purge** after the purge reached its log, opening the store completes the purge. If writing the snapshot file or deleting fails, `purge` throws `UncheckedIOException`; the purge is applied in memory, the store refuses commits, and opening it again completes the purge.
 - **One snapshot file until the next.** A purge leaves one snapshot file. If it is damaged, the store refuses to open rather than open without the data the deleted files held, so take a backup after a purge.
 - **Retries stay refused.** The store drops the transactions it kept for idempotency keys that wrote purged data or named a purged entity, by ID or by unique key, from memory and its files; their keys stay used, so a retry is rejected with `IDEMPOTENCY_KEY_PURGED`.
-- **Copies elsewhere** keep the data: backups, change feeds, approval requests that agents submitted, and data read before. Purge them yourself.
+- **Copies elsewhere** keep the data: backups, changes already read from the [change feed](follow-the-changes-of-a-store.md), approval requests that agents submitted, and data read before. Purge them yourself.
 
 ## After a crash
 

@@ -26,12 +26,14 @@ Dry runs and rejected transactions leave no change.
 A change carries no values. Read them through views at the change's basis, and at the basis before for what was there:
 
 ```java
-for (Changed changed : change.changed()) {
-    EffectivePeriod period = changed.periods().getFirst();
-    View after = store.view(Coordinates.effectiveAt(period.from()).knownAt(change.basis()));
-    View before = store.view(Coordinates.effectiveAt(period.from())
-            .knownAt(new Basis(change.basis().value() - 1)));
-    // compare after.entity(...) with before.entity(...), or read after.timeline(...)
+if (change instanceof TransactionChange transaction) {
+    for (Changed changed : transaction.changed()) {
+        EffectivePeriod period = changed.periods().getFirst();
+        View after = store.view(Coordinates.effectiveAt(period.from()).knownAt(change.basis()));
+        View before = store.view(Coordinates.effectiveAt(period.from())
+                .knownAt(new Basis(change.basis().value() - 1)));
+        // compare after.entity(...) with before.entity(...), or read after.timeline(...)
+    }
 }
 ```
 
@@ -76,8 +78,8 @@ Changes you read before the purge stay with you: when you see a `PurgeChange`, c
 
 ## Agents
 
-The agent tool `cairn_list_changes` takes `after`, a basis number (0 for the first), and `limit` (100 by default, at most 1,000), and returns `changes` as JSON with `next`, the basis to pass as `after` the next time, and `latestBasis`.
-An agent that polls keeps `next` between calls. See [Serve a store to AI agents](serve-a-store-to-ai-agents.md).
+Agents read the feed with the tool `cairn_list_changes`, which takes a basis and a limit and returns the changes as JSON with the basis to continue from; see its row in [Serve a store to AI agents](serve-a-store-to-ai-agents.md#the-tools).
+An agent that polls keeps `next` between calls.
 
 ## Limits
 
