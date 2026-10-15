@@ -25,4 +25,4 @@
 
 - [x] 4.1 A guide to the change feed, and the glossary (Change, Change feed)
 - [x] 4.2 Update the architecture page, the HR domain page, AGENTS.md, README.md and `openspec/config.yaml` (ADR-0029), and bump `last-reviewed`; point ADR-0011 and ADR-0022 to ADR-0029
-- [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
