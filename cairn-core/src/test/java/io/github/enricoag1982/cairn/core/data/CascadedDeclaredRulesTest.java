@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.core.IdGenerators;
 import io.github.enricoag1982.cairn.core.commit.CommitSequence;
+import io.github.enricoag1982.cairn.core.kv.InMemoryKeyValueStore;
 import io.github.enricoag1982.cairn.core.schema.InMemorySchemaRegistry;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.RelationshipId;
@@ -28,7 +29,6 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,8 +58,7 @@ class CascadedDeclaredRulesTest {
     private static final Instant NEXT_COMMIT_AT = Instant.parse("2026-03-16T09:00:00Z");
 
     private final CommitSequence sequence = new CommitSequence(new TestClock());
-    private final Map<EntityId, StoredEntity> entities = new HashMap<>();
-    private final Map<RelationshipId, StoredRelationship> relationships = new HashMap<>();
+    private final Ledger ledger = new Ledger(new InMemoryKeyValueStore());
     private Schema schema;
 
     @BeforeEach
@@ -90,22 +89,21 @@ class CascadedDeclaredRulesTest {
     }
 
     private void store(EntityId id, EntityType type, String name) {
-        StoredEntity entity = new StoredEntity(id, type.id());
-        entity.append(new Basis(2), Timeline.created(on(1, 1), Segment.OPEN,
-                Map.of(type.attribute("name").orElseThrow().id(), Value.of(name)), RECORDED, new Basis(2)));
-        entities.put(id, entity);
+        ledger.write(new Basis(2), List.of(new Preparation.Change(id, type.id(), null, null, true,
+                Timeline.created(on(1, 1), Segment.OPEN,
+                        Map.of(type.attribute("name").orElseThrow().id(), Value.of(name)), RECORDED,
+                        new Basis(2)))), new SchemaIndex(schema));
     }
 
     private void relate(RelationshipId id, RelationshipType type, Instant from) {
-        StoredRelationship stored = new StoredRelationship(id, type.id(), BETA, ALICE);
-        stored.append(new Basis(2), Timeline.created(from, Segment.OPEN, Map.of(), RECORDED, new Basis(2)));
-        relationships.put(id, stored);
+        ledger.write(new Basis(2), List.of(new Preparation.Change(id, type.id(), BETA, ALICE, true,
+                Timeline.created(from, Segment.OPEN, Map.of(), RECORDED, new Basis(2)))), new SchemaIndex(schema));
     }
 
     /** Prepares a transaction as the store would, as the third commit, with only the code of the reference rules. */
     private Preparation prepare(Transaction transaction) {
-        return sequence.underWriterLock(() -> new Preparation(transaction, new SchemaIndex(schema), entities,
-                relationships, Set.of(), IdGenerators.deterministic(),
+        return sequence.underWriterLock(() -> new Preparation(transaction, new SchemaIndex(schema), ledger,
+                Set.of(), IdGenerators.deterministic(),
                 new CommitSequence.Commit(new Basis(3), NEXT_COMMIT_AT), new ValueChecks(),
                 new Rules(ReferenceModel.executableRules()), sequence).run());
     }

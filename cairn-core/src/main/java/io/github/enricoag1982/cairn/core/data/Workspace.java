@@ -23,7 +23,7 @@ import java.util.Set;
 
 /**
  * The entities and relationships that a transaction touches, with what it needs to find them (design D5 of
- * {@code add-entity-versions} and D2 of {@code add-relationships}): the store's entities and relationships, from which
+ * {@code add-entity-versions} and D2 of {@code add-relationships}): the store's {@link Ledger}, from which
  * a {@link Working} copy is made at the first touch, the temporary IDs of the ones the transaction creates, and the
  * namespace of IDs, which entities and relationships share. It also resolves the unique keys that writes name entities
  * by (ADR-0026, design D2 of {@code add-unique-key-references}). The parts of a {@link Preparation} work on one
@@ -34,8 +34,7 @@ import java.util.Set;
 final class Workspace {
 
     private final SchemaIndex index;
-    private final Map<EntityId, StoredEntity> storedEntities;
-    private final Map<RelationshipId, StoredRelationship> storedRelationships;
+    private final Ledger ledger;
     private final Set<String> purgedDigests;
     private final IdGenerator generator;
     private final ProblemLog problems;
@@ -50,19 +49,16 @@ final class Workspace {
      * Creates the workspace of a transaction.
      *
      * @param index               the schema the transaction is validated against
-     * @param storedEntities      the entities of the store, ordered by ID
-     * @param storedRelationships the relationships of the store, ordered by ID
+     * @param ledger              the entities and relationships of the store
      * @param purgedDigests       the digests of the IDs of the entities and relationships that purges removed, which are
      *                            never given to a new entity or relationship
      * @param generator           a copy of the store's ID generator, which the preparation advances
      * @param problems            where problems about references and IDs are reported
      */
-    Workspace(SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
-            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedDigests,
-            IdGenerator generator, ProblemLog problems) {
+    Workspace(SchemaIndex index, Ledger ledger, Set<String> purgedDigests, IdGenerator generator,
+            ProblemLog problems) {
         this.index = index;
-        this.storedEntities = storedEntities;
-        this.storedRelationships = storedRelationships;
+        this.ledger = ledger;
         this.purgedDigests = purgedDigests;
         this.generator = generator;
         this.problems = problems;
@@ -72,12 +68,9 @@ final class Workspace {
         return index;
     }
 
-    Map<EntityId, StoredEntity> storedEntities() {
-        return storedEntities;
-    }
-
-    Map<RelationshipId, StoredRelationship> storedRelationships() {
-        return storedRelationships;
+    /** The entities and relationships of the store, as committed before the transaction. */
+    Ledger ledger() {
+        return ledger;
     }
 
     IdGenerator generator() {
@@ -144,10 +137,11 @@ final class Workspace {
             }
             case UniqueKeys.Valid valid -> {
                 Set<TypeId> types = index.typeAndSubtypes(valid.type());
-                for (StoredEntity entity : storedEntities.values()) {
-                    if (types.contains(entity.type()) && entity.latest().at(at).filter(valid::heldBy).isPresent()) {
-                        keyResolutions.add(new KeyResolution(position, key, entity.id()));
-                        return entity.id();
+                for (Held entity : ledger.uniqueHolders(valid.attribute().id(), valid.value(), false,
+                        Ledger.LATEST)) {
+                    if (types.contains(entity.type()) && entity.timeline().at(at).filter(valid::heldBy).isPresent()) {
+                        keyResolutions.add(new KeyResolution(position, key, entity.entityId()));
+                        return entity.entityId();
                     }
                 }
                 problems.add(Problems.of(ProblemCode.UNIQUE_KEY_NOT_FOUND, path, "No entity has the unique key " + key
@@ -199,7 +193,7 @@ final class Workspace {
         if (found != null) {
             return found;
         }
-        StoredEntity entity = storedEntities.get(id);
+        Held entity = ledger.entity(id).orElse(null);
         if (entity == null) {
             if (report) {
                 problems.add(Problems.of(ProblemCode.UNKNOWN_ENTITY, id.value(), "No entity has the ID " + id.value()
@@ -221,7 +215,7 @@ final class Workspace {
         if (found != null) {
             return found;
         }
-        StoredRelationship relationship = storedRelationships.get(id);
+        Held relationship = ledger.relationship(id).orElse(null);
         if (relationship == null) {
             if (report) {
                 problems.add(Problems.of(ProblemCode.UNKNOWN_RELATIONSHIP, id.value(), "No relationship has the ID "
@@ -256,17 +250,18 @@ final class Workspace {
     String holder(String text) {
         EntityId entity = new EntityId(text);
         RelationshipId relationship = new RelationshipId(text);
-        if (working.containsKey(entity) || storedEntities.containsKey(entity)) {
+        Id stored = ledger.holder(text).orElse(null);
+        if (working.containsKey(entity) || stored instanceof EntityId) {
             return "an entity";
         }
-        if (working.containsKey(relationship) || storedRelationships.containsKey(relationship)) {
+        if (working.containsKey(relationship) || stored instanceof RelationshipId) {
             return "a relationship";
         }
         return null;
     }
 
     boolean inStore(String text) {
-        return storedEntities.containsKey(new EntityId(text)) || storedRelationships.containsKey(new RelationshipId(text));
+        return ledger.holder(text).isPresent();
     }
 
     /**

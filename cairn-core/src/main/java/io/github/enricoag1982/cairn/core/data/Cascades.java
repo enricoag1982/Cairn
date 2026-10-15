@@ -117,11 +117,11 @@ final class Cascades {
                 found.add(subject);
             }
         }
-        for (StoredRelationship stored : workspace.storedRelationships().values()) {
-            if (!workspace.working().containsKey(stored.id()) && source.equals(stored.source())
-                    && workspace.index().relationshipType(stored.type())
+        for (Ledger.End end : workspace.ledger().ends(source, Ledger.LATEST)) {
+            if (end.forward() && !workspace.working().containsKey(end.relationship())
+                    && workspace.index().relationshipType(end.type())
                             .map(type -> type.kind() == RelationshipKind.COMPOSITION).orElse(false)) {
-                found.add(workspace.loadRelationship(stored.id(), false));
+                found.add(workspace.loadRelationship(end.relationship(), false));
             }
         }
         found.sort(Comparator.comparing(relationship -> (RelationshipId) relationship.id));
@@ -142,12 +142,16 @@ final class Cascades {
                 found.add(subject);
             }
         }
-        for (StoredRelationship stored : workspace.storedRelationships().values()) {
-            if (!workspace.working().containsKey(stored.id())
-                    && (entity.equals(stored.source()) || entity.equals(stored.target()))
-                    && goesPast(stored.latest(), from)
-                    && workspace.index().relationshipType(stored.type()).isPresent()) {
-                found.add(workspace.loadRelationship(stored.id(), false));
+        Set<RelationshipId> seen = new HashSet<>();
+        for (Ledger.End end : workspace.ledger().ends(entity, Ledger.LATEST)) {
+            RelationshipId id = end.relationship();
+            if (!seen.add(id) || workspace.working().containsKey(id)
+                    || workspace.index().relationshipType(end.type()).isEmpty()) {
+                continue;
+            }
+            Held held = workspace.ledger().relationship(id).orElse(null);
+            if (held != null && goesPast(held.timeline(), from)) {
+                found.add(workspace.loadRelationship(id, false));
             }
         }
         found.sort(Comparator.comparing(relationship -> (RelationshipId) relationship.id));

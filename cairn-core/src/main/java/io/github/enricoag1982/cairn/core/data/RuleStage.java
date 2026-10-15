@@ -70,8 +70,7 @@ final class RuleStage {
                         subject.timeline));
             }
         }
-        return new ProvisionalView.Source(basis, workspace.index(), workspace.storedEntities(), entities,
-                workspace.storedRelationships(), relationships);
+        return new ProvisionalView.Source(basis, workspace.index(), workspace.ledger(), entities, relationships);
     }
 
     void run() {

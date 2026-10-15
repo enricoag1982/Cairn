@@ -549,27 +549,6 @@ class TimelineTest {
         assertThat(before.changedSince(filled)).isEmpty();
     }
 
-    @Test
-    void anEntityAppendsOneTimelinePerBasisAndNeverChangesAnEarlierOne() {
-        StoredEntity entity = new StoredEntity(new io.github.enricoag1982.cairn.data.EntityId("e1"),
-                new io.github.enricoag1982.cairn.schema.TypeId(1));
-        Timeline first = acme();
-        Timeline second = set(first, MAR, Segment.OPEN, BALANCE, Value.of(1500));
-
-        entity.append(new Basis(1), first);
-        entity.append(new Basis(4), second);
-
-        assertThat(entity.at(Basis.NONE).isEmpty()).isTrue();
-        assertThat(entity.at(new Basis(1))).isSameAs(first);
-        assertThat(entity.at(new Basis(3))).isSameAs(first);
-        assertThat(entity.at(new Basis(4))).isSameAs(second);
-        assertThat(entity.at(new Basis(99))).isSameAs(second);
-        assertThat(entity.latest()).isSameAs(second);
-        assertThat(entity.latestBasis()).isEqualTo(new Basis(4));
-        assertThatThrownBy(() -> entity.append(new Basis(4), first)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> entity.append(new Basis(2), first)).isInstanceOf(IllegalArgumentException.class);
-    }
-
     // ------------------------------------------------------------------ lifetimes compared (relationships)
 
     private static Timeline during(Instant from, Instant end) {
@@ -632,25 +611,5 @@ class TimelineTest {
                 new Segment(JAN, MAR, values("a", 1), RECORDED_1, new Basis(1)),
                 new Segment(JUN, SEP, values("a", 1), RECORDED_1, new Basis(1))));
         assertThat(gap.firstOverlap(during(MAR, Segment.OPEN))).contains(new Timeline.Stretch(JUN, SEP));
-    }
-
-    @Test
-    void aRelationshipKeepsTheSameHistoryAsAnEntityDoes() {
-        StoredRelationship relationship = new StoredRelationship(
-                new io.github.enricoag1982.cairn.data.RelationshipId("r1"),
-                new io.github.enricoag1982.cairn.schema.TypeId(1), new io.github.enricoag1982.cairn.data.EntityId("a"),
-                new io.github.enricoag1982.cairn.data.EntityId("b"));
-        Timeline first = acme();
-        Timeline second = set(first, MAR, Segment.OPEN, BALANCE, Value.of(1500));
-
-        relationship.append(new Basis(1), first);
-        relationship.append(new Basis(4), second);
-
-        assertThat(relationship.source()).isEqualTo(new io.github.enricoag1982.cairn.data.EntityId("a"));
-        assertThat(relationship.target()).isEqualTo(new io.github.enricoag1982.cairn.data.EntityId("b"));
-        assertThat(relationship.at(new Basis(3))).isSameAs(first);
-        assertThat(relationship.latest()).isSameAs(second);
-        assertThat(relationship.latestBasis()).isEqualTo(new Basis(4));
-        assertThatThrownBy(() -> relationship.append(new Basis(4), first)).isInstanceOf(IllegalArgumentException.class);
     }
 }

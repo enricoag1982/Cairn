@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.core.IdGenerators;
 import io.github.enricoag1982.cairn.core.commit.CommitSequence;
+import io.github.enricoag1982.cairn.core.kv.InMemoryKeyValueStore;
 import io.github.enricoag1982.cairn.core.schema.InMemorySchemaRegistry;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
@@ -30,7 +31,6 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,7 +55,7 @@ class DeclaredRulesTest {
     private static final Instant NEXT_COMMIT_AT = Instant.parse("2026-03-16T09:00:00Z");
 
     private final CommitSequence sequence = new CommitSequence(new TestClock());
-    private final Map<EntityId, StoredEntity> stored = new HashMap<>();
+    private final Ledger ledger = new Ledger(new InMemoryKeyValueStore());
     private Schema schema;
 
     @BeforeEach
@@ -73,17 +73,16 @@ class DeclaredRulesTest {
         schema = registry.current();
 
         EntityType person = schema.entityType("Person").orElseThrow();
-        StoredEntity alice = new StoredEntity(ALICE, person.id());
-        alice.append(new Basis(2), Timeline.created(on(1, 1), Segment.OPEN,
-                Map.of(person.attribute("name").orElseThrow().id(), Value.of("Alice")),
-                Instant.parse("2026-01-05T09:00:00Z"), new Basis(2)));
-        stored.put(ALICE, alice);
+        ledger.write(new Basis(2), List.of(new Preparation.Change(ALICE, person.id(), null, null, true,
+                Timeline.created(on(1, 1), Segment.OPEN,
+                        Map.of(person.attribute("name").orElseThrow().id(), Value.of("Alice")),
+                        Instant.parse("2026-01-05T09:00:00Z"), new Basis(2)))), new SchemaIndex(schema));
     }
 
     /** Prepares a transaction as the store would, as the third commit, with only the code of the given rules. */
     private List<Problem> problemsOf(Transaction transaction) {
-        return sequence.underWriterLock(() -> new Preparation(transaction, new SchemaIndex(schema), stored,
-                new HashMap<>(), Set.of(), IdGenerators.deterministic(),
+        return sequence.underWriterLock(() -> new Preparation(transaction, new SchemaIndex(schema), ledger,
+                Set.of(), IdGenerators.deterministic(),
                 new CommitSequence.Commit(new Basis(3), NEXT_COMMIT_AT),
                 new ValueChecks(), new Rules(List.of(new LeiChecksumRule())), sequence).run().problems());
     }

@@ -32,10 +32,10 @@ import java.util.function.Predicate;
  *
  * <p>Queries run on the evaluator of {@code core.query}, which both views share, through the reads of the view.
  *
- * <p>Navigation scans the relationships of the named type and of its subtypes that have the entity as an end. A name
- * stands for a relationship type if it is the type's name or an alias, and the direction is from source to target; or
- * for the inverse name or an inverse alias, with the direction from target to source. For a symmetric type, both names
- * lead from both ends.
+ * <p>Navigation reads the relationships of the named type and of its subtypes that have the entity as an end, through
+ * the index of ends of the {@link Ledger}, in the direction that the name asks for. A name stands for a relationship
+ * type if it is the type's name or an alias, and the direction is from source to target; or for the inverse name or an
+ * inverse alias, with the direction from target to source. For a symmetric type, both names lead from both ends.
  */
 abstract class NavigableView implements View {
 
@@ -54,15 +54,16 @@ abstract class NavigableView implements View {
     abstract String schemaName();
 
     /**
-     * Every version, at any effective time, of the relationships of the given types that have an entity as their source
-     * or their target, as known at this view's basis.
+     * Every version, at any effective time, of the relationships of the given types that have an entity as their source,
+     * their target or either, as known at this view's basis.
      *
-     * @param types the identifiers of the relationship types
-     * @param end   the entity
+     * @param types     the identifiers of the relationship types
+     * @param end       the entity
+     * @param direction whether the entity is the relationships' source, their target, or either
      * @return the states of the versions, ordered by the ID of the relationship and then by the start of the version's
      *         period; relationships whose type the schema of this view does not have are left out
      */
-    abstract List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end);
+    abstract List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end, Ledger.Direction direction);
 
     /**
      * Called for every navigation from an entity, with the relationship type that the name stands for, before it reads
@@ -103,7 +104,11 @@ abstract class NavigableView implements View {
         };
     }
 
-    private Optional<EntityState> findByKey(UniqueKeys.Valid valid) {
+    /**
+     * Finds the entity that has the value of a valid unique key at the view's effective time, if there is one. This lists
+     * the entities of the key's type; a view that records no reads can use the index of unique values instead.
+     */
+    Optional<EntityState> findByKey(UniqueKeys.Valid valid) {
         for (EntityState state : entities(valid.type().name())) {
             Value held = state.values().get(valid.attribute().name());
             if (held != null && Conversions.same(held, valid.value())) {
@@ -204,9 +209,21 @@ abstract class NavigableView implements View {
         Map<RelationshipId, List<Led>> found = new TreeMap<>();
         for (Match match : matches) {
             Set<TypeId> types = index().typeAndSubtypes(match.type());
-            Set<String> symmetric = symmetricNames(match, types);
+            Set<TypeId> bothWays = symmetricTypes(match, types);
+            Set<String> symmetric = new HashSet<>();
+            bothWays.forEach(id -> index().relationshipType(id).ifPresent(type -> symmetric.add(type.name())));
+            Set<TypeId> oneWay = new HashSet<>(types);
+            oneWay.removeAll(bothWays);
             Map<RelationshipId, List<Led>> mine = new TreeMap<>();
-            for (RelationshipState version : relationshipVersions(types, from)) {
+            List<RelationshipState> versions = new ArrayList<>();
+            if (!bothWays.isEmpty()) {
+                versions.addAll(relationshipVersions(bothWays, from, Ledger.Direction.BOTH));
+            }
+            if (!oneWay.isEmpty()) {
+                versions.addAll(relationshipVersions(oneWay, from,
+                        match.inverse() ? Ledger.Direction.BACKWARD : Ledger.Direction.FORWARD));
+            }
+            for (RelationshipState version : versions) {
                 EntityId other = otherEnd(version, from, match.inverse(),
                         symmetric.contains(version.relationshipType()));
                 if (other != null && !found.containsKey(version.id())) {
@@ -219,18 +236,18 @@ abstract class NavigableView implements View {
     }
 
     /**
-     * The names of the types among those a match covers that are symmetric: all of them if the matched type is, else
-     * the subtypes that are.
+     * The types among those a match covers that are symmetric, which lead from both ends: all of them if the matched type
+     * is, else the subtypes that are.
      */
-    private Set<String> symmetricNames(Match match, Set<TypeId> types) {
-        Set<String> names = new HashSet<>();
+    private Set<TypeId> symmetricTypes(Match match, Set<TypeId> types) {
+        Set<TypeId> symmetric = new HashSet<>();
         for (TypeId id : types) {
             Optional<RelationshipType> type = index().relationshipType(id);
             if (type.isPresent() && (match.type().symmetric() || type.get().symmetric())) {
-                names.add(type.get().name());
+                symmetric.add(id);
             }
         }
-        return names;
+        return symmetric;
     }
 
     /** The end of a relationship that is not the entity navigated from; null if the navigation does not lead there. */

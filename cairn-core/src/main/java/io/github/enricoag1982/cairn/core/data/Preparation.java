@@ -6,7 +6,6 @@ import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.KeyResolution;
-import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.Write;
@@ -76,8 +75,7 @@ final class Preparation {
      *
      * @param transaction         the transaction
      * @param index               the schema the transaction is validated against
-     * @param storedEntities      the entities of the store, ordered by ID
-     * @param storedRelationships the relationships of the store, ordered by ID
+     * @param ledger              the entities and relationships of the store
      * @param purgedDigests       the digests of the IDs that purges removed, which no new entity or relationship may have
      * @param generator           a copy of the store's ID generator, which this preparation advances
      * @param commit              the basis and transaction time the transaction would get
@@ -86,11 +84,10 @@ final class Preparation {
      * @param sequence            the store's sequence, which the caller has locked for writing and which refuses
      *                            writes while the rules run
      */
-    Preparation(Transaction transaction, SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
-            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedDigests, IdGenerator generator,
-            CommitSequence.Commit commit, ValueChecks checks, Rules rules, CommitSequence sequence) {
-        this(transaction, index, storedEntities, storedRelationships, purgedDigests, generator, commit, checks, rules,
-                sequence, new ReadIndex());
+    Preparation(Transaction transaction, SchemaIndex index, Ledger ledger, Set<String> purgedDigests,
+            IdGenerator generator, CommitSequence.Commit commit, ValueChecks checks, Rules rules,
+            CommitSequence sequence) {
+        this(transaction, index, ledger, purgedDigests, generator, commit, checks, rules, sequence, new ReadIndex());
     }
 
     /**
@@ -98,8 +95,7 @@ final class Preparation {
      *
      * @param transaction         the transaction
      * @param index               the schema the transaction is validated against
-     * @param storedEntities      the entities of the store, ordered by ID
-     * @param storedRelationships the relationships of the store, ordered by ID
+     * @param ledger              the entities and relationships of the store
      * @param purgedDigests       the digests of the IDs that purges removed, which no new entity or relationship may have
      * @param generator           a copy of the store's ID generator, which this preparation advances
      * @param commit              the basis and transaction time the transaction would get
@@ -110,12 +106,12 @@ final class Preparation {
      * @param reads               what the store's rules read when they last checked, which the transaction does not
      *                            change; a commit applies {@link #readStage()} to it
      */
-    Preparation(Transaction transaction, SchemaIndex index, Map<EntityId, StoredEntity> storedEntities,
-            Map<RelationshipId, StoredRelationship> storedRelationships, Set<String> purgedDigests, IdGenerator generator,
-            CommitSequence.Commit commit, ValueChecks checks, Rules rules, CommitSequence sequence, ReadIndex reads) {
+    Preparation(Transaction transaction, SchemaIndex index, Ledger ledger, Set<String> purgedDigests,
+            IdGenerator generator, CommitSequence.Commit commit, ValueChecks checks, Rules rules,
+            CommitSequence sequence, ReadIndex reads) {
         this.transaction = transaction;
         this.commit = commit;
-        this.workspace = new Workspace(index, storedEntities, storedRelationships, purgedDigests, generator, problems);
+        this.workspace = new Workspace(index, ledger, purgedDigests, generator, problems);
         WriteChecks writeChecks = new WriteChecks(problems);
         this.creations = new Creations(workspace, writeChecks, commit);
         this.amendments = new Amendments(workspace, writeChecks, commit);
@@ -162,8 +158,7 @@ final class Preparation {
      * touched them: its values, if a write set them, then its integrity.
      */
     private void checkSubjects() {
-        Integrity integrity = new Integrity(workspace.index(), workspace.working(), workspace.storedEntities(),
-                workspace.storedRelationships());
+        Integrity integrity = new Integrity(workspace.index(), workspace.working(), workspace.ledger(), Set.of());
         for (Working subject : List.copyOf(workspace.working().values())) {
             if (subject.failed()) {
                 continue;
@@ -218,6 +213,11 @@ final class Preparation {
 
     CommitSequence.Commit commit() {
         return commit;
+    }
+
+    /** The schema the transaction was validated against. */
+    SchemaIndex index() {
+        return workspace.index();
     }
 
     /**

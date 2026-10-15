@@ -22,7 +22,7 @@ A one-byte prefix per kind, then fixed-width or length-prefixed parts so that ra
 
 | Prefix | Key | Value |
 | --- | --- | --- |
-| current | entity or relationship ID | type, ends of a relationship, last basis, encoded timeline |
+| current | entity or relationship ID | type, ends of a relationship, last basis, encoded timeline with the inserting basis of each segment |
 | row | ID, inserting basis, segment start | segment end, values, transaction time, recorded basis |
 | superseded | ID, inserting basis, segment start | superseding basis |
 | type | entity type ID, entity ID | basis that added it |
@@ -33,7 +33,7 @@ Values reuse the storage codecs of the commit log (`ValueCodec`, the segment enc
 
 ### D3. Writing
 
-A commit turns each written entity or relationship's previous and new timelines into one batch: the current key; a row for each new segment that the previous timeline did not have, equal by start, end, values, transaction time and recorded basis; a superseded marker for each previous segment that the new one does not have; index keys for new entities, new relationships at both ends, and unique values not indexed for that entity yet. A transaction that changes nothing writes nothing. Recovery and snapshot loading write the same batches from the timelines they restore.
+A commit turns each written entity or relationship's previous and new timelines into one batch: the current key; a row for each new segment that the previous timeline did not have, equal by start, end, values, transaction time and recorded basis; a superseded marker for each previous segment that the new one does not have, keyed by the inserting basis that the current key holds for it; index keys for new entities, new relationships at both ends, and unique values not indexed for that entity yet. A transaction that changes nothing writes nothing. Recovery and snapshot loading write the same batches from the timelines they restore.
 
 ### D4. Reading
 
