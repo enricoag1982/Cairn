@@ -230,6 +230,37 @@ class JsonPayloadScenariosTest {
     // ------------------------------------------------------------------ problems are located
 
     @Test
+    @DisplayName("Scenario: Locating a problem about an entity named by a key")
+    void locatingAProblemAboutAnEntityNamedByAKey() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        Receipt accounts = reference.replay(ReferenceStories.rd5Accounts(
+                parties.temporaryIds().get(ReferenceStories.BETA), parties.temporaryIds().get(ReferenceStories.ACME)));
+        EntityId a1 = (EntityId) accounts.temporaryIds().get(ReferenceStories.A1);
+        String payload = """
+                {
+                  "cairn": 1,
+                  "principal": "agent:onboarding",
+                  "writes": [
+                    { "patch": { "target": { "entityType": "Account", "key": { "number": "A-1" } },
+                                 "from": "2026-03-15T00:00:00Z", "set": { "currency": "eur" } } }
+                  ]
+                }
+                """;
+        TransactionPayload read = PayloadFixtures.read(payload, reference.schema(), reference.storeLookup());
+
+        DryRunResult result = reference.store.dryRun(read.transaction());
+
+        assertThat(result).isInstanceOf(DryRunResult.Rejected.class);
+        List<Problem> located = read.locate(((DryRunResult.Rejected) result).problems());
+        assertThat(located).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.VALUE_PATTERN_MISMATCH);
+            assertThat(problem.path()).as("the entity is named by its ID").isEqualTo(a1.value() + ".currency");
+            assertThat(problem.location()).contains(locationOf(payload, "\"currency\"",
+                    "/writes/0/patch/set/currency"));
+        });
+    }
+
+    @Test
     @DisplayName("Scenario: Locating a value problem")
     void locatingAValueProblem() {
         // An account has exactly one holder, so the payload also relates account A-1 to Beta.
@@ -290,6 +321,34 @@ class JsonPayloadScenariosTest {
                     assertThat(replace.target()).isEqualTo(acme);
                     assertThat(replace.values()).isEqualTo(state.values());
                 });
+    }
+
+    @Test
+    @DisplayName("Scenario: Key resolutions in a receipt as JSON")
+    void keyResolutionsInAReceiptAsJson() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        Receipt accounts = reference.replay(ReferenceStories.rd5Accounts(
+                parties.temporaryIds().get(ReferenceStories.BETA), parties.temporaryIds().get(ReferenceStories.ACME)));
+        EntityId a1 = (EntityId) accounts.temporaryIds().get(ReferenceStories.A1);
+        String payload = """
+                {
+                  "cairn": 1,
+                  "principal": "agent:onboarding",
+                  "writes": [
+                    { "patch": { "target": { "entityType": "Account", "key": { "number": "A-1" } },
+                                 "from": "2026-03-15T00:00:00Z", "set": { "balance": 1500 } } }
+                  ]
+                }
+                """;
+        TransactionPayload read = PayloadFixtures.read(payload, reference.schema(), reference.storeLookup());
+        Receipt receipt = reference.commit(read.transaction());
+
+        Object json = DocumentTrees.load(Payloads.toJson(receipt));
+
+        assertThat(DocumentTrees.at(json, "keys")).isEqualTo(List.of(Map.of(
+                "write", 0,
+                "key", Map.of("entityType", "Account", "key", Map.of("number", "A-1")),
+                "entity", a1.value())));
     }
 
     @Test

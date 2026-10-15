@@ -220,9 +220,10 @@ public enum ProblemCode {
     /** No entity has the value of a unique key at the start of the write's period. */
     UNIQUE_KEY_NOT_FOUND("A unique key names no entity: no entity of the key's type, or of one of its subtypes, has the "
             + "value at the start of the write's effective period, as the store held it before the transaction. A "
-            + "value can move from one entity to another over time, and a key does not name what the same transaction "
-            + "creates or changes. Correct the key or the period of the write, create the entity first, or name an entity "
-            + "that the transaction creates by its temporary ID."),
+            + "value can move from one entity to another over time. A key resolves against the store before the "
+            + "transaction, so it does not see what the same transaction creates or writes; temporary IDs name what it "
+            + "creates. Correct the key or the period of the write, create the entity first, or name an entity that the "
+            + "transaction creates by its temporary ID."),
     /** Two writes of a transaction create entities or relationships with the same temporary ID. */
     DUPLICATE_TEMPORARY_ID("A temporary ID names one entity or relationship in a transaction; entities and "
             + "relationships share the same temporary IDs. Give each created entity or relationship its own "

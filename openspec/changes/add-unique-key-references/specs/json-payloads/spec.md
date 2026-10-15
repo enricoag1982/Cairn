@@ -53,7 +53,7 @@ Every problem from reading a payload SHALL be located in it by a JSON Pointer, a
 #### Scenario: Locating a problem about an entity named by a key
 
 - **WHEN** A-1 exists (RD-5), a payload's first write patches `{ entityType: Account, key: { number: A-1 } }` with the currency `eur`, and its dry run's problems are located in the payload
-- **THEN** the problem is located at `/writes/0/patch/values/currency`
+- **THEN** the problem is located at `/writes/0/patch/set/currency`
 
 ### Requirement: Results as JSON
 

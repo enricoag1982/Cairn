@@ -16,8 +16,8 @@ import java.util.Objects;
  * <p>The record only holds what the caller wrote. Whether the type has the attribute, whether the attribute is unique
  * and whether the value fits are checked against a schema, by the store when it commits or by a view: a key that does
  * not pass is rejected with the problem {@code INVALID_UNIQUE_KEY}, and one that names no entity with
- * {@code UNIQUE_KEY_NOT_FOUND}. A key names entities only; it cannot name what the same transaction creates, which
- * temporary IDs do.
+ * {@code UNIQUE_KEY_NOT_FOUND}. A key names entities only, and resolves against the store before the transaction, so it
+ * does not see what the same transaction creates or writes: temporary IDs name what it creates.
  *
  * @param entityType the name or an alias of the entity type, compared without regard to case
  * @param attribute  the name or an alias of the attribute, compared without regard to case
