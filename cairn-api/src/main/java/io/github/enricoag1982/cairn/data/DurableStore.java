@@ -15,6 +15,13 @@ import io.github.enricoag1982.cairn.schema.Basis;
  * {@code UncheckedIOException}, the purge is applied in memory, and the store refuses commits like after a failed write,
  * until it is opened again and completes the purge.
  *
+ * <p>A store kept in RocksDB (ADR-0028, capability {@code durability}) is a durable store that keeps no commit log
+ * segments or snapshot files: each commit is a synchronous write batch to RocksDB's write-ahead log, so
+ * {@link #writeSnapshot()} flushes what RocksDB holds in memory to its files and returns the latest basis, and a purge is
+ * one synchronous write that a flush and a compaction of all of the store follow before it returns, so that no file of
+ * the store holds the purged data, not even the keys that named it; a purge that was stopped before it finished is
+ * finished when the store is opened. The rest of this description holds for it as it is, except what it says of files.
+ *
  * <p>One open store holds a directory at a time, in any process. {@link #close()} releases it. A closed store refuses
  * every call but {@code close}, which does nothing the second time: each call throws an {@code IllegalStateException},
  * and so does every call of the store's schema registry.

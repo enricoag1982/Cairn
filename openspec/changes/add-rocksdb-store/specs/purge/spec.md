@@ -26,5 +26,5 @@ A durable store SHALL make a purge durable before it returns: it SHALL write the
 
 #### Scenario: A purge interrupted in a RocksDB store
 
-- **WHEN** a RocksDB store writes a purge of Alice and stops before it has compacted its files, and the store is opened
+- **WHEN** a RocksDB store that holds Alice in its data files writes a purge of Alice and stops before it has compacted its files, and the store is opened
 - **THEN** the store has no Alice, and no file in its directory contains the text `Alice`

@@ -29,12 +29,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * An in-memory store with the reference model registered and a clock that the test moves, with shortcuts to commit,
+ * A store with the reference model registered and a clock that the test moves, with shortcuts to commit,
  * to reject and to replay the {@linkplain ReferenceStories stories of the reference domain}. It is created with the
  * rules of the reference domain, which all have code: {@code lei-checksum} and
  * {@code total-ownership-at-most-100} run. The deterministic ID generator makes IDs predictable: {@link #id(int)}. It
  * lives in the tests of {@code cairn-core}, because the test fixtures of {@code cairn-api} cannot create a store; the
- * stories, dates and values are in {@link ReferenceStories}.
+ * stories, dates and values are in {@link ReferenceStories}. The store is an in-memory store, or a RocksDB store in the
+ * second run of the scenario tests (see {@link TestBackend}).
  */
 final class ReferenceStore {
 
@@ -58,7 +59,7 @@ final class ReferenceStore {
 
     private ReferenceStore(IdGenerator generator, SchemaDefinition definition, List<Rule> rules,
             List<RuleDescriptor> declaredRules) {
-        store = Stores.inMemory(StoreSettings.builder()
+        store = TestBackend.open(StoreSettings.builder()
                 .clock(clock)
                 .idGenerator(generator)
                 .rules(rules)

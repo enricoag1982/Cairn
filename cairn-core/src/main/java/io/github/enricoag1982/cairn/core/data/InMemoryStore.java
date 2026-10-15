@@ -1,13 +1,16 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.commit.CommitSequence;
+import io.github.enricoag1982.cairn.core.kv.Batch;
 import io.github.enricoag1982.cairn.core.kv.InMemoryKeyValueStore;
 import io.github.enricoag1982.cairn.core.kv.KeyValueStore;
 import io.github.enricoag1982.cairn.core.schema.InMemorySchemaRegistry;
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.core.storage.IdDigests;
 import io.github.enricoag1982.cairn.core.storage.Journal;
+import io.github.enricoag1982.cairn.core.storage.KeyedTransaction;
 import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
+import io.github.enricoag1982.cairn.core.storage.StoredMetadata;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -81,6 +84,15 @@ import java.util.stream.Stream;
  * package's other classes restore a store from what a log and a snapshot file hold, and read it for a snapshot file.
  * Without a journal the store behaves as it always did.
  *
+ * <p>A store over a {@linkplain io.github.enricoag1982.cairn.core.kv.PersistentKeyValueStore persistent key-value store}
+ * has no journal (ADR-0028, design D2 and D3 of {@code add-rocksdb-store}): its commit writes the transaction record, the
+ * idempotency key with its receipt and the latest basis, the metadata, as keys in the same batch as the state of the
+ * commit, a schema registration writes its record and the latest basis in one batch, and a purge writes its record, the
+ * digests of the IDs, the removal of idempotency keys and a note that the files are still to be compacted in the batch that
+ * deletes the keys of what it removes. Each batch is applied durably before the store records the transaction and
+ * publishes its basis, and a batch that cannot be written leaves the transaction not applied. {@link PersistentStore}
+ * opens such a store, loads the metadata and guards it.
+ *
  * <p>The store remembers what its rules read when they last checked each version, in a {@link ReadIndex} that only the
  * writer touches (ADR-0025, design D3 of {@code add-rule-rechecks}). A commit applies the checks its preparation staged;
  * a dry run or a rejected transaction drops them; a purge removes what mentions the IDs it removes. A durable store
@@ -121,8 +133,13 @@ public final class InMemoryStore implements Store {
     private final Set<String> purgedKeys = ConcurrentHashMap.newKeySet();
     /** The ID generator of the store, for entities and relationships alike; guarded by the writer lock. */
     private IdGenerator generator;
-    /** Where commits are written before they are recorded; null for a store that is not durable. */
+    /** Where commits are written before they are recorded; null for a store that is not a directory store. */
     private volatile Journal journal;
+    /**
+     * The guard of a store over a persistent key-value store, which also writes its schema registrations; null for any other
+     * store. When it is set, commits and purges write their metadata as keys in the batch of their state.
+     */
+    private volatile Journal persistent;
 
     /**
      * Creates an empty store.
@@ -240,11 +257,18 @@ public final class InMemoryStore implements Store {
         return records.stream().filter(record -> record.basis().compareTo(latest) <= 0).toList();
     }
 
-    /** Refuses a commit if the journal does: an earlier write failed, or the store is closed. Called with the lock held. */
+    /**
+     * Refuses a commit if the journal or the guard of a persistent key-value store does: an earlier write failed, or the
+     * store is closed. Called with the lock held.
+     */
     private void requireWritable() {
         Journal written = journal;
         if (written != null) {
             written.requireWritable();
+        }
+        Journal kept = persistent;
+        if (kept != null) {
+            kept.requireWritable();
         }
     }
 
@@ -298,13 +322,22 @@ public final class InMemoryStore implements Store {
                 preparation.created(), preparation.ended(), preparation.keyResolutions(), transaction.principal(),
                 transaction.onBehalfOf(), transaction.reason(), transaction.idempotencyKey());
         List<Preparation.Change> changes = preparation.changes();
+        TransactionRecord entry = new TransactionRecord(commit.basis(), commit.transactionTime(),
+                transaction.principal(), transaction.onBehalfOf(), transaction.reason());
         Journal written = journal;
         if (written != null) {
             written.append(LogRecords.dataRecord(transaction, receipt, changes));
         }
-        ledger.write(commit.basis(), changes, preparation.index());
-        records.add(new TransactionRecord(commit.basis(), commit.transactionTime(), transaction.principal(),
-                transaction.onBehalfOf(), transaction.reason()));
+        Batch batch = new Batch();
+        if (persistent != null) {
+            StoredMetadata.putLatest(batch, commit.basis(), commit.transactionTime());
+            StoredMetadata.putTransaction(batch, entry);
+            if (transaction.idempotencyKey().isPresent()) {
+                StoredMetadata.putKeyed(batch, new KeyedTransaction(transaction, receipt));
+            }
+        }
+        ledger.write(commit.basis(), changes, preparation.index(), batch);
+        records.add(entry);
         transaction.idempotencyKey().ifPresent(key -> keys.put(key, new Keyed(transaction, receipt)));
         reads.apply(preparation.readStage());
         generator = preparation.generator();
@@ -428,12 +461,22 @@ public final class InMemoryStore implements Store {
                 throw missing(record);
             }
         }
-        ledger.purge(removedEntities, removedRelationships);
         Set<Id> removed = new HashSet<>(removedRelationships);
         removed.addAll(removedEntities);
-        reads.purge(removed);
         List<String> wrote = keys.entrySet().stream().filter(entry -> wrote(entry.getValue(), removed))
                 .map(Map.Entry::getKey).toList();
+        Batch batch = new Batch();
+        if (persistent != null) {
+            StoredMetadata.putLatest(batch, record.basis(), record.transactionTime());
+            StoredMetadata.putPurge(batch, record, digests);
+            StoredMetadata.putCompactionPending(batch);
+            for (String key : wrote) {
+                StoredMetadata.deleteKeyed(batch, key);
+                StoredMetadata.putPurgedKey(batch, key);
+            }
+        }
+        ledger.purge(removedEntities, removedRelationships, batch);
+        reads.purge(removed);
         purgedKeys.addAll(wrote);
         wrote.forEach(keys::remove);
         purgedDigests.addAll(digests);
@@ -532,6 +575,44 @@ public final class InMemoryStore implements Store {
     void attach(Journal journal) {
         this.journal = Objects.requireNonNull(journal, "journal");
         registry.attach(journal);
+    }
+
+    /**
+     * Makes the store write the metadata of every commit and purge as keys, in the batch of its state, and its schema
+     * registrations as keys too, and refuse them while the guard refuses writes: the store is over a persistent key-value
+     * store (ADR-0028). The guard's {@link Journal#append} is called for schema registrations only. Call it once, after
+     * the metadata was loaded and before the store is used by other threads.
+     */
+    void attachPersistent(Journal guard) {
+        this.persistent = Objects.requireNonNull(guard, "guard");
+        registry.attach(guard);
+    }
+
+    /**
+     * Checks that the ID generator accepts every ID that the store holds, as an entity or a relationship: a store keeps
+     * the ID generator it was created with, so one that does not accept them is another generator. Used after the store
+     * was recovered or its metadata was loaded.
+     *
+     * @param generator the generator that the store was opened with
+     * @throws IllegalStateException naming one ID that the generator does not accept
+     */
+    void requireIdsOfTheGenerator(IdGenerator generator) {
+        for (EntityId id : ledger.entityIds()) {
+            if (!generator.accepts(id.value())) {
+                throw otherGenerator(id.value(), "an entity");
+            }
+        }
+        for (RelationshipId id : ledger.relationshipIds()) {
+            if (!generator.accepts(id.value())) {
+                throw otherGenerator(id.value(), "a relationship");
+            }
+        }
+    }
+
+    private static IllegalStateException otherGenerator(String id, String holder) {
+        return new IllegalStateException("The ID generator that the store is opened with does not accept the ID " + id
+                + " of " + holder + " that the store holds. A store keeps the ID generator it was created with, so open "
+                + "it with that one.");
     }
 
     /** Runs an action holding the writer lock, which no commit or registration holds while it runs. */

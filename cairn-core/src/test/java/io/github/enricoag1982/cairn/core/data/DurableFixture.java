@@ -3,8 +3,12 @@ package io.github.enricoag1982.cairn.core.data;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.core.IdGenerators;
+import io.github.enricoag1982.cairn.core.StoreSettings;
+import io.github.enricoag1982.cairn.core.Stores;
+import io.github.enricoag1982.cairn.core.TestBackend;
 import io.github.enricoag1982.cairn.core.storage.CommitLog;
 import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.DurableStore;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Rule;
@@ -27,6 +31,10 @@ import java.util.List;
  * Opens durable stores on one directory for a test, one after the other, with the rules of the reference domain, a
  * clock that the test moves and a new deterministic ID generator each time, as an application that restarts has. Stores
  * that the test leaves open are closed by {@link #closeAll()}.
+ *
+ * <p>The {@code open} methods open directory stores, for the tests about their files. The {@code openStore} methods open
+ * the kind of durable store that the run of the tests is for: a directory store, or a RocksDB store when the tests run
+ * against RocksDB (see {@link TestBackend}), for the tests that every durable store must pass.
  */
 final class DurableFixture {
 
@@ -34,7 +42,7 @@ final class DurableFixture {
     final TestClock clock = new TestClock();
     /** The size after which log segments are complete; small in the tests of segments. */
     long segmentLimit = CommitLog.DEFAULT_SEGMENT_LIMIT;
-    private final List<DirectoryStore> opened = new ArrayList<>();
+    private final List<DurableStore> opened = new ArrayList<>();
 
     DurableFixture(Path directory) {
         this.directory = directory;
@@ -50,6 +58,51 @@ final class DurableFixture {
         DirectoryStore store = DirectoryStore.open(directory, clock, generator, rules, declared, segmentLimit);
         opened.add(store);
         return store;
+    }
+
+    /**
+     * Opens a durable store of the backend under test, with the settings given: a directory store, or a RocksDB store.
+     * The directory is held until the store is closed.
+     */
+    DurableStore openStore(StoreSettings settings) {
+        DurableStore store = TestBackend.isRocksDb() ? TestBackend.openRocksDb(directory, settings)
+                : Stores.durable(directory, settings);
+        opened.add(store);
+        return store;
+    }
+
+    /** Opens a durable store of the backend under test with the rules of the reference domain and the fixture's clock. */
+    DurableStore openStore() {
+        return openStore(clock, IdGenerators.deterministic(), ReferenceModel.executableRules(),
+                ReferenceModel.declaredRules());
+    }
+
+    DurableStore openStore(InstantSource clock, IdGenerator generator, List<Rule> rules,
+            List<RuleDescriptor> declared) {
+        return openStore(StoreSettings.builder().clock(clock).idGenerator(generator).rules(rules)
+                .declaredRules(declared).build());
+    }
+
+    /** Opens a durable store of the backend under test and registers the reference model in it. */
+    DurableStore openStoreWithReferenceModel() {
+        DurableStore store = openStore();
+        registerReferenceModel(store);
+        return store;
+    }
+
+    /** Opens a store of the backend under test like {@link #openWithEmployerHoldsAccount()} does, and registers its model. */
+    DurableStore openStoreWithEmployerHoldsAccount() {
+        DurableStore store = reopenStoreWithEmployerHoldsAccount();
+        assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), Definitions.withRule(
+                ReferenceModel.definition(), "Employs", EmployerHoldsAccountRule.DESCRIPTOR)))
+                .isInstanceOf(RegistrationResult.Applied.class);
+        return store;
+    }
+
+    /** Opens the store of {@link #openStoreWithEmployerHoldsAccount()} again, with its rules and a new ID generator. */
+    DurableStore reopenStoreWithEmployerHoldsAccount() {
+        return openStore(clock, IdGenerators.deterministic(), rulesWithEmployerHoldsAccount(),
+                ReferenceModel.declaredRules());
     }
 
     /** Opens a store and registers the reference model in it, which is the first transaction. */
@@ -118,7 +171,7 @@ final class DurableFixture {
 
     /** Closes the stores that the test left open. */
     void closeAll() {
-        for (DirectoryStore store : opened) {
+        for (DurableStore store : opened) {
             store.close();
         }
         opened.clear();

@@ -456,7 +456,25 @@ final class Ledger {
      * @throws IllegalStateException if a change creates what the ledger holds, or changes what it does not hold
      */
     void write(Basis basis, List<Preparation.Change> changes, SchemaIndex index) {
-        Batch batch = batch(basis, changes, index);
+        write(basis, changes, index, new Batch());
+    }
+
+    /**
+     * Writes what a commit changes as one batch applied at once, together with other keys that belong to it: a store over
+     * a persistent key-value store writes its metadata in the same batch as the state of the commit (ADR-0028), so that
+     * the two never disagree after a crash.
+     *
+     * @param basis   the basis of the transaction
+     * @param changes the entities and relationships it creates or changes, with the timelines it leaves them
+     * @param index   the schema of the transaction, which says what unique attributes the types have
+     * @param batch   the keys that are written with the commit's; the ledger adds its operations to this batch, which
+     *                the caller no longer uses
+     * @throws IllegalStateException if a change creates what the ledger holds, or changes what it does not hold
+     */
+    void write(Basis basis, List<Preparation.Change> changes, SchemaIndex index, Batch batch) {
+        for (Preparation.Change change : changes) {
+            add(batch, basis, change, index);
+        }
         if (!batch.isEmpty()) {
             store.apply(batch);
         }
@@ -568,7 +586,21 @@ final class Ledger {
      * @throws IllegalStateException if the ledger does not hold one of them
      */
     void purge(List<EntityId> entities, List<RelationshipId> relationships) {
-        Batch batch = new Batch();
+        purge(entities, relationships, new Batch());
+    }
+
+    /**
+     * Removes entities and relationships as {@link #purge(List, List)} does, in the same batch as other keys that belong to
+     * the purge: a store over a persistent key-value store writes the purge record and the digests of the IDs, and removes
+     * the transactions of idempotency keys, in the batch that deletes the keys of what it removes (ADR-0028).
+     *
+     * @param entities      the entities to remove
+     * @param relationships the relationships to remove
+     * @param batch         the keys that are written with the purge's; the ledger adds its deletes to this batch, which
+     *                      the caller no longer uses
+     * @throws IllegalStateException if the ledger does not hold one of them
+     */
+    void purge(List<EntityId> entities, List<RelationshipId> relationships, Batch batch) {
         for (RelationshipId id : relationships) {
             purge(batch, id, relationship(id).orElseThrow(() -> missing(id)));
         }

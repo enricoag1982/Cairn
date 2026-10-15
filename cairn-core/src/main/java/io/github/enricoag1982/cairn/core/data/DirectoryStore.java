@@ -12,39 +12,26 @@ import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.DurableStore;
-import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Purge;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.PurgeResult;
-import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.schema.Basis;
-import io.github.enricoag1982.cairn.schema.Origin;
-import io.github.enricoag1982.cairn.schema.Problem;
-import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
-import io.github.enricoag1982.cairn.schema.Schema;
-import io.github.enricoag1982.cairn.schema.SchemaDefinition;
-import io.github.enricoag1982.cairn.schema.SchemaPlan;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
-import io.github.enricoag1982.cairn.schema.SchemaTransaction;
-import io.github.enricoag1982.cairn.schema.StoredDefinition;
-import io.github.enricoag1982.cairn.schema.Submission;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.InstantSource;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -89,7 +76,7 @@ public final class DirectoryStore implements DurableStore {
         this.store = store;
         this.log = log;
         this.lock = lock;
-        this.registry = new Registry();
+        this.registry = new OpenRegistry(store.schema(), this::requireOpen);
     }
 
     /**
@@ -131,7 +118,7 @@ public final class DirectoryStore implements DurableStore {
         boolean opened = false;
         try {
             Recovery.Result recovered = Recovery.recover(directory, new Restorer(store));
-            requireIdsOfTheGenerator(store, generator);
+            store.requireIdsOfTheGenerator(generator);
             store.underWriterLock(() -> {
                 store.sequence().resume(recovered.latest(), recovered.lastTransactionTime());
                 return null;
@@ -154,31 +141,6 @@ public final class DirectoryStore implements DurableStore {
                 }
             }
         }
-    }
-
-    /**
-     * Checks that the ID generator accepts every ID that the recovered store holds, as an entity or a relationship: a
-     * store keeps the ID generator it was created with, so one that does not accept them is another generator.
-     *
-     * @throws IllegalStateException naming one ID that the generator does not accept
-     */
-    private static void requireIdsOfTheGenerator(InMemoryStore store, IdGenerator generator) {
-        for (EntityId id : store.ledger().entityIds()) {
-            if (!generator.accepts(id.value())) {
-                throw otherGenerator(id.value(), "an entity");
-            }
-        }
-        for (RelationshipId id : store.ledger().relationshipIds()) {
-            if (!generator.accepts(id.value())) {
-                throw otherGenerator(id.value(), "a relationship");
-            }
-        }
-    }
-
-    private static IllegalStateException otherGenerator(String id, String holder) {
-        return new IllegalStateException("The ID generator that the store is opened with does not accept the ID " + id
-                + " of " + holder + " that the store holds. A store keeps the ID generator it was created with, so open "
-                + "it with that one.");
     }
 
     /**
@@ -431,64 +393,6 @@ public final class DirectoryStore implements DurableStore {
                 abandon();
                 throw new IllegalStateException("The store stopped after the purge reached the log, as a test asked.");
             }
-        }
-    }
-
-    /** The store's schema registry, which refuses every call once the store is closed. */
-    private final class Registry implements SchemaRegistry {
-
-        @Override
-        public RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission) {
-            requireOpen();
-            return store.schema().register(origin, definition, submission);
-        }
-
-        @Override
-        public SchemaPlan plan(Origin origin, SchemaDefinition definition) {
-            requireOpen();
-            return store.schema().plan(origin, definition);
-        }
-
-        @Override
-        public List<Problem> validate(Origin origin, SchemaDefinition definition) {
-            requireOpen();
-            return store.schema().validate(origin, definition);
-        }
-
-        @Override
-        public List<RuleDescriptor> availableRules() {
-            requireOpen();
-            return store.schema().availableRules();
-        }
-
-        @Override
-        public Optional<StoredDefinition> storedDefinition(String originName) {
-            requireOpen();
-            return store.schema().storedDefinition(originName);
-        }
-
-        @Override
-        public Schema current() {
-            requireOpen();
-            return store.schema().current();
-        }
-
-        @Override
-        public Schema asOf(Basis basis) {
-            requireOpen();
-            return store.schema().asOf(basis);
-        }
-
-        @Override
-        public Schema asOf(Instant transactionTime) {
-            requireOpen();
-            return store.schema().asOf(transactionTime);
-        }
-
-        @Override
-        public List<SchemaTransaction> history() {
-            requireOpen();
-            return store.schema().history();
         }
     }
 }

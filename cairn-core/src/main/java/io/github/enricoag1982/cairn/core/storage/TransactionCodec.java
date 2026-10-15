@@ -351,6 +351,30 @@ final class TransactionCodec {
         };
     }
 
+    // ------------------------------------------------------------------ transaction with an idempotency key
+
+    /**
+     * Writes a committed transaction with an idempotency key and its receipt, as a snapshot file and a store over a
+     * key-value store keep them: the transaction as submitted, then the basis and the transaction time of the receipt,
+     * the IDs that it holds, and the keys that it resolved.
+     */
+    static void writeKeyed(Encoder out, KeyedTransaction keyed) {
+        write(out, keyed.transaction());
+        out.writeLong(keyed.receipt().basis().value());
+        out.writeInstant(keyed.receipt().transactionTime());
+        writeReceiptIds(out, keyed.receipt());
+        writeReceiptKeys(out, keyed.receipt());
+    }
+
+    /** Reads what {@link #writeKeyed} wrote, up to the end of the decoder. */
+    static KeyedTransaction readKeyed(Decoder in) {
+        Transaction transaction = read(in);
+        Basis basis = new Basis(in.readLong());
+        Instant transactionTime = in.readInstant();
+        Receipt receipt = readReceipt(in, basis, transactionTime, transaction);
+        return new KeyedTransaction(transaction, withKeys(receipt, readReceiptKeys(in)));
+    }
+
     // ------------------------------------------------------------------ history entry
 
     static void writeEntry(Encoder out, TransactionRecord record) {

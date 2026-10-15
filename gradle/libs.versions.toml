@@ -4,6 +4,7 @@ json-schema-validator = "3.0.7"
 junit = "6.1.3"
 mcp = "2.0.1"
 re2j = "1.8"
+rocksdb = "11.8.1"
 snakeyaml-engine = "3.1.1"
 
 [libraries]
@@ -15,4 +16,5 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 mcp-core = { module = "io.modelcontextprotocol.sdk:mcp-core", version.ref = "mcp" }
 mcp-json-jackson3 = { module = "io.modelcontextprotocol.sdk:mcp-json-jackson3", version.ref = "mcp" }
 re2j = { module = "com.google.re2j:re2j", version.ref = "re2j" }
+rocksdbjni = { module = "org.rocksdb:rocksdbjni", version.ref = "rocksdb" }
 snakeyaml-engine = { module = "org.snakeyaml:snakeyaml-engine", version.ref = "snakeyaml-engine" }
