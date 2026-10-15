@@ -4,6 +4,7 @@ import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.schema.Basis;
 import java.time.Instant;
+import java.util.List;
 
 /** Reads a {@link DataRecord} that {@link DataRecordWriter} wrote in format version 1. */
 final class DataRecordReader {
@@ -17,6 +18,8 @@ final class DataRecordReader {
         Instant transactionTime = in.readInstant();
         Transaction transaction = TransactionCodec.read(in);
         Receipt receipt = TransactionCodec.readReceipt(in, basis, transactionTime, transaction);
-        return new DataRecord(transaction, receipt, in.readAll(EffectCodec::readEffect));
+        List<Effect> effects = in.readAll(EffectCodec::readEffect);
+        return new DataRecord(transaction, TransactionCodec.withKeys(receipt, TransactionCodec.readReceiptKeys(in)),
+                effects);
     }
 }

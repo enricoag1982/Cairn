@@ -25,7 +25,8 @@ public record TransactionPayload(Transaction transaction, PayloadLocations locat
     /**
      * Locates problems in this payload: the problems that a dry run or a commit of its transaction reports. A problem
      * about an entity, relationship or attribute is located at the last write of the payload that concerns it, at the
-     * attribute's key where there is one; a problem about the transaction as a whole at the root of the payload. See
+     * attribute's key where there is one, whether the write names the entity by its ID or by a unique key that the lookup
+     * resolved when the payload was read; a problem about the transaction as a whole at the root of the payload. See
      * {@link PayloadLocations} for the rules. A problem that is located already keeps its location.
      *
      * @param problems the problems, for example those of {@code Store.dryRun} or of a rejected commit

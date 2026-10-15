@@ -5,6 +5,7 @@ import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
@@ -137,9 +138,9 @@ final class Preparation {
             switch (writes.get(position)) {
                 case Write.Create create -> creations.create(create, position);
                 case Write.Relate relate -> creations.relate(relate, position);
-                case Write.Patch patch -> amendments.patch(patch);
-                case Write.Replace replace -> amendments.replace(replace);
-                case Write.EndDate endDate -> amendments.endDate(endDate);
+                case Write.Patch patch -> amendments.patch(patch, position);
+                case Write.Replace replace -> amendments.replace(replace, position);
+                case Write.EndDate endDate -> amendments.endDate(endDate, position);
             }
         }
         ended = cascades.run(amendments.ended());
@@ -190,6 +191,11 @@ final class Preparation {
     /** The ID of every entity or relationship named with a temporary ID, in the order of the writes. */
     Map<TemporaryId, Id> temporaryIds() {
         return creations.temporaryIds();
+    }
+
+    /** What every unique key that a write names resolved to, in the order of the writes. */
+    List<KeyResolution> keyResolutions() {
+        return workspace.keyResolutions();
     }
 
     /** The ID of every entity and relationship created, in the order of the writes. */

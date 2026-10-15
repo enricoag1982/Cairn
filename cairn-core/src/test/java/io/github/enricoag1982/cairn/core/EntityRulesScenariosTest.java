@@ -374,4 +374,29 @@ class EntityRulesScenariosTest {
         assertThat(problem.path()).as("A-1 and HeldBy").isEqualTo(work.a1().value() + "[HeldBy]");
         assertThat(problems).as("no problem from the rule").noneMatch(found -> found.ruleCode().isPresent());
     }
+
+    @Test
+    @DisplayName("Scenario: A rule that finds by a key")
+    void aRuleThatFindsByAKey() {
+        AccountFundedRule rule = new AccountFundedRule();
+        ReferenceStore reference = ReferenceStore.withRules(AccountFundedRule.model(), ReferenceStore.rulesWith(rule),
+                ReferenceModel.declaredRules());
+        Receipt accounts = reference.createAccounts();
+        Receipt employment = reference.replay(ReferenceStories.rd3Employment(entity(reference.parties, BETA),
+                entity(reference.parties, ALICE)));
+        RelationshipId employs = relationship(employment, ReferenceStories.BETA_EMPLOYS_ALICE);
+        assertThat(rule.checks()).as("checked when the employment was written").isEqualTo(1);
+        reference.recordedOn(on(5, 20));
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(entity(accounts, A1), from(3, 1), values("balance", ReferenceStories.money("500"))).build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("account-a1-funded/underfunded");
+        assertThat(problem.path()).as("Beta's Employs of Alice, which the transaction does not name")
+                .isEqualTo(employs.value());
+        assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("changes what the rule read"));
+        assertThat(rule.checks()).as("run again for the transaction").isEqualTo(2);
+    }
 }

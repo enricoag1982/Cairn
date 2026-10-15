@@ -4,25 +4,29 @@ import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 /**
  * Writes and reads a {@link Transaction} as submitted, the parts of a {@link Receipt} that the transaction does not
- * hold, and the entries of the transaction history, in format version 1.
+ * hold (its IDs, and the resolutions of the unique keys that it names), and the entries of the transaction history, in
+ * format version 1.
  */
 final class TransactionCodec {
 
@@ -35,6 +39,8 @@ final class TransactionCodec {
     private static final int TEMPORARY = 0;
     private static final int ENTITY = 1;
     private static final int RELATIONSHIP = 2;
+    /** A unique key (ADR-0026): the entity type, the attribute and the value, which format version 1 gained. */
+    private static final int UNIQUE_KEY = 3;
 
     private static final int NO_CHECK = 0;
     private static final int PER_ENTITY = 1;
@@ -168,7 +174,23 @@ final class TransactionCodec {
                 out.writeByte(RELATIONSHIP);
                 out.writeText(id.value());
             }
+            case UniqueKey key -> {
+                out.writeByte(UNIQUE_KEY);
+                writeKey(out, key);
+            }
         }
+    }
+
+    private static void writeKey(Encoder out, UniqueKey key) {
+        out.writeText(key.entityType());
+        out.writeText(key.attribute());
+        ValueCodec.write(out, key.value());
+    }
+
+    private static UniqueKey readKey(Decoder in) {
+        String entityType = in.readText();
+        String attribute = in.readText();
+        return new UniqueKey(entityType, attribute, ValueCodec.read(in));
     }
 
     private static Ref readRef(Decoder in) {
@@ -177,6 +199,7 @@ final class TransactionCodec {
             case TEMPORARY -> new TemporaryId(in.readText());
             case ENTITY -> new EntityId(in.readText());
             case RELATIONSHIP -> new RelationshipId(in.readText());
+            case UNIQUE_KEY -> readKey(in);
             default -> throw new CorruptRecordException("The reference kind " + kind + " is not known.");
         };
     }
@@ -251,6 +274,41 @@ final class TransactionCodec {
         });
         out.writeAll(receipt.created(), TransactionCodec::writeId);
         out.writeAll(receipt.ended(), TransactionCodec::writeId);
+    }
+
+    /**
+     * Writes what a receipt holds of the unique keys that its transaction named (ADR-0026): the position of each write,
+     * the key and the ID of the entity it resolved to. A receipt without any writes nothing, so that the record of a
+     * transaction that names no key is as it was before receipts held keys, and the keys are always the last of a
+     * record: {@link #readReceiptKeys} reads them only if bytes are left.
+     */
+    static void writeReceiptKeys(Encoder out, Receipt receipt) {
+        if (!receipt.keys().isEmpty()) {
+            out.writeAll(receipt.keys(), (encoder, resolution) -> {
+                encoder.writeInt(resolution.write());
+                writeKey(encoder, resolution.key());
+                encoder.writeText(resolution.entity().value());
+            });
+        }
+    }
+
+    /** Reads what {@link #writeReceiptKeys} wrote: empty, if no bytes are left, as in a record that has none. */
+    static List<KeyResolution> readReceiptKeys(Decoder in) {
+        if (in.remaining() == 0) {
+            return List.of();
+        }
+        return in.readAll(decoder -> {
+            int write = decoder.readInt();
+            UniqueKey key = readKey(decoder);
+            return new KeyResolution(write, key, new EntityId(decoder.readText()));
+        });
+    }
+
+    /** A receipt as it is with the key resolutions that were read after it. */
+    static Receipt withKeys(Receipt receipt, List<KeyResolution> keys) {
+        return keys.isEmpty() ? receipt : new Receipt(receipt.basis(), receipt.transactionTime(),
+                receipt.temporaryIds(), receipt.created(), receipt.ended(), keys, receipt.principal(),
+                receipt.onBehalfOf(), receipt.reason(), receipt.idempotencyKey());
     }
 
     /** Reads what {@link #writeReceiptIds} wrote, and builds the receipt of a transaction. */

@@ -7,6 +7,7 @@ import io.github.enricoag1982.cairn.data.Link;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.Step;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
@@ -54,6 +55,12 @@ final class CountingView implements View {
     public Optional<EntityState> entity(EntityId id) {
         reads++;
         return view.entity(id);
+    }
+
+    @Override
+    public Optional<EntityState> entity(UniqueKey key) {
+        reads++;
+        return view.entity(key);
     }
 
     @Override

@@ -176,8 +176,8 @@ public record Transaction(
          * Adds a write that relates two entities, with a generated ID.
          *
          * @param relationshipType the name or an alias of the relationship type
-         * @param source           the source entity, by its ID or temporary ID
-         * @param target           the target entity, by its ID or temporary ID
+         * @param source           the source entity, by its ID, temporary ID or unique key
+         * @param target           the target entity, by its ID, temporary ID or unique key
          * @param period           when the relationship is effective
          * @param values           the values of its attributes
          * @return this builder
@@ -194,8 +194,8 @@ public record Transaction(
          *
          * @param temporaryId      the temporary ID
          * @param relationshipType the name or an alias of the relationship type
-         * @param source           the source entity, by its ID or temporary ID
-         * @param target           the target entity, by its ID or temporary ID
+         * @param source           the source entity, by its ID, temporary ID or unique key
+         * @param target           the target entity, by its ID, temporary ID or unique key
          * @param period           when the relationship is effective
          * @param values           the values of its attributes
          * @return this builder
@@ -211,8 +211,8 @@ public record Transaction(
          *
          * @param id               the ID, in the format of the store's generator
          * @param relationshipType the name or an alias of the relationship type
-         * @param source           the source entity, by its ID or temporary ID
-         * @param target           the target entity, by its ID or temporary ID
+         * @param source           the source entity, by its ID, temporary ID or unique key
+         * @param target           the target entity, by its ID, temporary ID or unique key
          * @param period           when the relationship is effective
          * @param values           the values of its attributes
          * @return this builder
@@ -229,8 +229,8 @@ public record Transaction(
          * @param temporaryId      the temporary ID
          * @param id               the ID, in the format of the store's generator
          * @param relationshipType the name or an alias of the relationship type
-         * @param source           the source entity, by its ID or temporary ID
-         * @param target           the target entity, by its ID or temporary ID
+         * @param source           the source entity, by its ID, temporary ID or unique key
+         * @param target           the target entity, by its ID, temporary ID or unique key
          * @param period           when the relationship is effective
          * @param values           the values of its attributes
          * @return this builder
@@ -244,7 +244,7 @@ public record Transaction(
         /**
          * Adds a patch without a conflict check that sets attributes for a period.
          *
-         * @param target the entity or relationship, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID, or an entity by its unique key
          * @param period the period the patch applies to
          * @param set    the attributes to set, with their new values
          * @return this builder
@@ -256,7 +256,7 @@ public record Transaction(
         /**
          * Adds a patch with a conflict check that sets attributes for a period.
          *
-         * @param target the entity or relationship, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID, or an entity by its unique key
          * @param period the period the patch applies to
          * @param set    the attributes to set, with their new values
          * @param check  the conflict check
@@ -269,7 +269,7 @@ public record Transaction(
         /**
          * Adds a patch that sets some attributes and clears others for a period.
          *
-         * @param target the entity or relationship, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID, or an entity by its unique key
          * @param period the period the patch applies to
          * @param set    the attributes to set, with their new values
          * @param clear  the optional attributes to clear
@@ -284,7 +284,7 @@ public record Transaction(
         /**
          * Adds a replacement without a conflict check.
          *
-         * @param target the entity or relationship, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID, or an entity by its unique key
          * @param period the period the replacement applies to
          * @param values the complete values of the entity's attributes
          * @return this builder
@@ -296,7 +296,7 @@ public record Transaction(
         /**
          * Adds a replacement with a conflict check.
          *
-         * @param target the entity or relationship, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID, or an entity by its unique key
          * @param period the period the replacement applies to
          * @param values the complete values of the entity's attributes
          * @param check  the conflict check
@@ -309,7 +309,7 @@ public record Transaction(
         /**
          * Adds an end-date without a conflict check.
          *
-         * @param target the entity or relationship, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID, or an entity by its unique key
          * @param from   the first instant at which the entity or relationship no longer exists
          * @return this builder
          */
@@ -320,7 +320,7 @@ public record Transaction(
         /**
          * Adds an end-date with a conflict check.
          *
-         * @param target the entity or relationship, by its ID or temporary ID
+         * @param target the entity or relationship, by its ID or temporary ID, or an entity by its unique key
          * @param from   the first instant at which the entity or relationship no longer exists
          * @param check  the conflict check
          * @return this builder

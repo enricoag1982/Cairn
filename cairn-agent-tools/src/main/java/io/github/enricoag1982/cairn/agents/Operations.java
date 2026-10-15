@@ -178,12 +178,12 @@ final class Operations {
     }
 
     /**
-     * Reads a payload with the store's latest schema and the IDs it holds, and checks that it names the principal the
-     * adapter acts as. A payload that names no party acted for gets the adapter's, if it has one.
+     * Reads a payload with the store's latest schema, the IDs it holds and the entities that its unique keys name, and
+     * checks that it names the principal the adapter acts as. A payload that names no party acted for gets the adapter's, if it has one.
      */
     private Prepared prepare(String text, String principal, Optional<String> onBehalfOf) {
         View view = store.view(Coordinates.effectiveAt(Instant.EPOCH));
-        return switch (Payloads.readTransaction(text, view.schema(), IdLookup.from(view))) {
+        return switch (Payloads.readTransaction(text, view.schema(), IdLookup.fromStore(store))) {
             case PayloadReadResult.Invalid invalid -> new Prepared.Failed(invalid.problems());
             case PayloadReadResult.Read read -> {
                 TransactionPayload payload = read.payload();

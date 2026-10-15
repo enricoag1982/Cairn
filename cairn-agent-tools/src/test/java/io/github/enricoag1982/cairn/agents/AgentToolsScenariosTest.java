@@ -29,6 +29,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /** The scenarios of the {@code agent-tools} spec that the tools themselves answer, one test each. */
 class AgentToolsScenariosTest {
@@ -216,6 +217,28 @@ class AgentToolsScenariosTest {
             assertThat(link.get("relationship").get("relationshipType").stringValue()).isEqualTo("Owns");
             assertThat(link.get("relationship").get("values").get("share").decimalValue()).isEqualByComparingTo("55");
         });
+    }
+
+    @Test
+    @DisplayName("Scenario: Reading an account by its number, as an agent")
+    void readingAnAccountByItsNumberAsAnAgent() {
+        Receipt parties = fixture.createParties();
+        Receipt accounts = fixture.replay(ReferenceStories.rd5Accounts(entity(parties, BETA), entity(parties, ACME)));
+        EntityId a1 = entity(accounts, ReferenceStories.A1);
+        fixture.replay(ReferenceStories.rd5BalancePatch(a1));
+        fixture.replay(ReferenceStories.rd5BalanceCorrection(a1));
+        ObjectNode arguments = args("effectiveAt", MARCH_31);
+        arguments.set("key", Json.parse("{ \"entityType\": \"Account\", \"key\": { \"number\": \"A-1\" } }"));
+
+        JsonNode read = fixture.call("cairn_read_entity", arguments);
+
+        assertThat(read.has("problems")).isFalse();
+        assertThat(read.get("effectiveAt").stringValue()).isEqualTo(MARCH_31);
+        assertThat(read.get("basis").longValue()).isEqualTo(fixture.store.latestBasis().value());
+        assertThat(read.get("result").get("id").stringValue()).isEqualTo(a1.value());
+        assertThat(read.get("result").get("entityType").stringValue()).isEqualTo("Account");
+        assertThat(read.get("result").get("values").get("number").stringValue()).isEqualTo("A-1");
+        assertThat(read.get("result").get("values").get("balance").decimalValue()).isEqualByComparingTo("1200");
     }
 
     @Test

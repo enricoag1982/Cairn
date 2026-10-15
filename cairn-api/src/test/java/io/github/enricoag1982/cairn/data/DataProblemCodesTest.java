@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The problem codes of data transactions (design D6 of {@code add-entity-versions}, D4 of {@code add-entity-rules}, D3 of
- * {@code add-relationships} and D3 of {@code add-purge}).
+ * {@code add-relationships}, D3 of {@code add-purge} and D1 of {@code add-unique-key-references}).
  */
 class DataProblemCodesTest {
 
@@ -20,7 +20,8 @@ class DataProblemCodesTest {
             "DUPLICATE_TEMPORARY_ID", "INVALID_PERIOD", "CONFLICT", "MISSING_PRINCIPAL", "IDEMPOTENCY_KEY_REUSED",
             "RULE_VIOLATION", "RULE_FAILED", "RULE_UNAVAILABLE", "UNKNOWN_RELATIONSHIP_TYPE", "WRONG_END_TYPE",
             "END_NOT_EFFECTIVE", "RELATIONSHIP_OUTLIVES_END", "TOO_FEW_RELATIONSHIPS", "TOO_MANY_RELATIONSHIPS",
-            "DUPLICATE_RELATIONSHIP", "UNKNOWN_RELATIONSHIP", "IDEMPOTENCY_KEY_PURGED");
+            "DUPLICATE_RELATIONSHIP", "UNKNOWN_RELATIONSHIP", "IDEMPOTENCY_KEY_PURGED", "INVALID_UNIQUE_KEY",
+            "UNIQUE_KEY_NOT_FOUND");
 
     @Test
     void everyCodeOfTheDesignExistsAndIsExplained() {

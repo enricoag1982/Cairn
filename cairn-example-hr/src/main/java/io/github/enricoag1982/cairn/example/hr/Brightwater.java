@@ -404,15 +404,13 @@ public final class Brightwater {
     /**
      * HR-13. The payload that the agent {@code agent:hr-assistant} writes: Hana Kim is hired from 1 August as a
      * Software Engineer, employment E-008 at 72,000 EUR, in a new position P-213 in Platform, in Berlin, employed by
-     * Brightwater GmbH. The agent finds the IDs of the existing units, job, location and employer through the tools.
+     * Brightwater GmbH. The agent names the existing unit, job, location and employer by the unique keys that it knows,
+     * the code of the unit and of the job and the names of the location and of the employer, and so needs no query to
+     * find their IDs (ADR-0026): the store resolves each key when it commits.
      *
-     * @param platform the ID of the unit Platform
-     * @param engineer the ID of the job Software Engineer
-     * @param berlin   the ID of the location Berlin
-     * @param employer the ID of Brightwater GmbH
      * @return the payload as JSON text
      */
-    public static String hr13HanaPayload(String platform, String engineer, String berlin, String employer) {
+    public static String hr13HanaPayload() {
         return """
                 {
                   "cairn": 1,
@@ -421,9 +419,11 @@ public final class Brightwater {
                   "writes": [
                     { "create": { "temporaryId": "p213", "entityType": "Position", "from": "2026-08-01T00:00:00Z",
                         "values": { "code": "P-213", "title": "Software Engineer", "fte": 1 } } },
-                    { "relate": { "relationshipType": "BelongsTo", "source": "$p213", "target": "%s",
+                    { "relate": { "relationshipType": "BelongsTo", "source": "$p213",
+                        "target": { "entityType": "OrgUnit", "key": { "code": "PLT" } },
                         "from": "2026-08-01T00:00:00Z" } },
-                    { "relate": { "relationshipType": "OfJob", "source": "$p213", "target": "%s",
+                    { "relate": { "relationshipType": "OfJob", "source": "$p213",
+                        "target": { "entityType": "Job", "key": { "code": "SWE" } },
                         "from": "2026-08-01T00:00:00Z" } },
                     { "create": { "temporaryId": "hana", "entityType": "Person", "from": "2026-08-01T00:00:00Z",
                         "values": { "givenName": "Hana", "familyName": "Kim" } } },
@@ -432,15 +432,17 @@ public final class Brightwater {
                                     "annualSalary": 72000, "currency": "EUR" } } },
                     { "relate": { "relationshipType": "EmploymentOf", "source": "$e008", "target": "$hana",
                         "from": "2026-08-01T00:00:00Z" } },
-                    { "relate": { "relationshipType": "EmployedBy", "source": "$e008", "target": "%s",
+                    { "relate": { "relationshipType": "EmployedBy", "source": "$e008",
+                        "target": { "entityType": "LegalEntity", "key": { "name": "Brightwater GmbH" } },
                         "from": "2026-08-01T00:00:00Z" } },
-                    { "relate": { "relationshipType": "WorksAt", "source": "$e008", "target": "%s",
+                    { "relate": { "relationshipType": "WorksAt", "source": "$e008",
+                        "target": { "entityType": "Location", "key": { "name": "Berlin" } },
                         "from": "2026-08-01T00:00:00Z" } },
                     { "relate": { "relationshipType": "Fills", "source": "$e008", "target": "$p213",
                         "from": "2026-08-01T00:00:00Z" } }
                   ]
                 }
-                """.formatted(HR_ASSISTANT, platform, engineer, employer, berlin);
+                """.formatted(HR_ASSISTANT);
     }
 
     // ------------------------------------------------------------------ dates

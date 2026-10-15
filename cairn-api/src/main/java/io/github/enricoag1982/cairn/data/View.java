@@ -51,6 +51,21 @@ public interface View {
     Optional<EntityState> entity(EntityId id);
 
     /**
+     * Finds the entity that has a unique key at the view's effective time, as known at its basis (ADR-0026, capability
+     * {@code views}): the entity of the key's type, or of one of the type's subtypes, whose value of the key's attribute
+     * is the key's value then. Unique attributes make the answer at most one entity at an instant, though over time the
+     * same value can belong to different entities, so a view at another effective time may find another one.
+     *
+     * @param key the entity type, a unique attribute of it and a value; names and aliases are compared without regard
+     *            to case, and a number fits a wider numeric attribute
+     * @return the entity's state, as {@link #entity(EntityId)} reads it; empty if no entity has the value at the
+     *         effective time
+     * @throws IllegalArgumentException if the view's schema has no entity type of that name, the type has no attribute of
+     *                                  that name, the attribute is not unique, or the value does not fit its value type
+     */
+    Optional<EntityState> entity(UniqueKey key);
+
+    /**
      * Lists the entities of an entity type that exist at the view's effective time, including the entities of the
      * type's subtypes.
      *

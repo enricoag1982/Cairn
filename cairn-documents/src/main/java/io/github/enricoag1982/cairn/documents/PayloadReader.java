@@ -7,6 +7,7 @@ import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.documents.NodeReader.Entry;
 import io.github.enricoag1982.cairn.schema.Attribute;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.snakeyaml.engine.v2.nodes.MappingNode;
 import org.snakeyaml.engine.v2.nodes.Node;
 import org.snakeyaml.engine.v2.nodes.NodeTuple;
@@ -40,7 +42,10 @@ import org.snakeyaml.engine.v2.nodes.SequenceNode;
  *
  * <p>Values are read by the value type of their attribute, in the type that the write concerns. The reader remembers the
  * temporary IDs and the supplied IDs that earlier writes create with their types, and asks the {@link IdLookup} about
- * other IDs. A reader is used once. It reads as much as it can after a problem, using defaults for what it could not
+ * other IDs. A reference may also be a unique key, {@code {entityType: Account, key: {number: A-1}}}, which the reader
+ * reads into a {@link UniqueKey} with its value typed by the attribute (ADR-0026); the lookup, if it knows the key at the
+ * start of the write's period, tells the entity it names, so that the write's values are typed by that entity's type and
+ * the problems of the transaction about the entity are located at the write. A reader is used once. It reads as much as it can after a problem, using defaults for what it could not
  * read, so that one pass finds every problem; the transaction it builds is returned only if there is none.
  *
  * <p>The path of a problem is {@code @transaction}, or {@code @write.<position>} for a problem in a write, followed by
@@ -57,8 +62,11 @@ final class PayloadReader {
     private record Subject(boolean relationship, String typeName) {
     }
 
-    /** A reference as read: the reference, the text that problems call it, and what it names if that is known. */
-    private record Reference(Ref ref, String text, Optional<Subject> subject) {
+    /**
+     * A reference as read: the reference, the text that problems call what it names (a temporary ID or an ID; for a unique
+     * key, the ID of the entity it names, if the lookup knows it), and what it names if that is known.
+     */
+    private record Reference(Ref ref, Optional<String> text, Optional<Subject> subject) {
     }
 
     /** Finds the attribute of a type by name or alias. */
@@ -106,6 +114,33 @@ final class PayloadReader {
                     new PayloadReadResult.Invalid(List.of(NodeReader.syntax(failed, TRANSACTION_PATH)));
             case YamlTree.Composed composed -> new PayloadReader(schema, lookup).readPayload(composed);
         };
+    }
+
+    /**
+     * Reads a unique key that is written alone, as a payload writes it in a reference. The paths of the problems are
+     * {@code path}.
+     */
+    static UniqueKeyReadResult readKey(String text, Schema schema, String path) {
+        return switch (YamlTree.compose(text)) {
+            case YamlTree.Failed failed ->
+                    new UniqueKeyReadResult.Invalid(List.of(NodeReader.syntax(failed, path)));
+            case YamlTree.Composed composed -> new PayloadReader(schema, IdLookup.none()).readKey(composed, path);
+        };
+    }
+
+    private UniqueKeyReadResult readKey(YamlTree.Composed composed, String path) {
+        nodes.addAll(YamlSubset.problems(composed, "a unique key", tokens -> path));
+        if (composed.root().isEmpty()) {
+            nodes.add(ProblemCode.MISSING_KEY, path, "The unique key is empty.", "a mapping with entityType and key",
+                    null, "Write the entity type and the key, such as { entityType: Account, key: { number: A-1 } }.",
+                    new DocumentLocation("", 1, 1));
+            return new UniqueKeyReadResult.Invalid(nodes.ordered());
+        }
+        Optional<UniqueKey> key = uniqueKey(composed.root().get(), "", path);
+        if (nodes.hasProblems() || key.isEmpty()) {
+            return new UniqueKeyReadResult.Invalid(nodes.ordered());
+        }
+        return new UniqueKeyReadResult.Read(key.get());
     }
 
     // ------------------------------------------------------------------ the payload
@@ -274,17 +309,17 @@ final class PayloadReader {
         Optional<TemporaryId> temporaryId = temporaryId(p.get("temporaryId"), path);
         Optional<RelationshipId> id = nodes.string(p.get("id"), path, "value of 'id'").map(RelationshipId::new);
         String relationshipType = nodes.string(p.get("relationshipType"), path, "value of 'relationshipType'").orElse("");
-        Optional<Reference> source = reference(p.get("source"), path);
-        Optional<Reference> target = reference(p.get("target"), path);
         EffectivePeriod period = period(p.get("from"), p.get("until"), path);
+        Optional<Reference> source = reference(p.get("source"), path, period.from());
+        Optional<Reference> target = reference(p.get("target"), path, period.from());
         Attributes attributes = schema.relationshipType(relationshipType).<Attributes>map(type -> type::attribute)
                 .orElse(NO_ATTRIBUTES);
         Map<String, Value> values = values(p.get("values"), attributes, path, here);
         Subject subject = new Subject(true, relationshipType);
         temporaryId.ifPresent(temporary -> creates(temporary.toString(), subject, here));
         id.ifPresent(supplied -> creates(supplied.value(), subject, here));
-        source.ifPresent(end -> here.mentions.add(end.text()));
-        target.ifPresent(end -> here.mentions.add(end.text()));
+        source.flatMap(Reference::text).ifPresent(here.mentions::add);
+        target.flatMap(Reference::text).ifPresent(here.mentions::add);
         return Optional.of(new Write.Relate(temporaryId, id, relationshipType, source.map(Reference::ref).orElse(NO_REFERENCE),
                 target.map(Reference::ref).orElse(NO_REFERENCE), period, values));
     }
@@ -296,10 +331,10 @@ final class PayloadReader {
             return Optional.empty();
         }
         Map<String, Entry> p = properties.get();
-        Optional<Reference> target = reference(p.get("target"), path);
-        target.ifPresent(found -> here.own.add(found.text()));
-        Attributes attributes = attributesOf(target);
         EffectivePeriod period = period(p.get("from"), p.get("until"), path);
+        Optional<Reference> target = reference(p.get("target"), path, period.from());
+        target.flatMap(Reference::text).ifPresent(here.own::add);
+        Attributes attributes = attributesOf(target);
         // The attributes to clear come first, so that a key which both clears and sets an attribute is located at the set.
         Set<String> clear = clear(p.get("clear"), attributes, path, here);
         Map<String, Value> set = values(p.get("set"), attributes, path, here);
@@ -314,9 +349,9 @@ final class PayloadReader {
             return Optional.empty();
         }
         Map<String, Entry> p = properties.get();
-        Optional<Reference> target = reference(p.get("target"), path);
-        target.ifPresent(found -> here.own.add(found.text()));
         EffectivePeriod period = period(p.get("from"), p.get("until"), path);
+        Optional<Reference> target = reference(p.get("target"), path, period.from());
+        target.flatMap(Reference::text).ifPresent(here.own::add);
         Map<String, Value> values = values(p.get("values"), attributesOf(target), path, here);
         ConflictCheck check = conflictCheck(p.get("conflictCheck"), path);
         return Optional.of(new Write.Replace(target.map(Reference::ref).orElse(NO_REFERENCE), period, values, check));
@@ -329,9 +364,9 @@ final class PayloadReader {
             return Optional.empty();
         }
         Map<String, Entry> p = properties.get();
-        Optional<Reference> target = reference(p.get("target"), path);
-        target.ifPresent(found -> here.own.add(found.text()));
         Instant from = instant(p.get("from"), path).orElse(Instant.EPOCH);
+        Optional<Reference> target = reference(p.get("target"), path, from);
+        target.flatMap(Reference::text).ifPresent(here.own::add);
         ConflictCheck check = conflictCheck(p.get("conflictCheck"), path);
         return Optional.of(new Write.EndDate(target.map(Reference::ref).orElse(NO_REFERENCE), from, check));
     }
@@ -362,10 +397,16 @@ final class PayloadReader {
     }
 
     /**
-     * Reads a reference: {@code $} and a temporary ID, or an ID. An ID is an entity ID or a relationship ID as the
-     * earlier writes of the payload or the lookup say, and an entity ID if they do not know it.
+     * Reads a reference: {@code $} and a temporary ID, an ID, or a unique key. An ID is an entity ID or a relationship ID
+     * as the earlier writes of the payload or the lookup say, and an entity ID if they do not know it. A unique key is a
+     * mapping, which {@link #uniqueKey} reads; the lookup resolves it at the instant the write starts.
+     *
+     * @param at the start of the write's effective period, at which a unique key resolves
      */
-    private Optional<Reference> reference(Entry entry, String path) {
+    private Optional<Reference> reference(Entry entry, String path, Instant at) {
+        if (entry != null && entry.value() instanceof MappingNode) {
+            return keyReference(entry, path, at);
+        }
         Optional<String> text = nodes.string(entry, path, "value of '" + (entry == null ? "" : entry.key()) + "'");
         if (text.isEmpty()) {
             return Optional.empty();
@@ -376,7 +417,7 @@ final class PayloadReader {
                 invalidReference(entry, path, "a temporary ID needs a name after the $");
                 return Optional.empty();
             }
-            return Optional.of(new Reference(new TemporaryId(written.substring(1)), written,
+            return Optional.of(new Reference(new TemporaryId(written.substring(1)), Optional.of(written),
                     Optional.ofNullable(created.get(written))));
         }
         if (written.isBlank()) {
@@ -386,14 +427,81 @@ final class PayloadReader {
         Optional<Subject> subject = Optional.ofNullable(created.get(written)).or(() -> lookup.find(written)
                 .map(known -> new Subject(known.kind() == IdLookup.Kind.RELATIONSHIP, known.typeName())));
         Ref ref = subject.filter(Subject::relationship).isPresent() ? new RelationshipId(written) : new EntityId(written);
-        return Optional.of(new Reference(ref, written, subject));
+        return Optional.of(new Reference(ref, Optional.of(written), subject));
+    }
+
+    /**
+     * Reads a reference that is a unique key. If the lookup knows the entity that the key names at the instant, the
+     * entity's ID is the text that problems about it are located by, and its type types the values of the write; else
+     * the key's own type does, if the schema has it as an entity type.
+     */
+    private Optional<Reference> keyReference(Entry entry, String path, Instant at) {
+        Optional<UniqueKey> key = uniqueKey(entry.value(), entry.pointer(), path);
+        if (key.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<IdLookup.Named> named = lookup.find(key.get(), at);
+        Optional<Subject> subject = Optional.of(new Subject(false, named.map(IdLookup.Named::typeName)
+                .orElse(key.get().entityType())));
+        return Optional.of(new Reference(key.get(), named.map(IdLookup.Named::id), subject));
+    }
+
+    /**
+     * Reads a unique key, as a reference of a write, or, at the root of a text, as {@link Payloads#readUniqueKey} reads
+     * it: a mapping with {@code entityType} and {@code key}, which is a mapping with exactly one entry, the name of an
+     * attribute and its value. The value is typed by the attribute in the named type, or read by its own YAML type if the
+     * schema does not have the type or the attribute, so that the store reports the key as invalid. The problems are
+     * located at the key's mapping, at {@code entityType} or at the {@code key}, as the shape that is wrong.
+     */
+    private Optional<UniqueKey> uniqueKey(Node node, String pointer, String path) {
+        Optional<Map<String, Entry>> properties = nodes.properties(node, pointer, path, "the unique key",
+                PayloadKeys.UNIQUE_KEY, PayloadKeys.UNIQUE_KEY_REQUIRED);
+        if (properties.isEmpty()) {
+            return Optional.empty();
+        }
+        Entry typeEntry = properties.get().get("entityType");
+        Entry keyEntry = properties.get().get("key");
+        Optional<String> entityType = nodes.string(typeEntry, path, "value of 'entityType'");
+        if (keyEntry == null) {
+            return Optional.empty();
+        }
+        String expected = "a mapping with one entry: the name of a unique attribute and its value";
+        if (!(keyEntry.value() instanceof MappingNode)) {
+            nodes.invalidKind(keyEntry.value(), keyEntry.pointer(), path, "value of 'key'", expected);
+            return Optional.empty();
+        }
+        List<Entry> members = nodes.named(keyEntry.value(), keyEntry.pointer(), path, "'key'", expected, name -> path);
+        DocumentLocation at = NodeReader.location(keyEntry.pointer(), keyEntry.keyNode());
+        if (members.isEmpty()) {
+            nodes.add(ProblemCode.MISSING_KEY, path, "The key of a unique key has no entry.",
+                    "one entry: the name of a unique attribute and its value", null,
+                    "Write the name of a unique attribute of the entity type and its value, such as { number: A-1 }.",
+                    at);
+            return Optional.empty();
+        }
+        if (members.size() > 1) {
+            String found = members.stream().map(Entry::key).collect(Collectors.joining(", "));
+            nodes.add(ProblemCode.INVALID_VALUE, path, "A unique key names one attribute and its value, but this one has "
+                    + members.size() + " entries: " + found + ".", "exactly one entry", found,
+                    "Keep the one unique attribute that names the entity, and leave the others out.", at);
+            return Optional.empty();
+        }
+        Entry member = members.getFirst();
+        Optional<Attribute> attribute = entityType.flatMap(schema::entityType)
+                .flatMap(type -> type.attribute(member.key()));
+        Optional<Value> value = nodes.literal(member.value(), member.pointer(),
+                attribute.map(Attribute::valueType).orElse(null), path, "value of '" + member.key() + "'");
+        if (entityType.isEmpty() || value.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new UniqueKey(entityType.get(), member.key(), value.get()));
     }
 
     private void invalidReference(Entry entry, String path, String reason) {
         String found = NodeReader.describe(entry.value());
         nodes.add(ProblemCode.INVALID_VALUE, path, "The value of '" + entry.key() + "' is not a reference: " + reason
-                + ".", "a reference: $ and a temporary ID, or an ID", found, "Write a temporary ID as \"$name\", for "
-                + "example \"$acme\", and an ID as it is.", NodeReader.location(entry.pointer(), entry.value()));
+                + ".", "a reference: $ and a temporary ID, an ID, or a unique key", found, "Write a temporary ID as "
+                + "\"$name\", for example \"$acme\", and an ID as it is.", NodeReader.location(entry.pointer(), entry.value()));
     }
 
     /** The attributes of the type of a patched or replaced target, if the payload or the lookup knows what it is. */

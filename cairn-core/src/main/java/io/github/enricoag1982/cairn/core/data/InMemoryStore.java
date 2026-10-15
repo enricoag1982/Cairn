@@ -277,8 +277,8 @@ public final class InMemoryStore implements Store {
     private Receipt record(Transaction transaction, Preparation preparation) {
         CommitSequence.Commit commit = preparation.commit();
         Receipt receipt = new Receipt(commit.basis(), commit.transactionTime(), preparation.temporaryIds(),
-                preparation.created(), preparation.ended(), transaction.principal(), transaction.onBehalfOf(),
-                transaction.reason(), transaction.idempotencyKey());
+                preparation.created(), preparation.ended(), preparation.keyResolutions(), transaction.principal(),
+                transaction.onBehalfOf(), transaction.reason(), transaction.idempotencyKey());
         List<Preparation.Change> changes = preparation.changes();
         Journal written = journal;
         if (written != null) {
@@ -447,13 +447,15 @@ public final class InMemoryStore implements Store {
 
     /**
      * Tells whether a committed transaction created, ended, patched, replaced or end-dated any of the removed IDs, or
-     * names one in a write, as the end of a relationship or as a supplied ID: the store keeps no transaction that holds
-     * the ID of what a purge removed.
+     * names one in a write, as the end of a relationship or as a supplied ID, or named one by a unique key, which its
+     * receipt records as a resolution (ADR-0026, design D4a of {@code add-unique-key-references}): the store keeps no
+     * transaction that holds the ID of what a purge removed, nor a key whose value may be personal data.
      */
     private static boolean wrote(Keyed keyed, Set<Id> removed) {
         Receipt receipt = keyed.receipt();
         if (receipt.created().stream().anyMatch(removed::contains)
-                || receipt.ended().stream().anyMatch(removed::contains)) {
+                || receipt.ended().stream().anyMatch(removed::contains)
+                || receipt.keys().stream().anyMatch(resolution -> removed.contains(resolution.entity()))) {
             return true;
         }
         for (Write write : keyed.transaction().writes()) {

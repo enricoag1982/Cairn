@@ -9,6 +9,7 @@ import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -23,7 +24,8 @@ import java.util.stream.Collectors;
 
 /**
  * Applies the writes that create something: the creation of an entity and the relating of two entities (design D5 of
- * {@code add-entity-versions} and D1 of {@code add-relationships}). Problems about the new entity or relationship are
+ * {@code add-entity-versions} and D1 of {@code add-relationships}). The ends of a relationship can be named by unique
+ * keys (ADR-0026). Problems about the new entity or relationship are
  * located at its temporary ID, else at the ID the caller supplied, else at {@code @write.<position>}: an ID that the
  * store generates differs between a dry run and a commit, so it cannot be the path of a problem that both report.
  *
@@ -121,8 +123,8 @@ final class Creations {
             ok = false;
         }
         RelationshipType type = relationshipType(path, write.relationshipType());
-        Working source = resolveEnd(path, "source", write.source());
-        Working target = resolveEnd(path, "target", write.target());
+        Working source = resolveEnd(path, "source", write.source(), period, position);
+        Working target = resolveEnd(path, "target", write.target(), period, position);
         WriteChecks.Resolved resolved = null;
         if (type != null) {
             resolved = checks.resolveValues(path, SubjectType.of(type), write.values());
@@ -268,10 +270,15 @@ final class Creations {
     }
 
     /**
-     * Finds an end of a relationship: an entity by its ID, or by the temporary ID of an entity that an earlier write
-     * creates. Reports an end that is unknown or that is a relationship.
+     * Finds an end of a relationship: an entity by its ID, by the temporary ID of an entity that an earlier write
+     * creates, or by a unique key, which resolves at the start of the relationship's period (ADR-0026) and whose
+     * problems are located at {@code @write.<position>}. Reports an end that is unknown or that is a relationship.
      */
-    private Working resolveEnd(String path, String role, Ref ref) {
+    private Working resolveEnd(String path, String role, Ref named, EffectivePeriod period, int position) {
+        Ref ref = workspace.resolveKey(named, period.from(), position);
+        if (ref == null) {
+            return null;
+        }
         Working found = switch (ref) {
             case TemporaryId temporaryId -> workspace.resolveTemporaryId(temporaryId);
             case EntityId id -> workspace.loadEntity(id, true);
@@ -280,6 +287,7 @@ final class Creations {
                         + id.value() + " is the ID of a relationship.", "an entity", "the ID of a relationship"));
                 yield null;
             }
+            case UniqueKey key -> throw new IllegalStateException("The unique key " + key + " was not resolved.");
         };
         if (found != null && found.isRelationship()) {
             problems.add(wrongEnd(path, "The " + role + " of a relationship must be an entity, but "

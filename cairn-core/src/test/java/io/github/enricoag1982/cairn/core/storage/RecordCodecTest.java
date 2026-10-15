@@ -7,11 +7,13 @@ import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
@@ -279,6 +281,8 @@ class RecordCodecTest {
         temporaryIds.put(new TemporaryId("owns"), new RelationshipId("r-1"));
         Receipt receipt = new Receipt(new Basis(9), T1, temporaryIds,
                 List.of(new EntityId("e-1"), new RelationshipId("r-1")), List.of(new RelationshipId("r-2")),
+                List.of(new KeyResolution(5, new UniqueKey("Account", "number", Value.of("A-1")),
+                        new EntityId("e-1"))),
                 transaction.principal(), transaction.onBehalfOf(), transaction.reason(), transaction.idempotencyKey());
         Map<AttributeId, Value> values = new LinkedHashMap<>();
         values.put(new AttributeId(12), Value.of("ACME"));
@@ -301,11 +305,104 @@ class RecordCodecTest {
         assertThat(instances.keySet()).as("every kind of conflict check").containsAll(
                 Arrays.asList(ConflictCheck.class.getPermittedSubclasses()));
         assertThat(instances.keySet()).as("every kind of reference and ID").contains(TemporaryId.class,
-                EntityId.class, RelationshipId.class);
+                EntityId.class, RelationshipId.class, UniqueKey.class, KeyResolution.class);
         assertEveryComponentIsSetSomewhere(instances);
         assertThat(read.transaction().writes()).hasSize(9);
         assertThat(read.receipt().temporaryIds().keySet()).containsExactly(new TemporaryId("acme"),
                 new TemporaryId("owns"));
+    }
+
+    @Test
+    void aDataRecordWhoseWritesNameEntitiesByUniqueKeysReadsBackEqual() {
+        Transaction transaction = Transaction.by("importer").idempotencyKey("keys")
+                .patch(new UniqueKey("Account", "number", Value.of("A-1")), EffectivePeriod.from(T2),
+                        Map.of("balance", Value.of(new BigDecimal("1500.00"))))
+                .replace(new UniqueKey("Organization", "lei", Value.of("5493001KJTIIGC8Y1R12")),
+                        EffectivePeriod.between(T1, T2), Map.of("name", Value.of("ACME")),
+                        ConflictCheck.perEntity(new Basis(3)))
+                .endDate(new UniqueKey("Thing", "serial", Value.of(7L)), T2)
+                .relate("Employs", new UniqueKey("Organization", "lei", Value.of("5493001KJTIIGC8Y1R12")),
+                        new UniqueKey("Person", "badge", Value.of(42)), EffectivePeriod.from(T1), Map.of())
+                .patch(new UniqueKey("Thing", "born", Value.of(LocalDate.of(2026, 2, 1))), EffectivePeriod.from(T1),
+                        Map.of())
+                .patch(new UniqueKey("Thing", "seen", Value.of(T1)), EffectivePeriod.from(T1), Map.of())
+                .patch(new UniqueKey("Thing", "flag", Value.of(true)), EffectivePeriod.from(T1), Map.of())
+                .patch(new UniqueKey("Thing", "label", Value.of("with ünïcode and 😀")), EffectivePeriod.from(T1),
+                        Map.of())
+                .build();
+        List<KeyResolution> resolutions = List.of(
+                new KeyResolution(0, new UniqueKey("Account", "number", Value.of("A-1")), new EntityId("e-1")),
+                new KeyResolution(1, new UniqueKey("Organization", "lei", Value.of("5493001KJTIIGC8Y1R12")),
+                        new EntityId("e-2")),
+                new KeyResolution(3, new UniqueKey("Person", "badge", Value.of(42)), new EntityId("e-3")),
+                new KeyResolution(3, new UniqueKey("Organization", "lei", Value.of("5493001KJTIIGC8Y1R12")),
+                        new EntityId("e-4")));
+        DataRecord record = new DataRecord(transaction, new Receipt(new Basis(4), T2, Map.of(), List.of(), List.of(),
+                resolutions, "importer", Optional.empty(), Optional.empty(), Optional.of("keys")), List.of());
+
+        DataRecord read = (DataRecord) roundTrip(record);
+
+        assertThat(read).isEqualTo(record);
+        assertThat(read.receipt().keys()).containsExactlyElementsOf(resolutions);
+        assertThat(read.transaction().writes()).hasSize(8);
+        assertThat(((Write.Patch) read.transaction().writes().getFirst()).target())
+                .isEqualTo(new UniqueKey("Account", "number", Value.of("A-1")));
+        assertThat(((Write.Relate) read.transaction().writes().get(3)).target())
+                .isEqualTo(new UniqueKey("Person", "badge", Value.of(42)));
+    }
+
+    @Test
+    void theKeyResolutionsOfAReceiptAreTheLastBytesOfARecordAndARecordWithoutThemReadsAsBefore() {
+        UniqueKey key = new UniqueKey("Account", "number", Value.of("A-1"));
+        Transaction transaction = Transaction.by("importer").patch(key, EffectivePeriod.from(T2), Map.of()).build();
+        Effect effect = new Effect(new EntityId("e-1"), new TypeId(2), false, Optional.empty(), Optional.empty(),
+                List.of(segment(T2, Instant.MAX, T1, 4, Map.of(new AttributeId(3), Value.of(1)))));
+        DataRecord without = new DataRecord(transaction, new Receipt(new Basis(4), T2, Map.of(), List.of(), List.of(),
+                "importer", Optional.empty(), Optional.empty(), Optional.empty()), List.of(effect));
+        DataRecord with = new DataRecord(transaction, new Receipt(new Basis(4), T2, Map.of(), List.of(), List.of(),
+                List.of(new KeyResolution(0, key, new EntityId("e-1"))), "importer", Optional.empty(),
+                Optional.empty(), Optional.empty()), List.of(effect));
+
+        byte[] plain = payload(RecordCodec.encode(without));
+        byte[] keyed = payload(RecordCodec.encode(with));
+
+        assertThat(Arrays.copyOf(keyed, plain.length)).as("what a receipt without keys is encoded as, unchanged")
+                .isEqualTo(plain);
+        assertThat(keyed.length).isGreaterThan(plain.length);
+        assertThat(((DataRecord) RecordCodec.decode(RecordCodec.VERSION, plain)).receipt().keys()).isEmpty();
+        assertThat(RecordCodec.decode(RecordCodec.VERSION, keyed)).isEqualTo(with);
+        byte[] cut = Arrays.copyOf(keyed, keyed.length - 1);
+        assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, cut))
+                .isInstanceOf(CorruptRecordException.class);
+    }
+
+    private static byte[] payload(byte[] frame) {
+        return Arrays.copyOfRange(frame, Encoder.FRAME_HEADER, frame.length);
+    }
+
+    @Test
+    void aReferenceOfAnUnknownKindIsCorrupt() {
+        byte[] frame = RecordCodec.encode(new DataRecord(Transaction.by("importer")
+                .endDate(new EntityId("e-1"), T2).build(), new Receipt(new Basis(2), T2, Map.of(), List.of(), List.of(),
+                "importer", Optional.empty(), Optional.empty(), Optional.empty()), List.of()));
+        byte[] payload = Arrays.copyOfRange(frame, Encoder.FRAME_HEADER, frame.length);
+        // The kind of the reference is the byte that is 1 (an entity) before the text "e-1".
+        byte[] text = "e-1".getBytes(StandardCharsets.UTF_8);
+        int at = indexOf(payload, text) - 5; // the length of the text takes 4 bytes, and the kind 1 before it
+        assertThat(payload[at]).isEqualTo((byte) 1);
+        payload[at] = 9;
+
+        assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, payload))
+                .isInstanceOf(CorruptRecordException.class).hasMessageContaining("reference kind 9");
+    }
+
+    private static int indexOf(byte[] bytes, byte[] part) {
+        for (int i = 0; i + part.length <= bytes.length; i++) {
+            if (Arrays.equals(bytes, i, i + part.length, part, 0, part.length)) {
+                return i;
+            }
+        }
+        throw new AssertionError("The bytes do not hold the text.");
     }
 
     @Test

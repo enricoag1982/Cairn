@@ -6,12 +6,14 @@ import static io.github.enricoag1982.cairn.documents.PayloadFixtures.payload;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.documents.PayloadFixtures.ReferenceDomainStore;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
@@ -163,6 +165,65 @@ class JsonPayloadScenariosTest {
             assertThat(problem.path()).isEqualTo("@write.0");
             assertThat(problem.expected()).contains("the key 'values'");
             assertThat(problem.location()).contains(locationOf(payload, "{ \"target\"", "/writes/0/replace"));
+        });
+    }
+
+    @Test
+    @DisplayName("Scenario: Patching an account by its number in a payload")
+    void patchingAnAccountByItsNumberInAPayload() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        Receipt accounts = reference.replay(ReferenceStories.rd5Accounts(
+                parties.temporaryIds().get(ReferenceStories.BETA), parties.temporaryIds().get(ReferenceStories.ACME)));
+        EntityId a1 = (EntityId) accounts.temporaryIds().get(ReferenceStories.A1);
+        String payload = """
+                {
+                  "cairn": 1,
+                  "principal": "agent:onboarding",
+                  "writes": [
+                    { "patch": { "target": { "entityType": "Account", "key": { "number": "A-1" } },
+                                 "from": "2026-03-15T00:00:00Z", "set": { "balance": 1500 } } }
+                  ]
+                }
+                """;
+
+        TransactionPayload read = PayloadFixtures.read(payload, reference.schema(), reference.storeLookup());
+        CommitResult result = reference.store.commit(read.transaction());
+
+        assertThat(read.transaction().writes()).singleElement().isInstanceOfSatisfying(Write.Patch.class, patch -> {
+            assertThat(patch.target()).isEqualTo(new UniqueKey("Account", "number", Value.of("A-1")));
+            assertThat(((UniqueKey) patch.target()).value()).isInstanceOf(Value.StringValue.class);
+            assertThat(patch.set()).containsOnlyKeys("balance");
+            assertThat(patch.set().get("balance")).isInstanceOf(Value.DecimalValue.class)
+                    .isEqualTo(Value.of(new BigDecimal("1500")));
+        });
+        assertThat(result).isInstanceOf(CommitResult.Committed.class);
+        EntityState state = reference.store.view(Coordinates.effectiveAt(ReferenceStories.on(3, 31))).entity(a1)
+                .orElseThrow();
+        assertThat(state.values()).containsEntry("balance", Value.of(new BigDecimal("1500")));
+    }
+
+    @Test
+    @DisplayName("Scenario: A key with two attributes")
+    void aKeyWithTwoAttributes() {
+        String payload = """
+                {
+                  "cairn": 1,
+                  "principal": "agent:onboarding",
+                  "writes": [
+                    { "patch": { "target": { "entityType": "Account", "key": { "number": "A-1", "currency": "EUR" } },
+                                 "from": "2026-03-15T00:00:00Z", "set": { "balance": 1500 } } }
+                  ]
+                }
+                """;
+
+        PayloadReadResult result = Payloads.readTransaction(payload, reference.schema(), reference.storeLookup());
+
+        assertThat(result).isInstanceOf(PayloadReadResult.Invalid.class);
+        assertThat(((PayloadReadResult.Invalid) result).problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_VALUE);
+            assertThat(problem.path()).isEqualTo("@write.0");
+            assertThat(problem.found()).contains("number, currency");
+            assertThat(problem.location()).contains(locationOf(payload, "\"key\"", "/writes/0/patch/target/key"));
         });
     }
 

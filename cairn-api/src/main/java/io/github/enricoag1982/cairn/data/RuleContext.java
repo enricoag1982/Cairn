@@ -15,16 +15,18 @@ import java.time.Instant;
  * <p>The store records what a rule reads through its context (ADR-0025), and runs the rule again when a transaction
  * changes it. Every read through {@link #view()} and {@link #viewAt(Instant)} counts: an entity or a relationship, with
  * every state that a read returns, what navigation or a traversal finds from an entity by a relationship name, and the
- * entities of an entity type that a read or the start of a query lists, each at the effective time of the view, or
- * across effective time for timelines. A change to any of these at an effective time that the rule read, in the values
- * or in the existence of what was read, runs the rule again for the version whose check read it. So a rule has to read
- * only through its context: what it reads anywhere else, the store cannot see.
+ * entities of an entity type that a read, the start of a query or {@linkplain View#entity(UniqueKey) finding an entity by
+ * a unique key} lists, each at the effective time of the view, or across effective time for timelines. A change to any
+ * of these at an effective time that the rule read, in the values or in the existence of what was read, runs the rule
+ * again for the version whose check read it. So a rule has to read only through its context: what it reads anywhere
+ * else, the store cannot see.
  *
  * <p>Prefer navigating from what the rule checks to listing the entities of a type or reading timelines. A rule that
  * lists a type, or reads a timeline, is reached by every change to any of those entities, at any time, and is run
  * again for all of them; a rule that navigates from what it checks is reached only by changes to what it reaches. A
  * query starts by listing the entities of its start type, so a rule that runs a query is reached by any change to an
- * entity of that type at the instants it read, whatever the query goes on to select.
+ * entity of that type at the instants it read, whatever the query goes on to select. So is a rule that finds an entity
+ * by a unique key: it reads the entities of the key's type.
  *
  * <p>A context belongs to one call of a rule and is not safe for use by several threads. Reporting after the call has
  * returned throws {@link IllegalStateException}, and reads through a view after the call has returned are not recorded.

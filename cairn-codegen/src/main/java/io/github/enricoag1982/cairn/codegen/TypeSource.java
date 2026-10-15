@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.codegen;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -11,7 +12,8 @@ import java.util.stream.Collectors;
 /**
  * Writes the Java source of a trait, an entity type or a relationship type (design D3 of
  * {@code add-java-type-generation}): the interface with its accessors, and, for entity types and relationship types,
- * {@code from}, the snapshot record and the builders.
+ * {@code from}, the snapshot record and the builders; for entity types also a {@code by<Attribute>} method for each unique
+ * attribute, which makes a unique key (design D7 of {@code add-unique-key-references}).
  */
 final class TypeSource {
 
@@ -196,6 +198,7 @@ final class TypeSource {
         if (element.kind() != Element.Kind.TRAIT) {
             writeFrom();
             writeFromInSchema();
+            writeKeys();
             writeFactories();
             writeSnapshot();
             if (relationship) {
@@ -314,6 +317,44 @@ final class TypeSource {
     }
 
     /**
+     * Writes a static {@code by<Attribute>} method for each unique attribute of an entity type, inherited ones included,
+     * which converts the Java value as the builders do and returns the {@code UniqueKey} of the type, the attribute and the
+     * value (ADR-0026). Relationship types have none, because keys name entities.
+     */
+    private void writeKeys() {
+        if (relationship) {
+            return;
+        }
+        Set<String> taken = new HashSet<>();
+        element.attributes().forEach(attribute -> taken.add(attribute(attribute)));
+        for (Attribute attribute : element.attributes()) {
+            if (!attribute.unique()) {
+                continue;
+            }
+            String method = model.names().key(attribute, taken);
+            member();
+            List<String> tags = new ArrayList<>();
+            tags.add("@param value the value of " + Docs.code(attribute.name()));
+            tags.add("@return the unique key of " + a(element.name()) + " that has the value");
+            if (attribute.deprecated()) {
+                tags.add("@deprecated The attribute " + Docs.code(attribute.name())
+                        + " is deprecated in its schema document.");
+            }
+            out.javadoc(doc("Names the entity of " + Docs.code(element.name()) + ", or of a subtype, that has a value of "
+                    + "the unique attribute " + Docs.code(attribute.name()) + ": a reference for a write, which the "
+                    + "store resolves when it commits, and a key for a view to find the entity by.", List.of(), tags));
+            if (attribute.deprecated()) {
+                out.line("@" + ref(Library.DEPRECATED));
+            }
+            out.open("static " + ref(Library.UNIQUE_KEY) + " " + method + "(" + scalar(attribute.valueType())
+                    + " value) {");
+            out.line("return new " + ref(Library.UNIQUE_KEY) + "(TYPE, " + Docs.literal(attribute.name()) + ", "
+                    + ref(Library.VALUE) + ".of(value));");
+            out.close("}");
+        }
+    }
+
+    /**
      * Writes {@code from(state, schema)}, which finds the nearest type that the generated code knows among the state's
      * type and its supertypes in the schema, and reads the state as that type, as {@code from(state)} does for a type
      * that it knows.
@@ -406,8 +447,9 @@ final class TypeSource {
     private void writeTargetFactory(String method, String builder, String verb) {
         member();
         out.javadoc(doc("Starts a write that " + verb + " " + a(element.name()) + ".",
-                "@param target the " + thing() + ", by its ID or by the temporary ID of one that the transaction "
-                        + "creates earlier",
+                "@param target the " + thing() + ", by its ID"
+                        + (relationship ? "" : ", by a unique key, such as one that a <code>by</code> method makes,")
+                        + " or by the temporary ID of one that the transaction creates earlier",
                 "@return the builder"));
         out.open("static " + nested(element, builder) + " " + method + "(" + ref(Library.REF) + " target) {");
         out.line("return new " + nested(element, builder) + "(target);");
@@ -419,10 +461,10 @@ final class TypeSource {
         Element targetType = model.element(element.target());
         member();
         out.javadoc(doc("Starts a write that relates two entities with " + a(element.name()) + ".",
-                "@param source the source, by its ID or by the temporary ID of an entity that the transaction creates "
-                        + "earlier",
-                "@param target the target, by its ID or by the temporary ID of an entity that the transaction creates "
-                        + "earlier",
+                "@param source the source, by its ID, by a unique key or by the temporary ID of an entity that the "
+                        + "transaction creates earlier",
+                "@param target the target, by its ID, by a unique key or by the temporary ID of an entity that the "
+                        + "transaction creates earlier",
                 "@return the builder"));
         out.open("static " + nested(element, "Relate") + " relate(" + ref(Library.REF) + " source, "
                 + ref(Library.REF) + " target) {");

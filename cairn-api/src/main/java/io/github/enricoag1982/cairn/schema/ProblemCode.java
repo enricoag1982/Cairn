@@ -210,6 +210,19 @@ public enum ProblemCode {
     UNKNOWN_TEMPORARY_ID("A temporary ID is valid only in the transaction that creates the entity or relationship, "
             + "and only in writes after the one that creates it. Create it with that temporary ID earlier in the same "
             + "transaction, or refer to it by its ID."),
+    /** A unique key does not name an entity type, a unique attribute of it, or a value that fits the attribute. */
+    INVALID_UNIQUE_KEY("A unique key names an entity by an entity type, an attribute of that type that is unique, and a "
+            + "value that fits the attribute's value type; names and aliases are compared without regard to case. A key "
+            + "is invalid if the schema has no such entity type, the type has no such attribute, the attribute is not "
+            + "unique, or the value does not fit. The expected details list the unique attributes of the type, where it "
+            + "has some. Correct the key, or name the entity by its ID. An agent tool reports it too, at "
+            + "@arguments.key, for a key that its call gives."),
+    /** No entity has the value of a unique key at the start of the write's period. */
+    UNIQUE_KEY_NOT_FOUND("A unique key names no entity: no entity of the key's type, or of one of its subtypes, has the "
+            + "value at the start of the write's effective period, as the store held it before the transaction. A "
+            + "value can move from one entity to another over time, and a key does not name what the same transaction "
+            + "creates or changes. Correct the key or the period of the write, create the entity first, or name an entity "
+            + "that the transaction creates by its temporary ID."),
     /** Two writes of a transaction create entities or relationships with the same temporary ID. */
     DUPLICATE_TEMPORARY_ID("A temporary ID names one entity or relationship in a transaction; entities and "
             + "relationships share the same temporary IDs. Give each created entity or relationship its own "

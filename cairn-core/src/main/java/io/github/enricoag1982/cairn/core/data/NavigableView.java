@@ -2,16 +2,19 @@ package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.query.QueryRunner;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.Step;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.TypeId;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -83,6 +86,31 @@ abstract class NavigableView implements View {
      * @param acrossTime   whether it is returned by a navigation across effective time
      */
     void navigated(RelationshipState relationship, boolean acrossTime) {
+    }
+
+    /**
+     * Finds an entity by a unique key by listing the entities of the key's type at the view's effective time and taking
+     * the one that has the value (ADR-0026, design D3 of {@code add-unique-key-references}), so a view that records the
+     * reads of a rule records this as it records listing the type: the type key and the entity key of each entity
+     * listed.
+     */
+    @Override
+    public Optional<EntityState> entity(UniqueKey key) {
+        Objects.requireNonNull(key, "key");
+        return switch (UniqueKeys.check(schema(), schemaName(), key)) {
+            case UniqueKeys.Invalid invalid -> throw new IllegalArgumentException(invalid.message());
+            case UniqueKeys.Valid valid -> findByKey(valid);
+        };
+    }
+
+    private Optional<EntityState> findByKey(UniqueKeys.Valid valid) {
+        for (EntityState state : entities(valid.type().name())) {
+            Value held = state.values().get(valid.attribute().name());
+            if (held != null && Conversions.same(held, valid.value())) {
+                return Optional.of(state);
+            }
+        }
+        return Optional.empty();
     }
 
     @Override

@@ -110,6 +110,50 @@ final class Arguments {
         return Optional.of(node.stringValue());
     }
 
+    /**
+     * An optional argument that is a JSON object, as JSON text; empty, with a problem, if it is of another kind.
+     *
+     * @param name     the name of the argument
+     * @param expected what the object is, for the problem
+     */
+    Optional<String> optionalObject(String name, String expected) {
+        JsonNode node = values.get(name);
+        if (node == null || node.isNull()) {
+            return Optional.empty();
+        }
+        if (!(node instanceof ObjectNode)) {
+            problems.add(wrongKind(name, expected, node));
+            return Optional.empty();
+        }
+        return Optional.of(Json.render(node));
+    }
+
+    /**
+     * Checks that a call names an entity by exactly one of two arguments, an ID and a unique key: when no problem has
+     * been found so far, a call with neither or with both has a problem at the path of the ID.
+     *
+     * @param id  the name of the argument that holds the ID
+     * @param key the name of the argument that holds the key
+     * @param hasId  whether the call gave the ID
+     * @param hasKey whether the call gave the key
+     */
+    void exactlyOne(String id, boolean hasId, String key, boolean hasKey) {
+        if (!valid() || hasId != hasKey) {
+            return;
+        }
+        String hint = "Use '" + id + "' for the ID of an entity, or '" + key + "' for a unique key such as "
+                + "{\"entityType\": \"Account\", \"key\": {\"number\": \"A-1\"}}.";
+        if (hasId) {
+            problems.add(new Problem(ProblemCode.INVALID_VALUE, "@arguments." + id,
+                    "The call gives both '" + id + "' and '" + key + "', but names the entity in one way.",
+                    Optional.of("exactly one of " + id + " and " + key), Optional.of("both"), Optional.of(hint)));
+        } else {
+            problems.add(new Problem(ProblemCode.MISSING_KEY, "@arguments." + id,
+                    "The call must name the entity by '" + id + "' or by '" + key + "'.",
+                    Optional.of("exactly one of " + id + " and " + key), Optional.empty(), Optional.of(hint)));
+        }
+    }
+
     /** A required argument that is a whole number of at least 0; null, with a problem, if it is not. */
     Integer count(String name) {
         JsonNode node = values.get(name);

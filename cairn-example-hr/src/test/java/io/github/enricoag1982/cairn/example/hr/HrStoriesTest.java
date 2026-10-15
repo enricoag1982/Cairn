@@ -61,8 +61,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -562,10 +560,13 @@ class HrStoriesTest {
         String employmentValues = tools.call("cairn_json_schema", arguments("kind", "values", "type", "Employment"));
         assertThat(employmentValues).contains("employeeNumber").contains("permanent").contains("fixed-term");
 
-        // It finds the IDs of the unit, job, location and employer by their codes and names, and writes the payload.
-        String payload = Brightwater.hr13HanaPayload(
-                lookup(tools, "OrgUnit", "code", "PLT"), lookup(tools, "Job", "code", "SWE"),
-                lookup(tools, "Location", "name", "Berlin"), lookup(tools, "LegalEntity", "name", "Brightwater GmbH"));
+        // It names the unit, job, location and employer by the codes and names it knows, in unique keys: it runs no
+        // query to find their IDs, and the store resolves the keys when it commits.
+        String payload = Brightwater.hr13HanaPayload();
+        assertThat(payload).contains("\"key\": { \"code\": \"PLT\" }").contains("\"key\": { \"code\": \"SWE\" }")
+                .contains("\"key\": { \"name\": \"Berlin\" }")
+                .contains("\"key\": { \"name\": \"Brightwater GmbH\" }");
+        assertThat(payload).as("the payload holds no ID").doesNotContainPattern("[0-9a-f]{8}-[0-9a-f]{4}-");
         assertThat(tools.call("cairn_dry_run", arguments("payload", payload))).contains("\"outcome\":\"wouldCommit\"");
 
         // The commit waits: nothing is written until a person decides.
@@ -606,19 +607,14 @@ class HrStoriesTest {
         assertThat(august1.entity(position).map(state -> Position.from(state).title())).contains("Software Engineer");
         assertThat(store.transactions().getLast().principal()).isEqualTo(Brightwater.HR_ASSISTANT);
         assertRecordedAt(store.transactions().getLast().transactionTime(), on(8, 1));
-    }
 
-    /** Looks an entity up by an attribute through {@code cairn_query}, as an agent would, and returns its ID. */
-    private static String lookup(AgentTools tools, String type, String attribute, String value) {
-        String query = """
-                { "from": { "type": "%s", "as": "x" },
-                  "steps": [ { "where": { "compare": { "left": { "attribute": "%s", "of": "x" }, "op": "eq",
-                                                       "right": { "value": "%s" } } } } ] }
-                """.formatted(type, attribute, value);
-        String answer = tools.call("cairn_query", arguments("query", query, "effectiveAt", "2026-08-01T00:00:00Z"));
-        Matcher id = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(answer);
-        assertThat(id.find()).as("the query for %s %s finds it: %s", type, value, answer).isTrue();
-        return id.group(1);
+        // The agent reads the new employment by its number, which it knows, in a key, without looking for its ID.
+        String byNumber = tools.call("cairn_read_entity", "{\"key\": {\"entityType\": \"Employment\", \"key\": "
+                + "{\"employeeNumber\": \"E-008\"}}, \"effectiveAt\": \"2026-08-01T00:00:00Z\"}");
+        assertThat(byNumber).contains("\"id\":\"" + employment.value() + "\"").contains("\"annualSalary\":72000");
+        assertThat(tools.call("cairn_read_entity", "{\"key\": {\"entityType\": \"Employment\", \"key\": "
+                + "{\"employeeNumber\": \"E-008\"}}, \"effectiveAt\": \"2026-07-31T00:00:00Z\"}"))
+                .as("before Hana's first day, E-008 names no employment").contains("\"result\":null");
     }
 
     /** Hana and her position, as {@code cairn_query} answers. */
