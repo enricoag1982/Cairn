@@ -8,7 +8,7 @@ Defines checks: expressions in the Common Expression Language that entity types 
 
 ### Requirement: Checks on types
 
-Entity types and relationship types MAY declare checks, each with a name, an expression in the Common Expression Language (CEL) and an optional message. A check name SHALL follow the rules for rule names, and an expression SHALL NOT be blank and SHALL have at most 4,000 characters. A check SHALL apply to the type that declares it and to its subtypes, and a type MUST NOT declare a check whose name it or one of its supertypes already declares. The schema SHALL report, for each type, the checks it declares and those it inherits.
+Entity types and relationship types MAY declare checks, each with a name, an expression in the Common Expression Language (CEL) and an optional message. A check name SHALL follow the rules for rule names, and an expression SHALL NOT be blank and SHALL have at most 4,000 characters. A check SHALL apply to the type that declares it and to its subtypes, and a type MUST NOT declare a check whose name it or one of its supertypes already uses for a check, an attribute or a rule. The schema SHALL report, for each type, the checks it declares and those it inherits.
 
 #### Scenario: A check on Account
 
@@ -17,13 +17,18 @@ Entity types and relationship types MAY declare checks, each with a name, an exp
 
 #### Scenario: A check inherited from a supertype
 
-- **WHEN** Party declares the check `name-not-blank` with the expression `size(self.name) > 0`, and the schema is queried for the checks of Organization
-- **THEN** the answer contains `name-not-blank`, inherited from Party
+- **WHEN** Party declares the check `name-not-empty` with the expression `size(self.name) > 0`, and the schema is queried for the checks of Organization
+- **THEN** the answer contains `name-not-empty`, inherited from Party
 
 #### Scenario: A check declared twice in a hierarchy
 
-- **WHEN** Party and its subtype Organization both declare the check `name-not-blank`
-- **THEN** validation fails with a problem located at `Organization.name-not-blank`
+- **WHEN** Party and its subtype Organization both declare the check `name-not-empty`
+- **THEN** validation fails with a problem located at `Organization.name-not-empty`
+
+#### Scenario: A check named like an attribute
+
+- **WHEN** Account declares a check named `balance`
+- **THEN** validation fails with a problem located at `Account.balance`, which says the name is taken by an attribute
 
 #### Scenario: An invalid check name
 
@@ -51,12 +56,12 @@ THE SYSTEM SHALL compile every check of a definition when it is validated, plann
 
 ### Requirement: Checks run at commit
 
-WHEN a transaction writes or a composition cascade changes a version of an entity or relationship, THE SYSTEM SHALL run the checks that apply to its type on every segment of its timeline that the transaction writes, with that segment's values, together with the declarative constraints and before Java rules. A check whose expression is false SHALL be a problem with the code `CHECK_VIOLATED`, the check's name and its message; a check whose evaluation fails, for example by reading an attribute without a value without testing it with `has`, or by exceeding the cost limit, SHALL be a problem with the code `CHECK_FAILED`, the check's name and the error. Either SHALL reject the transaction. Checks SHALL NOT read anything but the version they check, and SHALL NOT cause re-checks. A store whose schema declares checks, opened without an expression language, SHALL reject a write to a type that a check applies to with a problem of the code `CHECKS_UNAVAILABLE`, and SHALL accept other writes.
+WHEN a transaction writes or a composition cascade changes a version of an entity or relationship, THE SYSTEM SHALL run the checks that apply to its type on every segment of its timeline that the transaction writes, with that segment's values, together with the declarative constraints and before Java rules. A check whose expression is false SHALL be a problem with the code `CHECK_VIOLATED`, the check's name and its message; a check whose evaluation fails, for example by reading an attribute without a value without testing it with `has`, or by taking more than 10,000 evaluation steps, SHALL be a problem with the code `CHECK_FAILED`, the check's name and the error. Either SHALL reject the transaction. Checks SHALL NOT read anything but the version they check, and SHALL NOT cause re-checks. A store whose schema declares checks, opened without an expression language, SHALL reject a write to a type that a check applies to with a problem of the code `CHECKS_UNAVAILABLE`, and SHALL accept other writes. A recorded check that the store's expression language cannot compile when the store is opened SHALL make every write to the types it applies to fail with `CHECK_FAILED`.
 
 #### Scenario: A violated check
 
 - **WHEN** Account declares the check `balance-not-negative` with the message "A balance cannot be negative.", the transactions of RD-5 are committed, and a transaction sets A-1's balance to -5 from 1 April
-- **THEN** the transaction is rejected with a problem of the code `CHECK_VIOLATED` at the write, which names `balance-not-negative` and has its message
+- **THEN** the transaction is rejected with a problem of the code `CHECK_VIOLATED` located at A-1, which names `balance-not-negative` and has its message
 
 #### Scenario: A check that holds
 

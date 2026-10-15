@@ -80,4 +80,7 @@ Chosen option: "CEL checks over one version's values, compiled at registration a
   - `cairn-cel` runs on the class path only: CEL's jars have no module names and split packages, so they cannot be named modules; the engine's modules on the module path still find it.
   - CEL for Java has no runtime cost tracking, so the cost limit counts evaluation steps, at most 10,000.
   - `self` is declared as a type with one typed field per attribute, so type errors are found at registration too.
+  - A store opened without the module rejects writes to every type a check applies to, subtypes included, and a recorded check that the module cannot compile any more makes those writes fail with `CHECK_FAILED`.
+  - A check name must not be the name of an attribute or a rule of its type, because problems name all three by `Type.name`.
+  - Schema records of the commit log and snapshot files keep checks in an optional trailing section of format version 1, as receipts keep unique keys, so records without checks read as before; nothing released reads version 1 without it.
 - Common Expression Language: <https://cel.dev/>. CEL for Java: <https://github.com/google/cel-java>. Kubernetes validation rules in CEL, which read `self` the same way: <https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules>.

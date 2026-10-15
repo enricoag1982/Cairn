@@ -31,6 +31,8 @@ ADR-0018 left a third level of validation for later: checks within one entity, w
 
 - `schema-documents`: the `checks` of a type definition.
 - `schema-evolution`: adding, changing and removing checks.
+- `type-model`: paths of problems about checks.
+- `agent-tools`: the agent server runs checks.
 
 ## Impact
 

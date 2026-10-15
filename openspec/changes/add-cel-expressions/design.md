@@ -58,7 +58,7 @@ The subproject `cairn-cel` depends on `cairn-api` (and on `cairn-core` only in t
 How `self` is declared:
 
 - `self` is a struct type, `cairn.Self`, with one field per attribute of the type and its CEL type, through a type provider, without protobuf messages. The checker finds unknown attributes and type errors at registration, with their positions; at run time `self` is a map of the values that are present, so `has(self.x)` works and reading an absent one is an evaluation error.
-- The result type must be `bool`.
+- The result type must be `bool` or `dyn`; a `dyn` result that is not a boolean at run time is an evaluation error.
 - Mixed `int` and `double` operands are rejected, as CEL does by default: decimals compare with `0.0`, not `0`.
 
 Values passed in:
@@ -91,7 +91,7 @@ The breaking changes are:
 
 - adding a check to a type that the stored schema has;
 - changing a check's expression;
-- changing the type a check is declared on, in a way that adds it to existing types.
+- moving a check to another type, to a supertype or a subtype alike, which counts as adding it to the type that receives it.
 
 The compatible changes are removing a check, and adding, changing or removing its message.
 
@@ -105,6 +105,10 @@ Reading locates `INVALID_CHECK` problems at the check's `expression` key, adding
 
 - **HR.** The HR schema document declares on `LeaveRequest` the check `leave-dates-in-order` with `self.lastDay >= self.firstDay` and the message "The last day is before the first day.", and the Java rule is removed. Its tests expect `CHECK_VIOLATED` with that name. `cairn-example-hr` uses `cairn-cel` at test runtime.
 - **Reference domain.** Scenario tests use the test-only check `balance-not-negative` on Account, `self.balance >= 0.0`, added to the model in the tests that need it. The reference domain page lists it with the test-only rules.
+
+### D8. Checks in durable stores
+
+The schema records of the commit log and snapshot files, and a RocksDB store's schema keys, keep each type's checks in an optional trailing section, written only when some type declares one, as receipts keep their unique keys. Format version 1 stays: records without checks are read as before, and nothing released reads version 1 without the section. A store opened with a language compiles the recorded checks again; one that it cannot compile makes writes to its types fail with `CHECK_FAILED`.
 
 ## Risks / Trade-offs
 

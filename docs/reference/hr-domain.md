@@ -48,7 +48,11 @@ Person <--EmploymentOf-- Employment --Fills------> Position --BelongsTo--> OrgUn
 | `decided-by-manager` | 1 | `DecidedBy` | The deciding employment is not the requester, and manages the requester's unit, or a unit above it, on the request's first day. | `not-a-manager`, `own-request` |
 | `vacation-within-entitlement` | 1 | `LeaveRequest` | An employment's approved vacation days, of requests whose first days are in one calendar year, add up to at most 25. | `over-entitlement` |
 
-`LeaveRequest` also declares the *check* `leave-dates-in-order`, `self.lastDay >= self.firstDay`, with the message "The last day is before the first day." ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)); a request that breaks it is rejected with `CHECK_VIOLATED`.
+Checks ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)); a request that breaks one is rejected with `CHECK_VIOLATED`:
+
+| Check | Type | Expression | Message |
+| --- | --- | --- | --- |
+| `leave-dates-in-order` | `LeaveRequest` | `self.lastDay >= self.firstDay` | The last day is before the first day. |
 
 ## Organization and people
 
