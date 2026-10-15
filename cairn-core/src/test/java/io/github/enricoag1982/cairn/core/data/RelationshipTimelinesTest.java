@@ -59,7 +59,7 @@ class RelationshipTimelinesTest {
     }
 
     private List<Timeline> history(RelationshipId id, Basis... bases) {
-        StoredRelationship stored = recorder.relationships.get(id);
+        Recorder.Stored stored = recorder.relationship(id);
         return Arrays.stream(bases).map(stored::at).toList();
     }
 
@@ -75,7 +75,7 @@ class RelationshipTimelinesTest {
                 .relate(OWNS, "Owns", acme, beta, from(2, 1), values("share", 60)).build());
         RelationshipId id = (RelationshipId) preparation.temporaryIds().get(OWNS);
 
-        StoredRelationship stored = recorder.relationships.get(id);
+        Recorder.Stored stored = recorder.relationship(id);
 
         RelationshipType owns = recorder.registry.current().relationshipType("Owns").orElseThrow();
         assertThat(stored.type()).isEqualTo(owns.id());
@@ -122,7 +122,7 @@ class RelationshipTimelinesTest {
             assertThat(segment.recordedAt()).isEqualTo(on(5, 2));
             assertThat(segment.recordedBasis()).isEqualTo(second);
         });
-        assertThat(recorder.relationships.get(id).at(Basis.NONE).isEmpty()).isTrue();
+        assertThat(recorder.relationship(id).at(Basis.NONE).isEmpty()).isTrue();
     }
 
     @Test
@@ -133,7 +133,7 @@ class RelationshipTimelinesTest {
         Basis second = recorder.commit(Transaction.by("importer")
                 .patch(id, from(4, 1), values("share", 55)).build()).commit().basis();
 
-        List<Segment> segments = recorder.relationships.get(id).latest().segments();
+        List<Segment> segments = recorder.relationship(id).latest().segments();
 
         assertThat(segments).extracting(Segment::from, Segment::end, Segment::recordedBasis).containsExactly(
                 tuple(on(2, 1), on(4, 1), first), tuple(on(4, 1), Segment.OPEN, second));
@@ -151,7 +151,7 @@ class RelationshipTimelinesTest {
 
         recorder.commit(Transaction.by("importer").replace(id, from(4, 1), values()).build());
 
-        List<Segment> segments = recorder.relationships.get(id).latest().segments();
+        List<Segment> segments = recorder.relationship(id).latest().segments();
         assertThat(segments).hasSize(2);
         assertThat(segments.get(0).values()).hasSize(1);
         assertThat(segments.get(1).values()).isEmpty();
@@ -165,7 +165,7 @@ class RelationshipTimelinesTest {
 
         recorder.commit(Transaction.by("importer").endDate(id, on(6, 1)).build());
 
-        StoredRelationship stored = recorder.relationships.get(id);
+        Recorder.Stored stored = recorder.relationship(id);
         assertThat(stored.latest().lifetime()).contains(new Timeline.Lifetime(on(2, 1), on(6, 1)));
         assertThat(stored.at(first).lifetime()).contains(new Timeline.Lifetime(on(2, 1), Segment.OPEN));
     }
@@ -180,7 +180,7 @@ class RelationshipTimelinesTest {
                 .patch(id, from(2, 1), values("share", 60)).build());
 
         assertThat(preparation.changes()).isEmpty();
-        assertThat(recorder.relationships.get(id).latestBasis()).isEqualTo(first);
+        assertThat(recorder.relationship(id).latestBasis()).isEqualTo(first);
     }
 
     @Test
@@ -199,11 +199,11 @@ class RelationshipTimelinesTest {
 
         assertThat(Recorder.changed(ending)).containsExactly(alice.value(), hasAddress.value(), home.value());
         assertThat(ending.changes()).allSatisfy(change -> assertThat(change.created()).isFalse());
-        assertThat(recorder.entities.get(home).latest().lifetime())
+        assertThat(recorder.entity(home).latest().lifetime())
                 .contains(new Timeline.Lifetime(on(1, 1), on(6, 1)));
-        assertThat(recorder.relationships.get(hasAddress).latest().lifetime())
+        assertThat(recorder.relationship(hasAddress).latest().lifetime())
                 .contains(new Timeline.Lifetime(on(1, 1), on(6, 1)));
-        assertThat(recorder.entities.get(alice).latest().lifetime())
+        assertThat(recorder.entity(alice).latest().lifetime())
                 .contains(new Timeline.Lifetime(on(1, 1), on(6, 1)));
     }
 

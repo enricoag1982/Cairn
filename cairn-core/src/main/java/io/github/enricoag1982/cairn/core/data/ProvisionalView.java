@@ -21,8 +21,8 @@ import java.util.TreeMap;
 
 /**
  * The view that rules read through (design D3 of {@code add-entity-rules}): the state a transaction would produce. It
- * takes the latest committed timelines of the store, of entities and of relationships, and overlays the working
- * timelines of the transaction, with the schema the transaction would produce. Its basis is the prospective basis of
+ * takes the latest committed timelines of the store's {@link Ledger}, of entities and of relationships, and overlays the
+ * working timelines of the transaction, with the schema the transaction would produce. Its basis is the prospective basis of
  * the transaction, and the working segments carry it as their recorded basis.
  *
  * <p>The view is read-only and valid only while the rules of the transaction run: in a dry run, or if the commit is
@@ -62,15 +62,14 @@ final class ProvisionalView extends NavigableView {
      *
      * @param basis                the basis the transaction would get
      * @param index                the schema the transaction would produce
-     * @param stored               the entities of the store, of which the latest timelines are the committed state
+     * @param ledger               the entities and relationships of the store, of which the latest timelines are the
+     *                             committed state
      * @param overlay              the entities the transaction creates or changes, with the timelines it would give
      *                             them
-     * @param storedRelationships  the relationships of the store, of which the latest timelines are the committed state
      * @param relationshipOverlay  the relationships the transaction creates or changes, with the timelines it would
      *                             give them
      */
-    record Source(Basis basis, SchemaIndex index, Map<EntityId, StoredEntity> stored, Map<EntityId, Overlaid> overlay,
-            Map<RelationshipId, StoredRelationship> storedRelationships,
+    record Source(Basis basis, SchemaIndex index, Ledger ledger, Map<EntityId, Overlaid> overlay,
             Map<RelationshipId, OverlaidRelationship> relationshipOverlay) {
 
         /** The view of the transaction's state at an effective time. It records no reads. */
@@ -94,8 +93,7 @@ final class ProvisionalView extends NavigableView {
             if (overlaid != null) {
                 return Optional.of(overlaid);
             }
-            StoredEntity entity = stored.get(id);
-            return entity == null ? Optional.empty() : Optional.of(new Overlaid(entity.type(), entity.latest()));
+            return ledger.entity(id).map(entity -> new Overlaid(entity.type(), entity.timeline()));
         }
 
         private Optional<OverlaidRelationship> findRelationship(RelationshipId id) {
@@ -103,7 +101,7 @@ final class ProvisionalView extends NavigableView {
             if (overlaid != null) {
                 return Optional.of(overlaid);
             }
-            return Optional.ofNullable(storedRelationships.get(id)).map(ProvisionalView::committed);
+            return ledger.relationship(id).map(ProvisionalView::committed);
         }
     }
 
@@ -162,9 +160,9 @@ final class ProvisionalView extends NavigableView {
         read(new ReadKey.OfType(type.id()));
         Set<TypeId> types = source.index().typeAndSubtypes(type);
         Map<EntityId, Overlaid> matching = new TreeMap<>();
-        for (StoredEntity entity : source.stored().values()) {
-            if (types.contains(entity.type()) && !source.overlay().containsKey(entity.id())) {
-                matching.put(entity.id(), new Overlaid(entity.type(), entity.latest()));
+        for (Held entity : source.ledger().entities(types, source.basis())) {
+            if (!source.overlay().containsKey(entity.entityId())) {
+                matching.put(entity.entityId(), new Overlaid(entity.type(), entity.timeline()));
             }
         }
         source.overlay().forEach((id, entity) -> {
@@ -256,29 +254,39 @@ final class ProvisionalView extends NavigableView {
     }
 
     @Override
-    List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end) {
+    List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end, Ledger.Direction direction) {
         Map<RelationshipId, OverlaidRelationship> matching = new TreeMap<>();
-        for (StoredRelationship relationship : source.storedRelationships().values()) {
-            if (!source.relationshipOverlay().containsKey(relationship.id())) {
-                matching.put(relationship.id(), committed(relationship));
+        for (Held relationship : source.ledger().relationships(end, types, direction, source.basis())) {
+            if (!source.relationshipOverlay().containsKey(relationship.relationshipId())) {
+                matching.put(relationship.relationshipId(), committed(relationship));
             }
         }
-        matching.putAll(source.relationshipOverlay());
+        source.relationshipOverlay().forEach((id, relationship) -> {
+            if (types.contains(relationship.type()) && at(relationship, end, direction)) {
+                matching.put(id, relationship);
+            }
+        });
         List<RelationshipState> states = new ArrayList<>();
         matching.forEach((id, relationship) -> {
-            if (types.contains(relationship.type())
-                    && (relationship.source().equals(end) || relationship.target().equals(end))) {
-                for (Segment segment : relationship.timeline().segments()) {
-                    relationshipState(id, relationship, Optional.of(segment)).ifPresent(states::add);
-                }
+            for (Segment segment : relationship.timeline().segments()) {
+                relationshipState(id, relationship, Optional.of(segment)).ifPresent(states::add);
             }
         });
         return states;
     }
 
-    private static OverlaidRelationship committed(StoredRelationship relationship) {
+    /** Tells whether an entity is at the end of a relationship that a direction asks for. */
+    private static boolean at(OverlaidRelationship relationship, EntityId end, Ledger.Direction direction) {
+        return switch (direction) {
+            case FORWARD -> relationship.source().equals(end);
+            case BACKWARD -> relationship.target().equals(end);
+            case BOTH -> relationship.source().equals(end) || relationship.target().equals(end);
+        };
+    }
+
+    private static OverlaidRelationship committed(Held relationship) {
         return new OverlaidRelationship(relationship.type(), relationship.source(), relationship.target(),
-                relationship.latest());
+                relationship.timeline());
     }
 
     private Optional<RelationshipState> relationshipState(RelationshipId id, OverlaidRelationship relationship,

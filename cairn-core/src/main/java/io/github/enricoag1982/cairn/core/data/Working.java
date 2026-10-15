@@ -30,7 +30,7 @@ final class Working {
     final EntityId target;
     final boolean created;
     /** What the store holds of it; null if the transaction creates it. */
-    final Stored<?> stored;
+    final Held stored;
     final Timeline before;
     Timeline timeline;
     /**
@@ -46,7 +46,7 @@ final class Working {
     boolean linksUnresolved;
 
     private Working(Id id, String path, EntityType entityType, RelationshipType relationshipType, EntityId source,
-            EntityId target, boolean created, Stored<?> stored, Timeline before, Timeline timeline) {
+            EntityId target, boolean created, Held stored, Timeline before, Timeline timeline) {
         this.id = id;
         this.path = path;
         this.entityType = entityType;
@@ -71,14 +71,14 @@ final class Working {
     }
 
     /** An entity of the store; its type is null if the transaction's schema does not have it. */
-    static Working existingEntity(StoredEntity entity, EntityType type) {
-        Timeline latest = entity.latest();
+    static Working existingEntity(Held entity, EntityType type) {
+        Timeline latest = entity.timeline();
         return new Working(entity.id(), entity.id().value(), type, null, null, null, false, entity, latest, latest);
     }
 
     /** A relationship of the store; its type is null if the transaction's schema does not have it. */
-    static Working existingRelationship(StoredRelationship relationship, RelationshipType type) {
-        Timeline latest = relationship.latest();
+    static Working existingRelationship(Held relationship, RelationshipType type) {
+        Timeline latest = relationship.timeline();
         return new Working(relationship.id(), relationship.id().value(), null, type, relationship.source(),
                 relationship.target(), false, relationship, latest, latest);
     }

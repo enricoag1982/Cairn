@@ -25,6 +25,15 @@ final class EffectCodec {
 
     static void writeSegment(Encoder out, SegmentData segment) {
         out.writeInstant(segment.from());
+        writeSegmentBody(out, segment);
+    }
+
+    /**
+     * Writes what follows the start of a segment: the end, the transaction that recorded the values, and the values. The
+     * key-value ledger keeps the start in the key of a row and the rest in its value (ADR-0027), so that segments are
+     * encoded once.
+     */
+    static void writeSegmentBody(Encoder out, SegmentData segment) {
         out.writeInstant(segment.end());
         out.writeInstant(segment.recordedAt());
         out.writeLong(segment.recordedBasis().value());
@@ -39,6 +48,11 @@ final class EffectCodec {
 
     static SegmentData readSegment(Decoder in) {
         Instant from = in.readInstant();
+        return readSegmentBody(in, from);
+    }
+
+    /** Reads what {@link #writeSegmentBody} wrote, for a segment that starts at an instant. */
+    static SegmentData readSegmentBody(Decoder in, Instant from) {
         Instant end = in.readInstant();
         Instant recordedAt = in.readInstant();
         Basis recordedBasis = new Basis(in.readLong());

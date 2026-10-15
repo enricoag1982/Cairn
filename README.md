@@ -7,7 +7,7 @@ You, or your AI agents, define typed entities and relationships, with inheritanc
 The API hides the storage implementation: the same behavior in memory or in a key-value store on disk.
 
 > [!NOTE]
-> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which runs Java rules at commit and again when what they read changes, are built; so are transaction payloads and JSON results, tools that serve a store to AI agents over the Model Context Protocol, Java types generated from schema documents with a Gradle plugin, stores kept on disk that recover after a crash, queries with aggregation, and purges for legal erasure; a key-value store is not. The core design is recorded in accepted decision records.
+> **Status:** early. The schema API (defining, validating, planning, registering and evolving types), schema documents, and an in-memory store for entities and relationships with history on two time axes, which runs Java rules at commit and again when what they read changes, are built; so are transaction payloads and JSON results, tools that serve a store to AI agents over the Model Context Protocol, Java types generated from schema documents with a Gradle plugin, stores kept on disk that recover after a crash, queries with aggregation, and purges for legal erasure; the engine keeps its data in an ordered key-value store in memory, and one on disk is not built yet. The core design is recorded in accepted decision records.
 
 ## Ideas in one page
 

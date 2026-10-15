@@ -74,3 +74,4 @@ Every storage implementation runs the full conformance suite in CI.
 ## More Information
 
 - Prior art for the key layout: Datomic's four indexes. An LSM tree, as in RocksDB, already keeps recent data in memory and older data on disk.
+- [ADR-0027](0027-encode-bitemporal-data-as-keys-over-an-ordered-key-value-interface.md) lays out the keys and replaces the snapshot at a version: values carry their bases instead. The schema, transaction records and idempotency keys stay outside the interface until the RocksDB change. This decision stays in force for the rest.

@@ -56,8 +56,12 @@ final class Integrity {
 
     private final SchemaIndex index;
     private final Map<Id, Working> working;
-    private final Map<EntityId, StoredEntity> storedEntities;
+    private final Ledger ledger;
+    private final Set<RelationshipId> excluded;
+    /** The relationships at each end that the transaction touches, then, once loaded, those of the store. */
     private final Map<EntityId, List<Live>> byEnd = new HashMap<>();
+    /** The ends whose relationships in the store were loaded into {@link #byEnd}. */
+    private final Set<EntityId> loaded = new HashSet<>();
     private final Map<RelationshipId, Live> byId = new HashMap<>();
     /** The relationships whose own problems were reported, so that a pair of duplicates is reported once. */
     private final Set<RelationshipId> processed = new HashSet<>();
@@ -65,31 +69,59 @@ final class Integrity {
     private final Set<RelationshipId> reportedOutliving = new HashSet<>();
 
     /**
-     * Collects the relationships of the state the transaction would produce.
+     * Prepares to check the relationships of the state the transaction would produce. The relationships that the
+     * transaction touches are known at once; those of the store are read through the index of ends, for the entities
+     * that are asked about, and only for them.
      *
-     * @param index               the schema of the transaction
-     * @param working             the entities and relationships that the transaction touches
-     * @param storedEntities      the entities of the store
-     * @param storedRelationships the relationships of the store
+     * @param index    the schema of the transaction
+     * @param working  the entities and relationships that the transaction touches
+     * @param ledger   the entities and relationships of the store
+     * @param excluded relationships of the store to leave out as if they did not exist, which a purge removes
      */
-    Integrity(SchemaIndex index, Map<Id, Working> working, Map<EntityId, StoredEntity> storedEntities,
-            Map<RelationshipId, StoredRelationship> storedRelationships) {
+    Integrity(SchemaIndex index, Map<Id, Working> working, Ledger ledger, Set<RelationshipId> excluded) {
         this.index = index;
         this.working = working;
-        this.storedEntities = storedEntities;
+        this.ledger = ledger;
+        this.excluded = excluded;
         for (Working relationship : working.values()) {
             if (relationship.isRelationship() && !relationship.failed()) {
                 add(new Live((RelationshipId) relationship.id, relationship.path, relationship.relationshipType,
                         relationship.source, relationship.target, relationship.timeline, relationship.before, true));
             }
         }
-        for (StoredRelationship relationship : storedRelationships.values()) {
-            if (!working.containsKey(relationship.id())) {
-                index.relationshipType(relationship.type()).ifPresent(type -> add(new Live(relationship.id(),
-                        relationship.id().value(), type, relationship.source(), relationship.target(),
-                        relationship.latest(), relationship.latest(), false)));
+    }
+
+    /**
+     * The relationships that have an entity at an end, in the state the transaction would produce: those the transaction
+     * touches in the order of the first touch, then those of the store that it does not touch, of types that the schema
+     * has, in the order of their IDs.
+     */
+    private List<Live> relationshipsAt(EntityId end) {
+        List<Live> found = byEnd.computeIfAbsent(end, key -> new ArrayList<>());
+        if (loaded.add(end)) {
+            Set<RelationshipId> seen = new TreeSet<>();
+            for (Ledger.End entry : ledger.ends(end, Ledger.LATEST)) {
+                seen.add(entry.relationship());
+            }
+            for (RelationshipId id : seen) {
+                if (working.containsKey(id) || excluded.contains(id)) {
+                    continue;
+                }
+                Live live = byId.get(id);
+                if (live == null) {
+                    live = ledger.relationship(id).flatMap(held -> index.relationshipType(held.type())
+                            .map(type -> new Live(held.relationshipId(), held.id().value(), type, held.source(),
+                                    held.target(), held.timeline(), held.timeline(), false))).orElse(null);
+                    if (live != null) {
+                        byId.put(id, live);
+                    }
+                }
+                if (live != null) {
+                    found.add(live);
+                }
             }
         }
+        return found;
     }
 
     private void add(Live relationship) {
@@ -162,7 +194,7 @@ final class Integrity {
     }
 
     private void duplicates(Live relationship, List<Problem> problems) {
-        for (Live other : byEnd.getOrDefault(relationship.source(), List.of())) {
+        for (Live other : relationshipsAt(relationship.source())) {
             if (other == relationship || !other.type().id().equals(relationship.type().id())
                     || (other.touched() && !processed.contains(other.id()))) {
                 continue;
@@ -197,7 +229,7 @@ final class Integrity {
         List<Problem> problems = new ArrayList<>();
         EntityId id = (EntityId) entity.id;
         if (entity.timeline.shrankSince(entity.before)) {
-            for (Live relationship : byEnd.getOrDefault(id, List.of())) {
+            for (Live relationship : relationshipsAt(id)) {
                 if (relationship.touched() || reportedOutliving.contains(relationship.id())) {
                     continue; // A relationship of the transaction is reported with its own problems.
                 }
@@ -244,7 +276,7 @@ final class Integrity {
             return;
         }
         Set<TypeId> types = index.typeAndSubtypes(type);
-        List<Live> related = byEnd.getOrDefault(id, List.of()).stream()
+        List<Live> related = relationshipsAt(id).stream()
                 .filter(relationship -> types.contains(relationship.type().id()) && at(role, relationship, id))
                 .toList();
         NavigableSet<Instant> boundaries = new TreeSet<>();
@@ -326,8 +358,7 @@ final class Integrity {
         if (touched != null) {
             return touched.timeline;
         }
-        StoredEntity stored = storedEntities.get(id);
-        return stored == null ? Timeline.EMPTY : stored.latest();
+        return ledger.entity(id).map(Held::timeline).orElse(Timeline.EMPTY);
     }
 
     private String pathOf(EntityId id) {

@@ -162,9 +162,9 @@ final class Amendments {
         if (readAt == null || target.created) {
             return;
         }
-        Stored<?> stored = target.stored;
-        Timeline then = stored.at(readAt);
-        Timeline now = stored.latest();
+        Held stored = target.stored;
+        Timeline then = workspace.ledger().timelineAt(stored.id(), readAt);
+        Timeline now = stored.timeline();
         boolean perAttribute = check instanceof ConflictCheck.PerAttribute && attributes != null;
         if (!perAttribute) {
             if (!then.sameState(now)) {
@@ -182,9 +182,9 @@ final class Amendments {
         }
     }
 
-    private static Problem conflict(String path, String message, Basis readAt, Stored<?> stored, String kind) {
+    private static Problem conflict(String path, String message, Basis readAt, Held stored, String kind) {
         return Problems.of(ProblemCode.CONFLICT, path, message, "no change since basis " + readAt.value(),
-                "a change recorded at basis " + stored.latestBasis().value(),
+                "a change recorded at basis " + stored.basis().value(),
                 "Read the " + kind + " again, and decide whether the write still applies.");
     }
 }

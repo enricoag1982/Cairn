@@ -163,12 +163,12 @@ public final class DirectoryStore implements DurableStore {
      * @throws IllegalStateException naming one ID that the generator does not accept
      */
     private static void requireIdsOfTheGenerator(InMemoryStore store, IdGenerator generator) {
-        for (EntityId id : store.entities().keySet()) {
+        for (EntityId id : store.ledger().entityIds()) {
             if (!generator.accepts(id.value())) {
                 throw otherGenerator(id.value(), "an entity");
             }
         }
-        for (RelationshipId id : store.relationships().keySet()) {
+        for (RelationshipId id : store.ledger().relationshipIds()) {
             if (!generator.accepts(id.value())) {
                 throw otherGenerator(id.value(), "a relationship");
             }
@@ -378,6 +378,11 @@ public final class DirectoryStore implements DurableStore {
         } finally {
             snapshotLock.unlock();
         }
+    }
+
+    /** The entities and relationships of the store, as keys and values; for tests that look at them. */
+    Ledger ledger() {
+        return store.ledger();
     }
 
     /** What the store's rules read when they last checked, which is learned after recovery; for tests. */

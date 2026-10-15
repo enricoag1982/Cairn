@@ -8,10 +8,10 @@ import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.TypeId;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -19,25 +19,23 @@ import java.util.Set;
 /**
  * A view of the in-memory store (design D4 of {@code add-entity-versions} and D2 of {@code add-relationships}): an
  * effective time, a basis, and the schema as it was at that basis. It takes for each entity and relationship the
- * timeline with the greatest basis at or below its own, and in it the segment that contains its effective time. The
- * store only appends under bases above the one a view was created with, so a view never waits for a writer and always
- * gives the same answer.
+ * timeline that the {@link Ledger} gives at its basis, and in it the segment that contains its effective time. A
+ * commit only writes under bases above the one a view was created with, so a view never waits for a writer and always
+ * gives the same answer. Listings, navigation and unique keys read the ledger's indexes and then each candidate at the
+ * view's basis.
  */
 final class StoreView extends NavigableView {
 
     private final Instant effectiveAt;
     private final Basis basis;
     private final SchemaIndex index;
-    private final NavigableMap<EntityId, StoredEntity> entities;
-    private final NavigableMap<RelationshipId, StoredRelationship> relationships;
+    private final Ledger ledger;
 
-    StoreView(Instant effectiveAt, Basis basis, SchemaIndex index, NavigableMap<EntityId, StoredEntity> entities,
-            NavigableMap<RelationshipId, StoredRelationship> relationships) {
+    StoreView(Instant effectiveAt, Basis basis, SchemaIndex index, Ledger ledger) {
         this.effectiveAt = effectiveAt;
         this.basis = basis;
         this.index = index;
-        this.entities = entities;
-        this.relationships = relationships;
+        this.ledger = ledger;
     }
 
     @Override
@@ -58,11 +56,8 @@ final class StoreView extends NavigableView {
     @Override
     public Optional<EntityState> entity(EntityId id) {
         Objects.requireNonNull(id, "id");
-        StoredEntity entity = entities.get(id);
-        if (entity == null) {
-            return Optional.empty();
-        }
-        return entity.at(basis).at(effectiveAt).flatMap(segment -> state(entity, segment));
+        return ledger.entity(id, basis).flatMap(entity -> entity.timeline().at(effectiveAt)
+                .flatMap(segment -> entityState(entity, segment)));
     }
 
     @Override
@@ -70,51 +65,60 @@ final class StoreView extends NavigableView {
         Objects.requireNonNull(entityType, "entityType");
         EntityType type = index.schema().entityType(entityType).orElseThrow(() -> new IllegalArgumentException(
                 "The schema at basis " + basis.value() + " has no entity type '" + entityType + "'."));
-        Set<TypeId> types = index.typeAndSubtypes(type);
         List<EntityState> states = new ArrayList<>();
-        for (StoredEntity entity : entities.values()) {
-            if (types.contains(entity.type())) {
-                entity.at(basis).at(effectiveAt).flatMap(segment -> state(entity, segment)).ifPresent(states::add);
-            }
+        for (Held entity : ledger.entities(index.typeAndSubtypes(type), basis)) {
+            entity.timeline().at(effectiveAt).flatMap(segment -> entityState(entity, segment)).ifPresent(states::add);
         }
         return List.copyOf(states);
+    }
+
+    /** Finds the entity by the index of unique values: its candidates are the entities that ever had the value. */
+    @Override
+    Optional<EntityState> findByKey(UniqueKeys.Valid valid) {
+        Set<TypeId> types = index.typeAndSubtypes(valid.type());
+        for (Held entity : ledger.uniqueHolders(valid.attribute().id(), valid.value(), false, basis)) {
+            if (!types.contains(entity.type())) {
+                continue;
+            }
+            Optional<EntityState> state = entity.timeline().at(effectiveAt).flatMap(segment -> entityState(entity, segment));
+            if (state.isPresent()) {
+                Value held = state.get().values().get(valid.attribute().name());
+                if (held != null && Conversions.same(held, valid.value())) {
+                    return state;
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     @Override
     public List<EntityState> timeline(EntityId id) {
         Objects.requireNonNull(id, "id");
-        StoredEntity entity = entities.get(id);
-        if (entity == null) {
-            return List.of();
-        }
         List<EntityState> states = new ArrayList<>();
-        for (Segment segment : entity.at(basis).segments()) {
-            state(entity, segment).ifPresent(states::add);
-        }
+        ledger.entity(id, basis).ifPresent(entity -> {
+            for (Segment segment : entity.timeline().segments()) {
+                entityState(entity, segment).ifPresent(states::add);
+            }
+        });
         return List.copyOf(states);
     }
 
     @Override
     public Optional<RelationshipState> relationship(RelationshipId id) {
         Objects.requireNonNull(id, "id");
-        StoredRelationship relationship = relationships.get(id);
-        if (relationship == null) {
-            return Optional.empty();
-        }
-        return relationship.at(basis).at(effectiveAt).flatMap(segment -> state(relationship, segment));
+        return ledger.relationship(id, basis).flatMap(relationship -> relationship.timeline().at(effectiveAt)
+                .flatMap(segment -> relationshipState(relationship, segment)));
     }
 
     @Override
     public List<RelationshipState> relationshipTimeline(RelationshipId id) {
         Objects.requireNonNull(id, "id");
-        StoredRelationship relationship = relationships.get(id);
-        if (relationship == null) {
-            return List.of();
-        }
         List<RelationshipState> states = new ArrayList<>();
-        for (Segment segment : relationship.at(basis).segments()) {
-            state(relationship, segment).ifPresent(states::add);
-        }
+        ledger.relationship(id, basis).ifPresent(relationship -> {
+            for (Segment segment : relationship.timeline().segments()) {
+                relationshipState(relationship, segment).ifPresent(states::add);
+            }
+        });
         return List.copyOf(states);
     }
 
@@ -129,25 +133,22 @@ final class StoreView extends NavigableView {
     }
 
     @Override
-    List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end) {
+    List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end, Ledger.Direction direction) {
         List<RelationshipState> states = new ArrayList<>();
-        for (StoredRelationship relationship : relationships.values()) {
-            if (types.contains(relationship.type())
-                    && (relationship.source().equals(end) || relationship.target().equals(end))) {
-                for (Segment segment : relationship.at(basis).segments()) {
-                    state(relationship, segment).ifPresent(states::add);
-                }
+        for (Held relationship : ledger.relationships(end, types, direction, basis)) {
+            for (Segment segment : relationship.timeline().segments()) {
+                relationshipState(relationship, segment).ifPresent(states::add);
             }
         }
         return states;
     }
 
-    private Optional<EntityState> state(StoredEntity entity, Segment segment) {
-        return EntityStates.of(index, entity.id(), entity.type(), segment);
+    private Optional<EntityState> entityState(Held entity, Segment segment) {
+        return EntityStates.of(index, entity.entityId(), entity.type(), segment);
     }
 
-    private Optional<RelationshipState> state(StoredRelationship relationship, Segment segment) {
-        return RelationshipStates.of(index, relationship.id(), relationship.type(), relationship.source(),
+    private Optional<RelationshipState> relationshipState(Held relationship, Segment segment) {
+        return RelationshipStates.of(index, relationship.relationshipId(), relationship.type(), relationship.source(),
                 relationship.target(), segment);
     }
 }

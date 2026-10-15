@@ -1,6 +1,8 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.commit.CommitSequence;
+import io.github.enricoag1982.cairn.core.kv.InMemoryKeyValueStore;
+import io.github.enricoag1982.cairn.core.kv.KeyValueStore;
 import io.github.enricoag1982.cairn.core.schema.InMemorySchemaRegistry;
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.core.storage.IdDigests;
@@ -42,7 +44,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -52,11 +53,16 @@ import java.util.stream.Stream;
  * {@code add-entity-rules}, D2 and D3 of {@code add-relationships}, ADR-0007, ADR-0008). Use {@code Stores.inMemory}
  * to create one.
  *
+ * <p>Entities and relationships are keys and values on an ordered {@linkplain KeyValueStore key-value store} (ADR-0011,
+ * ADR-0027, design of {@code refactor-storage-onto-key-value-store}), which the {@link Ledger} reads and writes; the
+ * store keeps its other state, such as the schema registry, the transaction records and the idempotency keys, in Java
+ * objects.
+ *
  * <p>One writer commits at a time, holding the writer lock of the store's {@link CommitSequence}, which the schema
  * registry shares. A commit applies the writes to working copies, validates the result, runs the rules, and only then
- * appends the new timelines, records the transaction, and publishes its basis. A dry run does the same up to the append
- * and then throws everything away. Readers take no lock: they read through {@linkplain StoreView views}, which see only
- * data at or below the basis that was published when they were created.
+ * writes the new timelines to the ledger as one batch, records the transaction, and publishes its basis. A dry run does
+ * the same up to the write and then throws everything away. Readers take no lock: they read through
+ * {@linkplain StoreView views}, which see only data at or below the basis that was published when they were created.
  *
  * <p>While the store runs rules, in a commit or a dry run, it refuses writes: a rule that commits, runs dry or
  * registers a schema in the store gets an {@code IllegalStateException}, and its transaction is rejected.
@@ -64,7 +70,7 @@ import java.util.stream.Stream;
  * <p>A {@linkplain #purge(Purge) purge} is the one thing that removes data (ADR-0024, design of {@code add-purge}). It
  * takes the writer lock, checks what it would remove, and only then removes it: relationships first and entities after
  * them, so that a single lookup never finds a relationship whose end is missing (a view that reads during a purge may
- * still see part of it). Views read the store's maps and keep no reference to what they read, so once the purge has
+ * still see part of it). Views read the ledger and keep no reference to what they read, so once the purge has
  * returned every view, also one that was opened before it, reads the purged state. The store keeps no ID of what was
  * removed, only the {@linkplain IdDigests digests} of the IDs, so that they are never given out or accepted again, and
  * the idempotency keys of transactions that wrote removed data, without their transactions.
@@ -88,9 +94,7 @@ public final class InMemoryStore implements Store {
 
     private final CommitSequence sequence;
     private final InMemorySchemaRegistry registry;
-    private final ConcurrentSkipListMap<EntityId, StoredEntity> entities = new ConcurrentSkipListMap<>();
-    private final ConcurrentSkipListMap<RelationshipId, StoredRelationship> relationships =
-            new ConcurrentSkipListMap<>();
+    private final Ledger ledger;
     private final CopyOnWriteArrayList<TransactionRecord> records = new CopyOnWriteArrayList<>();
     private final ValueChecks checks = new ValueChecks();
     private final Rules rules;
@@ -134,6 +138,21 @@ public final class InMemoryStore implements Store {
      */
     public InMemoryStore(InstantSource clock, IdGenerator generator, Collection<? extends Rule> rules,
             Collection<RuleDescriptor> declaredRules) {
+        this(new InMemoryKeyValueStore(), clock, generator, rules, declaredRules);
+    }
+
+    /**
+     * Creates an empty store that keeps its entities and relationships on a key-value store, which a test can watch.
+     *
+     * @param keys          the key-value store, which holds nothing yet and which no one else writes to
+     * @param clock         the source of transaction times
+     * @param generator     the ID generator of the store, which the store owns from now on
+     * @param rules         the rules with code, which the store runs at commit
+     * @param declaredRules the descriptions of rules that the store does not have the code of
+     */
+    InMemoryStore(KeyValueStore keys, InstantSource clock, IdGenerator generator, Collection<? extends Rule> rules,
+            Collection<RuleDescriptor> declaredRules) {
+        this.ledger = new Ledger(Objects.requireNonNull(keys, "keys"));
         this.sequence = new CommitSequence(Objects.requireNonNull(clock, "clock"));
         this.generator = Objects.requireNonNull(generator, "generator");
         this.rules = new Rules(rules);
@@ -207,8 +226,7 @@ public final class InMemoryStore implements Store {
                     : requested.compareTo(Basis.NONE) < 0 ? Basis.NONE : requested;
             case KnownAt.AtTransactionTime(Instant time) -> basisAt(time, latest);
         };
-        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), entities,
-                relationships);
+        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), ledger);
     }
 
     @Override
@@ -263,16 +281,16 @@ public final class InMemoryStore implements Store {
      * that drops the result leaves no trace. Called with the lock held.
      */
     private Preparation prepare(Transaction transaction) {
-        return new Preparation(transaction, new SchemaIndex(registry.current()), entities, relationships, purgedDigests,
+        return new Preparation(transaction, new SchemaIndex(registry.current()), ledger, purgedDigests,
                 generator.copy(), sequence.next(), checks, rules, sequence, reads).run();
     }
 
     /**
      * Makes a valid preparation the store's latest state. A durable store first writes the commit to its journal, so that
-     * nothing is applied if that fails; then the new timelines of entities and relationships are appended, the
-     * transaction and its idempotency key are recorded, the checks of the rules are applied to the index of reads, the
-     * ID generator's advanced copy is kept, and the basis is published last, so that a reader that learns of the basis
-     * finds all of it. Called with the lock held.
+     * nothing is applied if that fails; then the new timelines of entities and relationships are written to the ledger
+     * as one batch, the transaction and its idempotency key are recorded, the checks of the rules are applied to the
+     * index of reads, the ID generator's advanced copy is kept, and the basis is published last, so that a reader that
+     * learns of the basis finds all of it. Called with the lock held.
      */
     private Receipt record(Transaction transaction, Preparation preparation) {
         CommitSequence.Commit commit = preparation.commit();
@@ -284,26 +302,7 @@ public final class InMemoryStore implements Store {
         if (written != null) {
             written.append(LogRecords.dataRecord(transaction, receipt, changes));
         }
-        for (Preparation.Change change : changes) {
-            switch (change.id()) {
-                case EntityId id -> {
-                    StoredEntity entity = change.created() ? new StoredEntity(id, change.type()) : entities.get(id);
-                    entity.append(commit.basis(), change.timeline());
-                    if (change.created()) {
-                        entities.put(id, entity);
-                    }
-                }
-                case RelationshipId id -> {
-                    StoredRelationship relationship = change.created()
-                            ? new StoredRelationship(id, change.type(), change.source(), change.target())
-                            : relationships.get(id);
-                    relationship.append(commit.basis(), change.timeline());
-                    if (change.created()) {
-                        relationships.put(id, relationship);
-                    }
-                }
-            }
-        }
+        ledger.write(commit.basis(), changes, preparation.index());
         records.add(new TransactionRecord(commit.basis(), commit.transactionTime(), transaction.principal(),
                 transaction.onBehalfOf(), transaction.reason()));
         transaction.idempotencyKey().ifPresent(key -> keys.put(key, new Keyed(transaction, receipt)));
@@ -363,8 +362,8 @@ public final class InMemoryStore implements Store {
         Objects.requireNonNull(purge, "purge");
         return sequence.<PurgeResult>underWriterLock(() -> {
             requireWritable();
-            PurgeCheck.Outcome outcome = PurgeCheck.run(purge, new SchemaIndex(registry.current()), entities,
-                    relationships, purgedDigests);
+            PurgeCheck.Outcome outcome = PurgeCheck.run(purge, new SchemaIndex(registry.current()), ledger,
+                    purgedDigests);
             if (!outcome.problems().isEmpty()) {
                 return new PurgeResult.Rejected(outcome.problems());
             }
@@ -395,9 +394,9 @@ public final class InMemoryStore implements Store {
     void replayPurge(PurgeLogRecord logged) {
         PurgeRecord record = logged.purge();
         Set<String> digests = new HashSet<>(logged.removed());
-        List<EntityId> removedEntities = entities.keySet().stream()
+        List<EntityId> removedEntities = ledger.entityIds().stream()
                 .filter(id -> digests.contains(IdDigests.of(id.value()))).toList();
-        List<RelationshipId> removedRelationships = relationships.keySet().stream()
+        List<RelationshipId> removedRelationships = ledger.relationshipIds().stream()
                 .filter(id -> digests.contains(IdDigests.of(id.value()))).toList();
         if (removedEntities.size() != record.entities() || removedRelationships.size() != record.relationships()
                 || digests.size() != record.entities() + record.relationships()) {
@@ -420,15 +419,16 @@ public final class InMemoryStore implements Store {
     private void applyPurge(PurgeRecord record, List<EntityId> removedEntities,
             List<RelationshipId> removedRelationships, List<String> digests) {
         for (RelationshipId id : removedRelationships) {
-            if (relationships.remove(id) == null) {
+            if (ledger.relationship(id).isEmpty()) {
                 throw missing(record);
             }
         }
         for (EntityId id : removedEntities) {
-            if (entities.remove(id) == null) {
+            if (ledger.entity(id).isEmpty()) {
                 throw missing(record);
             }
         }
+        ledger.purge(removedEntities, removedRelationships);
         Set<Id> removed = new HashSet<>(removedRelationships);
         removed.addAll(removedEntities);
         reads.purge(removed);
@@ -494,22 +494,23 @@ public final class InMemoryStore implements Store {
         sequence.<Object>underWriterLock(() -> {
             SchemaIndex index = new SchemaIndex(registry.current());
             List<RuleRunner.Subject> subjects = new ArrayList<>();
-            for (StoredEntity entity : entities.values()) {
+            for (EntityId id : ledger.entityIds()) {
+                Held entity = ledger.entity(id).orElseThrow();
                 index.entityType(entity.type()).map(SubjectType::of).filter(type -> !type.effectiveRules().isEmpty())
-                        .ifPresent(type -> subjects.add(new RuleRunner.Subject(entity.id(), entity.id().value(), type,
-                                null, null, entity.latest().segments())));
+                        .ifPresent(type -> subjects.add(new RuleRunner.Subject(id, id.value(), type, null, null,
+                                entity.timeline().segments())));
             }
-            for (StoredRelationship relationship : relationships.values()) {
+            for (RelationshipId id : ledger.relationshipIds()) {
+                Held relationship = ledger.relationship(id).orElseThrow();
                 index.relationshipType(relationship.type()).map(SubjectType::of)
                         .filter(type -> !type.effectiveRules().isEmpty())
-                        .ifPresent(type -> subjects.add(new RuleRunner.Subject(relationship.id(),
-                                relationship.id().value(), type, relationship.source(), relationship.target(),
-                                relationship.latest().segments())));
+                        .ifPresent(type -> subjects.add(new RuleRunner.Subject(id, id.value(), type,
+                                relationship.source(), relationship.target(), relationship.timeline().segments())));
             }
             if (!subjects.isEmpty()) {
                 ReadIndex.Stage stage = new ReadIndex.Stage();
-                ProvisionalView.Source source = new ProvisionalView.Source(sequence.latestBasis(), index, entities,
-                        Map.of(), relationships, Map.of());
+                ProvisionalView.Source source = new ProvisionalView.Source(sequence.latestBasis(), index, ledger,
+                        Map.of(), Map.of());
                 new RuleRunner(rules, source, sequence, stage).learn(subjects);
                 reads.apply(stage);
             }
@@ -546,12 +547,9 @@ public final class InMemoryStore implements Store {
         return registry;
     }
 
-    ConcurrentSkipListMap<EntityId, StoredEntity> entities() {
-        return entities;
-    }
-
-    ConcurrentSkipListMap<RelationshipId, StoredRelationship> relationships() {
-        return relationships;
+    /** The entities and relationships of the store. */
+    Ledger ledger() {
+        return ledger;
     }
 
     CopyOnWriteArrayList<TransactionRecord> records() {

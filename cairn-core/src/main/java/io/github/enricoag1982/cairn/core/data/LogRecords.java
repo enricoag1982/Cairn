@@ -29,16 +29,19 @@ final class LogRecords {
     }
 
     static List<SegmentData> segments(Timeline timeline) {
-        return timeline.segments().stream()
-                .map(segment -> new SegmentData(segment.from(), segment.end(), segment.values(), segment.recordedAt(),
-                        segment.recordedBasis()))
-                .toList();
+        return timeline.segments().stream().map(LogRecords::data).toList();
+    }
+
+    static SegmentData data(Segment segment) {
+        return new SegmentData(segment.from(), segment.end(), segment.values(), segment.recordedAt(),
+                segment.recordedBasis());
+    }
+
+    static Segment segment(SegmentData data) {
+        return new Segment(data.from(), data.end(), data.values(), data.recordedAt(), data.recordedBasis());
     }
 
     static Timeline timeline(List<SegmentData> segments) {
-        return Timeline.restored(segments.stream()
-                .map(data -> new Segment(data.from(), data.end(), data.values(), data.recordedAt(),
-                        data.recordedBasis()))
-                .toList());
+        return Timeline.restored(segments.stream().map(LogRecords::segment).toList());
     }
 }

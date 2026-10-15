@@ -142,20 +142,18 @@ final class Rechecks {
             return working.failed() ? null : new Resolved(id, working.path, working.type(), working.source,
                     working.target, working.timeline);
         }
+        Held stored = workspace.ledger().held(id).orElse(null);
+        if (stored == null) {
+            return null;
+        }
         return switch (id) {
-            case EntityId entityId -> {
-                StoredEntity entity = workspace.storedEntities().get(entityId);
-                yield entity == null ? null : workspace.index().entityType(entity.type())
-                        .map(type -> new Resolved(id, id.value(), SubjectType.of(type), null, null, entity.latest()))
-                        .orElse(null);
-            }
-            case RelationshipId relationshipId -> {
-                StoredRelationship relationship = workspace.storedRelationships().get(relationshipId);
-                yield relationship == null ? null : workspace.index().relationshipType(relationship.type())
-                        .map(type -> new Resolved(id, id.value(), SubjectType.of(type), relationship.source(),
-                                relationship.target(), relationship.latest()))
-                        .orElse(null);
-            }
+            case EntityId ignored -> workspace.index().entityType(stored.type())
+                    .map(type -> new Resolved(id, id.value(), SubjectType.of(type), null, null, stored.timeline()))
+                    .orElse(null);
+            case RelationshipId ignored -> workspace.index().relationshipType(stored.type())
+                    .map(type -> new Resolved(id, id.value(), SubjectType.of(type), stored.source(), stored.target(),
+                            stored.timeline()))
+                    .orElse(null);
         };
     }
 }

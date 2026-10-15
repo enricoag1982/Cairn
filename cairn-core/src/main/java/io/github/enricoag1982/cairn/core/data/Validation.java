@@ -4,17 +4,19 @@ import static io.github.enricoag1982.cairn.core.data.WriteChecks.attributePath;
 
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.core.schema.Values;
+import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Validates the state that the writes leave an entity or a relationship in (design D5 and D6 of
@@ -91,8 +93,8 @@ final class Validation {
     /**
      * Reports every other entity, or for a relationship every other relationship, that has a value of a unique
      * attribute at the same time as this one has the same value. The others are those of the store that this
-     * transaction does not touch, and those it touches before this one, so that a pair of touched ones is reported once,
-     * on the one that came second.
+     * transaction does not touch, found through the index of unique values and taken in the order of their IDs, and those
+     * it touches before this one, so that a pair of touched ones is reported once, on the one that came second.
      */
     private void validateUnique(Working subject, Attribute attribute) {
         List<Segment> mine = subject.timeline.segments().stream()
@@ -102,11 +104,16 @@ final class Validation {
             return;
         }
         Set<Id> reported = new HashSet<>();
-        Collection<? extends Stored<?>> peers = subject.isRelationship() ? workspace.storedRelationships().values()
-                : workspace.storedEntities().values();
-        for (Stored<?> other : peers) {
-            if (!workspace.working().containsKey(other.id())) {
-                clash(subject, attribute, mine, other.id(), other.id().value(), other.latest(), reported);
+        Set<String> candidates = new TreeSet<>();
+        for (Value value : new LinkedHashSet<>(mine.stream().map(segment -> segment.values().get(attribute.id()))
+                .toList())) {
+            candidates.addAll(workspace.ledger().uniqueIds(attribute.id(), value, Ledger.LATEST));
+        }
+        for (String text : candidates) {
+            Id id = subject.isRelationship() ? new RelationshipId(text) : new EntityId(text);
+            if (!workspace.working().containsKey(id)) {
+                workspace.ledger().held(id).ifPresent(other -> clash(subject, attribute, mine, other.id(),
+                        other.id().value(), other.timeline(), reported));
             }
         }
         for (Working other : workspace.working().values()) {
