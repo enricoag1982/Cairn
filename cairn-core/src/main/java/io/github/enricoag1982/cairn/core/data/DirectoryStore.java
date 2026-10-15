@@ -22,6 +22,7 @@ import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
@@ -33,6 +34,7 @@ import java.time.InstantSource;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.Flow;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -112,14 +114,43 @@ public final class DirectoryStore implements DurableStore {
      */
     public static DirectoryStore open(Path directory, InstantSource clock, IdGenerator generator,
             Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules) {
-        return open(directory, clock, generator, rules, declaredRules, CommitLog.DEFAULT_SEGMENT_LIMIT);
+        return open(directory, clock, generator, rules, declaredRules, Optional.empty());
+    }
+
+    /**
+     * Opens the store in a directory, as {@link #open(Path, InstantSource, IdGenerator, Collection, Collection)} does,
+     * with an expression language that compiles and runs the checks of the store's schema. The checks are compiled again
+     * when the schema is recovered. A store without an expression language keeps its data readable, but rejects writes to
+     * the types that checks apply to.
+     *
+     * @param directory     the directory
+     * @param clock         the source of transaction times
+     * @param generator     the ID generator of the store, which the store owns from now on
+     * @param rules         the rules with code, which the store runs at commit
+     * @param declaredRules the descriptions of rules that the store has no code for
+     * @param language      the expression language, if there is one
+     * @return the open store
+     * @throws UncheckedIOException     if reading or writing the directory fails
+     * @throws IllegalStateException    as for the method without a language
+     * @throws IllegalArgumentException as for the method without a language
+     */
+    public static DirectoryStore open(Path directory, InstantSource clock, IdGenerator generator,
+            Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules,
+            Optional<ExpressionLanguage> language) {
+        return open(directory, clock, generator, rules, declaredRules, language, CommitLog.DEFAULT_SEGMENT_LIMIT);
     }
 
     /** Opens a store whose log segments are complete after {@code segmentLimit} bytes; for tests of segments. */
     static DirectoryStore open(Path directory, InstantSource clock, IdGenerator generator,
             Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules, long segmentLimit) {
+        return open(directory, clock, generator, rules, declaredRules, Optional.empty(), segmentLimit);
+    }
+
+    private static DirectoryStore open(Path directory, InstantSource clock, IdGenerator generator,
+            Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules,
+            Optional<ExpressionLanguage> language, long segmentLimit) {
         Objects.requireNonNull(directory, "directory");
-        InMemoryStore store = new InMemoryStore(clock, generator, rules, declaredRules);
+        InMemoryStore store = new InMemoryStore(clock, generator, rules, declaredRules, language);
         try {
             Files.createDirectories(directory);
         } catch (IOException e) {

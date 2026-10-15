@@ -51,7 +51,10 @@ entityTypes:
       status: { type: string, required: true, allowedValues: [requested, approved, rejected, cancelled] }
     rules:
       - { name: vacation-within-entitlement, version: 1 }
-      - { name: leave-dates-in-order, version: 1 }
+    checks:
+      leave-dates-in-order:
+        expression: self.lastDay >= self.firstDay
+        message: The last day is before the first day.
 
 relationshipTypes:
   EmploymentOf:

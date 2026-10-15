@@ -6,7 +6,7 @@ owner: ""
 # Serve a store to AI agents
 
 How to run the Cairn agent server and connect an AI agent to it, such as Claude Code.
-The server creates an in-memory store, registers the schema documents you give it, and serves the store as *agent tools* over the *Model Context Protocol* (MCP), on standard input and output.
+The server creates an in-memory store, registers the schema documents you give it, and serves the store as *agent tools* over the *Model Context Protocol* (MCP), on standard input and output. It includes `cairn-cel`, so documents may declare *checks* ([Write checks](write-checks.md)).
 What the tools do is specified in the `agent-tools` spec; why agents are first-class users is in [ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md).
 
 > [!WARNING]

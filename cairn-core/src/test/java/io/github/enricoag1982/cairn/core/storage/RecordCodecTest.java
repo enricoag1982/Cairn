@@ -20,6 +20,7 @@ import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.AttributeId;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -130,14 +131,18 @@ class RecordCodecTest {
         TraitDefinition trait = new TraitDefinition("Named", attributes.subList(0, 2), List.of("Labelled", "Titled"),
                 true, Optional.of("Things with names"));
         EntityTypeDefinition parent = new EntityTypeDefinition("Party", true, Optional.empty(), List.of("Named"),
-                attributes, List.of("Actor"), true, Optional.of("Somebody"), List.of(new RuleReference("rule-a", 2)));
+                attributes, List.of("Actor"), true, Optional.of("Somebody"), List.of(new RuleReference("rule-a", 2)),
+                List.of(new Check("name-set", "has(self.text) && size(self.text) > 0",
+                        Optional.of("The name is empty, or ünïcode: \ud83d\ude00.")),
+                        new Check("quiet", "true", Optional.empty())));
         EntityTypeDefinition child = new EntityTypeDefinition("Person", false, Optional.of("Party"),
                 List.of("Named", "Other"), attributes.subList(2, 4), List.of("Human", "Individual"), false,
                 Optional.of("A person"), List.of(new RuleReference("rule-b", 1), new RuleReference("rule-c", 3)));
         RelationshipTypeDefinition owns = new RelationshipTypeDefinition("Owns", "Party", "Party",
                 Multiplicity.ZERO_OR_MORE, Multiplicity.EXACTLY_ONE, "ownedBy", List.of("ownedFrom", "heldBy"),
                 RelationshipKind.COMPOSITION, true, Optional.of("Link"), attributes.subList(4, 7),
-                List.of("Possesses", "Holds"), true, Optional.of("Owning"), List.of(new RuleReference("rule-d", 1)));
+                List.of("Possesses", "Holds"), true, Optional.of("Owning"), List.of(new RuleReference("rule-d", 1)),
+                List.of(new Check("share-set", "has(self.amount)", Optional.of("A share needs an amount."))));
         RelationshipTypeDefinition link = new RelationshipTypeDefinition("Link", "Party", "Person",
                 Multiplicity.ZERO_OR_ONE, Multiplicity.ONE_OR_MORE, "linkedFrom", List.of(),
                 RelationshipKind.ASSOCIATION, false, Optional.empty(), List.of(), List.of(), false, Optional.empty(),
@@ -164,7 +169,7 @@ class RecordCodecTest {
 
         assertThat(instances.keySet()).contains(SchemaDefinition.class, EntityTypeDefinition.class,
                 TraitDefinition.class, RelationshipTypeDefinition.class, AttributeDefinition.class,
-                RuleReference.class, Range.class, Bound.class, Multiplicity.class);
+                RuleReference.class, Check.class, Range.class, Bound.class, Multiplicity.class);
         assertEveryComponentIsSetSomewhere(instances);
         assertThat(instances.keySet()).as("every kind of value").containsAll(
                 Arrays.asList(Value.class.getPermittedSubclasses()));

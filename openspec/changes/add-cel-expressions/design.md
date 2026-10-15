@@ -47,19 +47,19 @@ In `cairn-api`, package `schema`:
   - `CompiledCheck compile(String expression, Map<String, ValueType> attributes)`, which throws `CheckCompilationException` (message, and 1-based line and column in the expression, when known).
 - `CompiledCheck`, with `boolean evaluate(Map<String, Value> values)`, which throws `CheckEvaluationException`.
 
-`cairn-core`'s module declares `uses ExpressionLanguage`. `SchemaRegistries` and `Stores` load the first one found when they create a registry or store. `StoreSettings.Builder.expressionLanguage(...)` sets one explicitly, which tests use.
+`cairn-core`'s module declares `uses ExpressionLanguage`. `StoreSettings.Builder.build()` and the `SchemaRegistries.inMemory` overloads load the first one that `ServiceLoader` finds; `StoreSettings.Builder.expressionLanguage(...)` sets one explicitly and `noExpressionLanguage()` sets none, which tests use.
 
 The registry compiles each check of a valid definition against the attributes of its type, inherited ones included, for each concrete type that inherits it. It keeps the compiled checks with the compiled schema. A store opened on a recorded schema compiles the checks again; without a language, writes to types with checks are rejected with `CHECKS_UNAVAILABLE` at the write.
 
 ### D3. `cairn-cel`
 
-The module is `io.github.enricoag1982.cairn.cel`, a subproject that depends on `cairn-api` (and on `cairn-core` only in tests) and on `dev.cel:cel` from the version catalog. It provides `ExpressionLanguage` through `META-INF/services` and `provides … with`.
+The subproject `cairn-cel` depends on `cairn-api` (and on `cairn-core` only in tests) and on `dev.cel:cel` from the version catalog. It provides `ExpressionLanguage` through `META-INF/services`. It runs on the class path, without `module-info`, because CEL's jars have no module names and split packages; `cairn-api` and `cairn-core` on the module path still find it.
 
 How `self` is declared:
 
-- Declare `self` as `map(string, dyn)`, and walk the checked AST to find every `self.<name>` select and `has(self.<name>)` test. A name the type does not have is a compilation error at the position of that select.
-- The result type must be `bool` or `dyn`.
-- If the library allows declaring `self` as a struct type with the attributes' CEL types, without protobuf messages, prefer that, so that type errors are found at registration. Report which way was taken.
+- `self` is a struct type, `cairn.Self`, with one field per attribute of the type and its CEL type, through a type provider, without protobuf messages. The checker finds unknown attributes and type errors at registration, with their positions; at run time `self` is a map of the values that are present, so `has(self.x)` works and reading an absent one is an evaluation error.
+- The result type must be `bool`.
+- Mixed `int` and `double` operands are rejected, as CEL does by default: decimals compare with `0.0`, not `0`.
 
 Values passed in:
 
@@ -74,10 +74,10 @@ Values passed in:
 
 Limits:
 
-- Evaluation runs with a cost limit of 10,000 (CEL's runtime cost tracking). Exceeding it is an evaluation error.
+- CEL for Java has no runtime cost tracking, so evaluation counts the steps it evaluates and stops after 10,000, as an evaluation error. A plain check takes a few steps.
 - Compilation rejects expressions with a nesting depth above CEL's default.
 
-JPMS: use the module path if the CEL jars' module names resolve. Otherwise keep `cairn-cel` on the class path without `module-info`, as `cairn-agent-tools` is, and report it.
+The code generator validates documents with a schema registry, so a build whose documents declare checks puts `cairn-cel` on the generator's class path (`cairnCodegen`).
 
 ### D4. At commit
 

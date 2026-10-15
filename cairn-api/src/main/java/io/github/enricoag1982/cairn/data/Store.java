@@ -26,7 +26,9 @@ public interface Store {
 
     /**
      * Commits a transaction atomically: either every write is recorded or none is. The transaction is validated against
-     * the state it would produce, and rejected with every problem found if any write is invalid.
+     * the state it would produce, and rejected with every problem found if any write is invalid. Validation includes the
+     * {@linkplain io.github.enricoag1982.cairn.schema.Check checks} of the types written (capability {@code checks}): on
+     * every version that a write changes, after the declarative constraints and before the rules.
      *
      * <p>A transaction with an idempotency key that a committed transaction already used, and that is equal to it, gets
      * the earlier receipt and records nothing; with other content it is rejected. A transaction with the key of one

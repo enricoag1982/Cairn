@@ -1,5 +1,6 @@
 [versions]
 assertj = "3.27.7"
+cel = "0.14.0"
 json-schema-validator = "3.0.7"
 junit = "6.1.3"
 mcp = "2.0.1"
@@ -9,6 +10,7 @@ snakeyaml-engine = "3.1.1"
 
 [libraries]
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+cel = { module = "dev.cel:cel", version.ref = "cel" }
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }

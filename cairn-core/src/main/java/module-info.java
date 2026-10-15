@@ -17,4 +17,7 @@ module io.github.enricoag1982.cairn.core {
 
     // StoreSettings.Builder.discoverRules() loads the rules that other modules or jars provide.
     uses io.github.enricoag1982.cairn.data.Rule;
+
+    // The settings and schema registries look for the expression language that runs checks (ADR-0030).
+    uses io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 }

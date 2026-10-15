@@ -47,7 +47,8 @@ Person <--EmploymentOf-- Employment --Fills------> Position --BelongsTo--> OrgUn
 | `no-unit-cycles` | 1 | `PartOf` | Following `PartOf` from a unit never leads back to it. | `cycle` |
 | `decided-by-manager` | 1 | `DecidedBy` | The deciding employment is not the requester, and manages the requester's unit, or a unit above it, on the request's first day. | `not-a-manager`, `own-request` |
 | `vacation-within-entitlement` | 1 | `LeaveRequest` | An employment's approved vacation days, of requests whose first days are in one calendar year, add up to at most 25. | `over-entitlement` |
-| `leave-dates-in-order` | 1 | `LeaveRequest` | The last day is not before the first day. | `last-before-first` |
+
+`LeaveRequest` also declares the *check* `leave-dates-in-order`, `self.lastDay >= self.firstDay`, with the message "The last day is before the first day." ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)); a request that breaks it is rejected with `CHECK_VIOLATED`.
 
 ## Organization and people
 
@@ -90,7 +91,7 @@ Dates are in 2026. Each story has a test whose display name starts with its ID; 
 ## Gaps
 
 What the example could not express directly, found while building it. Each is a candidate for a later change.
-The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request (see the `relationships` spec). And the fourth: approvers no longer poll, because a notifier follows the change feed (HR-15, [ADR-0029](../decisions/0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md)).
+The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request (see the `relationships` spec). And the fourth: approvers no longer poll, because a notifier follows the change feed (HR-15, [ADR-0029](../decisions/0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md)). And the fifth: "the last day is not before the first day" is a check in CEL in the schema document, not a Java rule.
 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |
@@ -99,7 +100,6 @@ The first gap it found is closed: a rule ran only when a type that names it was 
 | Rules see only the new version | No rule can say that a rejected leave request never changes again | The previous version in the rule context |
 | Typed inverse names | Relationship types have `TYPE` constants, but inverse names such as `subunits` and `requester` are strings in rules and queries | Generated constants for inverse names |
 | Query ergonomics | A traversal that binds its depth needs positional `Optional` arguments; result cells need casts | Simpler overloads, and typed rows |
-| Cross-attribute constraints | `leave-dates-in-order` is a Java rule for "the last day is not before the first day" | Declarative constraints across attributes, or CEL expressions, on the [roadmap](../research/2026-10-13-ai-native-schema-and-rules.md#conclusion) |
 | A query starts from every entity of its start type | `vacation-within-entitlement` queries from `Employment`, so it reads every employment at the instants it checks, and any change to an employment there, such as a pay change, checks every approved vacation again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)) | Queries that start from given entities |
 | Traversals need a maximum depth | Queries cap the unit hierarchy at 20 levels, so a deeper one would be cut off without notice; rules pass `Integer.MAX_VALUE` and a condition that always holds to `View.traverse` | Traversals to the end, and a `traverse` without a condition |
 | Relationships that record past facts end with their ends | The generated company never ends a manager's employment, because that would end every `DecidedBy` pointing to it, and past decisions would drop out of current views | Relationships that may outlive an end that they only record, such as who decided |

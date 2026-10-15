@@ -11,9 +11,11 @@ They are written in the [Common Expression Language](https://cel.dev/) (CEL). Wh
 
 ## Add the module
 
-Checks run in the module `cairn-cel` (`io.github.enricoag1982.cairn.cel`), which uses Google's CEL for Java and brings its dependencies: Guava, protobuf-java, the ANTLR runtime and a few smaller ones.
-Put it on the module path or class path of the application; stores and schema registries find it through `ServiceLoader`, or take it from `StoreSettings.builder().expressionLanguage(...)`.
-The agent server includes it. Without it, a registry rejects definitions that declare checks (`CHECKS_UNAVAILABLE`), and a store whose schema has checks rejects writes to the types they apply to.
+Checks run in the module `cairn-cel`, which uses Google's CEL for Java and brings about 8 MB of dependencies: Guava, protobuf-java, the ANTLR runtime and a few smaller ones.
+Put it on the class path of the application: CEL's jars cannot be named modules, but Cairn's modules on the module path still find it through `ServiceLoader`. `StoreSettings.builder().expressionLanguage(...)` sets a language explicitly, and `noExpressionLanguage()` none.
+Without it, a registry rejects definitions that declare checks (`CHECKS_UNAVAILABLE`), and a store whose schema has checks rejects writes to the types they apply to.
+The agent server includes it. The code generator validates documents, so a build whose documents declare checks adds it to the generator's class path too, with `cairnCodegen("io.github.enricoag1982.cairn:cairn-cel:0.1.0-SNAPSHOT")` next to the generator ([Generate Java types](generate-java-types.md)).
+On Java 25, protobuf-java prints a warning about `sun.misc.Unsafe` when it loads; it does no harm.
 
 ## Declare a check
 
@@ -46,7 +48,7 @@ One variable, `self`: the values of the version being checked, by attribute name
 | `string`, and attributes with allowed values | string |
 | `boolean` | bool |
 | `int`, `long` | int |
-| `decimal` | double, so `0.0`, not `0`, in comparisons |
+| `decimal` | double, so compare with `0.0`, not `0`: CEL rejects mixing integers and doubles |
 | `date` | timestamp at 00:00 UTC of that day |
 | `instant` | timestamp |
 
@@ -56,7 +58,7 @@ Decimals become doubles, which are not exact: keep exact decimal comparisons, su
 ## When checks run
 
 - **At registration**, the registry compiles every check. An expression that does not compile, names an attribute the type does not have, or cannot give a boolean is a problem `INVALID_CHECK` at the check. In a document, the problem is located at the check's `expression`, with the position in it.
-- **At commit**, checks run on every segment of a timeline that the transaction writes, with the declarative constraints and before Java rules. A false result rejects the transaction with `CHECK_VIOLATED`, the check's name and its message; an evaluation error, such as reading an absent attribute without `has`, or an expression too costly to run, rejects it with `CHECK_FAILED`. Dry runs report the same problems.
+- **At commit**, checks run on every segment of a timeline that the transaction writes, with the declarative constraints and before Java rules. A false result rejects the transaction with `CHECK_VIOLATED`, the check's name and its message; an evaluation error, such as reading an absent attribute without `has`, or an expression that takes more than 10,000 evaluation steps, rejects it with `CHECK_FAILED`. Dry runs report the same problems.
 
 ## Changing checks
 

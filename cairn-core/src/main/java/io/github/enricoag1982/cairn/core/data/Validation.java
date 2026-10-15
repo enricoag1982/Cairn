@@ -22,7 +22,9 @@ import java.util.TreeSet;
  * Validates the state that the writes leave an entity or a relationship in (design D5 and D6 of
  * {@code add-entity-versions}): the declarative constraints of its attributes in every segment of its timeline, the
  * required attributes in every stretch of its lifetime, and unique attributes against every other entity or
- * relationship. The problems follow the order of the attributes in the schema.
+ * relationship; then the checks of its type (design D4 of {@code add-cel-expressions}), run by a {@link CheckRunner} on
+ * every segment the transaction changes. The problems follow the order of the attributes in the schema, and then those
+ * of the checks.
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.
  */
@@ -31,11 +33,13 @@ final class Validation {
     private final Workspace workspace;
     private final ProblemLog problems;
     private final ValueChecks checks;
+    private final CheckRunner checkRunner;
 
     Validation(Workspace workspace, ValueChecks checks) {
         this.workspace = workspace;
         this.problems = workspace.problems();
         this.checks = checks;
+        this.checkRunner = new CheckRunner(workspace);
     }
 
     void validate(Working subject) {
@@ -59,6 +63,7 @@ final class Validation {
                 validateUnique(subject, attribute);
             }
         }
+        checkRunner.run(subject);
     }
 
     /** Reports each stretch of the subject's lifetime in which a required attribute has no value. */

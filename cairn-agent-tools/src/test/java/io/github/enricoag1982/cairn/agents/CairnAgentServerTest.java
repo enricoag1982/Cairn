@@ -249,6 +249,61 @@ class CairnAgentServerTest {
                 .containsExactly("Organization", "Owns");
     }
 
+    private static final String LEADS = """
+            cairn: 1
+            origin: { name: crm, version: "1.0.0" }
+            entityTypes:
+              Lead:
+                attributes:
+                  score: { type: int }
+                checks:
+                  score-not-negative:
+                    expression: "!has(self.score) || self.score >= 0"
+                    message: A score cannot be negative.
+            """;
+
+    @Test
+    void theServersStoreRunsTheChecksOfItsDocumentsBecauseTheExpressionModuleIsOnItsClassPath() throws Exception {
+        Path leads = Files.writeString(directory.resolve("leads.cairn.yaml"), LEADS);
+
+        Store store = CairnAgentServer.createStore(ServerOptions.parse(new String[] {"--principal", "agent:demo",
+                "--schema", leads.toString()}));
+
+        assertThat(store.schema().current().entityType("Lead").orElseThrow().checks()).singleElement()
+                .satisfies(check -> assertThat(check.name()).isEqualTo("score-not-negative"));
+        try (StdioSession session = new StdioSession("--schema", leads.toString(), "--principal", "agent:demo")) {
+            session.initialize();
+
+            JsonNode negative = session.callTool("cairn_dry_run", args("payload", leadPayload(-1)));
+            JsonNode fine = session.callTool("cairn_dry_run", args("payload", leadPayload(3)));
+
+            assertThat(negative.get("outcome").stringValue()).isEqualTo("rejected");
+            assertThat(negative.get("problems")).singleElement().satisfies(problem -> {
+                assertThat(problem.get("code").stringValue()).isEqualTo("CHECK_VIOLATED");
+                assertThat(problem.get("message").stringValue()).contains("score-not-negative")
+                        .contains("A score cannot be negative.");
+            });
+            assertThat(fine.get("outcome").stringValue()).isEqualTo("wouldCommit");
+        }
+    }
+
+    @Test
+    void aDocumentWhoseCheckDoesNotCompileStopsTheServerWithThePositionInTheDocument() throws Exception {
+        Path broken = Files.writeString(directory.resolve("broken.cairn.yaml"),
+                LEADS.replace("self.score >= 0", "self.scor >= 0"));
+
+        Run run = run("--principal", "agent:demo", "--schema", broken.toString());
+
+        assertThat(run.status()).isNotZero();
+        assertThat(run.err()).contains("INVALID_CHECK").contains("Lead.score-not-negative").contains("scor")
+                .contains("/entityTypes/Lead/checks/score-not-negative/expression");
+    }
+
+    private static String leadPayload(int score) {
+        return "{\"cairn\": 1, \"principal\": \"agent:demo\", \"writes\": [{\"create\": {\"entityType\": \"Lead\", "
+                + "\"from\": \"2026-01-01T00:00:00Z\", \"values\": {\"score\": " + score + "}}}]}";
+    }
+
     @Test
     void aDocumentThatNamesNoRuleDeclaresNone() throws Exception {
         Path crm = Files.writeString(directory.resolve("crm.cairn.yaml"),

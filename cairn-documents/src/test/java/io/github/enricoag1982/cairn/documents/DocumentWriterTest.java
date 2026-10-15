@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -84,12 +85,15 @@ class DocumentWriterTest {
                 Optional.of("[a-z]+"), OptionalInt.of(1), OptionalInt.of(9));
         SchemaDefinition definition = new SchemaDefinition(
                 List.of(new EntityTypeDefinition("Full", true, Optional.of("Base"), List.of("Named"), List.of(attribute),
-                        List.of("Old"), true, Optional.of("An entity type."), List.of(new RuleReference("a-rule", 2)))),
+                        List.of("Old"), true, Optional.of("An entity type."), List.of(new RuleReference("a-rule", 2)),
+                        List.of(new Check("a-check", "self.code != ''", Optional.of("The code is empty.")),
+                                new Check("b-check", "true", Optional.empty())))),
                 List.of(new TraitDefinition("Named", List.of(attribute), List.of("Old"), true, Optional.of("A trait."))),
                 List.of(new RelationshipTypeDefinition("Links", "Full", "Full", Multiplicity.ZERO_OR_ONE,
                         Multiplicity.ONE_OR_MORE, "linkedBy", List.of("oldLinkedBy"), RelationshipKind.COMPOSITION, true,
                         Optional.of("Super"), List.of(attribute), List.of("Old"), true, Optional.of("A relationship type."),
-                        List.of(new RuleReference("a-rule", 2)))));
+                        List.of(new RuleReference("a-rule", 2)),
+                        List.of(new Check("link-check", "has(self.code)", Optional.of("A link has a code."))))));
 
         for (String text : List.of(SchemaDocuments.writeYaml(ORIGIN, definition), SchemaDocuments.writeJson(ORIGIN, definition))) {
             Object tree = DocumentTrees.load(text);
@@ -113,6 +117,14 @@ class DocumentWriterTest {
             assertThat(DocumentTrees.keysOf(((List<?>) DocumentTrees.at(tree, "entityTypes", "Full", "rules")).getFirst()))
                     .as(text).containsExactlyElementsOf(Keys.RULE);
             assertThat(DocumentTrees.at(tree, "relationshipTypes", "Links", "kind")).as(text).isEqualTo("composition");
+            assertThat(DocumentTrees.keysAt(tree, "entityTypes", "Full", "checks")).as(text)
+                    .containsExactly("a-check", "b-check");
+            assertThat(DocumentTrees.keysAt(tree, "entityTypes", "Full", "checks", "a-check")).as(text)
+                    .containsExactlyElementsOf(Keys.CHECK);
+            assertThat(DocumentTrees.keysAt(tree, "entityTypes", "Full", "checks", "b-check")).as(text)
+                    .containsExactly("expression");
+            assertThat(DocumentTrees.keysAt(tree, "relationshipTypes", "Links", "checks", "link-check")).as(text)
+                    .containsExactlyElementsOf(Keys.CHECK);
         }
         assertRoundTrip(ORIGIN, definition);
     }

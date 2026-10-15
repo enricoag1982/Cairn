@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -87,6 +88,11 @@ class DocumentReaderTest {
                     deprecated: true
                     rules:
                       - { name: person-rule, version: 2 }
+                    checks:
+                      email-set:
+                        expression: has(self.email)
+                        message: A person has an email.
+                      age-known: { expression: "!has(self.age) || self.age >= 0" }
                     attributes:
                       email:
                         type: string
@@ -120,6 +126,7 @@ class DocumentReaderTest {
                     aliases: [Acquainted]
                     deprecated: true
                     rules: [{ name: knows-rule, version: 1 }]
+                    checks: { since-set: { expression: "has(self.since)", message: Since when? } }
                     attributes:
                       since: { type: date }
                   CloseTo:
@@ -134,7 +141,7 @@ class DocumentReaderTest {
         SchemaDefinition definition = valid(text).definition();
 
         assertThat(List.of(Keys.DOCUMENT, Keys.ORIGIN, Keys.TRAIT, Keys.ENTITY_TYPE, Keys.RELATIONSHIP_TYPE, Keys.ATTRIBUTE,
-                Keys.RANGE, Keys.RULE)).allSatisfy(keys -> assertThat(keys).allSatisfy(key ->
+                Keys.RANGE, Keys.RULE, Keys.CHECK)).allSatisfy(keys -> assertThat(keys).allSatisfy(key ->
                         assertThat(text).as("the document uses the key %s", key)
                                 .containsPattern("(?<![\\w$])" + Pattern.quote(key) + ":")));
         assertThat(definition.traits()).containsExactly(new TraitDefinition("Named",
@@ -156,13 +163,16 @@ class DocumentReaderTest {
                                 Bound.exclusive(Value.of(new BigDecimal("0"))),
                                 Bound.inclusive(Value.of(new BigDecimal("700.5"))))).build()),
                         List.of("Human", "Individual"), true, Optional.empty(),
-                        List.of(new RuleReference("person-rule", 2))));
+                        List.of(new RuleReference("person-rule", 2)),
+                        List.of(new Check("email-set", "has(self.email)", Optional.of("A person has an email.")),
+                                new Check("age-known", "!has(self.age) || self.age >= 0", Optional.empty()))));
         assertThat(definition.relationshipTypes()).containsExactly(
                 new RelationshipTypeDefinition("Knows", "Person", "Person", Multiplicity.ZERO_OR_MORE,
                         Multiplicity.ZERO_OR_MORE, "knownBy", List.of("knownTo"), RelationshipKind.ASSOCIATION, true,
                         Optional.empty(), List.of(AttributeDefinition.builder("since", DATE).build()),
                         List.of("Acquainted"), true, Optional.of("Two people know each other."),
-                        List.of(new RuleReference("knows-rule", 1))),
+                        List.of(new RuleReference("knows-rule", 1)),
+                        List.of(new Check("since-set", "has(self.since)", Optional.of("Since when?")))),
                 new RelationshipTypeDefinition("CloseTo", "Person", "Person", Multiplicity.ZERO_OR_ONE,
                         Multiplicity.ONE_OR_MORE, "closeTo", List.of(), RelationshipKind.COMPOSITION, false,
                         Optional.of("Knows"), List.of(), List.of(), false, Optional.empty(), List.of()));

@@ -31,6 +31,7 @@ final class SchemaRecordReader {
                 new SchemaIdentifiers.AttributeAssignment(decoder.readText(), decoder.readText(),
                         new AttributeId(decoder.readLong())));
         long nextId = in.readLong();
+        definition = DefinitionCodec.readChecks(in, definition);
         return new SchemaRecord(basis, transactionTime, new Submission(principal, onBehalfOf, reason), origin,
                 definition, new SchemaIdentifiers(types, attributes, nextId));
     }

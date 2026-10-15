@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.documents;
 
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.Problem;
+import io.github.enricoag1982.cairn.schema.ProblemCode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -13,10 +14,12 @@ import java.util.TreeMap;
  * Where the elements of a schema document are in its text (capability {@code schema-documents}, design D4).
  *
  * <p>Elements are identified by the paths that problems carry: a type name; a type name and an attribute, inverse
- * name or rule name joined by a dot; and {@code @origin}. A type is located at its key under {@code traits},
- * {@code entityTypes} or {@code relationshipTypes}, an attribute at its key under {@code attributes}, an inverse name
- * at the key {@code inverseName}, a rule at its entry in {@code rules} and the origin at the key {@code origin}.
- * Paths match without regard to case, as names do.
+ * name, rule name or check name joined by a dot; and {@code @origin}. A type is located at its key under
+ * {@code traits}, {@code entityTypes} or {@code relationshipTypes}, an attribute at its key under {@code attributes},
+ * an inverse name at the key {@code inverseName}, a rule at its entry in {@code rules}, a check at its key under
+ * {@code checks} and the origin at the key {@code origin}. A problem about the expression of a check
+ * ({@code INVALID_CHECK}) is located at the key {@code expression} of the check, and, where the text allows it and the
+ * problem gives the position in the expression, at that position. Paths match without regard to case, as names do.
  *
  * <p>A problem about an element that the document does not have, such as an attribute that a new version of the
  * document removes, is located at the closest enclosing element that the document has: {@code Address.street} at
@@ -27,10 +30,17 @@ public final class DocumentLocations {
 
     private final DocumentLocation root;
     private final Map<String, DocumentLocation> elements;
+    private final Map<String, ExpressionPlace> expressions;
 
     DocumentLocations(DocumentLocation root, Map<String, DocumentLocation> elements) {
+        this(root, elements, Map.of());
+    }
+
+    DocumentLocations(DocumentLocation root, Map<String, DocumentLocation> elements,
+            Map<String, ExpressionPlace> expressions) {
         this.root = Objects.requireNonNull(root, "root");
         this.elements = Map.copyOf(elements);
+        this.expressions = Map.copyOf(expressions);
     }
 
     /**
@@ -64,14 +74,19 @@ public final class DocumentLocations {
 
     /**
      * Locates a problem by its path. A problem about an element that the document does not have is located at the
-     * closest enclosing element that it has, and at the root if no part of the path is in the document. A problem that
-     * is located already is returned as it is.
+     * closest enclosing element that it has, and at the root if no part of the path is in the document. A problem about
+     * the expression of a check is located in the expression. A problem that is located already is returned as it is.
      *
      * @param problem the problem
      * @return the located problem
      */
     public Problem locate(Problem problem) {
-        return problem.location().isPresent() ? problem : problem.at(enclosing(problem.path()));
+        if (problem.location().isPresent()) {
+            return problem;
+        }
+        ExpressionPlace expression = problem.code() == ProblemCode.INVALID_CHECK
+                ? expressions.get(key(problem.path())) : null;
+        return problem.at(expression != null ? expression.locate(problem.message()) : enclosing(problem.path()));
     }
 
     /**
@@ -111,12 +126,13 @@ public final class DocumentLocations {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof DocumentLocations that && root.equals(that.root) && elements.equals(that.elements);
+        return other instanceof DocumentLocations that && root.equals(that.root) && elements.equals(that.elements)
+                && expressions.equals(that.expressions);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(root, elements);
+        return Objects.hash(root, elements, expressions);
     }
 
     @Override

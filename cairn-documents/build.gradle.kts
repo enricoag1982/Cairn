@@ -11,4 +11,6 @@ dependencies {
     testImplementation(project(":cairn-core"))
     testImplementation(testFixtures(project(":cairn-api")))
     testImplementation(libs.json.schema.validator)
+    // The tests that locate problems of checks in documents compile the checks (ADR-0030).
+    testRuntimeOnly(project(":cairn-cel"))
 }

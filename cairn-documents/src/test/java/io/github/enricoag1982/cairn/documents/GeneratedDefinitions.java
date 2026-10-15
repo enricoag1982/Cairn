@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.documents;
 
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -18,6 +19,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -31,7 +33,7 @@ import java.util.Set;
  * origin and definition.
  *
  * <p>The definitions have the shape of valid ones and use every property: descriptions, examples and range bounds of the
- * attribute's own value type, allowed values, patterns, lengths, rules, aliases, deprecation, abstract types,
+ * attribute's own value type, allowed values, patterns, lengths, rules, checks, aliases, deprecation, abstract types,
  * supertypes, traits, compositions, symmetric types, inverse aliases and all four multiplicities. They are not
  * registered, so they need not be valid in every respect. Strings are chosen to be awkward for YAML and JSON: words that
  * read as numbers, booleans or null, syntax characters, escapes, control characters and non-ASCII text.
@@ -134,7 +136,8 @@ final class GeneratedDefinitions {
                 aliases(),
                 chance(0.2),
                 description(),
-                rules());
+                rules(),
+                checks());
     }
 
     private RelationshipTypeDefinition relationshipType(String name, List<String> earlier, List<String> entityNames) {
@@ -153,7 +156,8 @@ final class GeneratedDefinitions {
                 aliases(),
                 chance(0.2),
                 description(),
-                rules());
+                rules(),
+                checks());
     }
 
     private Multiplicity multiplicity() {
@@ -168,6 +172,22 @@ final class GeneratedDefinitions {
                     between(1, 5)));
         }
         return rules;
+    }
+
+    /** Checks with different names, in the order of their names, which is the order a document writes them in. */
+    private List<Check> checks() {
+        Set<String> used = new HashSet<>();
+        List<Check> checks = new ArrayList<>();
+        for (int i = between(0, 2); i > 0; i--) {
+            String name = pick(List.of("a-check", "balance-not-negative", "x1", "name-not-blank", "dates-in-order"));
+            if (used.add(name)) {
+                String expression = text();
+                checks.add(new Check(name, expression.isEmpty() ? "x" : expression,
+                        chance(0.5) ? Optional.of(text()) : Optional.empty()));
+            }
+        }
+        checks.sort(Comparator.comparing(Check::name));
+        return checks;
     }
 
     // ------------------------------------------------------------------ attributes
@@ -358,13 +378,13 @@ final class GeneratedDefinitions {
         return new SchemaDefinition(
                 definition.entityTypes().stream().map(type -> new EntityTypeDefinition(type.name(), type.isAbstract(),
                         type.supertype(), type.traits(), widened(type.attributes()), type.aliases(), type.deprecated(),
-                        type.description(), type.rules())).toList(),
+                        type.description(), type.rules(), type.checks())).toList(),
                 definition.traits().stream().map(trait -> new TraitDefinition(trait.name(), widened(trait.attributes()),
                         trait.aliases(), trait.deprecated(), trait.description())).toList(),
                 definition.relationshipTypes().stream().map(type -> new RelationshipTypeDefinition(type.name(),
                         type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
                         type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(), widened(type.attributes()),
-                        type.aliases(), type.deprecated(), type.description(), type.rules())).toList());
+                        type.aliases(), type.deprecated(), type.description(), type.rules(), type.checks())).toList());
     }
 
     private static List<AttributeDefinition> widened(List<AttributeDefinition> attributes) {

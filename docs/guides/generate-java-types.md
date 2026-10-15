@@ -60,6 +60,7 @@ cairn {
 
 dependencies {
     cairnCodegen("io.github.enricoag1982.cairn:cairn-codegen:0.1.0-SNAPSHOT")    // the generator
+    cairnCodegen("io.github.enricoag1982.cairn:cairn-cel:0.1.0-SNAPSHOT")        // only if your documents declare checks
     implementation("io.github.enricoag1982.cairn:cairn-api:0.1.0-SNAPSHOT")      // what the generated code uses
 }
 ```

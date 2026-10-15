@@ -38,7 +38,7 @@ Chosen option: "CEL checks over one version's values, compiled at registration a
 - **At registration.** The registry compiles every check of a definition: an expression that does not parse, that names an attribute the type does not have through `self.<name>`, or whose result cannot be a boolean, is a problem located at the check, with the position in the expression, and in the document when one was read. Without an expression module the registry rejects every definition that declares checks, with a problem that says which module to add.
 - **At commit.** Checks run with the declarative constraints, before Java rules, on every segment that a transaction writes. A false result is a problem with the code `CHECK_VIOLATED`, the check's name and its message; an evaluation error, such as reading an absent attribute without `has`, or exceeding the cost limit, is a problem with the code `CHECK_FAILED` and the error. A store whose schema declares checks, opened without the module, rejects writes to the types that declare them, as for rules without code ([ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md)).
 - **Schema evolution.** Adding a check to an existing type, or changing its expression, is a breaking change, as adding a rule is; removing a check or changing only its message is compatible.
-- **Packaging.** The module `cairn-cel` depends on `cairn-core`'s published interface for expression languages and on `dev.cel:cel`, Google's CEL for Java, and the engine finds it through `ServiceLoader`. The agent server and applications that want checks put it on their module or class path.
+- **Packaging.** The module `cairn-cel` depends on the interface for expression languages that `cairn-api` publishes and on `dev.cel:cel`, Google's CEL for Java, and the engine finds it through `ServiceLoader`. The agent server, the code generator of documents with checks, and applications that want checks put it on their class path.
 
 ### Consequences
 
@@ -76,4 +76,8 @@ Chosen option: "CEL checks over one version's values, compiled at registration a
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again; the user agreed to CEL expressions in the roadmap on 2026-10-15, with the proposal of `add-cel-expressions`.
 - This decision completes the third level of ADR-0018, which stays in force.
 - Checks across versions or entities, functions of Cairn's own in expressions, and derived attributes written in CEL can follow.
+- Revised on 2026-10-15, before `add-cel-expressions` was archived, after building it:
+  - `cairn-cel` runs on the class path only: CEL's jars have no module names and split packages, so they cannot be named modules; the engine's modules on the module path still find it.
+  - CEL for Java has no runtime cost tracking, so the cost limit counts evaluation steps, at most 10,000.
+  - `self` is declared as a type with one typed field per attribute, so type errors are found at registration too.
 - Common Expression Language: <https://cel.dev/>. CEL for Java: <https://github.com/google/cel-java>. Kubernetes validation rules in CEL, which read `self` the same way: <https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules>.

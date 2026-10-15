@@ -53,7 +53,7 @@ public final class KeyValueStores {
         Objects.requireNonNull(keys, "keys");
         Objects.requireNonNull(settings, "settings");
         return PersistentStore.open(keys, settings.clock(), settings.idGenerator().copy(), settings.rules(),
-                settings.declaredRules());
+                settings.declaredRules(), settings.expressionLanguage());
     }
 
     /**

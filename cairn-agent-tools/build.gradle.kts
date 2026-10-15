@@ -17,5 +17,7 @@ dependencies {
     implementation(project(":cairn-documents"))
     implementation(libs.mcp.core)
     implementation(libs.mcp.json.jackson3)
+    // The checks that schema documents declare run in the served store (ADR-0030): the module is found through ServiceLoader.
+    runtimeOnly(project(":cairn-cel"))
     testImplementation(testFixtures(project(":cairn-api")))
 }

@@ -11,6 +11,7 @@ import io.github.enricoag1982.cairn.core.storage.Journal;
 import io.github.enricoag1982.cairn.core.storage.KeyedTransaction;
 import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
 import io.github.enricoag1982.cairn.core.storage.StoredMetadata;
+import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.data.Change;
 import io.github.enricoag1982.cairn.data.Changed;
 import io.github.enricoag1982.cairn.data.CommitResult;
@@ -177,7 +178,26 @@ public final class InMemoryStore implements Store {
      */
     public InMemoryStore(InstantSource clock, IdGenerator generator, Collection<? extends Rule> rules,
             Collection<RuleDescriptor> declaredRules) {
-        this(new InMemoryKeyValueStore(), clock, generator, rules, declaredRules);
+        this(clock, generator, rules, declaredRules, Optional.empty());
+    }
+
+    /**
+     * Creates an empty store that compiles and runs checks.
+     *
+     * @param clock         the source of transaction times
+     * @param generator     the ID generator of the store, which the store owns from now on
+     * @param rules         the rules with code, which the store runs at commit; their descriptions are available rules
+     * @param declaredRules the descriptions of rules that the store does not have the code of; types of the schema may
+     *                      name them, but a write that would need to run one is rejected
+     * @param language      the expression language that compiles and runs the checks of the schema; without one, the
+     *                      store rejects definitions that declare checks, and writes to types that checks apply to
+     * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two
+     *                                  rules, with code or declared, have the same name and version
+     * @throws NullPointerException     if a rule has no descriptor
+     */
+    public InMemoryStore(InstantSource clock, IdGenerator generator, Collection<? extends Rule> rules,
+            Collection<RuleDescriptor> declaredRules, Optional<ExpressionLanguage> language) {
+        this(new InMemoryKeyValueStore(), clock, generator, rules, declaredRules, language);
     }
 
     /**
@@ -191,6 +211,23 @@ public final class InMemoryStore implements Store {
      */
     InMemoryStore(KeyValueStore keys, InstantSource clock, IdGenerator generator, Collection<? extends Rule> rules,
             Collection<RuleDescriptor> declaredRules) {
+        this(keys, clock, generator, rules, declaredRules, Optional.empty());
+    }
+
+    /**
+     * Creates an empty store that keeps its entities and relationships on a key-value store, and compiles and runs
+     * checks.
+     *
+     * @param keys          the key-value store, which holds nothing yet and which no one else writes to
+     * @param clock         the source of transaction times
+     * @param generator     the ID generator of the store, which the store owns from now on
+     * @param rules         the rules with code, which the store runs at commit
+     * @param declaredRules the descriptions of rules that the store does not have the code of
+     * @param language      the expression language that compiles and runs the checks of the schema
+     */
+    InMemoryStore(KeyValueStore keys, InstantSource clock, IdGenerator generator,
+            Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules,
+            Optional<ExpressionLanguage> language) {
         this.ledger = new Ledger(Objects.requireNonNull(keys, "keys"));
         this.sequence = new CommitSequence(Objects.requireNonNull(clock, "clock"));
         this.sequence.afterPublish(feed::published);
@@ -198,7 +235,7 @@ public final class InMemoryStore implements Store {
         this.rules = new Rules(rules);
         List<RuleDescriptor> available = new ArrayList<>(this.rules.descriptors());
         available.addAll(declaredRules);
-        this.registry = new InMemorySchemaRegistry(sequence, available);
+        this.registry = new InMemorySchemaRegistry(sequence, available, language);
         this.declaredRules = declaredRules.stream()
                 .sorted(Comparator.comparing(RuleDescriptor::name).thenComparingInt(RuleDescriptor::version))
                 .toList();

@@ -83,6 +83,13 @@ class JsonSchemaDriftTest {
         for (Object rule : rules) {
             assertLevel("rule reference", rule, Keys.RULE, Keys.RULE_REQUIRED);
         }
+
+        List<Object> checks = List.of(
+                schemaAt(entityType, "properties", "checks", "additionalProperties"),
+                schemaAt(relationshipType, "properties", "checks", "additionalProperties"));
+        for (Object check : checks) {
+            assertLevel("check", check, Keys.CHECK, Keys.CHECK_REQUIRED);
+        }
     }
 
     @Test

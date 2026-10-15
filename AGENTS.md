@@ -92,7 +92,7 @@ cairn-documents/         Java module: schema documents, transaction payloads and
 cairn-agent-tools/       agent tools over MCP, approval policy and server (class path, no module-info)
 cairn-codegen/           Java module: generator of Java types from schema documents, with a command line
 cairn-rocksdb/           Java module: stores kept in RocksDB (native library; tests need --enable-native-access)
-cairn-cel/               checks in CEL, found by the engine through ServiceLoader (optional; brings Guava and protobuf)
+cairn-cel/               checks in CEL, found through ServiceLoader (optional, class path only; brings Guava and protobuf)
 cairn-gradle-plugin/     Gradle plugin that runs the generator (Java 17, no module-info)
 cairn-example-hr/        end-to-end example and test: an HR system on Cairn's public API (docs/reference/hr-domain.md)
 build-logic/, gradle/    Gradle convention plugins, version catalog and wrapper

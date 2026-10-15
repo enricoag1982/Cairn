@@ -1,11 +1,14 @@
 package io.github.enricoag1982.cairn.core.data;
 
+import io.github.enricoag1982.cairn.core.schema.AppliedCheck;
+import io.github.enricoag1982.cairn.core.schema.CheckedSchema;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -32,6 +35,14 @@ final class SchemaIndex {
 
     Schema schema() {
         return schema;
+    }
+
+    /**
+     * The checks that apply to an entity type or relationship type, compiled, in the order of the type's effective checks;
+     * none if the schema does not keep compiled checks.
+     */
+    List<AppliedCheck> checks(TypeId id) {
+        return schema instanceof CheckedSchema checked ? checked.checks(id) : List.of();
     }
 
     Optional<EntityType> entityType(TypeId id) {

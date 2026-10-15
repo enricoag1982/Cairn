@@ -44,7 +44,7 @@ public final class Stores {
     public static Store inMemory(StoreSettings settings) {
         Objects.requireNonNull(settings, "settings");
         return new InMemoryStore(settings.clock(), settings.idGenerator().copy(), settings.rules(),
-                settings.declaredRules());
+                settings.declaredRules(), settings.expressionLanguage());
     }
 
     /**
@@ -107,6 +107,6 @@ public final class Stores {
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(settings, "settings");
         return DirectoryStore.open(directory, settings.clock(), settings.idGenerator().copy(), settings.rules(),
-                settings.declaredRules());
+                settings.declaredRules(), settings.expressionLanguage());
     }
 }

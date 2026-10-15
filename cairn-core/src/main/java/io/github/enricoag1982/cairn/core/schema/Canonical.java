@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.core.schema;
 
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
@@ -15,8 +16,8 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Compares definitions without regard to the order in which types, attributes, aliases, allowed values, rule references
- * and examples are listed (design D6).
+ * Compares definitions without regard to the order in which types, attributes, aliases, allowed values, rule references,
+ * checks and examples are listed (design D6).
  */
 final class Canonical {
 
@@ -40,7 +41,7 @@ final class Canonical {
     private static EntityTypeDefinition of(EntityTypeDefinition type) {
         return new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), sorted(type.traits()),
                 attributes(type.attributes()), sorted(type.aliases()), type.deprecated(), type.description(),
-                rules(type.rules()));
+                rules(type.rules()), checks(type.checks()));
     }
 
     private static TraitDefinition of(TraitDefinition trait) {
@@ -52,13 +53,20 @@ final class Canonical {
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
                 type.sourcesPerTarget(), type.inverseName(), sorted(type.inverseAliases()), type.kind(), type.symmetric(),
                 type.supertype(), attributes(type.attributes()), sorted(type.aliases()), type.deprecated(),
-                type.description(), rules(type.rules()));
+                type.description(), rules(type.rules()), checks(type.checks()));
     }
 
     private static List<RuleReference> rules(List<RuleReference> rules) {
         return rules.stream()
                 .distinct()
                 .sorted(Comparator.comparing(RuleReference::name).thenComparingInt(RuleReference::version))
+                .toList();
+    }
+
+    private static List<Check> checks(List<Check> checks) {
+        return checks.stream()
+                .distinct()
+                .sorted(Comparator.comparing(Check::name))
                 .toList();
     }
 
