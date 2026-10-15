@@ -23,8 +23,9 @@ import java.util.Optional;
  *                        its source (capability {@code relationships}), and that none of the transaction's own
  *                        writes ended, in the order in which the cascades reached them, depth first: for each entity
  *                        that a write ended, in the order of the writes, each of its composition relationships in the
- *                        order of their IDs, every one followed by its target and then by the compositions of that
- *                        target in the same way, before the next relationship; each ID once
+ *                        order of their IDs, every one followed by its target, then by what the cascade ends from that
+ *                        target in the same way, and then by the other relationships of that target that end with it,
+ *                        in the order of their IDs, before the next relationship; each ID once
  * @param keys            what each {@linkplain UniqueKey unique key} that a write names resolved to (ADR-0026), in the
  *                        order of the writes, and, within a relate, the source before the target; empty if no write names
  *                        a key

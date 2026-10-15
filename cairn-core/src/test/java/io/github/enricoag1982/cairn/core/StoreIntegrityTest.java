@@ -580,11 +580,12 @@ class StoreIntegrityTest {
         EntityId room = entity(estate.estate, ROOM);
         RelationshipId tagged = relationship(estate.estate, new TemporaryId("tagged"));
 
-        List<Problem> without = estate.store.reject(transaction().endDate(region, on(6, 1)).build());
-        estate.store.commit(transaction().endDate(region, on(6, 1)).endDate(tagged, on(6, 1)).build());
+        estate.store.commit(transaction().endDate(region, on(6, 1)).build());
 
-        assertProblem(only(without), ProblemCode.RELATIONSHIP_OUTLIVES_END, tagged.value());
         assertThat(estate.store.view(on(5, 31)).entities("Room")).hasSize(1);
+        assertThat(estate.store.view(on(5, 31)).relationship(tagged)).isPresent();
+        assertThat(estate.store.view(on(6, 1)).relationship(tagged)).as("the target's other relationship ends too")
+                .isEmpty();
         assertThat(estate.store.view(on(6, 1)).entity(region)).isEmpty();
         assertThat(estate.store.view(on(6, 1)).entity(site)).as("a target of the composition").isEmpty();
         assertThat(estate.store.view(on(6, 1)).entity(room)).as("the target of its target").isEmpty();

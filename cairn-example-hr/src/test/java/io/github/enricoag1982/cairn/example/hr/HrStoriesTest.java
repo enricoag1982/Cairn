@@ -523,6 +523,8 @@ class HrStoriesTest {
         assertRecordedAt(leaving.transactionTime(), on(6, 20));
         assertThat(leaving.ended()).as("the composition ends the sick leave with the employment")
                 .contains(ids.entity("gusSick"));
+        assertThat(leaving.ended()).as("and Fay's decision, which the transaction does not name, with the request")
+                .containsSubsequence(ids.entity("gusSick"), ids.relationship("gusSickDecision"));
 
         List<String> vacantOnJuly1 = vacantPositions(on(7, 1));
         List<String> vacantOnJune30 = vacantPositions(on(6, 30));

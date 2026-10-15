@@ -27,16 +27,16 @@ import java.util.Set;
  *
  * <p>A Preparation only orders the work; each part does one kind of it, on the {@link Workspace} that they share:
  * {@link Creations} and {@link Amendments} apply the writes, {@link Cascades} ends the compositions of what the writes
- * end, {@link Validation} and {@link Integrity} check the state that results, and {@link RuleStage} runs the rules. The
- * {@link ProblemLog} keeps what they find.
+ * end, their targets and the other relationships of those, {@link Validation} and {@link Integrity} check the state
+ * that results, and {@link RuleStage} runs the rules. The {@link ProblemLog} keeps what they find.
  *
  * <p>Writes are applied in order. A write with problems is applied as far as it can be, so that the problems of the
  * resulting state are found too: every problem of the transaction is reported, not only the first. When the writes are
- * applied, ending an entity ends its compositions too. Problems come in a fixed order: those of the transaction
- * itself, then those of each write in the order of the writes, then those of each entity and relationship (the
- * subjects) in the order in which the writes first touched them, then those of the rules, and last those of the
- * re-checks. The problems of a subject are those of its values, which follow the order of the attributes in the schema,
- * and then those of its relationships.
+ * applied, ending an entity ends its compositions too, and the targets of those end with their other relationships.
+ * Problems come in a fixed order: those of the transaction itself, then those of each write in the order of the writes,
+ * then those of each entity and relationship (the subjects) in the order in which the writes first touched them, then
+ * those of the rules, and last those of the re-checks. The problems of a subject are those of its values, which follow
+ * the order of the attributes in the schema, and then those of its relationships.
  *
  * <p>A Preparation is used once and by one thread: the one holding the store's writer lock.
  */
@@ -203,7 +203,10 @@ final class Preparation {
         return creations.created();
     }
 
-    /** The ID of every relationship and entity that composition cascades ended, in the order of {@link Cascades}. */
+    /**
+     * The ID of every relationship and entity that composition cascades ended, in the order of {@link Cascades}: the
+     * compositions, their targets and the other relationships of those targets.
+     */
     List<Id> ended() {
         return ended;
     }

@@ -355,10 +355,12 @@ public final class Brightwater {
     }
 
     /**
-     * HR-11, the leaving. Recorded 20 June: Gus leaves on 30 June, so his employment ends from 1 July, with its
-     * relationships and the decision of his sick leave, which ends with the request.
+     * HR-11, the leaving. Recorded 20 June: Gus leaves on 30 June, so his employment ends from 1 July, with its own
+     * relationships. The transaction does not name the sick leave or its decision: the sick leave is a target of the
+     * composition from his employment, so it ends with it, and so does the decision by Fay, a relationship of the
+     * request that the cascade ends with the request.
      *
-     * @param ids the IDs of HR-1, HR-2 and the sick leave
+     * @param ids the IDs of HR-1 and HR-2
      * @return the recording
      */
     public static Recording hr11GusLeaves(Ids ids) {
@@ -369,7 +371,6 @@ public final class Brightwater {
                 .endDate(ids.relationship("employedBy007"), july1)
                 .endDate(ids.relationship("worksAt007"), july1)
                 .endDate(ids.relationship("fills007"), july1)
-                .endDate(ids.relationship("gusSickDecision"), july1)
                 .build());
     }
 
