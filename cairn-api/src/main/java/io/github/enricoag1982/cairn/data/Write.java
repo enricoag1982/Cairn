@@ -12,6 +12,11 @@ import java.util.Set;
  * One change of a {@link Transaction} (capabilities {@code entity-versions} and {@code relationships}): create an
  * entity, relate two entities, or patch, replace or end-date an entity or a relationship for an effective period.
  *
+ * <p>A write names an existing entity by its ID, by the temporary ID of one that an earlier write creates, or by a
+ * {@link UniqueKey}, which the store resolves to the entity's ID when it commits (ADR-0026): at the start of the write's
+ * effective period, against the store as it was before the transaction. Relationships are named by IDs and temporary
+ * IDs only.
+ *
  * <p>Attribute values are keyed by the attribute's name or one of its aliases. The records only hold what the caller
  * wrote; the store checks it at commit and reports every problem found. Collections are copied and keep their
  * iteration order, which is the order in which problems about their elements are reported.
@@ -57,10 +62,11 @@ public sealed interface Write {
      * @param id               the ID to give the relationship, in the format of the store's {@link IdGenerator}; empty
      *                         to let the store generate one
      * @param relationshipType the name or an alias of the relationship type, compared without regard to case
-     * @param source           the source entity, by its ID or by the temporary ID of an entity that an earlier write of
-     *                         the transaction creates; for a symmetric relationship type either end can be the source
-     * @param target           the target entity, by its ID or by the temporary ID of an entity that an earlier write of
-     *                         the transaction creates
+     * @param source           the source entity, by its ID, by the temporary ID of an entity that an earlier write of
+     *                         the transaction creates, or by a unique key; for a symmetric relationship type either end
+     *                         can be the source
+     * @param target           the target entity, by its ID, by the temporary ID of an entity that an earlier write of
+     *                         the transaction creates, or by a unique key
      * @param period           when the relationship is effective
      * @param values           the values of its attributes
      */
@@ -91,7 +97,7 @@ public sealed interface Write {
      * Sets some attributes of an entity or a relationship for a period and leaves the others unchanged. It may also
      * clear optional attributes. The entity or relationship must exist throughout the period.
      *
-     * @param target the entity or relationship, by its ID or its temporary ID
+     * @param target the entity or relationship, by its ID or its temporary ID, or an entity by its unique key
      * @param period the period the patch applies to
      * @param set    the attributes to set, with their new values
      * @param clear  the optional attributes to clear, by name or alias
@@ -120,7 +126,7 @@ public sealed interface Write {
      * Sets the complete state of an entity or a relationship for a period: attributes that the write does not mention
      * have no value in the period. The entity or relationship must exist throughout the period.
      *
-     * @param target the entity or relationship, by its ID or its temporary ID
+     * @param target the entity or relationship, by its ID or its temporary ID, or an entity by its unique key
      * @param period the period the replacement applies to
      * @param values the complete values of the entity's attributes
      * @param check  the conflict check
@@ -144,7 +150,7 @@ public sealed interface Write {
      * is deleted. Ending an entity also ends its composition relationships and their targets from the same instant
      * (capability {@code relationships}).
      *
-     * @param target the entity or relationship, by its ID or its temporary ID
+     * @param target the entity or relationship, by its ID or its temporary ID, or an entity by its unique key
      * @param from   the first instant at which it no longer exists; truncated to microseconds
      * @param check  the conflict check
      */

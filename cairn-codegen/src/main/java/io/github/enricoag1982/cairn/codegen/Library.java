@@ -46,6 +46,7 @@ final class Library {
     static final String TYPED_ENTITY = DATA + "TypedEntity";
     static final String TYPED_RELATIONSHIP = DATA + "TypedRelationship";
     static final String TYPED_VALUES = DATA + "TypedValues";
+    static final String UNIQUE_KEY = DATA + "UniqueKey";
     static final String WRITE = DATA + "Write";
     static final String SCHEMA_TYPE = SCHEMA + "Schema";
     static final String RULE_CODE = SCHEMA + "RuleCode";

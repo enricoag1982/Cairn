@@ -360,9 +360,11 @@ public final class AgentTools {
     // ------------------------------------------------------------------ reading data
 
     /**
-     * {@code cairn_read_entity}: reads an entity at an effective time.
+     * {@code cairn_read_entity}: reads an entity at an effective time. The entity is named by its ID ({@code id}) or by a
+     * unique key ({@code key}, as payloads write it), exactly one of the two; a key that no entity has at that time reads
+     * as nothing.
      *
-     * @param arguments the arguments: {@code {id, effectiveAt, knownAt?}}
+     * @param arguments the arguments: {@code {id | key, effectiveAt, knownAt?}}
      * @return {@code {effectiveAt, basis, result}} as JSON text, or the problems
      */
     public String readEntity(String arguments) {
@@ -400,9 +402,10 @@ public final class AgentTools {
     }
 
     /**
-     * {@code cairn_navigate}: follows the relationships of an entity by a name.
+     * {@code cairn_navigate}: follows the relationships of an entity by a name. The entity is named by {@code id} or by
+     * {@code key}, as for {@link #readEntity}; a key that no entity has at that time leads nowhere.
      *
-     * @param arguments the arguments: {@code {id, name, effectiveAt, knownAt?}}
+     * @param arguments the arguments: {@code {id | key, name, effectiveAt, knownAt?}}
      * @return {@code {effectiveAt, basis, result}} as JSON text, or the problems
      */
     public String navigate(String arguments) {
@@ -410,9 +413,11 @@ public final class AgentTools {
     }
 
     /**
-     * {@code cairn_traverse}: follows every relationship of a name up to a maximum depth, without a condition.
+     * {@code cairn_traverse}: follows every relationship of a name up to a maximum depth, without a condition. The entity
+     * to start from is named by {@code id} or by {@code key}, as for {@link #readEntity}; a key that no entity has at that
+     * time leads nowhere.
      *
-     * @param arguments the arguments: {@code {id, name, maxDepth, effectiveAt, knownAt?}}
+     * @param arguments the arguments: {@code {id | key, name, maxDepth, effectiveAt, knownAt?}}
      * @return {@code {effectiveAt, basis, result}} as JSON text, or the problems
      */
     public String traverse(String arguments) {

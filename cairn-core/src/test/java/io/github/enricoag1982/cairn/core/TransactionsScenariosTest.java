@@ -11,6 +11,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI_WRONG_CHECK_DIGITS;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,13 +19,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.DryRunResult;
+import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -327,5 +331,111 @@ class TransactionsScenariosTest {
         assertThat(problems.get(0).path()).as("Gamma, though the write of ACME comes first").isEqualTo("$gamma.lei");
         assertThat(problems.get(1).ruleCode()).contains("controlling-owner-has-lei/no-lei");
         assertThat(problems.get(1).path()).as("the re-check").isEqualTo(acmeOwns.value());
+    }
+
+    // ------------------------------------------------------------------ unique keys
+
+    private static UniqueKey key(String entityType, String attribute, String value) {
+        return new UniqueKey(entityType, attribute, Value.of(value));
+    }
+
+    @Test
+    @DisplayName("Scenario: Patching an account by its number")
+    void patchingAnAccountByItsNumber() {
+        Receipt accounts = reference.createAccounts();
+        EntityId a1 = entity(accounts, ReferenceStories.A1);
+
+        Receipt receipt = reference.commit(Transaction.by("importer")
+                .patch(key("Account", "number", "A-1"), from(3, 15), values("balance", money("1500"))).build());
+
+        assertThat(receipt.created()).isEmpty();
+        assertThat(reference.view(on(3, 31)).entity(a1).orElseThrow().values())
+                .containsEntry("balance", Value.of(money("1500")));
+        assertThat(reference.view(on(3, 14)).entity(a1).orElseThrow().values())
+                .containsEntry("balance", Value.of(money("1000")));
+        assertThat(receipt.keys()).as("the key of the write at position 0, with A-1's ID")
+                .containsExactly(new KeyResolution(0, key("Account", "number", "A-1"), a1));
+    }
+
+    @Test
+    @DisplayName("Scenario: Relating by a key")
+    void relatingByAKey() {
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId alice = entity(parties, ALICE);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        reference.recordedOn(on(3, 1));
+
+        Receipt receipt = reference.commit(Transaction.by("importer")
+                .relate("Employs", key("Organization", "lei", LEI), alice, from(3, 1), values("title", "Analyst"))
+                .build());
+
+        assertThat(receipt.created()).singleElement().isInstanceOf(RelationshipId.class);
+        assertThat(reference.view(on(3, 1)).navigate(acme, "Employs")).singleElement().satisfies(link -> {
+            assertThat(link.entity().id()).isEqualTo(alice);
+            assertThat(link.relationship().source()).isEqualTo(acme);
+        });
+        assertThat(reference.view(on(2, 28)).navigate(acme, "Employs")).isEmpty();
+    }
+
+    /** ACME has the LEI until 1 March, and Gamma has it from 1 March. Returns the IDs of ACME and Gamma. */
+    private List<EntityId> leiMovesFromAcmeToGamma() {
+        EntityId acme = entity(reference.createParties(), ACME);
+        reference.commit(Transaction.by("importer")
+                .patch(acme, EffectivePeriod.between(on(1, 1), on(3, 1)), values("lei", LEI)).build());
+        reference.replay(ReferenceStories.rd9Gamma());
+        EntityId gamma = reference.view(on(3, 1)).entities("Organization").stream()
+                .filter(state -> state.values().get("name").equals(Value.of("Gamma"))).findFirst().orElseThrow().id();
+        return List.of(acme, gamma);
+    }
+
+    @Test
+    @DisplayName("Scenario: A key whose value moved")
+    void aKeyWhoseValueMoved() {
+        List<EntityId> moved = leiMovesFromAcmeToGamma();
+        EntityId acme = moved.get(0);
+        EntityId gamma = moved.get(1);
+        reference.recordedOn(on(4, 1));
+
+        Receipt receipt = reference.commit(Transaction.by("importer")
+                .patch(key("Organization", "lei", LEI), from(4, 1), values("name", "Gamma Holdings")).build());
+
+        assertThat(receipt.created()).isEmpty();
+        assertThat(reference.view(on(4, 1)).entity(gamma).orElseThrow().values())
+                .containsEntry("name", Value.of("Gamma Holdings"));
+        assertThat(reference.view(on(4, 1)).entity(acme).orElseThrow().values()).containsEntry("name", Value.of("ACME"));
+        assertThat(reference.view(on(3, 1)).entity(gamma).orElseThrow().values())
+                .as("before the patch").containsEntry("name", Value.of("Gamma"));
+    }
+
+    @Test
+    @DisplayName("Scenario: A key that names no entity")
+    void aKeyThatNamesNoEntity() {
+        reference.createAccounts();
+        Basis before = reference.store.latestBasis();
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(key("Account", "number", "A-9"), from(3, 15), values("balance", money("1500"))).build());
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertProblem(problem, ProblemCode.UNIQUE_KEY_NOT_FOUND, "@write.0");
+            assertThat(problem.message()).contains("Account(number: A-9)");
+        });
+        assertThat(reference.store.latestBasis()).isEqualTo(before);
+    }
+
+    @Test
+    @DisplayName("Scenario: A key on an attribute that is not unique")
+    void aKeyOnAnAttributeThatIsNotUnique() {
+        reference.createAccounts();
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(key("Account", "currency", "EUR"), from(3, 15), values("balance", money("1500"))).build());
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertProblem(problem, ProblemCode.INVALID_UNIQUE_KEY, "@write.0");
+            assertThat(problem.expected()).hasValueSatisfying(expected -> assertThat(expected).contains("number"));
+            assertThat(problem.message()).contains("Account(currency: EUR)", "currency");
+        });
     }
 }

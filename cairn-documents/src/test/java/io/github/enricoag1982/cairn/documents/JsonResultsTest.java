@@ -13,12 +13,14 @@ import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Link;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.TemporaryId;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
@@ -120,6 +122,69 @@ class JsonResultsTest {
                       "onBehalfOf": "person:alice",
                       "reason": "Onboarding",
                       "idempotencyKey": "key-1"
+                    }
+                    """);
+        }
+
+        @Test
+        void aReceiptListsWhatItsKeysResolvedToInTheFormOfPayloads() {
+            Receipt receipt = new Receipt(new Basis(7), RECORDED, Map.of(), List.of(), List.of(),
+                    List.of(new KeyResolution(0, new UniqueKey("Account", "number", Value.of("A-1")),
+                                    new EntityId("e-1")),
+                            new KeyResolution(2, new UniqueKey("Organization", "lei", Value.of("5493001KJTIIGC8Y1R12")),
+                                    new EntityId("e-2")),
+                            new KeyResolution(2, new UniqueKey("Thing", "serial", Value.of(7L)), new EntityId("e-3")),
+                            new KeyResolution(3, new UniqueKey("Thing", "amount", Value.of(new BigDecimal("1.50"))),
+                                    new EntityId("e-4"))),
+                    "importer", Optional.empty(), Optional.empty(), Optional.empty());
+
+            assertThat(Payloads.toJson(receipt)).isEqualTo("""
+                    {
+                      "basis": 7,
+                      "transactionTime": "2026-01-05T09:00:00.123456Z",
+                      "keys": [
+                        {
+                          "write": 0,
+                          "key": {
+                            "entityType": "Account",
+                            "key": {
+                              "number": "A-1"
+                            }
+                          },
+                          "entity": "e-1"
+                        },
+                        {
+                          "write": 2,
+                          "key": {
+                            "entityType": "Organization",
+                            "key": {
+                              "lei": "5493001KJTIIGC8Y1R12"
+                            }
+                          },
+                          "entity": "e-2"
+                        },
+                        {
+                          "write": 2,
+                          "key": {
+                            "entityType": "Thing",
+                            "key": {
+                              "serial": 7
+                            }
+                          },
+                          "entity": "e-3"
+                        },
+                        {
+                          "write": 3,
+                          "key": {
+                            "entityType": "Thing",
+                            "key": {
+                              "amount": 1.50
+                            }
+                          },
+                          "entity": "e-4"
+                        }
+                      ],
+                      "principal": "importer"
                     }
                     """);
         }

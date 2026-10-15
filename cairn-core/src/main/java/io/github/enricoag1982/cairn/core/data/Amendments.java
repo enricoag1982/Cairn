@@ -6,6 +6,7 @@ import io.github.enricoag1982.cairn.core.commit.CommitSequence;
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
+import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.AttributeId;
@@ -25,7 +26,9 @@ import java.util.Set;
  * Applies the writes that change something that exists: patch, replace and end-date, on entities and relationships
  * alike (design D5 and D6 of {@code add-entity-versions} and D1 of {@code add-relationships}). Checks the conflict
  * checks of the writes against what is committed now. Problems about the target are located at the path of the
- * reference that names it.
+ * reference that names it; a target named by a unique key is resolved first, at the start of the write's period, and
+ * problems about the entity then name its ID, while problems about the key are located at {@code @write.<position>}
+ * (ADR-0026).
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.
  */
@@ -49,9 +52,10 @@ final class Amendments {
         return ended;
     }
 
-    void patch(Write.Patch write) {
-        String path = Workspace.pathOf(write.target());
-        Working target = workspace.resolve(write.target());
+    void patch(Write.Patch write, int position) {
+        Ref named = workspace.resolveKey(write.target(), write.period().from(), position);
+        String path = pathOf(named, position);
+        Working target = named == null ? null : workspace.resolve(named);
         boolean validPeriod = checks.checkPeriod(path, write.period());
         if (target == null || target.failed()) {
             return;
@@ -82,9 +86,10 @@ final class Amendments {
         }
     }
 
-    void replace(Write.Replace write) {
-        String path = Workspace.pathOf(write.target());
-        Working target = workspace.resolve(write.target());
+    void replace(Write.Replace write, int position) {
+        Ref named = workspace.resolveKey(write.target(), write.period().from(), position);
+        String path = pathOf(named, position);
+        Working target = named == null ? null : workspace.resolve(named);
         boolean validPeriod = checks.checkPeriod(path, write.period());
         if (target == null || target.failed()) {
             return;
@@ -98,9 +103,10 @@ final class Amendments {
         }
     }
 
-    void endDate(Write.EndDate write) {
-        String path = Workspace.pathOf(write.target());
-        Working target = workspace.resolve(write.target());
+    void endDate(Write.EndDate write, int position) {
+        Ref named = workspace.resolveKey(write.target(), write.from(), position);
+        String path = pathOf(named, position);
+        Working target = named == null ? null : workspace.resolve(named);
         if (target == null || target.failed()) {
             return;
         }
@@ -117,6 +123,11 @@ final class Amendments {
         if (!target.isRelationship()) {
             ended.add(new Cascades.Ended(target, write.from()));
         }
+    }
+
+    /** What problems about a write's target call it: the reference it was resolved to, else the write itself. */
+    private static String pathOf(Ref resolved, int position) {
+        return resolved == null ? Workspace.writePath(position) : Workspace.pathOf(resolved);
     }
 
     /** Reports a period that the target does not exist throughout; tells whether it exists throughout it. */

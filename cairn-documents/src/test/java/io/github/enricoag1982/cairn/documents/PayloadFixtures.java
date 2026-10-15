@@ -63,6 +63,16 @@ final class PayloadFixtures {
             return IdLookup.from(latest());
         }
 
+        /** A lookup of the IDs the store holds and of the entities that unique keys name, through its latest views. */
+        IdLookup storeLookup() {
+            return IdLookup.fromStore(store);
+        }
+
+        /** Reads a payload that must be valid, with the lookup of the store that also resolves unique keys. */
+        TransactionPayload readWithKeys(String text) {
+            return PayloadFixtures.read(text, schema(), storeLookup());
+        }
+
         /** Replays a story of the reference domain: moves the clock to its recording date and commits it. */
         Receipt replay(ReferenceStories.Recording recording) {
             return ReferenceStories.replay(store, clock, recording);

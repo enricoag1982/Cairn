@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-13
+last-reviewed: 2026-10-15
 owner: ""
 ---
 
@@ -87,6 +87,7 @@ switch (party) {
 }
 ```
 
+Each unique attribute gets a method that makes a *unique key*, so `view.entity(Account.byNumber("A-1"))` finds the account that has the number at the view's effective time.
 The interfaces are not sealed, so a switch needs a default branch: a document or an agent can add subtypes later.
 A state of a type that the generated code does not know, such as a subtype registered after generation, reads as the type you asked for; its other attributes are in `entityState()`.
 Reading a state of a known type that is not the asked type or one of its subtypes throws `IllegalArgumentException`.
@@ -107,6 +108,7 @@ store.commit(transaction);
 
 `relate` also takes the generated types of the two ends, such as `Owns.relate(acme, beta)` for an `Organization` and a `Party` read before.
 `patch(ref)` sets attributes and clears optional ones (`clearLei()`), and `replace(ref)` sets all of them; both take a conflict check with `check(...)`.
+A reference can be an ID, a temporary ID or a unique key, such as `Account.patch(Account.byNumber("A-1"))`; the store resolves a key when it commits, at the start of the write's period ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)).
 
 ## Query
 
@@ -151,7 +153,7 @@ Give the rule to the store with `StoreSettings.builder().rules(new LeiChecksum()
 A rule that several types name is generated for their closest common supertype.
 
 Name a rule only on the type it checks, and read everything else through its `RuleContext`: the store records what the rule reads there, and runs it again when a transaction changes that, such as a relationship that the rule navigated and that ends ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)). What a rule reads anywhere else, the store cannot see.
-Prefer navigating from what the rule checks: a rule that lists the entities of a type, runs a query, which starts by listing its start type, or reads a timeline, runs again whenever any of those entities changes at a time it read.
+Prefer navigating from what the rule checks: a rule that lists the entities of a type, finds an entity by a unique key, runs a query, which starts by listing its start type, or reads a timeline, runs again whenever any of those entities changes at a time it read.
 
 ## Names
 

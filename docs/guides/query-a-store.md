@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-13
+last-reviewed: 2026-10-15
 owner: ""
 ---
 
@@ -47,6 +47,7 @@ switch (result) {
 ```
 
 A query for a type includes its subtypes; `exactType()` after `from` leaves them out.
+To read one entity by a unique attribute, such as an account by its number, use `view.entity(UniqueKey)` rather than a query ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)).
 Without `select`, a query returns its bindings, or its group keys and aggregates when it groups. `orderBy` and `limit` come last.
 
 With generated types ([guide](generate-java-types.md)), each attribute has a typed reference, so values are checked by the compiler:

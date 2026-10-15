@@ -5,21 +5,30 @@ import static io.github.enricoag1982.cairn.core.data.ReferenceTales.relationship
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA_EMPLOYS_ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
+import io.github.enricoag1982.cairn.data.KeyResolution;
+import io.github.enricoag1982.cairn.data.Purge;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Basis;
+import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
@@ -107,6 +116,44 @@ class PurgeDurabilityScenariosTest {
         assertThat(reopened.wasPurged(alice)).as("the reopened store knows that her ID was purged").isTrue();
         assertThat(reopened.view(Coordinates.effectiveAt(on(3, 31))).entities("Organization")).as("ACME and Beta stay")
                 .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Scenario: A key that named a purged entity")
+    void aKeyThatNamedAPurgedEntity() {
+        DirectoryStore store = durable.openWithReferenceModel();
+        Receipt parties = durable.replay(store, ReferenceStories.rd1Parties());
+        EntityId acme = entity(parties, ACME);
+        durable.replay(store, ReferenceStories.rd9AcmeLei(acme));
+        durable.clock.moveTo(on(2, 1));
+        Transaction renamesAcme = Transaction.by("importer").idempotencyKey("rename-acme")
+                .patch(new UniqueKey("Organization", "lei", Value.of(ReferenceStories.LEI)), from(2, 1),
+                        values("name", "ACME Holdings")).build();
+        Receipt receipt = DurableFixture.commit(store, renamesAcme);
+        assertThat(receipt.keys()).containsExactly(new KeyResolution(0,
+                new UniqueKey("Organization", "lei", Value.of(ReferenceStories.LEI)), acme));
+        store.writeSnapshot();
+        assertThat(StoreFiles.filesContaining(directory, ReferenceStories.LEI)).as("the files hold the LEI before")
+                .isNotEmpty();
+
+        purged(store.purge(Purge.by(ReferenceStories.PURGE_PRINCIPAL).reason(ReferenceStories.PURGE_REASON).entity(acme)
+                .build()));
+        CommitResult again = store.commit(renamesAcme);
+
+        assertThat(again).isInstanceOf(CommitResult.Rejected.class);
+        assertThat(((CommitResult.Rejected) again).problems()).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.IDEMPOTENCY_KEY_PURGED);
+            assertThat(problem.path()).isEqualTo("@transaction");
+        });
+        assertThat(StoreFiles.filesContaining(directory, ReferenceStories.LEI)).as("no file holds the LEI after the purge")
+                .isEmpty();
+        store.close();
+        DirectoryStore reopened = durable.open();
+        assertThat(reopened.commit(renamesAcme)).as("nor does a reopened store accept it again")
+                .isInstanceOf(CommitResult.Rejected.class);
+        assertThat(StoreFiles.filesContaining(directory, ReferenceStories.LEI)).as("no file holds the LEI after reopening")
+                .isEmpty();
+        assertThat(reopened.view(Coordinates.effectiveAt(on(3, 31))).entity(acme)).isEmpty();
     }
 
     @Test

@@ -30,7 +30,9 @@ import java.util.Objects;
  * <li>{@code endDate}: {@code target}, {@code from} and {@code conflictCheck}.
  * </ul>
  *
- * <p>A reference ({@code source}, {@code target}) is written as {@code $} followed by a temporary ID, or as an ID. The
+ * <p>A reference ({@code source}, {@code target}) is written as {@code $} followed by a temporary ID, as an ID, or, for
+ * an existing entity, as a unique key: {@code {entityType: Account, key: {number: A-1}}}, whose {@code key} has exactly one
+ * entry, the name of a unique attribute and its value (ADR-0026). The
  * {@code temporaryId} of a {@code create} or {@code relate} is written the same way, or as the name alone. Instants are
  * ISO 8601 strings, such as {@code 2026-01-01T00:00:00Z}; an offset other than UTC, such as {@code +01:00}, is accepted
  * and converted to UTC. A conflict check is {@code {perEntity: <basis>}} or {@code {perAttribute: <basis>}}, with the
@@ -87,8 +89,19 @@ public final class Payloads {
      * {@code 2026-01-01T00:00:00Z}. One with an offset other than UTC, such as {@code 2026-01-01T01:00:00+01:00}, is
      * accepted and converted to UTC.
      *
-     * <p>A reference that is not a temporary ID becomes an {@code EntityId} or a {@code RelationshipId}, as the payload
-     * or the lookup says, and an {@code EntityId} if neither knows it, so that the transaction's validation reports it.
+     * <p>A reference that is not a temporary ID or a unique key becomes an {@code EntityId} or a {@code RelationshipId},
+     * as the payload or the lookup says, and an {@code EntityId} if neither knows it, so that the transaction's validation
+     * reports it.
+     *
+     * <p>A reference that is a unique key becomes a {@link io.github.enricoag1982.cairn.data.UniqueKey}, which the store
+     * resolves when it commits. Its value is read by the value type of the attribute in the named type, as the values of
+     * writes are, or by its own YAML type if the schema does not have the type or the attribute. A mapping that has other
+     * keys than {@code entityType} and {@code key}, lacks one of them, has a {@code key} that is no mapping or does not
+     * have exactly one entry, or whose value is no literal, is a problem of reading, located at the reference or at its
+     * {@code key}, as the shape that is wrong. Whether the type, the attribute and the value are valid, and whether an
+     * entity has the value, is for the store to say. If the lookup knows the entity that the key names at the start of the
+     * write's period, the values of a {@code patch} or {@code replace} are read by the type of that entity, and problems
+     * about that entity, which name its ID, are located at the writes that name it by the key.
      *
      * @param text   the payload, as YAML or JSON
      * @param schema the schema that types the values of the writes, normally the schema of the store that commits the
@@ -104,11 +117,33 @@ public final class Payloads {
         return PayloadReader.read(text, schema, lookup);
     }
 
+    /**
+     * Reads a unique key that is written alone, in the form that payloads write it in a reference, such as
+     * {@code {entityType: Account, key: {number: A-1}}}, for example from the arguments of an agent tool. It reads as a
+     * reference of a payload does, and does not check the key against the schema: the type, the attribute and the value
+     * are for a store or a view to check.
+     *
+     * @param text   the key, as YAML or JSON
+     * @param schema the schema that types the value by the attribute it names
+     * @param path   the path that every problem carries, such as {@code @arguments.key}
+     * @return the key, or the problems, each located in the text
+     */
+    public static UniqueKeyReadResult readUniqueKey(String text, Schema schema, String path) {
+        Objects.requireNonNull(text, "text");
+        Objects.requireNonNull(schema, "schema");
+        Objects.requireNonNull(path, "path");
+        return PayloadReader.readKey(text, schema, path);
+    }
+
     // ------------------------------------------------------------------ results as JSON
 
     /**
      * Writes a receipt as JSON: {@code basis}, {@code transactionTime}, {@code temporaryIds}, {@code created},
-     * {@code ended}, {@code principal}, {@code onBehalfOf}, {@code reason} and {@code idempotencyKey}.
+     * {@code ended}, {@code keys}, {@code principal}, {@code onBehalfOf}, {@code reason} and {@code idempotencyKey}.
+     *
+     * <p>{@code keys} lists what each unique key that a write names resolved to, in the order of the writes: the
+     * position of the write ({@code write}), the {@code key} in the form that payloads write it, such as
+     * {@code {"entityType": "Account", "key": {"number": "A-1"}}}, and the ID of the {@code entity} that it named.
      *
      * <p>{@code temporaryIds} maps each temporary ID, with its {@code $}, to the ID that it names, as
      * {@code {"entity": "<id>"}} or {@code {"relationship": "<id>"}}, as do the items of {@code created} and

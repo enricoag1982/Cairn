@@ -52,6 +52,11 @@ final class PayloadKeys {
     /** The keys an {@code endDate} must have. */
     static final List<String> END_DATE_REQUIRED = List.of("target", "from");
 
+    /** The keys of a reference to an entity by a unique key (ADR-0026): the entity type and the {@code key}. */
+    static final List<String> UNIQUE_KEY = List.of("entityType", "key");
+    /** The keys a reference by a unique key must have. */
+    static final List<String> UNIQUE_KEY_REQUIRED = List.of("entityType", "key");
+
     /** The keys of a conflict check: it has exactly one of them, whose value is a basis. */
     static final List<String> CONFLICT_CHECK = List.of("perEntity", "perAttribute");
 

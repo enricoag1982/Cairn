@@ -21,7 +21,9 @@ import java.util.TreeMap;
  * <li>an attribute with the name of a member that generated code adds to the type, such as {@code id}, {@code from}
  * or, on builders, {@code check}, or of a method of {@code Object}, or of a library type that generated code uses
  * before a dot;
- * <li>a rule's base class with the name of a type.
+ * <li>a rule's base class with the name of a type;
+ * <li>the method that makes the unique key of an attribute, {@code by} and the attribute's name with its first letter in
+ * upper case, with the name of an accessor or of another such method of the same type.
  * </ul>
  *
  * <p>A suffixed name is lengthened with further underscores until it is no other type's or attribute's name.
@@ -119,6 +121,27 @@ final class JavaNames {
         while (isReserved(kind, candidate) || attributeNames.contains(candidate)) {
             candidate += "_";
         }
+        return candidate;
+    }
+
+    /**
+     * The name of the static method that makes the unique key of an attribute of an entity type (ADR-0026): {@code by}
+     * and the attribute's name with its first letter in upper case, such as {@code byNumber}. It gets the suffix
+     * {@code _}, repeated until it clashes with nothing, where it would clash with a name that generated code reserves,
+     * or with a name in {@code taken}, which the caller fills with the accessors of the type's attributes and the keys
+     * it has named so far. The name chosen is added to {@code taken}.
+     *
+     * @param attribute the unique attribute
+     * @param taken     the member names of the type that the method must not take
+     * @return the name of the method
+     */
+    String key(Attribute attribute, Set<String> taken) {
+        String name = attribute.name();
+        String candidate = "by" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        while (isReserved(Kind.ENTITY, candidate) || taken.contains(candidate)) {
+            candidate += "_";
+        }
+        taken.add(candidate);
         return candidate;
     }
 

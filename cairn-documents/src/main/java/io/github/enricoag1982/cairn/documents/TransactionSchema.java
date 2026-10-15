@@ -87,9 +87,35 @@ final class TransactionSchema {
                         .put("examples", strings("2026-01-01T00:00:00Z", "2026-01-01T01:00:00+01:00")))
                 .put("reference", new Mapping()
                         .put("description", "A reference to an entity or a relationship: $ and the temporary ID of a "
-                                + "write earlier in this transaction, such as $acme, or an ID.")
-                        .put("type", "string")
-                        .put("minLength", ONE))
+                                + "write earlier in this transaction, such as $acme, or an ID. An existing entity can "
+                                + "also be named by a unique key: its entity type and one unique attribute with its "
+                                + "value, such as { entityType: Account, key: { number: A-1 } }, which the store "
+                                + "resolves when it commits.")
+                        .put("oneOf", new Sequence(List.of(new Mapping().put("type", "string").put("minLength", ONE),
+                                ref("uniqueKey")))))
+                .put("uniqueKey", new Mapping()
+                        .put("description", "A unique key: the name of an entity type, or an alias, and a key with "
+                                + "exactly one entry, the name of an attribute of that type that is unique, or an "
+                                + "alias, and its value. The store resolves it when it commits, at the start of the "
+                                + "write's period, to the entity of the type, or of a subtype, that has the value then; "
+                                + "it checks the type, the attribute and the value.")
+                        .put("type", "object")
+                        .put("additionalProperties", FALSE)
+                        .put("required", strings(PayloadKeys.UNIQUE_KEY_REQUIRED.toArray(String[]::new)))
+                        .put("properties", new Mapping()
+                                .put("entityType", new Mapping()
+                                        .put("description", "The name of the entity type of the entity, or an alias of "
+                                                + "it. The entity can be of a subtype.")
+                                        .put("type", "string")
+                                        .put("minLength", ONE))
+                                .put("key", new Mapping()
+                                        .put("description", "The attribute and its value, as a mapping with exactly one "
+                                                + "entry: the name of a unique attribute of the entity type, or an "
+                                                + "alias, and the value, which has the attribute's value type.")
+                                        .put("type", "object")
+                                        .put("minProperties", ONE)
+                                        .put("maxProperties", ONE)
+                                        .put("additionalProperties", ref("scalar")))))
                 .put("scalar", new Mapping()
                         .put("description", "A value: a string, a number or true or false. A date or an instant is a "
                                 + "string in ISO 8601 form, and a decimal is a number.")
@@ -213,9 +239,9 @@ final class TransactionSchema {
                                 + "generates one otherwise."))
                         .put("relationshipType", relationshipType)
                         .put("source", reference("The source: $ and the temporary ID of an entity that an earlier write "
-                                + "creates, or the ID of an entity."))
+                                + "creates, the ID of an entity, or a unique key that names it."))
                         .put("target", reference("The target: $ and the temporary ID of an entity that an earlier write "
-                                + "creates, or the ID of an entity."))
+                                + "creates, the ID of an entity, or a unique key that names it."))
                         .put("from", instant("The first instant at which the relationship exists."))
                         .put("until", instant("The first instant after the relationship; leave it out for a relationship "
                                 + "without an end."))
@@ -251,7 +277,7 @@ final class TransactionSchema {
                 .put("required", strings(PayloadKeys.PATCH_REQUIRED.toArray(String[]::new)))
                 .put("properties", new Mapping()
                         .put("target", reference("The entity or relationship to change: $ and the temporary ID of a "
-                                + "write earlier in this transaction, or an ID."))
+                                + "write earlier in this transaction, an ID, or a unique key."))
                         .put("from", instant("The first instant at which the change applies."))
                         .put("until", instant("The first instant after the change; leave it out for a change that lasts "
                                 + "until further notice."))
@@ -274,7 +300,7 @@ final class TransactionSchema {
                 .put("required", strings(PayloadKeys.REPLACE_REQUIRED.toArray(String[]::new)))
                 .put("properties", new Mapping()
                         .put("target", reference("The entity or relationship to replace: $ and the temporary ID of a "
-                                + "write earlier in this transaction, or an ID."))
+                                + "write earlier in this transaction, an ID, or a unique key."))
                         .put("from", instant("The first instant at which the new values apply."))
                         .put("until", instant("The first instant after the new values; leave it out for values that "
                                 + "last until further notice."))
@@ -292,7 +318,7 @@ final class TransactionSchema {
                 .put("required", strings(PayloadKeys.END_DATE_REQUIRED.toArray(String[]::new)))
                 .put("properties", new Mapping()
                         .put("target", reference("The entity or relationship to end: $ and the temporary ID of a write "
-                                + "earlier in this transaction, or an ID."))
+                                + "earlier in this transaction, an ID, or a unique key."))
                         .put("from", instant("The first instant at which the entity or relationship no longer exists."))
                         .put("conflictCheck", conflictCheckReference()));
     }

@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-13
+last-reviewed: 2026-10-15
 owner: ""
 ---
 
@@ -70,8 +70,9 @@ Scenarios that validate or register the reference model assume a registry with t
 - `name-not-blank` version 1, for Party: the name is not empty or only white space (`blank-name`).
 - `employer-holds-account` version 1, for Employs: an organization holds at least one account, through `HeldBy`, whenever it employs someone (`no-account`).
 - `controlling-owner-has-lei` version 1, for Owns: an organization that owns more than 50% of a party has an LEI (`no-lei`).
+- `account-a1-funded` version 1, for Employs: the account with the number A-1, found by its unique key, has a balance of at least 1,000 when an employment starts (`underfunded`).
 
-The last two read other entities and relationships, so writes to those run them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)).
+The last three read other entities and relationships, so writes to those run them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)).
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 

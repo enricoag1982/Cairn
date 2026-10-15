@@ -1,16 +1,23 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.schema.Problems;
+import io.github.enricoag1982.cairn.core.schema.Values;
 import io.github.enricoag1982.cairn.core.storage.IdDigests;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.TypeId;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -18,7 +25,9 @@ import java.util.Set;
  * The entities and relationships that a transaction touches, with what it needs to find them (design D5 of
  * {@code add-entity-versions} and D2 of {@code add-relationships}): the store's entities and relationships, from which
  * a {@link Working} copy is made at the first touch, the temporary IDs of the ones the transaction creates, and the
- * namespace of IDs, which entities and relationships share. The parts of a {@link Preparation} work on one workspace.
+ * namespace of IDs, which entities and relationships share. It also resolves the unique keys that writes name entities
+ * by (ADR-0026, design D2 of {@code add-unique-key-references}). The parts of a {@link Preparation} work on one
+ * workspace.
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.
  */
@@ -34,6 +43,8 @@ final class Workspace {
     private final Map<Id, Working> working = new LinkedHashMap<>();
     /** Entities and relationships share one namespace of temporary IDs. */
     private final Map<TemporaryId, Working> temporaries = new HashMap<>();
+    /** What the unique keys that writes name resolved to, in the order of the writes. */
+    private final List<KeyResolution> keyResolutions = new ArrayList<>();
 
     /**
      * Creates the workspace of a transaction.
@@ -82,6 +93,14 @@ final class Workspace {
         return working;
     }
 
+    /**
+     * What the unique keys that the writes name resolved to, in the order of the writes and, within a relate, the source
+     * before the target (ADR-0026): what the receipt of a committed transaction lists.
+     */
+    List<KeyResolution> keyResolutions() {
+        return List.copyOf(keyResolutions);
+    }
+
     // ------------------------------------------------------------------ references
 
     /** What problems about the target of a write call it: its temporary ID or its ID. */
@@ -90,15 +109,72 @@ final class Workspace {
             case TemporaryId temporaryId -> temporaryId.toString();
             case EntityId id -> id.value();
             case RelationshipId id -> id.value();
+            case UniqueKey key -> key.toString(); // A write is resolved to the entity's ID before problems name it.
         };
     }
 
-    /** Finds the entity or relationship a write targets, or reports that there is none. */
+    /** What problems about a reference that a write could not resolve call the write: {@code @write.<position>}. */
+    static String writePath(int position) {
+        return "@write." + position;
+    }
+
+    /**
+     * Resolves the unique key that a write names an entity by, if the reference is one, so that the write goes on as if
+     * it named the entity's ID (ADR-0026). A key resolves at the start of the write's effective period, against the
+     * entities as the store held them before the transaction, never against what this transaction writes, so the result
+     * does not depend on the order of the writes. Any other reference is returned as it is. Each resolution is kept for
+     * the receipt, with the position of the write.
+     *
+     * @param ref      the reference that the write names
+     * @param at       the start of the write's effective period
+     * @param position the position of the write in the transaction, from 0, which locates the problems
+     * @return the reference to go on with: the entity's ID for a key that names one; null, after the problem was
+     *         reported, for a key that is invalid or names no entity
+     */
+    Ref resolveKey(Ref ref, Instant at, int position) {
+        if (!(ref instanceof UniqueKey key)) {
+            return ref;
+        }
+        String path = writePath(position);
+        switch (UniqueKeys.check(index.schema(), "The schema", key)) {
+            case UniqueKeys.Invalid invalid -> {
+                problems.add(Problems.of(ProblemCode.INVALID_UNIQUE_KEY, path, invalid.message(), invalid.expected(),
+                        invalid.found(), invalid.hint()));
+                return null;
+            }
+            case UniqueKeys.Valid valid -> {
+                Set<TypeId> types = index.typeAndSubtypes(valid.type());
+                for (StoredEntity entity : storedEntities.values()) {
+                    if (types.contains(entity.type()) && entity.latest().at(at).filter(valid::heldBy).isPresent()) {
+                        keyResolutions.add(new KeyResolution(position, key, entity.id()));
+                        return entity.id();
+                    }
+                }
+                problems.add(Problems.of(ProblemCode.UNIQUE_KEY_NOT_FOUND, path, "No entity has the unique key " + key
+                        + " at " + at + ", the start of the write's effective period, in the store as committed "
+                        + "before this transaction.", "an entity of " + valid.type().name() + ", or of a subtype, "
+                        + "that has the " + valid.attribute().name() + " " + describeValue(valid) + " at " + at,
+                        "no such entity", "A value of a unique attribute can belong to another entity at another time; "
+                        + "check the value and the start of the period."));
+                return null;
+            }
+        }
+    }
+
+    private static String describeValue(UniqueKeys.Valid valid) {
+        return Values.describe(valid.value());
+    }
+
+    /**
+     * Finds the entity or relationship a write targets, or reports that there is none. A unique key must be resolved
+     * first, with {@link #resolveKey}.
+     */
     Working resolve(Ref ref) {
         Working found = switch (ref) {
             case TemporaryId temporaryId -> resolveTemporaryId(temporaryId);
             case EntityId id -> loadEntity(id, true);
             case RelationshipId id -> loadRelationship(id, true);
+            case UniqueKey key -> throw new IllegalStateException("The unique key " + key + " was not resolved.");
         };
         if (found != null) {
             found.written = true;

@@ -4,11 +4,13 @@ import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Id;
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Link;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.Step;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Mapping;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Plain;
 import io.github.enricoag1982.cairn.documents.WrittenNode.Sequence;
@@ -53,11 +55,28 @@ final class JsonResults {
         }
         ids(mapping, "created", receipt.created());
         ids(mapping, "ended", receipt.ended());
+        if (!receipt.keys().isEmpty()) {
+            mapping.put("keys", list(receipt.keys(), JsonResults::keyResolution));
+        }
         mapping.put("principal", receipt.principal());
         receipt.onBehalfOf().ifPresent(party -> mapping.put("onBehalfOf", party));
         receipt.reason().ifPresent(reason -> mapping.put("reason", reason));
         receipt.idempotencyKey().ifPresent(key -> mapping.put("idempotencyKey", key));
         return mapping;
+    }
+
+    /**
+     * What a unique key resolved to: {@code {write, key, entity}}, the key in the form that payloads write it, such as
+     * {@code {"entityType": "Account", "key": {"number": "A-1"}}}.
+     */
+    private static Mapping keyResolution(KeyResolution resolution) {
+        UniqueKey key = resolution.key();
+        return new Mapping()
+                .put("write", plain(resolution.write()))
+                .put("key", new Mapping()
+                        .put("entityType", key.entityType())
+                        .put("key", new Mapping().put(key.attribute(), DocumentWriter.literal(key.value()))))
+                .put("entity", resolution.entity().value());
     }
 
     static Mapping entityState(EntityState state) {

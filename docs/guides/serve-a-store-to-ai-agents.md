@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-13
+last-reviewed: 2026-10-15
 owner: ""
 ---
 
@@ -75,8 +75,8 @@ Other MCP clients that start servers on standard input and output take the same 
 | `cairn_explain_problem` | The explanation of a problem code, or of a rule's code such as `lei-checksum/invalid-check-digits`. |
 | `cairn_plan_schema`, `cairn_register_schema` | Plan a schema document, then register it. The plan lists each change as compatible or breaking, with hints. |
 | `cairn_dry_run`, `cairn_commit` | Run a transaction payload dry, then commit it. Problems are located in the payload, with hints. |
-| `cairn_read_entity`, `cairn_read_relationship`, `cairn_list_entities` | Read at an effective time, and optionally as known at a basis or a transaction time (`knownAt`). |
-| `cairn_timeline`, `cairn_navigate`, `cairn_traverse` | Read an entity's or relationship's history, follow one relationship name, or follow it to a maximum depth. |
+| `cairn_read_entity`, `cairn_read_relationship`, `cairn_list_entities` | Read at an effective time, and optionally as known at a basis or a transaction time (`knownAt`). `cairn_read_entity` takes an entity's ID (`id`) or a *unique key* (`key`). |
+| `cairn_timeline`, `cairn_navigate`, `cairn_traverse` | Read an entity's or relationship's history, follow one relationship name, or follow it to a maximum depth. `cairn_navigate` and `cairn_traverse` start from an ID or a unique key. |
 | `cairn_query` | Run a *query* written as JSON or YAML: filters, follow steps, traversals, grouping and aggregates. See [Query a store](query-a-store.md). |
 | `cairn_approval_status` | The status of an approval request and, once decided, its outcome. |
 
@@ -85,6 +85,7 @@ Every tool returns JSON. A call that cannot be done returns problems instead of 
 
 A typical agent session reads `cairn_describe`, asks `cairn_json_schema` for the payload schema, writes a payload, runs it with `cairn_dry_run` until it has no problems, and then commits it. To answer questions over many entities, it asks `cairn_json_schema` for the kind `query` and sends queries to `cairn_query`.
 For a schema change it edits the document from `cairn_describe`, raises the origin's version, plans and registers it.
+Payloads, `cairn_read_entity`, `cairn_navigate` and `cairn_traverse` name an existing entity by its ID, or by a unique key, such as `{ "entityType": "Account", "key": { "number": "A-1" } }`, so an agent rarely needs a query to find an ID. The store resolves a write's key when it commits, at the start of the write's period ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)).
 
 ## Rules
 

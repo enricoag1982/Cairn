@@ -33,6 +33,9 @@ final class ToolCatalog {
             + "and knownAt, if given, reads the store as it was at a basis or a transaction time (the default is "
             + "now). The result reports the effectiveAt and the basis it was read at.";
 
+    private static final String ID_OF_ENTITY = "The ID of the entity. Give this or key, not both.";
+    private static final String ID_TO_START_FROM = "The ID of the entity to start from. Give this or key, not both.";
+
     private ToolCatalog() {
     }
 
@@ -93,9 +96,12 @@ final class ToolCatalog {
                         + "Build it from cairn_json_schema with kind \"payload\"; its principal is the one "
                         + "cairn_describe reports."))));
         tools.add(tool(READ_ENTITY,
-                "Reads one entity: its type, values and effective period." + READ_COORDINATES
-                        + " The result is null if the entity does not exist at that effective time.",
-                coordinates(List.of("id", "effectiveAt"), "id", string("The ID of the entity."))));
+                "Reads one entity: its type, values and effective period. Name the entity by its ID (id), or by a "
+                        + "unique key (key): its entity type and one unique attribute with its value, such as the "
+                        + "Account with the number A-1. Give exactly one of the two." + READ_COORDINATES
+                        + " The result is null if the entity does not exist at that effective time, and, for a key, "
+                        + "if no entity has the value at that time.",
+                coordinates(List.of("effectiveAt"), "id", string(ID_OF_ENTITY), "key", key())));
         tools.add(tool(READ_RELATIONSHIP,
                 "Reads one relationship: its type, source, target, values and effective period." + READ_COORDINATES
                         + " The result is null if the relationship does not exist at that effective time.",
@@ -115,17 +121,22 @@ final class ToolCatalog {
         tools.add(tool(NAVIGATE,
                 "Follows the relationships of an entity by a name that exists at the effective time: the name of a "
                         + "relationship type leads from its source to its targets, and its inverse name from the "
-                        + "target to the sources. Returns each relationship and the entity at its other end."
-                        + READ_COORDINATES,
-                coordinates(List.of("id", "name", "effectiveAt"),
-                        "id", string("The ID of the entity to start from."),
+                        + "target to the sources. Returns each relationship and the entity at its other end. Name "
+                        + "the entity to start from by its ID (id) or by a unique key (key), exactly one of the two; "
+                        + "a key that no entity has at that time leads nowhere." + READ_COORDINATES,
+                coordinates(List.of("name", "effectiveAt"),
+                        "id", string(ID_TO_START_FROM),
+                        "key", key(),
                         "name", string("The name or inverse name of a relationship type."))));
         tools.add(tool(TRAVERSE,
                 "Follows every relationship of a name, recursively and breadth first, up to a maximum depth. "
                         + "Returns each entity reached, its depth and the relationship it was reached through; "
-                        + "each entity once." + READ_COORDINATES,
-                coordinates(List.of("id", "name", "maxDepth", "effectiveAt"),
-                        "id", string("The ID of the entity to start from."),
+                        + "each entity once. Name the entity to start from by its ID (id) or by a unique key (key), "
+                        + "exactly one of the two; a key that no entity has at that time leads nowhere."
+                        + READ_COORDINATES,
+                coordinates(List.of("name", "maxDepth", "effectiveAt"),
+                        "id", string(ID_TO_START_FROM),
+                        "key", key(),
                         "name", string("The name or inverse name of a relationship type."),
                         "maxDepth", integer("The largest number of relationships to follow; 0 follows none."))));
         tools.add(tool(QUERY,
@@ -178,6 +189,28 @@ final class ToolCatalog {
         all[properties.length + 2] = "knownAt";
         all[properties.length + 3] = knownAt();
         return object(required, all);
+    }
+
+    /**
+     * The argument that names an entity by a unique key, in the form of transaction payloads. The attribute must be unique
+     * in the entity type, and the value is read by the attribute's value type; the effective time of the call decides
+     * which entity has the value.
+     */
+    private static ObjectNode key() {
+        ObjectNode schema = Json.object().put("type", "object")
+                .put("description", "A unique key to name the entity by, in place of id: its entity type, and a key with "
+                        + "exactly one entry, the name of a unique attribute of that type and its value, such as "
+                        + "{\"entityType\": \"Account\", \"key\": {\"number\": \"A-1\"}}. The entity is the one of that "
+                        + "type, or of a subtype, that has the value at the effective time. Give this or id, not both.");
+        ObjectNode properties = schema.putObject("properties");
+        properties.putObject("entityType").put("type", "string").put("minLength", 1)
+                .put("description", "The name or an alias of the entity type.");
+        properties.putObject("key").put("type", "object").put("minProperties", 1).put("maxProperties", 1)
+                .put("description", "The name of a unique attribute of the entity type, or an alias, and its value.")
+                .putObject("additionalProperties").putArray("type").add("string").add("number").add("boolean");
+        schema.putArray("required").add("entityType").add("key");
+        schema.put("additionalProperties", false);
+        return schema;
     }
 
     private static ObjectNode knownAt() {

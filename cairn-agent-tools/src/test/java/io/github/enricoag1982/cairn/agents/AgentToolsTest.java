@@ -74,10 +74,10 @@ class AgentToolsTest {
         }
 
         assertThat(traverse).isNotNull();
-        assertThat(traverse.get("required")).map(JsonNode::stringValue)
-                .containsExactly("id", "name", "maxDepth", "effectiveAt");
-        assertThat(traverse.get("properties").propertyNames()).containsExactlyInAnyOrder("id", "name", "maxDepth",
-                "effectiveAt", "knownAt");
+        assertThat(traverse.get("required")).as("the start is named by id or by key, so neither is required")
+                .map(JsonNode::stringValue).containsExactly("name", "maxDepth", "effectiveAt");
+        assertThat(traverse.get("properties").propertyNames()).containsExactlyInAnyOrder("id", "key", "name",
+                "maxDepth", "effectiveAt", "knownAt");
     }
 
     @Test
@@ -553,7 +553,7 @@ class AgentToolsTest {
         JsonNode unknown = problem(result, "UNKNOWN_KEY");
         assertThat(unknown.get("path").stringValue()).isEqualTo("@arguments.effectivAt");
         assertThat(unknown.get("hint").stringValue()).contains("effectiveAt");
-        assertThat(unknown.get("expected").stringValue()).isEqualTo("id, effectiveAt, knownAt");
+        assertThat(unknown.get("expected").stringValue()).isEqualTo("id, key, effectiveAt, knownAt");
         assertThat(problem(result, "MISSING_KEY").get("path").stringValue()).isEqualTo("@arguments.effectiveAt");
     }
 

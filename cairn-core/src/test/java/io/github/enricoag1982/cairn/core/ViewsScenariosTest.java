@@ -11,6 +11,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd5BalanceCorrection;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd5BalancePatch;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd7Rename;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd9Gamma;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,13 +22,16 @@ import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.Value;
+import java.math.BigDecimal;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -130,6 +134,62 @@ class ViewsScenariosTest {
 
         assertThatThrownBy(() -> view.entities("Organisation")).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Organisation");
+    }
+
+    // ------------------------------------------------------------------ reading an entity by a unique key
+
+    @Test
+    @DisplayName("Scenario: Finding an account by its number")
+    void findingAnAccountByItsNumber() {
+        EntityId a1 = (EntityId) reference.createAccounts().temporaryIds().get(A1);
+        reference.replay(rd5BalancePatch(a1));
+        reference.replay(rd5BalanceCorrection(a1));
+
+        Optional<EntityState> found = reference.view(on(3, 31)).entity(new UniqueKey("Account", "number",
+                Value.of("A-1")));
+
+        assertThat(found).isPresent();
+        assertThat(found.get().id()).isEqualTo(a1);
+        assertThat(found.get().values()).containsEntry("balance", Value.of(new BigDecimal("1200")));
+        assertThat(found.get()).as("as the entity read by its ID").isEqualTo(reference.view(on(3, 31)).entity(a1)
+                .orElseThrow());
+    }
+
+    @Test
+    @DisplayName("Scenario: Finding by a value that moved")
+    void findingByAValueThatMoved() {
+        EntityId acme = (EntityId) reference.createParties().temporaryIds().get(ACME);
+        reference.commit(Transaction.by("importer")
+                .patch(acme, EffectivePeriod.between(on(1, 1), on(3, 1)), values("lei", LEI)).build());
+        reference.replay(rd9Gamma());
+        UniqueKey key = new UniqueKey("Organization", "lei", Value.of(LEI));
+
+        Optional<EntityState> february = reference.view(on(2, 15)).entity(key);
+        Optional<EntityState> march = reference.view(on(3, 15)).entity(key);
+
+        assertThat(february).hasValueSatisfying(state -> assertThat(state.id()).isEqualTo(acme));
+        assertThat(march).hasValueSatisfying(state -> {
+            assertThat(state.id()).isNotEqualTo(acme);
+            assertThat(state.values()).containsEntry("name", Value.of("Gamma"));
+        });
+        assertThat(reference.view(on(2, 28)).entity(key)).as("the last day of ACME's period").isPresent()
+                .hasValueSatisfying(state -> assertThat(state.id()).isEqualTo(acme));
+        assertThat(reference.view(on(3, 1)).entity(key)).as("the period of ACME is half-open")
+                .hasValueSatisfying(state -> assertThat(state.values()).containsEntry("name", Value.of("Gamma")));
+        assertThat(reference.view(on(12, 31)).entity(key)).as("Gamma is not ended").isPresent();
+        assertThat(reference.view(on(12, 31)).entity(new UniqueKey("Organization", "lei", Value.of("none"))))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("Scenario: Finding by an attribute that is not unique")
+    void findingByAnAttributeThatIsNotUnique() {
+        reference.createAccounts();
+        View view = reference.view(on(3, 31));
+
+        assertThatThrownBy(() -> view.entity(new UniqueKey("Account", "currency", Value.of("EUR"))))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("currency")
+                .hasMessageContaining("not unique");
     }
 
     // ------------------------------------------------------------------ timeline of an entity

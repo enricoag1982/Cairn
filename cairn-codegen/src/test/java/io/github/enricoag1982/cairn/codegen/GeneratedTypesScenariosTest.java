@@ -15,6 +15,7 @@ import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RuleContext;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
@@ -37,8 +38,10 @@ import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.RuleCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -257,6 +260,32 @@ class GeneratedTypesScenariosTest {
 
         assertThat(Organization.from(domain.entity(on(3, 1), acme)).lei()).isEmpty();
         assertThat(Organization.from(domain.entity(on(2, 1), acme)).lei()).as("before 1 March").contains(ReferenceStories.LEI);
+    }
+
+    // ------------------------------------------------------------------ keys
+
+    @Test
+    @DisplayName("Scenario: Patching and finding by a generated key")
+    void patchingAndFindingByAGeneratedKey() {
+        ReferenceDomain domain = new ReferenceDomain();
+        Receipt parties = domain.replay(ReferenceStories.rd1Parties());
+        domain.replay(ReferenceStories.rd5Accounts(ReferenceDomain.entityId(parties, BETA),
+                ReferenceDomain.entityId(parties, ACME)));
+
+        CommitResult result = domain.attempt(on(3, 16), Transaction.by(PRINCIPAL)
+                .write(Account.patch(Account.byNumber("A-1")).balance(new BigDecimal("1500"))
+                        .effectiveFrom(on(3, 15))).build());
+
+        assertThat(result).isInstanceOf(CommitResult.Committed.class);
+        Optional<EntityState> found = domain.view(on(3, 31)).entity(Account.byNumber("A-1"));
+        assertThat(found).isPresent();
+        Account a1 = Account.from(found.get());
+        assertThat(a1.number()).isEqualTo("A-1");
+        assertThat(a1.balance()).isEqualByComparingTo("1500");
+        assertThat(Account.byNumber("A-1")).isEqualTo(new UniqueKey("Account", "number", Value.of("A-1")));
+        assertThat(Organization.byLei(ReferenceStories.LEI)).as("a type of its own")
+                .isEqualTo(new UniqueKey("Organization", "lei", Value.of(ReferenceStories.LEI)));
+        assertThat(domain.view(on(3, 31)).entity(Organization.byLei(ReferenceStories.LEI))).isEmpty();
     }
 
     // ------------------------------------------------------------------ rules

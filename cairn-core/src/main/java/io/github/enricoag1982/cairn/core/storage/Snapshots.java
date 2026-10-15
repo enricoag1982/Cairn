@@ -227,6 +227,7 @@ public final class Snapshots {
             frame.writeLong(keyed.receipt().basis().value());
             frame.writeInstant(keyed.receipt().transactionTime());
             TransactionCodec.writeReceiptIds(frame, keyed.receipt());
+            TransactionCodec.writeReceiptKeys(frame, keyed.receipt());
             out.write(frame.finishFrame());
             frames++;
         }
@@ -478,7 +479,7 @@ public final class Snapshots {
         Basis basis = new Basis(in.readLong());
         Instant transactionTime = in.readInstant();
         Receipt receipt = TransactionCodec.readReceipt(in, basis, transactionTime, transaction);
-        return new KeyedTransaction(transaction, receipt);
+        return new KeyedTransaction(transaction, TransactionCodec.withKeys(receipt, TransactionCodec.readReceiptKeys(in)));
     }
 
     /** Decodes the body of a frame after its kind byte, and checks that all of it was read. */

@@ -10,7 +10,9 @@
  * {@code entity-versions} and {@code relationships}). Entities are named by an
  * {@link io.github.enricoag1982.cairn.data.EntityId}, relationships by a
  * {@link io.github.enricoag1982.cairn.data.RelationshipId}, and either inside the transaction that creates it by a
- * {@link io.github.enricoag1982.cairn.data.TemporaryId}.
+ * {@link io.github.enricoag1982.cairn.data.TemporaryId}. An existing entity can also be named by a
+ * {@link io.github.enricoag1982.cairn.data.UniqueKey}, an entity type with one of its unique attributes and a value,
+ * which the store resolves when it commits (ADR-0026).
  *
  * <p>Data is read only through a {@link io.github.enricoag1982.cairn.data.View}, an immutable view bound to
  * {@linkplain io.github.enricoag1982.cairn.data.Coordinates coordinates}: an effective time, and a basis or

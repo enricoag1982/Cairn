@@ -9,12 +9,16 @@ import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.Store;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.documents.IdLookup;
 import io.github.enricoag1982.cairn.documents.Payloads;
 import io.github.enricoag1982.cairn.documents.Queries;
 import io.github.enricoag1982.cairn.documents.QueryReadResult;
+import io.github.enricoag1982.cairn.documents.UniqueKeyReadResult;
 import io.github.enricoag1982.cairn.query.QueryResult;
+import io.github.enricoag1982.cairn.schema.Attribute;
+import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
@@ -32,6 +36,10 @@ import tools.jackson.databind.node.ObjectNode;
  * The tools that read a store through a view (design D2 of {@code add-agent-tools}): an entity, a relationship, the
  * entities of a type, a timeline, navigation and traversal, and queries. Every result reports the coordinates it was read at, as
  * {@code {effectiveAt, basis, result}}; a timeline has no effective time, so it reports the basis only.
+ *
+ * <p>The tools that start from an entity, {@code cairn_read_entity}, {@code cairn_navigate} and {@code cairn_traverse},
+ * name it by its ID ({@code id}) or by a unique key ({@code key}, in the form of payloads), exactly one of the two. A key
+ * is found at the call's effective time, through the view; one that no entity has then reads as nothing (ADR-0026).
  */
 final class Reads {
 
@@ -43,19 +51,28 @@ final class Reads {
 
     /** {@code cairn_read_entity}. */
     ObjectNode entity(String text) {
-        Arguments in = Arguments.parse(text, "id", "effectiveAt", "knownAt");
-        String id = in.string("id");
+        Arguments in = Arguments.parse(text, "id", "key", "effectiveAt", "knownAt");
+        Optional<String> id = in.optionalString("id");
+        Optional<String> key = in.optionalObject("key", KEY_FORM);
         Instant effectiveAt = in.instant("effectiveAt");
         KnownAt knownAt = in.knownAt();
+        in.exactlyOne("id", id.isPresent(), "key", key.isPresent());
         if (!in.valid()) {
             return Operations.problemsOnly(in.problems());
         }
         View view = view(effectiveAt, knownAt);
-        Optional<Problem> unknown = unknown(view, id, IdLookup.Kind.ENTITY);
+        if (key.isPresent()) {
+            return switch (find(view, key.get())) {
+                case Found.Invalid invalid -> Operations.problemsOnly(invalid.problems());
+                case Found.Nothing nothing -> result(view, true, null);
+                case Found.Entity found -> result(view, true, json(found.state()));
+            };
+        }
+        Optional<Problem> unknown = unknown(view, id.get(), IdLookup.Kind.ENTITY);
         if (unknown.isPresent()) {
             return Operations.problemsOnly(List.of(unknown.get()));
         }
-        return result(view, true, view.entity(new EntityId(id)).map(Reads::json).orElse(null));
+        return result(view, true, view.entity(new EntityId(id.get())).map(Reads::json).orElse(null));
     }
 
     /** {@code cairn_read_relationship}. */
@@ -116,42 +133,82 @@ final class Reads {
 
     /** {@code cairn_navigate}: the relationships of an entity by a name, and the entities at their other ends. */
     ObjectNode navigate(String text) {
-        Arguments in = Arguments.parse(text, "id", "name", "effectiveAt", "knownAt");
-        String id = in.string("id");
+        Arguments in = Arguments.parse(text, "id", "key", "name", "effectiveAt", "knownAt");
+        Optional<String> id = in.optionalString("id");
+        Optional<String> key = in.optionalObject("key", KEY_FORM);
         String name = in.string("name");
         Instant effectiveAt = in.instant("effectiveAt");
         KnownAt knownAt = in.knownAt();
+        in.exactlyOne("id", id.isPresent(), "key", key.isPresent());
         if (!in.valid()) {
             return Operations.problemsOnly(in.problems());
         }
         View view = view(effectiveAt, knownAt);
-        Optional<Problem> problem = unknown(view, id, IdLookup.Kind.ENTITY)
-                .or(() -> unknownName(view.schema(), name));
-        if (problem.isPresent()) {
-            return Operations.problemsOnly(List.of(problem.get()));
+        Optional<EntityId> start = Optional.empty();
+        if (key.isPresent()) {
+            Optional<Problem> unknownName = unknownName(view.schema(), name);
+            if (unknownName.isPresent()) {
+                return Operations.problemsOnly(List.of(unknownName.get()));
+            }
+            switch (find(view, key.get())) {
+                case Found.Invalid invalid -> {
+                    return Operations.problemsOnly(invalid.problems());
+                }
+                case Found.Nothing nothing -> {
+                    return result(view, true, Json.parse(Payloads.linksToJson(List.of())));
+                }
+                case Found.Entity found -> start = Optional.of(found.state().id());
+            }
+        } else {
+            Optional<Problem> problem = unknown(view, id.get(), IdLookup.Kind.ENTITY)
+                    .or(() -> unknownName(view.schema(), name));
+            if (problem.isPresent()) {
+                return Operations.problemsOnly(List.of(problem.get()));
+            }
+            start = Optional.of(new EntityId(id.get()));
         }
-        List<Link> links = view.navigate(new EntityId(id), name);
+        List<Link> links = view.navigate(start.get(), name);
         return result(view, true, Json.parse(Payloads.linksToJson(links)));
     }
 
     /** {@code cairn_traverse}: everything reachable by a name, breadth first, up to a depth. */
     ObjectNode traverse(String text) {
-        Arguments in = Arguments.parse(text, "id", "name", "maxDepth", "effectiveAt", "knownAt");
-        String id = in.string("id");
+        Arguments in = Arguments.parse(text, "id", "key", "name", "maxDepth", "effectiveAt", "knownAt");
+        Optional<String> id = in.optionalString("id");
+        Optional<String> key = in.optionalObject("key", KEY_FORM);
         String name = in.string("name");
         Integer maxDepth = in.count("maxDepth");
         Instant effectiveAt = in.instant("effectiveAt");
         KnownAt knownAt = in.knownAt();
+        in.exactlyOne("id", id.isPresent(), "key", key.isPresent());
         if (!in.valid()) {
             return Operations.problemsOnly(in.problems());
         }
         View view = view(effectiveAt, knownAt);
-        Optional<Problem> problem = unknown(view, id, IdLookup.Kind.ENTITY)
-                .or(() -> unknownName(view.schema(), name));
-        if (problem.isPresent()) {
-            return Operations.problemsOnly(List.of(problem.get()));
+        Optional<EntityId> start = Optional.empty();
+        if (key.isPresent()) {
+            Optional<Problem> unknownName = unknownName(view.schema(), name);
+            if (unknownName.isPresent()) {
+                return Operations.problemsOnly(List.of(unknownName.get()));
+            }
+            switch (find(view, key.get())) {
+                case Found.Invalid invalid -> {
+                    return Operations.problemsOnly(invalid.problems());
+                }
+                case Found.Nothing nothing -> {
+                    return result(view, true, Json.parse(Payloads.stepsToJson(List.of())));
+                }
+                case Found.Entity found -> start = Optional.of(found.state().id());
+            }
+        } else {
+            Optional<Problem> problem = unknown(view, id.get(), IdLookup.Kind.ENTITY)
+                    .or(() -> unknownName(view.schema(), name));
+            if (problem.isPresent()) {
+                return Operations.problemsOnly(List.of(problem.get()));
+            }
+            start = Optional.of(new EntityId(id.get()));
         }
-        List<Step> steps = view.traverse(new EntityId(id), name, relationship -> true, maxDepth);
+        List<Step> steps = view.traverse(start.get(), name, relationship -> true, maxDepth);
         return result(view, true, Json.parse(Payloads.stepsToJson(steps)));
     }
 
@@ -184,6 +241,64 @@ final class Reads {
                 };
             }
         };
+    }
+
+    // ------------------------------------------------------------------ keys
+
+    private static final String KEY_FORM = "a unique key: {\"entityType\": \"Account\", \"key\": {\"number\": "
+            + "\"A-1\"}}";
+
+    /** What a unique key given to a call names. */
+    private sealed interface Found {
+        /** The entity that has the key's value at the view's effective time. */
+        record Entity(EntityState state) implements Found {
+        }
+
+        /** No entity has the key's value at the view's effective time: the call reads as nothing. */
+        record Nothing() implements Found {
+        }
+
+        /** The key cannot be read, or is not valid in the view's schema. */
+        record Invalid(List<Problem> problems) implements Found {
+        }
+    }
+
+    /**
+     * Reads the text of a {@code key} argument as payloads read a unique key, and finds the entity that has it at the
+     * view's effective time. A problem of reading or of the key is located at {@code @arguments.key}.
+     */
+    private static Found find(View view, String keyText) {
+        UniqueKey key;
+        switch (Payloads.readUniqueKey(keyText, view.schema(), "@arguments.key")) {
+            case UniqueKeyReadResult.Invalid invalid -> {
+                // The text is the arguments' own JSON, so the locations in it would mean nothing to the caller.
+                return new Found.Invalid(invalid.problems().stream().map(problem -> new Problem(problem.code(),
+                        problem.path(), problem.message(), problem.expected(), problem.found(), problem.hint())).toList());
+            }
+            case UniqueKeyReadResult.Read read -> key = read.key();
+        }
+        try {
+            return view.entity(key).<Found>map(Found.Entity::new).orElseGet(Found.Nothing::new);
+        } catch (IllegalArgumentException invalid) {
+            return new Found.Invalid(List.of(invalidKey(view.schema(), key, invalid.getMessage())));
+        }
+    }
+
+    /** The problem of a key that the schema of the view does not accept, with the unique attributes of its type. */
+    private static Problem invalidKey(Schema schema, UniqueKey key, String message) {
+        Optional<EntityType> type = schema.entityType(key.entityType());
+        List<String> unique = type.map(found -> found.attributes().stream().filter(Attribute::unique)
+                .map(Attribute::name).toList()).orElse(List.of());
+        String expected = type.isEmpty() ? "the name or an alias of an entity type"
+                : unique.isEmpty() ? "an attribute of " + type.get().name() + " that is unique, but it has none"
+                : "one of " + String.join(", ", unique);
+        Optional<String> hint = type.isEmpty()
+                ? Arguments.closest(key.entityType(), schema.entityTypes().stream().map(EntityType::name).toList())
+                        .map(closest -> "Did you mean '" + closest + "'?")
+                : Optional.of(unique.isEmpty() ? "Name the entity by its ID."
+                        : "Name the entity by one of its unique attributes, or by its ID.");
+        return new Problem(ProblemCode.INVALID_UNIQUE_KEY, "@arguments.key", message, Optional.of(expected),
+                Optional.of(key.toString()), hint);
     }
 
     // ------------------------------------------------------------------ helpers

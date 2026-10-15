@@ -30,7 +30,12 @@ import java.util.regex.Pattern;
  *     write creates without a temporary ID or an ID.
  * <li>A temporary ID such as {@code $acme}, or an ID, is the last write of the payload that is about the entity or
  *     relationship it names: a write that creates it, or patches, replaces or end-dates it. Only if there is none, it
- *     is the last write that merely mentions it, as the end of a relationship.
+ *     is the last write that merely mentions it, as the end of a relationship. A write that names an entity by a unique
+ *     key is about the entity that the {@link IdLookup} resolved the key to when the payload was read, at the start of
+ *     the write's period (ADR-0026), and mentions it if it is an end of a relationship; the problems of the
+ *     transaction about that entity name its ID. If the lookup resolved nothing, such problems are located like those
+ *     about a subject that no write names, which is less precise and never wrong. A problem about the key itself has
+ *     the path {@code @write.<n>} of its write.
  * <li>A reference and an attribute joined by a dot, such as {@code $acme.name}, is the attribute's key in the last write
  *     about the subject that has one. A write that sets the whole state of the subject (a create, a relate that
  *     creates it, a replace) without the attribute ends the search at the write itself: the attribute is missing
