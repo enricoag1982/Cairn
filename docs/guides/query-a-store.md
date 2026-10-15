@@ -96,4 +96,4 @@ The JSON Schema of the form is published with `cairn-documents` (`Queries.jsonSc
 
 ## Limits
 
-Queries scan the entities of their start type at the view's coordinates; there are no indexes yet. Each query reads one view: a value's history over time is read with timelines, not queries. There is no text query language yet.
+Queries read every entity of their start type at the view's coordinates and filter them in memory; there are no indexes of attribute values yet. Each query reads one view: a value's history over time is read with timelines, not queries. There is no text query language yet.

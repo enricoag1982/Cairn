@@ -76,8 +76,9 @@ final class Timeline {
     }
 
     /**
-     * The timeline that recovery reads back: the segments of a timeline that an earlier commit built, in order. They are
-     * taken as they are, without merging or checking, because they are what the commit recorded.
+     * A timeline read back from storage, by recovery or by the ledger when it decodes or rebuilds one: the segments of a
+     * timeline that an earlier commit built, in order. They are taken as they are, without merging or checking, because
+     * they are what the commit recorded.
      */
     static Timeline restored(List<Segment> segments) {
         return new Timeline(List.copyOf(segments));

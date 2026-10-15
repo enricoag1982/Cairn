@@ -9,7 +9,7 @@ import java.util.Optional;
 
 /**
  * What a data transaction did to one entity or relationship: the timeline it has after the transaction, which recovery
- * appends under the transaction's basis.
+ * writes to the ledger under the transaction's basis.
  *
  * @param id       the ID of the entity or relationship; the kind of the ID tells which it is
  * @param type     the identifier of its type, which never changes

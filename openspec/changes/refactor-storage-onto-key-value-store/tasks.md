@@ -16,4 +16,4 @@
 ## 3. Documentation
 
 - [x] 3.1 Update the architecture page (building blocks, runtime view, risks) and the glossary if a term is needed, and bump `last-reviewed`
-- [ ] 3.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 3.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

@@ -21,7 +21,7 @@ import java.util.Set;
  * Applies the writes of one transaction to working copies of the timelines it touches, validates the state that
  * results (design D5 and D6 of {@code add-entity-versions}), checks the integrity of relationships over effective time
  * (design D3 and D4 of {@code add-relationships}), and runs the rules that apply to it (design D3 of
- * {@code add-entity-rules}). Nothing in the store changes: a commit appends {@link #changes()} afterwards, and a dry
+ * {@code add-entity-rules}). Nothing in the store changes: a commit writes {@link #changes()} to the ledger afterwards, as one batch, and a dry
  * run drops them.
  *
  * <p>A Preparation only orders the work; each part does one kind of it, on the {@link Workspace} that they share:
