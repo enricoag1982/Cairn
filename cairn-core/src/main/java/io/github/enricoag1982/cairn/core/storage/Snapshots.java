@@ -1,8 +1,6 @@
 package io.github.enricoag1982.cairn.core.storage;
 
 import io.github.enricoag1982.cairn.data.PurgeRecord;
-import io.github.enricoag1982.cairn.data.Receipt;
-import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.schema.Basis;
 import java.io.BufferedInputStream;
@@ -223,11 +221,7 @@ public final class Snapshots {
         for (KeyedTransaction keyed : content.keyed()) {
             Encoder frame = Encoder.framed();
             frame.writeByte(KEYED);
-            TransactionCodec.write(frame, keyed.transaction());
-            frame.writeLong(keyed.receipt().basis().value());
-            frame.writeInstant(keyed.receipt().transactionTime());
-            TransactionCodec.writeReceiptIds(frame, keyed.receipt());
-            TransactionCodec.writeReceiptKeys(frame, keyed.receipt());
+            TransactionCodec.writeKeyed(frame, keyed);
             out.write(frame.finishFrame());
             frames++;
         }
@@ -456,7 +450,7 @@ public final class Snapshots {
                             receiver.schema(schema);
                         }
                         case TRANSACTION -> receiver.transaction(decode(frame.payload(), TransactionCodec::readEntry));
-                        case KEYED -> receiver.keyed(decode(frame.payload(), Snapshots::readKeyed));
+                        case KEYED -> receiver.keyed(decode(frame.payload(), TransactionCodec::readKeyed));
                         case HISTORY -> receiver.history(decode(frame.payload(), EffectCodec::readHistory));
                         case PURGE -> receiver.purge(decode(frame.payload(), PurgeCodec::read));
                         case PURGED_ID -> receiver.purgedId(decode(frame.payload(), PurgeCodec::readDigest));
@@ -472,14 +466,6 @@ public final class Snapshots {
                 }
             }
         }
-    }
-
-    private static KeyedTransaction readKeyed(Decoder in) {
-        Transaction transaction = TransactionCodec.read(in);
-        Basis basis = new Basis(in.readLong());
-        Instant transactionTime = in.readInstant();
-        Receipt receipt = TransactionCodec.readReceipt(in, basis, transactionTime, transaction);
-        return new KeyedTransaction(transaction, TransactionCodec.withKeys(receipt, TransactionCodec.readReceiptKeys(in)));
     }
 
     /** Decodes the body of a frame after its kind byte, and checks that all of it was read. */

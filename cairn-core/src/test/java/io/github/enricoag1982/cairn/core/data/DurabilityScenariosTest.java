@@ -16,7 +16,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.enricoag1982.cairn.core.IdGenerators;
 import io.github.enricoag1982.cairn.core.StoreSettings;
-import io.github.enricoag1982.cairn.core.Stores;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -26,6 +25,7 @@ import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
@@ -67,7 +67,7 @@ class DurabilityScenariosTest {
         durable.closeAll();
     }
 
-    private StoreEquivalence.Observation observe(DirectoryStore store, ReferenceTales.Told told) {
+    private StoreEquivalence.Observation observe(Store store, ReferenceTales.Told told) {
         return StoreEquivalence.observe(store, told.ids(), EFFECTIVE_TIMES, List.of());
     }
 
@@ -76,12 +76,12 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: Reopening a store")
     void reopeningAStore() {
-        DirectoryStore first = durable.openWithReferenceModel();
+        DurableStore first = durable.openStoreWithReferenceModel();
         ReferenceTales.Told told = ReferenceTales.rd1ToRd5(first, durable.clock);
         StoreEquivalence.Observation before = observe(first, told);
         first.close();
 
-        DirectoryStore reopened = durable.open();
+        DurableStore reopened = durable.openStore();
 
         StoreEquivalence.assertEquivalent(before, observe(reopened, told));
         assertThat(reopened.schema().history()).as("the schema's history").hasSize(1);
@@ -92,7 +92,7 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: The next commit after reopening")
     void theNextCommitAfterReopening() {
-        DirectoryStore first = durable.openWithReferenceModel();
+        DurableStore first = durable.openStoreWithReferenceModel();
         Receipt parties = durable.replay(first, ReferenceStories.rd1Parties());
         EntityId acme = entity(parties, ACME);
         EntityId beta = entity(parties, BETA);
@@ -104,7 +104,7 @@ class DurabilityScenariosTest {
         assertThat(first.latestBasis()).as("the basis before closing").isEqualTo(new Basis(7));
         first.close();
 
-        DirectoryStore reopened = durable.open();
+        DurableStore reopened = durable.openStore();
         Receipt receipt = DurableFixture.commit(reopened,
                 Transaction.by("importer").create("Person", from(1, 1), values("name", "Bob")).build());
 
@@ -115,13 +115,13 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: An idempotency key after reopening")
     void anIdempotencyKeyAfterReopening() {
-        DirectoryStore first = durable.openWithReferenceModel();
+        DurableStore first = durable.openStoreWithReferenceModel();
         Transaction transaction = Transaction.by("importer").idempotencyKey("import-42")
                 .create(ACME, "Organization", from(1, 1), values("name", "ACME")).build();
         Receipt receipt = DurableFixture.commit(first, transaction);
         first.close();
 
-        DirectoryStore reopened = durable.open();
+        DurableStore reopened = durable.openStore();
         CommitResult again = reopened.commit(transaction);
 
         assertThat(again).isEqualTo(new CommitResult.Committed(receipt));
@@ -135,13 +135,13 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: Recovering without the code of a rule")
     void recoveringWithoutTheCodeOfARule() {
-        DirectoryStore first = durable.openWithReferenceModel();
+        DurableStore first = durable.openStoreWithReferenceModel();
         Receipt parties = durable.replay(first, ReferenceStories.rd1Parties());
         EntityId acme = entity(parties, ACME);
         durable.replay(first, ReferenceStories.rd9AcmeLei(acme));
         first.close();
 
-        DirectoryStore reopened = durable.open(durable.clock, IdGenerators.deterministic(),
+        DurableStore reopened = durable.openStore(durable.clock, IdGenerators.deterministic(),
                 List.of(new TotalOwnershipRule()), List.of(LeiChecksumRule.DESCRIPTOR));
         List<Problem> problems = durable.rejectReplay(reopened, ReferenceStories.rd7Rename(acme));
 
@@ -157,7 +157,7 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: A clock that went back")
     void aClockThatWentBack() {
-        DirectoryStore first = durable.openWithReferenceModel();
+        DurableStore first = durable.openStoreWithReferenceModel();
         durable.clock.moveTo(on(3, 1));
         Receipt last = DurableFixture.commit(first,
                 Transaction.by("importer").create(ACME, "Organization", from(1, 1), values("name", "ACME")).build());
@@ -165,7 +165,7 @@ class DurabilityScenariosTest {
 
         TestClock earlier = new TestClock();
         earlier.moveTo(on(1, 1));
-        DirectoryStore reopened = durable.open(earlier, IdGenerators.deterministic(), ReferenceModel.executableRules(),
+        DurableStore reopened = durable.openStore(earlier, IdGenerators.deterministic(), ReferenceModel.executableRules(),
                 ReferenceModel.declaredRules());
         Receipt receipt = DurableFixture.commit(reopened,
                 Transaction.by("importer").create(BETA, "Organization", from(1, 1), values("name", "Beta")).build());
@@ -177,20 +177,20 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: Another ID generator")
     void anotherIdGenerator() {
-        DirectoryStore first = durable.open(durable.clock, IdGenerators.uuidV7(durable.clock, new Random(1)),
+        DurableStore first = durable.openStore(durable.clock, IdGenerators.uuidV7(durable.clock, new Random(1)),
                 ReferenceModel.executableRules(), ReferenceModel.declaredRules());
         DurableFixture.registerReferenceModel(first);
         ReferenceTales.Told told = ReferenceTales.rd1ToRd5(first, durable.clock);
         List<String> held = told.ids().stream().map(Id::value).toList();
         first.close();
 
-        assertThatThrownBy(() -> durable.open(durable.clock, new Accepting(text -> text.startsWith("other-")),
+        assertThatThrownBy(() -> durable.openStore(durable.clock, new Accepting(text -> text.startsWith("other-")),
                 ReferenceModel.executableRules(), ReferenceModel.declaredRules()))
                 .isInstanceOf(IllegalStateException.class)
                 .satisfies(e -> assertThat(held).as("it names an ID that the store holds")
                         .anyMatch(id -> e.getMessage().contains(id)));
 
-        DirectoryStore again = durable.open(durable.clock, IdGenerators.uuidV7(durable.clock, new Random(2)),
+        DurableStore again = durable.openStore(durable.clock, IdGenerators.uuidV7(durable.clock, new Random(2)),
                 ReferenceModel.executableRules(), ReferenceModel.declaredRules());
         assertThat(again.latestBasis()).as("the directory was released, and nothing was changed").isEqualTo(
                 new Basis(9));
@@ -198,12 +198,12 @@ class DurabilityScenariosTest {
 
     @Test
     void anIdGeneratorThatRejectsOnlyTheIdOfARelationshipIsRefusedNamingIt() {
-        DirectoryStore first = durable.openWithReferenceModel();
+        DurableStore first = durable.openStoreWithReferenceModel();
         ReferenceTales.Told told = ReferenceTales.rd1ToRd5(first, durable.clock);
         Id relationship = told.ids().stream().filter(id -> id instanceof RelationshipId).findFirst().orElseThrow();
         first.close();
 
-        assertThatThrownBy(() -> durable.open(durable.clock, new Accepting(text -> !text.equals(relationship.value())),
+        assertThatThrownBy(() -> durable.openStore(durable.clock, new Accepting(text -> !text.equals(relationship.value())),
                 ReferenceModel.executableRules(), ReferenceModel.declaredRules()))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining(relationship.value())
                 .hasMessageContaining("relationship");
@@ -231,7 +231,7 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: Re-checks after reopening")
     void rechecksAfterReopening() {
-        DirectoryStore first = durable.openWithEmployerHoldsAccount();
+        DurableStore first = durable.openStoreWithEmployerHoldsAccount();
         Receipt parties = durable.replay(first, ReferenceStories.rd1Parties());
         EntityId acme = entity(parties, ACME);
         EntityId beta = entity(parties, BETA);
@@ -244,7 +244,7 @@ class DurabilityScenariosTest {
         List<Problem> before = ((DryRunResult.Rejected) first.dryRun(movesA1)).problems();
         first.close();
 
-        DirectoryStore reopened = durable.reopenWithEmployerHoldsAccount();
+        DurableStore reopened = durable.reopenStoreWithEmployerHoldsAccount();
         CommitResult result = reopened.commit(movesA1);
 
         assertThat(result).isInstanceOf(CommitResult.Rejected.class);
@@ -261,11 +261,11 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: IDs after reopening")
     void idsAfterReopening() {
-        DirectoryStore first = durable.openWithReferenceModel();
+        DurableStore first = durable.openStoreWithReferenceModel();
         Receipt parties = durable.replay(first, ReferenceStories.rd1Parties());
         first.close();
 
-        DirectoryStore reopened = durable.open();
+        DurableStore reopened = durable.openStore();
         Receipt receipt = DurableFixture.commit(reopened, Transaction.by("importer")
                 .create("Person", from(1, 1), values("name", "Bob")).build());
 
@@ -276,6 +276,7 @@ class DurabilityScenariosTest {
     // ------------------------------------------------------------------ crash safety
 
     @Test
+    @DirectoryStoresOnly
     @DisplayName("Scenario: A commit cut short")
     void aCommitCutShort() {
         DirectoryStore first = durable.openWithReferenceModel();
@@ -296,6 +297,7 @@ class DurabilityScenariosTest {
     }
 
     @Test
+    @DirectoryStoresOnly
     @DisplayName("Scenario: A last record full of zeros")
     void aLastRecordFullOfZeros() {
         DirectoryStore first = durable.openWithReferenceModel();
@@ -317,6 +319,7 @@ class DurabilityScenariosTest {
     }
 
     @Test
+    @DirectoryStoresOnly
     @DisplayName("Scenario: A damaged log")
     void aDamagedLog() {
         DirectoryStore first = durable.openWithReferenceModel();
@@ -337,6 +340,7 @@ class DurabilityScenariosTest {
     }
 
     @Test
+    @DirectoryStoresOnly
     @DisplayName("Scenario: An unknown format version")
     void anUnknownFormatVersion() {
         DirectoryStore first = durable.openWithReferenceModel();
@@ -352,6 +356,7 @@ class DurabilityScenariosTest {
     // ------------------------------------------------------------------ snapshot files
 
     @Test
+    @DirectoryStoresOnly
     @DisplayName("Scenario: Recovering from a snapshot file and the log after it")
     void recoveringFromASnapshotFileAndTheLogAfterIt() {
         DirectoryStore first = durable.openWithReferenceModel();
@@ -375,6 +380,7 @@ class DurabilityScenariosTest {
     }
 
     @Test
+    @DirectoryStoresOnly
     @DisplayName("Scenario: A damaged newest snapshot file")
     void aDamagedNewestSnapshotFile() {
         DirectoryStore first = durable.openWithReferenceModel();
@@ -407,13 +413,13 @@ class DurabilityScenariosTest {
     @Test
     @DisplayName("Scenario: A directory in use")
     void aDirectoryInUse() {
-        DurableStore first = Stores.durable(directory, StoreSettings.builder().clock(durable.clock).build());
+        DurableStore first = durable.openStore(StoreSettings.builder().clock(durable.clock).build());
 
-        assertThatThrownBy(() -> Stores.durable(directory, StoreSettings.builder().clock(durable.clock).build()))
+        assertThatThrownBy(() -> durable.openStore(StoreSettings.builder().clock(durable.clock).build()))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining(directory.toString());
         first.close();
 
-        DurableStore second = Stores.durable(directory, StoreSettings.builder().clock(durable.clock).build());
+        DurableStore second = durable.openStore(StoreSettings.builder().clock(durable.clock).build());
         assertThat(second.latestBasis()).isEqualTo(Basis.NONE);
         second.close();
     }
@@ -421,6 +427,7 @@ class DurabilityScenariosTest {
     // ------------------------------------------------------------------ a commit that cannot be written
 
     @Test
+    @DirectoryStoresOnly
     @DisplayName("Scenario: A failed write")
     void aFailedWrite() {
         DirectoryStore store = durable.openWithReferenceModel();

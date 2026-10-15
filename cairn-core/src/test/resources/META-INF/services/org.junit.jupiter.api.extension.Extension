@@ -1,0 +1,2 @@
+# Closes the stores of the RocksDB run of the scenario tests; JUnit loads it only when that run turns auto-detection on.
+io.github.enricoag1982.cairn.core.TestBackend$Cleanup

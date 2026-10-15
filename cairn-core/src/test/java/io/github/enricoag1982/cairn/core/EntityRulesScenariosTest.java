@@ -69,7 +69,7 @@ class EntityRulesScenariosTest {
     @Test
     @DisplayName("Scenario: Rules become available to the schema")
     void rulesBecomeAvailableToTheSchema() {
-        Store store = Stores.inMemory(StoreSettings.builder().clock(new TestClock())
+        Store store = TestBackend.open(StoreSettings.builder().clock(new TestClock())
                 .rules(new LeiChecksumRule()).declaredRules(List.of(TotalOwnershipRule.DESCRIPTOR)).build());
 
         RegistrationResult result = store.schema().register(ReferenceModel.origin("1.0.0"),
@@ -84,7 +84,7 @@ class EntityRulesScenariosTest {
     @Test
     @DisplayName("Scenario: Listing declared rules")
     void listingDeclaredRules() {
-        Store store = Stores.inMemory(StoreSettings.builder().clock(new TestClock())
+        Store store = TestBackend.open(StoreSettings.builder().clock(new TestClock())
                 .rules(new LeiChecksumRule()).declaredRules(List.of(TotalOwnershipRule.DESCRIPTOR)).build());
 
         assertThat(store.declaredRules()).containsExactly(TotalOwnershipRule.DESCRIPTOR);

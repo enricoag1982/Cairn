@@ -12,39 +12,26 @@ import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.DurableStore;
-import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Purge;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.PurgeResult;
-import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.schema.Basis;
-import io.github.enricoag1982.cairn.schema.Origin;
-import io.github.enricoag1982.cairn.schema.Problem;
-import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
-import io.github.enricoag1982.cairn.schema.Schema;
-import io.github.enricoag1982.cairn.schema.SchemaDefinition;
-import io.github.enricoag1982.cairn.schema.SchemaPlan;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
-import io.github.enricoag1982.cairn.schema.SchemaTransaction;
-import io.github.enricoag1982.cairn.schema.StoredDefinition;
-import io.github.enricoag1982.cairn.schema.Submission;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.InstantSource;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -73,6 +60,13 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class DirectoryStore implements DurableStore {
 
+    /**
+     * The subdirectory in which a RocksDB store keeps its database (module {@code cairn-rocksdb}, ADR-0028). A directory
+     * that has it was written by that store, and this store refuses it. The name is repeated here, and in
+     * {@code RocksDbStores}, because this module does not depend on the other.
+     */
+    static final String ROCKSDB_SUBDIRECTORY = "rocksdb";
+
     private final Path directory;
     private final InMemoryStore store;
     private final CommitLog log;
@@ -89,7 +83,7 @@ public final class DirectoryStore implements DurableStore {
         this.store = store;
         this.log = log;
         this.lock = lock;
-        this.registry = new Registry();
+        this.registry = new OpenRegistry(store.schema(), this::requireOpen);
     }
 
     /**
@@ -103,11 +97,11 @@ public final class DirectoryStore implements DurableStore {
      * @param declaredRules the descriptions of rules that the store has no code for
      * @return the open store
      * @throws UncheckedIOException     if reading or writing the directory fails
-     * @throws IllegalStateException    if another open store holds the directory, a file is damaged anywhere but at the
-     *                                  end of the last log segment, a file was written in a format version that is not
-     *                                  known, or the generator does not accept the ID of an entity or a relationship that
-     *                                  the store holds; the message names the file and, for damage, the position, or
-     *                                  the ID
+     * @throws IllegalStateException    if another open store holds the directory, the directory holds a RocksDB store
+     *                                  (a subdirectory {@code rocksdb}), a file is damaged anywhere but at the end of the
+     *                                  last log segment, a file was written in a format version that is not known, or the
+     *                                  generator does not accept the ID of an entity or a relationship that the store
+     *                                  holds; the message names the file and, for damage, the position, or the ID
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two rules
      *                                  have the same name and version
      */
@@ -130,8 +124,9 @@ public final class DirectoryStore implements DurableStore {
         CommitLog log = null;
         boolean opened = false;
         try {
+            requireNoRocksDbStore(directory);
             Recovery.Result recovered = Recovery.recover(directory, new Restorer(store));
-            requireIdsOfTheGenerator(store, generator);
+            store.requireIdsOfTheGenerator(generator);
             store.underWriterLock(() -> {
                 store.sequence().resume(recovered.latest(), recovered.lastTransactionTime());
                 return null;
@@ -157,28 +152,19 @@ public final class DirectoryStore implements DurableStore {
     }
 
     /**
-     * Checks that the ID generator accepts every ID that the recovered store holds, as an entity or a relationship: a
-     * store keeps the ID generator it was created with, so one that does not accept them is another generator.
+     * Refuses a directory that a RocksDB store wrote, before anything is read or created in it: the store would open as an
+     * empty store, with a log and snapshot files of its own beside the database, and the next opening of the directory as
+     * a RocksDB store would not see what it wrote. Called with the directory's lock held, so that a directory that is in
+     * use is reported as such.
      *
-     * @throws IllegalStateException naming one ID that the generator does not accept
+     * @throws IllegalStateException naming the directory and the kind of store that wrote it
      */
-    private static void requireIdsOfTheGenerator(InMemoryStore store, IdGenerator generator) {
-        for (EntityId id : store.ledger().entityIds()) {
-            if (!generator.accepts(id.value())) {
-                throw otherGenerator(id.value(), "an entity");
-            }
+    private static void requireNoRocksDbStore(Path directory) {
+        if (Files.isDirectory(directory.resolve(ROCKSDB_SUBDIRECTORY))) {
+            throw new IllegalStateException("The directory " + directory + " holds a RocksDB store (subdirectory "
+                    + ROCKSDB_SUBDIRECTORY + "); open it with RocksDbStores.open in the module cairn-rocksdb, not as a "
+                    + "store kept through a commit log and snapshot files.");
         }
-        for (RelationshipId id : store.ledger().relationshipIds()) {
-            if (!generator.accepts(id.value())) {
-                throw otherGenerator(id.value(), "a relationship");
-            }
-        }
-    }
-
-    private static IllegalStateException otherGenerator(String id, String holder) {
-        return new IllegalStateException("The ID generator that the store is opened with does not accept the ID " + id
-                + " of " + holder + " that the store holds. A store keeps the ID generator it was created with, so open "
-                + "it with that one.");
     }
 
     /**
@@ -431,64 +417,6 @@ public final class DirectoryStore implements DurableStore {
                 abandon();
                 throw new IllegalStateException("The store stopped after the purge reached the log, as a test asked.");
             }
-        }
-    }
-
-    /** The store's schema registry, which refuses every call once the store is closed. */
-    private final class Registry implements SchemaRegistry {
-
-        @Override
-        public RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission) {
-            requireOpen();
-            return store.schema().register(origin, definition, submission);
-        }
-
-        @Override
-        public SchemaPlan plan(Origin origin, SchemaDefinition definition) {
-            requireOpen();
-            return store.schema().plan(origin, definition);
-        }
-
-        @Override
-        public List<Problem> validate(Origin origin, SchemaDefinition definition) {
-            requireOpen();
-            return store.schema().validate(origin, definition);
-        }
-
-        @Override
-        public List<RuleDescriptor> availableRules() {
-            requireOpen();
-            return store.schema().availableRules();
-        }
-
-        @Override
-        public Optional<StoredDefinition> storedDefinition(String originName) {
-            requireOpen();
-            return store.schema().storedDefinition(originName);
-        }
-
-        @Override
-        public Schema current() {
-            requireOpen();
-            return store.schema().current();
-        }
-
-        @Override
-        public Schema asOf(Basis basis) {
-            requireOpen();
-            return store.schema().asOf(basis);
-        }
-
-        @Override
-        public Schema asOf(Instant transactionTime) {
-            requireOpen();
-            return store.schema().asOf(transactionTime);
-        }
-
-        @Override
-        public List<SchemaTransaction> history() {
-            requireOpen();
-            return store.schema().history();
         }
     }
 }
