@@ -32,7 +32,7 @@ try (DurableStore store = RocksDbStores.open(Path.of("/var/lib/my-app/cairn"), s
 
 `RocksDbStores.open` creates the directory if it does not exist, and otherwise opens the store that is in it.
 The returned `DurableStore` is the same interface as that of [a durable store kept in a directory](run-a-durable-store.md), and the settings are those of an in-memory store, with the same rules about ID generators and rules without code.
-A closed store refuses every call but `close`, which does nothing then. One open store holds a directory at a time, in any process: opening a second one on the same directory throws `IllegalStateException`.
+Closing writes what RocksDB holds in memory to its files and releases the directory. A closed store refuses every call but `close`, which does nothing then. One open store holds a directory at a time, in any process: opening a second one on the same directory throws `IllegalStateException`.
 
 Opening replays nothing: RocksDB replays its own write-ahead log, and the store then reads what it records beside the data (the schema and its history, transaction records, the receipts of idempotency keys and purge records) into memory.
 Then it runs each rule it has code for once over the data, without judging the results, to learn what the rules read ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), so opening takes longer the more data the rules' types hold.
@@ -54,17 +54,17 @@ lock          held while a store is open, as for stores kept in a directory
 rocksdb/      RocksDB's database: data files (*.sst), its write-ahead log (*.log), MANIFEST, CURRENT, LOCK, OPTIONS and LOG files
 ```
 
-The database is in a subdirectory because RocksDB's `LOCK` and the store's `lock` are the same file on file systems that ignore case.
-Do not change the files, and do not open the directory with `Stores.durable`, or a RocksDB store on a directory store's directory: neither is refused, and each would see an empty store.
+Why the database is in a subdirectory is in [ADR-0028](../decisions/0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md).
+Do not change the files. Opening the directory with `Stores.durable`, or a RocksDB store on the directory of a durable store kept in a directory, throws `IllegalStateException` and changes nothing.
 To back a store up, close it and copy the directory.
 
 ## Purges
 
 A purge works as in every store ([ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md), the `purge` spec): it removes the entities from all of history and leaves a purge record.
-A RocksDB store writes the purge in one synchronous batch, then flushes and compacts the whole database, and opens it again so that RocksDB rewrites its MANIFEST, which can name the smallest and largest key of each file, before `purge` returns. Then no file of the store holds the purged data or the keys that named it.
-Commits wait meanwhile, and the time grows with the size of the store. A view that reads while a purge runs may see part of it.
+A RocksDB store writes the purge in one synchronous batch, then flushes and compacts the whole database, and opens it again so that RocksDB rewrites its MANIFEST ([ADR-0028](../decisions/0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) says why), before `purge` returns. Then no file of the store holds the purged data or the keys that named it.
+Commits wait meanwhile, and the time grows with the size of the store; reads wait only while the database is opened again. A view that reads while a purge runs may see part of it.
 
-- **If the store stops during a purge,** after the batch was written, opening the store finishes the compaction before it opens. If compacting fails, `purge` throws `UncheckedIOException`; the purge is applied, the store refuses commits, and opening it again finishes the compaction.
+- **If the store stops during a purge,** after the batch was written, opening the store finishes the compaction before it opens. If flushing or compacting fails, `purge` throws `UncheckedIOException`; the purge is applied, the store refuses commits, and opening it again finishes the compaction. If opening the database again fails, the store refuses every call but `close` until it is opened again.
 - **Retries stay refused,** after a reopen too: the store drops the transactions it kept for idempotency keys that wrote purged data or named a purged entity, and keeps their keys as used.
 - **Who and why stay,** and **copies elsewhere** keep the data, as for [durable stores kept in a directory](run-a-durable-store.md#purges). Deleted files can stay readable on the disk itself, as with any file system.
 

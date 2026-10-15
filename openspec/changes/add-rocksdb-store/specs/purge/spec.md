@@ -2,7 +2,7 @@
 
 ### Requirement: Purges in durable stores
 
-A durable store SHALL make a purge durable before it returns: it SHALL write the purge to its commit log, write a snapshot file without the purged data, and delete every older snapshot file and log segment, so that no file of the store holds the purged data. If the store stops after the purge reached its log, recovery SHALL complete the purge before the store opens. A RocksDB store (see the `durability` capability) SHALL write the purge in one synchronous write, and compact its files before the purge returns, so that no file of the store holds the purged data, including the keys that name it; a crash before the purge returns SHALL leave either the purge or nothing of it, and if the purge was written, opening the store SHALL finish compacting its files before the store opens.
+A durable store kept in a directory SHALL make a purge durable before it returns: it SHALL write the purge to its commit log, write a snapshot file without the purged data, and delete every older snapshot file and log segment, so that no file of the store holds the purged data. If the store stops after the purge reached its log, recovery SHALL complete the purge before the store opens. A RocksDB store (see the `durability` capability) SHALL write the purge in one synchronous write, and compact its files before the purge returns, so that no file of the store holds the purged data, including the keys that name it; a crash before the purge returns SHALL leave either the purge or nothing of it, and if the purge was written, opening the store SHALL finish compacting its files before the store opens.
 
 #### Scenario: Nothing left on disk
 

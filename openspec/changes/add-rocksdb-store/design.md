@@ -22,7 +22,7 @@ Prefixes after ADR-0027's: the format version (written when a store is created),
 
 ### D3. Commits and opening
 
-A data commit, a schema registration and a purge each build one batch of state and metadata and `apply` it durably before publishing the basis; if `apply` throws, the transaction is not applied and the store refuses writes until it is opened again, as `DirectoryStore` does. Opening checks the format version, loads the metadata into the engine (registry history, records, keys, purges, digests, sequence), checks that the ID generator accepts the stored IDs and advances it past them as recovery does, and runs `learnReads` (ADR-0025). There is no replay of transactions.
+A data commit, a schema registration and a purge each build one batch of state and metadata and `apply` it durably before publishing the basis; if `apply` throws, the transaction is not applied and the store refuses writes until it is opened again, as `DirectoryStore` does. Opening checks the format version, loads the metadata into the engine (registry history, records, keys, purges, digests, sequence), checks that the ID generator accepts the stored IDs and advances it past them as recovery does, and runs `learnReads` (ADR-0025). There is no replay of transactions. Closing flushes, as writing a snapshot does, so that the next opening replays no write-ahead log.
 
 ### D4. Purges
 
@@ -30,7 +30,7 @@ The purge batch deletes the `Ledger`'s keys of what it removes (ADR-0027 D5), th
 
 ### D5. `cairn-rocksdb`
 
-Module `io.github.enricoag1982.cairn.rocksdb`, requiring `io.github.enricoag1982.cairn.core` and the RocksDB library (`org.rocksdb:rocksdbjni`, in the version catalog). `RocksDbStores.open(Path, StoreSettings)` creates the directory, takes the same lock file as directory stores, opens RocksDB in the subdirectory `rocksdb` (RocksDB's own lock file, `LOCK`, would be the same file as `lock` on file systems that ignore case), and wraps it as a `PersistentKeyValueStore`: `get` and `scan` through RocksDB iterators in byte order, `apply` as a `WriteBatch` written with `sync`, `flush` and `compactRange`. Tests and applications run with native access enabled for the library's module.
+Module `io.github.enricoag1982.cairn.rocksdb`, requiring `io.github.enricoag1982.cairn.core` and the RocksDB library (`org.rocksdb:rocksdbjni`, in the version catalog). `RocksDbStores.open(Path, StoreSettings)` creates the directory, takes the same lock file as directory stores, opens RocksDB in the subdirectory `rocksdb` (RocksDB's own lock file, `LOCK`, would be the same file as `lock` on file systems that ignore case), refuses a directory that holds a directory store's `log` or `snapshots` (and `Stores.durable` refuses one that holds `rocksdb`), and wraps it as a `PersistentKeyValueStore`: `get` as a point lookup and `scan` through RocksDB iterators in byte order, `apply` as a `WriteBatch` written with `sync`, `flush` and `compactRange`. Tests and applications run with native access enabled for the library's module.
 
 ### D6. Conformance
 
