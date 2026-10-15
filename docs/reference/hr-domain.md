@@ -89,7 +89,7 @@ Dates are in 2026. Each story has a test whose display name starts with its ID; 
 ## Gaps
 
 What the example could not express directly, found while building it. Each is a candidate for a later change.
-The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request.
+The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request (see the `relationships` spec).
 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |

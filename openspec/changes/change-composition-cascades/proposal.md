@@ -30,6 +30,6 @@ None.
 ## Impact
 
 - **Decisions:** none new. It follows ADR-0010 (a composition's target ends with its source) and keeps ADR-0007 (one writer) and ADR-0025 (ending relationships runs re-checks of rules that read them).
-- **Code:** `cairn-core` `Cascades`; no API change.
+- **Code:** `cairn-core` `Cascades` and `Preparation`; no API signature changes, but the documented contract of `Receipt.ended` grows; the HR example's `Brightwater` and `CompanyGenerator` no longer end decisions by ID.
 - **Example:** HR-11 and the HR domain page.
-- **Docs:** the glossary entry for cascades or compositions if it needs it, the HR domain page.
+- **Docs:** the glossary entry for composition cascades, the architecture page and the HR domain page.
