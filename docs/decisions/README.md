@@ -41,5 +41,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0025](0025-run-a-rule-again-when-the-data-it-read-changes.md) | Run a rule again when the data it read changes | accepted | 2026-10-13 |
 | [ADR-0026](0026-refer-to-entities-by-unique-keys-resolved-at-commit.md) | Refer to entities by unique keys, resolved at commit | accepted | 2026-10-15 |
 | [ADR-0027](0027-encode-bitemporal-data-as-keys-over-an-ordered-key-value-interface.md) | Encode bitemporal data as keys over an ordered key-value interface | accepted | 2026-10-15 |
+| [ADR-0028](0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) | Keep a store in RocksDB with its metadata as keys and its write-ahead log as the commit log | accepted | 2026-10-15 |
 
 <!-- decision-log:end -->
