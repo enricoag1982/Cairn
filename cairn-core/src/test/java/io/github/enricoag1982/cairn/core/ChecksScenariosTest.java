@@ -99,12 +99,12 @@ class ChecksScenariosTest {
     @DisplayName("Scenario: A check inherited from a supertype")
     void aCheckInheritedFromASupertype() {
         SchemaRegistry registry = registryWithLanguage();
-        SchemaDefinition definition = withCheck(ReferenceModel.definition(), "Party", "name-not-blank",
+        SchemaDefinition definition = withCheck(ReferenceModel.definition(), "Party", "name-not-empty",
                 "size(self.name) > 0", null);
 
         Schema schema = applied(registry.register(ReferenceModel.origin("1.0.0"), definition)).schema();
 
-        Check inherited = new Check("name-not-blank", "size(self.name) > 0");
+        Check inherited = new Check("name-not-empty", "size(self.name) > 0");
         assertThat(schema.entityType("Organization").orElseThrow().effectiveChecks())
                 .containsExactly(new EffectiveCheck(inherited, "Party"));
         assertThat(schema.entityType("Organization").orElseThrow().checks()).as("declared by Organization").isEmpty();
@@ -114,14 +114,27 @@ class ChecksScenariosTest {
     @Test
     @DisplayName("Scenario: A check declared twice in a hierarchy")
     void aCheckDeclaredTwiceInAHierarchy() {
-        SchemaDefinition definition = withCheck(withCheck(ReferenceModel.definition(), "Party", "name-not-blank",
-                "size(self.name) > 0", null), "Organization", "name-not-blank", "size(self.name) > 0", null);
+        SchemaDefinition definition = withCheck(withCheck(ReferenceModel.definition(), "Party", "name-not-empty",
+                "size(self.name) > 0", null), "Organization", "name-not-empty", "size(self.name) > 0", null);
 
         List<Problem> problems = registryWithLanguage().validate(ReferenceModel.origin("1.0.0"), definition);
 
         Problem problem = only(problems);
         assertThat(problem.code()).isEqualTo(ProblemCode.DUPLICATE_CHECK);
-        assertThat(problem.path()).isEqualTo("Organization.name-not-blank");
+        assertThat(problem.path()).isEqualTo("Organization.name-not-empty");
+    }
+
+    @Test
+    @DisplayName("Scenario: A check named like an attribute")
+    void aCheckNamedLikeAnAttribute() {
+        SchemaDefinition definition = withCheck(ReferenceModel.definition(), "Account", "balance", NON_NEGATIVE, null);
+
+        List<Problem> problems = registryWithLanguage().validate(ReferenceModel.origin("1.0.0"), definition);
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.DUPLICATE_CHECK);
+        assertThat(problem.path()).isEqualTo("Account.balance");
+        assertThat(problem.message()).contains("taken by an attribute").contains("balance");
     }
 
     @Test

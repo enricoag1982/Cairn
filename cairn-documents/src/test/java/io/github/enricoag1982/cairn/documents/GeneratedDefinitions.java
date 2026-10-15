@@ -179,7 +179,7 @@ final class GeneratedDefinitions {
         Set<String> used = new HashSet<>();
         List<Check> checks = new ArrayList<>();
         for (int i = between(0, 2); i > 0; i--) {
-            String name = pick(List.of("a-check", "balance-not-negative", "x1", "name-not-blank", "dates-in-order"));
+            String name = pick(List.of("a-check", "balance-not-negative", "x1", "name-not-empty", "dates-in-order"));
             if (used.add(name)) {
                 String expression = text();
                 checks.add(new Check(name, expression.isEmpty() ? "x" : expression,

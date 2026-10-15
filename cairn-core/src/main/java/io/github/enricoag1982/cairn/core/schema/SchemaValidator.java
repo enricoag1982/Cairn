@@ -816,10 +816,10 @@ final class SchemaValidator {
     }
 
     /**
-     * Checks the checks a type declares: their names, that neither the type nor a supertype declares the name already,
-     * their expressions' length, and that the expressions compile against the attributes of the type. Checks whose name or
-     * expression is malformed are not compiled. The checks that need the supertypes or the attributes are skipped if the
-     * hierarchy is broken.
+     * Checks the checks a type declares: their names, that neither the type nor a supertype declares the name already
+     * or uses it for an attribute or a rule, their expressions' length, and that the expressions compile against the
+     * attributes of the type. Checks whose name or expression is malformed are not compiled. The checks that need the
+     * supertypes or the attributes are skipped if the hierarchy is broken.
      */
     private void checkChecks(String typeName, Kind kind, List<Check> declared, Map<String, String> supertypes) {
         String key = Names.key(typeName);
@@ -847,9 +847,51 @@ final class SchemaValidator {
                         "Remove the check from " + typeName + " or from " + supertype.get() + "."));
                 continue;
             }
+            Optional<String> taken = nameTakenBy(check.name(), kind, key, supertypes, hierarchyUsable);
+            if (taken.isPresent()) {
+                problems.add(Problems.of(ProblemCode.DUPLICATE_CHECK, path, "The check name '" + check.name()
+                        + "' declared by " + typeName + " is already taken by " + taken.get() + ".",
+                        "a name that no attribute, rule or check of " + typeName + " and its supertypes has",
+                        check.name(), "Rename the check."));
+                continue;
+            }
             checkExpression(typeName, check, path, hierarchyUsable ? effective.get(key) : null,
                     checkedTypes == null || checkedTypes.contains(key));
         }
+    }
+
+    /**
+     * Tells what a check name is taken by, if a type or one of its supertypes uses it for an attribute (or an alias of
+     * one, compared without regard to case) or for a rule. The supertypes are looked at only if the hierarchy is usable.
+     *
+     * @return what takes the name, such as {@code an attribute: balance, declared by entity type Account}
+     */
+    private Optional<String> nameTakenBy(String name, Kind kind, String key, Map<String, String> supertypes,
+            boolean hierarchyUsable) {
+        Declared attribute = hierarchyUsable && effective.get(key) != null ? effective.get(key).get(Names.key(name)) : null;
+        if (attribute != null) {
+            return Optional.of("an attribute: " + attribute.attribute().name() + ", declared by "
+                    + attribute.declarerLabel());
+        }
+        List<AttributeDefinition> own = kind == Kind.ENTITY_TYPE ? entityType(key).attributes()
+                : relationshipType(key).attributes();
+        if (!hierarchyUsable) {
+            for (AttributeDefinition candidate : own) {
+                if (Names.same(candidate.name(), name) || Names.contains(candidate.aliases(), name)) {
+                    return Optional.of("an attribute: " + candidate.name() + ", declared by "
+                            + (kind == Kind.ENTITY_TYPE ? entityType(key).name() : relationshipType(key).name()));
+                }
+            }
+        }
+        List<RuleReference> ownRules = kind == Kind.ENTITY_TYPE ? entityType(key).rules() : relationshipType(key).rules();
+        if (ownRules.stream().anyMatch(rule -> rule.name().equals(name))) {
+            return Optional.of("a rule: " + name + ", which the type names");
+        }
+        if (hierarchyUsable) {
+            return nearestSupertypeNaming(name, kind, key, supertypes)
+                    .map(supertype -> "a rule: " + name + ", which its supertype " + supertype + " names");
+        }
+        return Optional.empty();
     }
 
     /**

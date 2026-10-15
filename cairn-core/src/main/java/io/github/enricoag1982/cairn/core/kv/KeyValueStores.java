@@ -37,7 +37,8 @@ public final class KeyValueStores {
      * it, and so does a failure to open.
      *
      * @param keys     the key-value store, which no one else writes to
-     * @param settings the clock, ID generator and rules; the store works on a copy of the generator
+     * @param settings the clock, ID generator, rules and expression language; the store works on a copy of the
+     *                 generator. The checks of the stored schema are compiled again with the expression language
      * @return the open store, which the caller closes
      * @throws IllegalStateException    if the key-value store holds keys but no format version, or a format version that
      *                                  this version of Cairn does not know, which the message names, if a stored record is

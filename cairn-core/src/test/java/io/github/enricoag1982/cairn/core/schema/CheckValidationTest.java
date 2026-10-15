@@ -7,6 +7,7 @@ import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.RelationshipKind;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
@@ -124,6 +125,106 @@ class CheckValidationTest {
                 .build();
 
         assertThat(validate(definition)).isEmpty();
+    }
+
+    @Test
+    void aCheckCannotBeNamedLikeAnAttributeOfItsTypeItsSupertypesOrItsTraits() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .trait("Labelled", t -> t.attribute("label", ValueType.STRING))
+                .entityType("Party", e -> e.abstractType().attribute("name", ValueType.STRING))
+                .entityType("Person", e -> e.supertype("Party").includes("Labelled")
+                        .attribute("age", ValueType.INT)
+                        .check("name", "true").check("label", "true").check("age", "true").check("fine", "true"))
+                .build();
+
+        List<Problem> problems = validate(definition);
+
+        assertThat(problems).extracting(Problem::path).containsExactly("Person.name", "Person.label", "Person.age");
+        assertThat(problems).extracting(Problem::code).containsOnly(ProblemCode.DUPLICATE_CHECK);
+        assertThat(problems).extracting(Problem::message).allSatisfy(message ->
+                assertThat(message).contains("taken by an attribute"));
+        assertThat(problems.get(0).message()).contains("entity type Party");
+        assertThat(problems.get(1).message()).contains("trait Labelled");
+        assertThat(language.compiled()).as("only the check with a name of its own is compiled")
+                .extracting(StubLanguage.Compiled::expression).containsExactly("true");
+    }
+
+    @Test
+    void anAliasOfAnAttributeTakesTheNameToo() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Account", e -> e.attribute("balance", ValueType.DECIMAL, a -> a.aliases("saldo"))
+                        .check("saldo", "true"))
+                .build();
+
+        Problem problem = only(validate(definition));
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.DUPLICATE_CHECK);
+        assertThat(problem.path()).isEqualTo("Account.saldo");
+        assertThat(problem.message()).contains("taken by an attribute").contains("balance");
+    }
+
+    @Test
+    void namesAreComparedWithoutRegardToCase() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Account", e -> e.attribute("Balance", ValueType.DECIMAL).check("balance", "true"))
+                .build();
+
+        Problem problem = only(validate(definition));
+
+        assertThat(problem.path()).isEqualTo("Account.balance");
+        assertThat(problem.message()).contains("taken by an attribute").contains("Balance");
+    }
+
+    @Test
+    void aCheckCannotBeNamedLikeARuleOfItsTypeOrItsSupertypes() {
+        RuleDescriptor lei = new RuleDescriptor("lei-checksum", 1, "Checks something.", "Party", List.of());
+        RuleDescriptor notBlank = new RuleDescriptor("name-not-blank", 1, "Checks something.", "Organization", List.of());
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Party", e -> e.abstractType().rule("lei-checksum", 1))
+                .entityType("Organization", e -> e.supertype("Party").rule("name-not-blank", 1)
+                        .check("lei-checksum", "true").check("name-not-blank", "true").check("name-not-empty", "true"))
+                .build();
+
+        List<Problem> problems = SchemaValidator.validate(definition, List.of(lei, notBlank),
+                new CheckCompiler(Optional.of(language)));
+
+        assertThat(problems).extracting(Problem::path)
+                .containsExactly("Organization.lei-checksum", "Organization.name-not-blank");
+        assertThat(problems).extracting(Problem::code).containsOnly(ProblemCode.DUPLICATE_CHECK);
+        assertThat(problems.get(0).message()).contains("taken by a rule").contains("supertype Party");
+        assertThat(problems.get(1).message()).contains("taken by a rule").contains("the type names");
+    }
+
+    @Test
+    void aRelationshipTypeCheckCannotBeNamedLikeItsAttributesOrRules() {
+        RuleDescriptor rule = new RuleDescriptor("share-total", 1, "Checks something.", "Owns", List.of());
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Party", e -> { })
+                .relationshipType("Owns", r -> r.from("Party").to("Party").inverse("ownedBy")
+                        .attribute("share", ValueType.DECIMAL).rule("share-total", 1)
+                        .check("share", "true").check("share-total", "true"))
+                .build();
+
+        List<Problem> problems = SchemaValidator.validate(definition, List.of(rule),
+                new CheckCompiler(Optional.of(language)));
+
+        assertThat(problems).extracting(Problem::path).containsExactly("Owns.share", "Owns.share-total");
+        assertThat(problems.get(0).message()).contains("taken by an attribute");
+        assertThat(problems.get(1).message()).contains("taken by a rule");
+    }
+
+    @Test
+    void aBrokenHierarchyStillFindsTheNamesOfTheTypeItself() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .entityType("Organization", e -> e.supertype("Prty").attribute("lei", ValueType.STRING)
+                        .check("lei", "true"))
+                .build();
+
+        List<Problem> problems = validate(definition);
+
+        assertThat(problems).extracting(Problem::code)
+                .containsExactly(ProblemCode.UNKNOWN_REFERENCE, ProblemCode.DUPLICATE_CHECK);
+        assertThat(problems.get(1).message()).contains("taken by an attribute");
     }
 
     @Test

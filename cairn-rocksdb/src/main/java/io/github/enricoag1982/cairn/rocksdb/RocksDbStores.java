@@ -69,7 +69,10 @@ public final class RocksDbStores {
      * name, is not run: a write that needs it is rejected, as with an in-memory store, whatever the store recorded.
      *
      * @param directory the directory, which is created if it does not exist
-     * @param settings  the clock, ID generator and rules; the store works on a copy of the generator
+     * @param settings  the clock, ID generator, rules and expression language; the store works on a copy of the
+     *                  generator. The checks of the stored schema are compiled again with the expression language:
+     *                  without one, or with one that cannot compile a stored check, the store rejects writes to the
+     *                  types the checks apply to
      * @return the open store, which the caller closes
      * @throws UncheckedIOException     if reading or writing the directory or the database fails
      * @throws IllegalStateException    if another open store holds the directory, if the directory holds a store kept

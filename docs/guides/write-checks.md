@@ -32,7 +32,7 @@ entityTypes:
 ```
 
 - A check has a name, written like a rule name (lowercase letters, digits and hyphens), an expression, and an optional message for the problem it reports.
-- Entity types and relationship types declare checks; subtypes inherit them. A name is declared once in a hierarchy.
+- Entity types and relationship types declare checks; subtypes inherit them. A name is declared once in a hierarchy, and must differ from the names of the type's attributes and rules, and those of its supertypes, because problems name all of them as `Type.name`.
 - In Java, `EntityTypeBuilder.check(name, expression, message)` declares the same.
 
 ## What an expression sees

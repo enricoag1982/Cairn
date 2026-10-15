@@ -263,26 +263,46 @@ class CairnAgentServerTest {
             """;
 
     @Test
-    void theServersStoreRunsTheChecksOfItsDocumentsBecauseTheExpressionModuleIsOnItsClassPath() throws Exception {
-        Path leads = Files.writeString(directory.resolve("leads.cairn.yaml"), LEADS);
+    @DisplayName("Scenario: A server that runs checks")
+    void aServerThatRunsChecks() throws Exception {
+        String checked = Files.readString(REFERENCE_MODEL).replace("  Account:\n", """
+                  Account:
+                    checks:
+                      balance-not-negative:
+                        expression: self.balance >= 0.0
+                        message: A balance cannot be negative.
+                """);
+        Path accounts = Files.writeString(directory.resolve("accounts.cairn.yaml"), checked);
 
         Store store = CairnAgentServer.createStore(ServerOptions.parse(new String[] {"--principal", "agent:demo",
-                "--schema", leads.toString()}));
+                "--schema", accounts.toString()}));
+        assertThat(store.schema().current().entityType("Account").orElseThrow().checks()).singleElement()
+                .satisfies(check -> assertThat(check.name()).isEqualTo("balance-not-negative"));
+        try (StdioSession session = new StdioSession("--schema", accounts.toString(), "--principal", "agent:demo")) {
+            session.initialize();
 
-        assertThat(store.schema().current().entityType("Lead").orElseThrow().checks()).singleElement()
-                .satisfies(check -> assertThat(check.name()).isEqualTo("score-not-negative"));
+            JsonNode result = session.callTool("cairn_dry_run", args("payload", accountPayload(-5)));
+
+            assertThat(result.get("outcome").stringValue()).isEqualTo("rejected");
+            assertThat(result.get("problems")).anySatisfy(problem -> {
+                assertThat(problem.get("code").stringValue()).isEqualTo("CHECK_VIOLATED");
+                assertThat(problem.get("message").stringValue()).contains("balance-not-negative")
+                        .contains("A balance cannot be negative.");
+            });
+        }
+    }
+
+    @Test
+    void theChecksOfAServersDocumentsLetAVersionThatHoldsThrough() throws Exception {
+        Path leads = Files.writeString(directory.resolve("leads.cairn.yaml"), LEADS);
         try (StdioSession session = new StdioSession("--schema", leads.toString(), "--principal", "agent:demo")) {
             session.initialize();
 
             JsonNode negative = session.callTool("cairn_dry_run", args("payload", leadPayload(-1)));
             JsonNode fine = session.callTool("cairn_dry_run", args("payload", leadPayload(3)));
 
-            assertThat(negative.get("outcome").stringValue()).isEqualTo("rejected");
-            assertThat(negative.get("problems")).singleElement().satisfies(problem -> {
-                assertThat(problem.get("code").stringValue()).isEqualTo("CHECK_VIOLATED");
-                assertThat(problem.get("message").stringValue()).contains("score-not-negative")
-                        .contains("A score cannot be negative.");
-            });
+            assertThat(negative.get("problems")).singleElement()
+                    .satisfies(problem -> assertThat(problem.get("code").stringValue()).isEqualTo("CHECK_VIOLATED"));
             assertThat(fine.get("outcome").stringValue()).isEqualTo("wouldCommit");
         }
     }
@@ -297,6 +317,12 @@ class CairnAgentServerTest {
         assertThat(run.status()).isNotZero();
         assertThat(run.err()).contains("INVALID_CHECK").contains("Lead.score-not-negative").contains("scor")
                 .contains("/entityTypes/Lead/checks/score-not-negative/expression");
+    }
+
+    private static String accountPayload(int balance) {
+        return "{\"cairn\": 1, \"principal\": \"agent:demo\", \"writes\": [{\"create\": {\"entityType\": "
+                + "\"Account\", \"from\": \"2026-01-01T00:00:00Z\", \"values\": {\"number\": \"A-9\", "
+                + "\"currency\": \"EUR\", \"balance\": " + balance + "}}}]}";
     }
 
     private static String leadPayload(int score) {

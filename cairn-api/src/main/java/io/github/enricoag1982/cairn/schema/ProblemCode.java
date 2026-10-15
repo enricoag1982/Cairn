@@ -104,10 +104,11 @@ public enum ProblemCode {
     /** A check name breaks the naming rule for checks. */
     INVALID_CHECK_NAME("A check name consists of lowercase ASCII letters, digits and hyphens, starts with a letter and "
             + "has at most 128 characters, as a rule name does. Rename the check."),
-    /** A type declares a check whose name it, or one of its supertypes, already declares. */
-    DUPLICATE_CHECK("A check that a type declares also applies to its subtypes, so a type cannot declare two checks "
-            + "with the same name, and neither can a type and one of its supertypes. Rename or remove the repeated "
-            + "check."),
+    /** A type declares a check whose name it, or one of its supertypes, already uses for a check, an attribute or a rule. */
+    DUPLICATE_CHECK("A check that a type declares also applies to its subtypes, so its name must be used once in the "
+            + "hierarchy: a type cannot declare two checks with the same name, neither can a type and one of its "
+            + "supertypes, and a check cannot be named like an attribute or a rule of the type or of one of its "
+            + "supertypes. The message says what takes the name. Rename or remove the check."),
     /** The expression of a check is blank, too long, does not compile, reads an attribute the type lacks, or is no boolean. */
     INVALID_CHECK("The expression of a check must be an expression of the Common Expression Language (CEL) with at "
             + "most 4,000 characters that compiles, reads the version's attributes only as self.<name> with names the "
@@ -295,9 +296,12 @@ public enum ProblemCode {
     /** A check gave no result: its evaluation failed. */
     CHECK_FAILED("A check gave no result for a version that the transaction writes: its evaluation failed, for "
             + "example because the expression reads an attribute that has no value without testing it with has(), or "
-            + "because it exceeded the cost limit. The problem names the check and gives the error. Test optional "
-            + "attributes with has(self.name) in the expression, or correct the expression in a new version of the "
-            + "schema."),
+            + "because it exceeded the cost limit of 10,000 evaluation steps. It also gives no result if the store's "
+            + "expression language could not compile the recorded check when the store was opened, for example "
+            + "because it is another version of the language; every write to the types the check applies to then "
+            + "fails. The problem names the check and gives the error. Test optional attributes with has(self.name) in "
+            + "the expression, or correct the expression in a new version of the schema, or open the store with an "
+            + "expression language that compiles it."),
     /** A write relates entities with a name that is not a relationship type. */
     UNKNOWN_RELATIONSHIP_TYPE("A write relates two entities with a type name that the schema does not have as a "
             + "relationship type. Type names and aliases are compared without regard to case. Correct the name, which "

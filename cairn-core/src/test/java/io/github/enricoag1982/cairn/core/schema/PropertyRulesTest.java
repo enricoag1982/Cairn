@@ -257,11 +257,11 @@ class PropertyRulesTest {
     class Checks {
 
         private final Check balance = new Check("balance-not-negative", "self.balance >= 0.0");
-        private final Check notBlank = new Check("name-not-blank", "size(self.name) > 0");
+        private final Check notEmpty = new Check("name-not-empty", "size(self.name) > 0");
 
         @Test
         void removingACheckIsCompatibleAndLocatedAtTheCheck() {
-            assertThat(checks(List.of(balance, notBlank), List.of(notBlank))).singleElement().satisfies(change -> {
+            assertThat(checks(List.of(balance, notEmpty), List.of(notEmpty))).singleElement().satisfies(change -> {
                 assertThat(change.compatible()).isTrue();
                 assertThat(change.path()).isEqualTo("Account.balance-not-negative");
                 assertThat(change.description()).contains("removed", "balance-not-negative");
@@ -270,7 +270,7 @@ class PropertyRulesTest {
 
         @Test
         void addingACheckIsBreakingWithAHintAndLocatedAtTheCheck() {
-            assertThat(checks(List.of(notBlank), List.of(notBlank, balance))).singleElement().satisfies(change -> {
+            assertThat(checks(List.of(notEmpty), List.of(notEmpty, balance))).singleElement().satisfies(change -> {
                 assertThat(change.compatible()).isFalse();
                 assertThat(change.path()).isEqualTo("Account.balance-not-negative");
                 assertThat(change.hint()).isPresent();
@@ -311,24 +311,24 @@ class PropertyRulesTest {
 
         @Test
         void everyAddedCheckIsReported() {
-            assertThat(checks(List.of(), List.of(balance, notBlank))).hasSize(2)
+            assertThat(checks(List.of(), List.of(balance, notEmpty))).hasSize(2)
                     .allMatch(change -> !change.compatible());
         }
 
         @Test
         void listingTheSameChecksInAnotherOrderIsNoChange() {
-            assertThat(checks(List.of(balance, notBlank), List.of(notBlank, balance))).isEmpty();
+            assertThat(checks(List.of(balance, notEmpty), List.of(notEmpty, balance))).isEmpty();
         }
 
         @Test
         void relationshipTypesAreComparedTheSame() {
             RelationshipTypeDefinition before = relationshipWithChecks(List.of(balance));
-            RelationshipTypeDefinition after = relationshipWithChecks(List.of(balance, notBlank));
+            RelationshipTypeDefinition after = relationshipWithChecks(List.of(balance, notEmpty));
 
             assertThat(PropertyRules.compare("relationship", before, after, "Employs", CompiledSchema.EMPTY,
                     CompiledSchema.EMPTY)).singleElement().satisfies(change -> {
                         assertThat(change.compatible()).isFalse();
-                        assertThat(change.path()).isEqualTo("Employs.name-not-blank");
+                        assertThat(change.path()).isEqualTo("Employs.name-not-empty");
                     });
             assertThat(PropertyRules.compare("relationship", after, before, "Employs", CompiledSchema.EMPTY,
                     CompiledSchema.EMPTY)).singleElement()
