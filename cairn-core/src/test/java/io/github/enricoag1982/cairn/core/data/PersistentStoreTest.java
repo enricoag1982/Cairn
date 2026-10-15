@@ -682,6 +682,59 @@ class PersistentStoreTest {
     }
 
     @Test
+    void closingFlushesTheKeysBeforeItClosesThemAsClosingADirectoryStoreWritesASnapshot() {
+        DurableStore store = openWithReferenceModel();
+        replay(store, ReferenceStories.rd1Parties());
+        int eventsBefore = keys.events().size();
+
+        store.close();
+
+        assertThat(keys.events().subList(eventsBefore, keys.events().size())).containsExactly("flush", "close");
+    }
+
+    @Test
+    void aStoreThatRefusesWritesAfterAFailedWriteDoesNotFlushWhenItIsClosedButClosesTheKeys() {
+        DurableStore store = openWithReferenceModel();
+        keys.failApplies();
+        assertThatThrownBy(() -> store.commit(Transaction.by("importer")
+                .create("Person", from(1, 1), values("name", "Bob")).build())).isInstanceOf(UncheckedIOException.class);
+        int eventsBefore = keys.events().size();
+
+        store.close();
+
+        assertThat(keys.events().subList(eventsBefore, keys.events().size())).containsExactly("close");
+        assertThat(keys.isClosed()).isTrue();
+    }
+
+    @Test
+    void aStoreWhosePurgeCouldNotCompactDoesNotFlushAgainWhenItIsClosed() {
+        DurableStore store = openWithReferenceModel();
+        Receipt parties = replay(store, ReferenceStories.rd1Parties());
+        keys.failCompactions();
+        assertThatThrownBy(() -> store.purge(ReferenceStories.rd11PurgeAlice(entity(parties, ALICE))))
+                .isInstanceOf(UncheckedIOException.class);
+        int flushes = (int) keys.events().stream().filter("flush"::equals).count();
+
+        store.close();
+
+        assertThat(keys.events().stream().filter("flush"::equals)).as("no flush when closing").hasSize(flushes);
+        assertThat(keys.events().getLast()).isEqualTo("close");
+    }
+
+    @Test
+    void aFlushThatFailsWhenClosingStillClosesTheKeysAndTheCallThrows() {
+        DurableStore store = openWithReferenceModel();
+        keys.failFlushes();
+
+        assertThatThrownBy(store::close).isInstanceOf(UncheckedIOException.class);
+
+        assertThat(keys.isClosed()).as("the keys are closed, and the directory released").isTrue();
+        assertThatThrownBy(store::latestBasis).isInstanceOf(IllegalStateException.class);
+        store.close();
+        assertThat(keys.events().stream().filter("close"::equals)).hasSize(1);
+    }
+
+    @Test
     void theLockOfADirectoryIsTheSameAsTheOneOfDirectoryStores(@TempDir Path directory) {
         Runnable release = KeyValueStores.lockDirectory(directory);
 

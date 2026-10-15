@@ -3,7 +3,7 @@ package io.github.enricoag1982.cairn.data;
 import io.github.enricoag1982.cairn.schema.Basis;
 
 /**
- * A {@link Store} that is kept on disk, in a directory (ADR-0011, ADR-0022, capability {@code durability}). Every
+ * A {@link Store} that is kept on disk, in a directory (ADR-0011, ADR-0022, ADR-0028, capability {@code durability}). Every
  * committed transaction, of data or of the schema, is on disk before its commit returns, and a store opened again on the
  * directory has the state of the committed transactions. In every other way it behaves as an in-memory store.
  *
@@ -15,12 +15,21 @@ import io.github.enricoag1982.cairn.schema.Basis;
  * {@code UncheckedIOException}, the purge is applied in memory, and the store refuses commits like after a failed write,
  * until it is opened again and completes the purge.
  *
- * <p>A store kept in RocksDB (ADR-0028, capability {@code durability}) is a durable store that keeps no commit log
- * segments or snapshot files: each commit is a synchronous write batch to RocksDB's write-ahead log, so
- * {@link #writeSnapshot()} flushes what RocksDB holds in memory to its files and returns the latest basis, and a purge is
- * one synchronous write that a flush and a compaction of all of the store follow before it returns, so that no file of
- * the store holds the purged data, not even the keys that named it; a purge that was stopped before it finished is
- * finished when the store is opened. The rest of this description holds for it as it is, except what it says of files.
+ * <p>A store kept in RocksDB ({@code RocksDbStores.open} in the module {@code cairn-rocksdb}, ADR-0028) implements this
+ * interface, and differs from what is described above in these ways:
+ *
+ * <ul>
+ *   <li>It has no commit log segments or snapshot files: each commit is a synchronous write batch to RocksDB's
+ *       write-ahead log, and {@link #writeSnapshot()} and {@link #close()} flush what RocksDB holds in memory to its
+ *       files, so that opening the store again replays no write-ahead log. A store that refuses writes after a failure
+ *       does not flush when it closes.
+ *   <li>A purge is one synchronous write, which a flush and a compaction of all of the store follow before the purge
+ *       returns, so that no file of the store holds the purged data, not even the keys that named it. A purge whose write
+ *       cannot be made applies nothing. If the flush, the compaction or the reopening of the database that follows it
+ *       fails, the purge is applied, the call throws, and the store refuses commits; opening the store finishes the
+ *       purge.
+ *   <li>After the database could not be reopened, every call but {@code close} throws, until the store is opened again.
+ * </ul>
  *
  * <p>One open store holds a directory at a time, in any process. {@link #close()} releases it. A closed store refuses
  * every call but {@code close}, which does nothing the second time: each call throws an {@code IllegalStateException},

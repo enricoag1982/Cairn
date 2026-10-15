@@ -24,6 +24,7 @@ import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
+import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -281,5 +282,49 @@ class RocksDbStoresScenariosTest {
                 .hasMessageContaining("version 2").hasMessageContaining(directory.toString());
 
         KeyValueStores.lockDirectory(directory).run();
+    }
+
+    @Test
+    @DisplayName("Scenario: A directory of the other kind of store")
+    void aDirectoryOfTheOtherKindOfStore() throws IOException {
+        Path keptThroughALog = directory.resolve("kept-through-a-log");
+        Path keptInRocksDb = directory.resolve("kept-in-rocksdb");
+        StoreSettings settings = StoreSettings.builder().clock(rocks.clock).idGenerator(IdGenerators.deterministic())
+                .rules(ReferenceModel.executableRules()).declaredRules(ReferenceModel.declaredRules()).build();
+        try (DurableStore store = Stores.durable(keptThroughALog, settings)) {
+            RocksDbFixture.registerReferenceModel(store);
+            ReferenceStories.replay(store, rocks.clock, ReferenceStories.rd1Parties());
+        }
+        RocksDbFixture other = new RocksDbFixture(keptInRocksDb);
+        DurableStore rocksStore = other.openWithReferenceModel();
+        other.replay(rocksStore, ReferenceStories.rd1Parties());
+        rocksStore.close();
+        Map<String, byte[]> logFiles = StoreFiles.contents(keptThroughALog);
+        Map<String, byte[]> rocksFiles = StoreFiles.contents(keptInRocksDb);
+
+        assertThatThrownBy(() -> RocksDbStores.open(keptThroughALog, settings)).as("a RocksDB store on a directory store")
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining(keptThroughALog.toString())
+                .hasMessageContaining("Stores.durable");
+        assertThatThrownBy(() -> Stores.durable(keptInRocksDb, settings)).as("a directory store on a RocksDB store")
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining(keptInRocksDb.toString())
+                .hasMessageContaining("RocksDbStores.open");
+
+        assertThat(keptThroughALog.resolve(RocksDbStores.DATABASE)).as("no database was created").doesNotExist();
+        assertThat(keptInRocksDb.resolve("log")).as("no log was created").doesNotExist();
+        assertThat(keptInRocksDb.resolve("snapshots")).as("no snapshot files").doesNotExist();
+        assertThat(StoreFiles.contents(keptThroughALog)).as("the files of the directory store")
+                .containsOnlyKeys(logFiles.keySet()).allSatisfy((name, bytes) -> assertThat(bytes).as(name)
+                        .isEqualTo(logFiles.get(name)));
+        assertThat(StoreFiles.contents(keptInRocksDb)).as("the files of the RocksDB store")
+                .containsOnlyKeys(rocksFiles.keySet()).allSatisfy((name, bytes) -> assertThat(bytes).as(name)
+                        .isEqualTo(rocksFiles.get(name)));
+        try (DurableStore again = Stores.durable(keptThroughALog, settings)) {
+            assertThat(again.transactions()).as("the directory store, with RD-1").hasSize(1);
+            assertThat(again.view(Coordinates.effectiveAt(on(2, 1))).entities("Person")).hasSize(1);
+        }
+        DurableStore reopened = other.open();
+        assertThat(reopened.transactions()).as("the RocksDB store, with RD-1").hasSize(1);
+        assertThat(reopened.view(Coordinates.effectiveAt(on(2, 1))).entities("Person")).hasSize(1);
+        other.closeAll();
     }
 }

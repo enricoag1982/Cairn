@@ -53,13 +53,19 @@ import java.util.stream.Stream;
  * again, while reads and dry runs go on.
  *
  * <p>A purge deletes the keys of what it removes and writes its record, and the note that the files are still to be
- * compacted, in one batch. Then, still holding the writer lock, it flushes and compacts the key-value store, which makes
- * the key-value store drop what the purge deleted from its files and from its own records of them, and deletes the note
- * before it returns, so that no file keeps the purged data. If any of that fails, the purge is applied, the call throws,
- * and the store refuses commits until it is opened again, which finishes the compaction while the note is there.
+ * compacted, in one batch; if that batch cannot be written, nothing is applied. Then, still holding the writer lock, it
+ * flushes and compacts the key-value store, which makes the key-value store drop what the purge deleted from its files
+ * and from its own records of them, and deletes the note before it returns, so that no file keeps the purged data. If
+ * flushing or compacting fails, the purge is applied, the call throws, and the store refuses commits until it is opened
+ * again, which finishes the compaction while the note is there. If the key-value store cannot be reopened after the
+ * compaction, as RocksDB is to rewrite its own records of its files, it is unusable, and every call but {@code close}
+ * throws until the store is opened again.
  *
- * <p>After {@code close}, every call but {@code close} throws an {@code IllegalStateException}, on the store and on its
- * schema registry; closing closes the key-value store.
+ * <p>{@link #writeSnapshot()} flushes the key-value store, and so does {@link #close()}, as closing a store kept in a
+ * directory writes a snapshot file, so that opening the store again replays no write-ahead log; a store that refuses
+ * writes after a failure does not flush when it closes. After {@code close}, every call but {@code close} throws an
+ * {@code IllegalStateException}, on the store and on its schema registry; closing closes the key-value store, also if the
+ * flush fails, and then the call throws.
  */
 public final class PersistentStore implements DurableStore {
 
@@ -282,7 +288,29 @@ public final class PersistentStore implements DurableStore {
                 closed = true;
                 return null;
             });
-            keys.persistent.close();
+            // As a store kept in a directory writes a snapshot file when it closes, this one flushes, unless a write or
+            // a purge's compaction failed: the key-value store may be unusable then, and the files are for the next
+            // opening to finish. The key-value store is closed in any case, and a failure to flush is reported after.
+            RuntimeException failure = null;
+            try {
+                if (!keys.failed) {
+                    keys.persistent.flush();
+                }
+            } catch (RuntimeException e) {
+                failure = e;
+            }
+            try {
+                keys.persistent.close();
+            } catch (RuntimeException e) {
+                if (failure == null) {
+                    failure = e;
+                } else {
+                    failure.addSuppressed(e);
+                }
+            }
+            if (failure != null) {
+                throw failure;
+            }
         } finally {
             maintenanceLock.unlock();
         }

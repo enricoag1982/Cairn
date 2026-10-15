@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -21,9 +22,11 @@ import java.util.Objects;
  * flushes and compacts the database, with the write-ahead log not archived, and opens it again so that its MANIFEST,
  * which names the smallest and the largest key of every file, no longer names the keys that were deleted, so that no file
  * of the store keeps the purged data, not an ID or the value of a unique attribute, when the purge returns. A purge that
- * stopped before that, in a crash, is finished when the store is opened. Opening a store takes longer the more data it
- * holds, because the store reads its metadata into memory and runs its rules once over every version they name to learn
- * what they read.
+ * stopped before that, in a crash, is finished when the store is opened. Writing a snapshot and closing the store flush
+ * what RocksDB holds in memory to its files, so that opening the store again replays no write-ahead log; a store that
+ * refuses writes after a failure does not flush when it closes. Opening a store takes longer the more data it holds,
+ * because the store reads its metadata into memory and runs its rules once over every version they name to learn what
+ * they read.
  *
  * <p>The store lives in a directory, which holds the file {@code lock} that stores in directories take, so that one open
  * store holds a directory at a time, in any process, and the subdirectory {@code rocksdb}, which holds the database and
@@ -33,8 +36,18 @@ import java.util.Objects;
  */
 public final class RocksDbStores {
 
-    /** The subdirectory of the store's directory that holds the RocksDB database. */
+    /**
+     * The subdirectory of the store's directory that holds the RocksDB database. {@code Stores.durable} of the engine
+     * refuses a directory that has it; the name is repeated there because the engine does not depend on this module.
+     */
     static final String DATABASE = "rocksdb";
+
+    /**
+     * The subdirectories that a store kept through a commit log and snapshot files has, which the engine names in its
+     * {@code FileFormat}, a class that is not exported: a directory that has one was written by that store, and this
+     * module refuses it.
+     */
+    static final List<String> DIRECTORY_STORE_SUBDIRECTORIES = List.of("log", "snapshots");
 
     private RocksDbStores() {
     }
@@ -59,9 +72,12 @@ public final class RocksDbStores {
      * @param settings  the clock, ID generator and rules; the store works on a copy of the generator
      * @return the open store, which the caller closes
      * @throws UncheckedIOException     if reading or writing the directory or the database fails
-     * @throws IllegalStateException    if another open store holds the directory, if the database was written in a format
-     *                                  version that this version of Cairn does not know, which the message names, if a
-     *                                  stored record is damaged, or if the settings' ID generator does not
+     * @throws IllegalStateException    if another open store holds the directory, if the directory holds a store kept
+     *                                  through a commit log and snapshot files (a subdirectory {@code log} or
+     *                                  {@code snapshots}, written by {@code Stores.durable}), which is left as it is and
+     *                                  is opened with that method, if the database was written in a format version that
+     *                                  this version of Cairn does not know, which the message names, if a stored record
+     *                                  is damaged, or if the settings' ID generator does not
      *                                  {@linkplain io.github.enricoag1982.cairn.data.IdGenerator#accepts accept} the ID of
      *                                  an entity or a relationship that the store holds
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two rules,
@@ -79,6 +95,7 @@ public final class RocksDbStores {
         Runnable release = KeyValueStores.lockDirectory(directory);
         RocksDbKeyValueStore keys;
         try {
+            requireNoDirectoryStore(directory);
             keys = RocksDbKeyValueStore.open(directory.resolve(DATABASE), release);
         } catch (RuntimeException | Error e) {
             release.run();
@@ -89,6 +106,24 @@ public final class RocksDbStores {
         } catch (IllegalStateException e) {
             throw new IllegalStateException("Opening the RocksDB store in " + directory + " failed: " + e.getMessage(),
                     e);
+        }
+    }
+
+    /**
+     * Refuses a directory that a store kept through a commit log and snapshot files wrote, before the database is created
+     * in it: the store would open as an empty store, with a database beside the log, and the next opening of the directory
+     * as the other kind of store would not see what it wrote. Called with the directory's lock held, so that a directory
+     * that is in use is reported as such.
+     *
+     * @throws IllegalStateException naming the directory and the kind of store that wrote it
+     */
+    private static void requireNoDirectoryStore(Path directory) {
+        for (String subdirectory : DIRECTORY_STORE_SUBDIRECTORIES) {
+            if (Files.isDirectory(directory.resolve(subdirectory))) {
+                throw new IllegalStateException("The directory " + directory + " holds a store kept through a commit "
+                        + "log and snapshot files (subdirectory " + subdirectory + "); open it with Stores.durable in "
+                        + "the module cairn-core, not as a RocksDB store.");
+            }
         }
     }
 }

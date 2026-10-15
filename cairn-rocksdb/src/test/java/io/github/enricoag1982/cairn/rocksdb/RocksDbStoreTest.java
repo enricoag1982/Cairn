@@ -101,6 +101,21 @@ class RocksDbStoreTest {
     }
 
     @Test
+    void closingTheStoreFlushesItsCommitsToADataFileSoThatOpeningItAgainReplaysNoLog() {
+        DurableStore store = rocks.openWithReferenceModel();
+        rocks.replay(store, ReferenceStories.rd1Parties());
+        assertThat(dataFilesContaining(directory, "Alice")).as("before").isNotEmpty().allMatch(name -> name.endsWith(".log"));
+
+        store.close();
+
+        assertThat(dataFilesContaining(directory, "Alice")).as("after closing").isNotEmpty()
+                .allMatch(name -> name.endsWith(".sst"));
+        DurableStore reopened = rocks.open();
+        assertThat(reopened.transactions()).hasSize(1);
+        assertThat(reopened.view(Coordinates.effectiveAt(on(2, 1))).entities("Person")).hasSize(1);
+    }
+
+    @Test
     void aPurgeLeavesNoDataFileThatHoldsTheDataAndNoFileThatHoldsTheNameBeforeTheStoreIsClosed() {
         DurableStore store = rocks.openWithReferenceModel();
         Receipt parties = rocks.replay(store, rd1WithAKey());

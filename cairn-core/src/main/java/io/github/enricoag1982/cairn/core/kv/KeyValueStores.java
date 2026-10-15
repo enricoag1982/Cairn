@@ -32,8 +32,9 @@ public final class KeyValueStores {
      * makes durable before the store publishes its basis. A purge flushes and compacts the key-value store before it
      * returns, and its batch holds a note that it did not yet, which it deletes afterwards: a key-value store whose purge
      * was stopped before that has the note, and opening it flushes and compacts first, so that no file keeps what the
-     * purge removed. {@linkplain DurableStore#writeSnapshot() Writing a snapshot} flushes it. The returned store owns the
-     * key-value store: closing the store closes it, and so does a failure to open.
+     * purge removed. {@linkplain DurableStore#writeSnapshot() Writing a snapshot} flushes it, and so does closing the store,
+     * unless a write or a purge's compaction failed. The returned store owns the key-value store: closing the store closes
+     * it, and so does a failure to open.
      *
      * @param keys     the key-value store, which no one else writes to
      * @param settings the clock, ID generator and rules; the store works on a copy of the generator

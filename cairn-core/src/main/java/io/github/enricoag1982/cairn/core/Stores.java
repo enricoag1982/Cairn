@@ -54,9 +54,10 @@ public final class Stores {
      * @param directory the directory, which is created if it does not exist
      * @return the open store, which the caller closes
      * @throws java.io.UncheckedIOException if reading or writing the directory fails
-     * @throws IllegalStateException        if another open store holds the directory, if a file in it is damaged
-     *                                      anywhere but at the end of the last log segment, or if a file was written in
-     *                                      a format version that this version does not know; the message names the file
+     * @throws IllegalStateException        if another open store holds the directory, if the directory holds a RocksDB
+     *                                      store, if a file in it is damaged anywhere but at the end of the last log
+     *                                      segment, or if a file was written in a format version that this version does
+     *                                      not know; the message names the file
      * @see #durable(Path, StoreSettings)
      */
     public static DurableStore durable(Path directory) {
@@ -88,9 +89,12 @@ public final class Stores {
      * @param settings  the clock, ID generator and rules; the store works on a copy of the generator
      * @return the open store, which the caller closes
      * @throws java.io.UncheckedIOException if reading or writing the directory fails
-     * @throws IllegalStateException        if another open store holds the directory, if a file in it is damaged
-     *                                      anywhere but at the end of the last log segment, if a file was written in a
-     *                                      format version that this version does not know, or if the settings' ID
+     * @throws IllegalStateException        if another open store holds the directory, if the directory holds a RocksDB
+     *                                      store (a subdirectory {@code rocksdb}, written by {@code RocksDbStores} of the
+     *                                      module {@code cairn-rocksdb}), which is left as it is and is opened with that
+     *                                      class, if a file in it is damaged anywhere but at the end of the last log
+     *                                      segment, if a file was written in a format version that this version does not
+     *                                      know, or if the settings' ID
      *                                      generator does not {@linkplain io.github.enricoag1982.cairn.data.IdGenerator#accepts
      *                                      accept} the ID of an entity or a relationship that the store holds, as the
      *                                      generator of another store; the message names the file and, for damage, the

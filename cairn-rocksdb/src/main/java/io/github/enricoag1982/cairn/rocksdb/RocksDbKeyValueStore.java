@@ -26,14 +26,15 @@ import org.rocksdb.WriteOptions;
 
 /**
  * A {@link PersistentKeyValueStore} on a RocksDB database (ADR-0028, design D5 of {@code add-rocksdb-store}): {@code get}
- * and {@code scan} through RocksDB's iterators, which order keys as unsigned bytes with the default comparator, {@code
- * apply} as a {@link WriteBatch} written with {@code sync}, so that RocksDB's write-ahead log is the commit log, {@code
- * flush} as a flush that waits, and {@code compactAll} as a compaction of the whole key range with the bottommost level
- * forced, so that no data file keeps a deleted value, followed by closing the database and opening it again, which makes
- * RocksDB write a new MANIFEST and delete the old one and the old info log. The MANIFEST holds the smallest and the
- * largest key of every file, so a key that a purge deleted, an ID or the value of a unique attribute, stays in it until
- * then; a compaction alone would leave it there. The database is opened with the write-ahead log not archived: a log that
- * a flush made obsolete is deleted.
+ * as a point lookup, {@code scan} through RocksDB's iterators, which order keys as unsigned bytes with the default
+ * comparator, {@code apply} as a {@link WriteBatch} written with {@code sync}, so that RocksDB's write-ahead log is the
+ * commit log, {@code flush} as a flush that waits, and {@code compactAll} as a compaction of the whole key range with the
+ * bottommost level forced, so that no data file keeps a deleted value, followed by closing the database and opening it
+ * again, which makes RocksDB write a new MANIFEST and delete the old one. The MANIFEST holds the smallest and the largest
+ * key of every file, so a key that a purge deleted, an ID or the value of a unique attribute, stays in it until then; a
+ * compaction alone would leave it there. Reopening does not delete RocksDB's info log: it keeps the old one as
+ * {@code LOG.old.<microseconds>}, up to {@code keep_log_file_num} files, and these hold no keys or values. The database is
+ * opened with the write-ahead log not archived: a log that a flush made obsolete is deleted.
  *
  * <p>The database is native memory, and a call on a closed database can crash the virtual machine, so every call, and
  * every step of a scan, takes the read lock of a gate, which {@link #close()} and the reopening take exclusively: they wait
@@ -210,9 +211,10 @@ final class RocksDbKeyValueStore implements PersistentKeyValueStore {
 
     /**
      * Closes the database and opens it again with the same options, so that RocksDB writes a new MANIFEST, which names
-     * only the files that are left, and deletes the old one and the old info log. The scans keep going: each gives up its
-     * iterator before the database closes and takes one on the new database. The directory stays locked. Called holding
-     * the write lock of the gate. If it fails, the store is unusable.
+     * only the files that are left, and deletes the old one. RocksDB keeps the old info log as {@code LOG.old.<micros>},
+     * which holds no data. The scans keep going: each gives up its iterator before the database closes and takes one on
+     * the new database. The directory stays locked. Called holding the write lock of the gate. If it fails, the store is
+     * unusable.
      *
      * @throws UncheckedIOException if closing or opening the database fails
      */

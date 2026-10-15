@@ -60,6 +60,13 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class DirectoryStore implements DurableStore {
 
+    /**
+     * The subdirectory in which a RocksDB store keeps its database (module {@code cairn-rocksdb}, ADR-0028). A directory
+     * that has it was written by that store, and this store refuses it. The name is repeated here, and in
+     * {@code RocksDbStores}, because this module does not depend on the other.
+     */
+    static final String ROCKSDB_SUBDIRECTORY = "rocksdb";
+
     private final Path directory;
     private final InMemoryStore store;
     private final CommitLog log;
@@ -90,11 +97,11 @@ public final class DirectoryStore implements DurableStore {
      * @param declaredRules the descriptions of rules that the store has no code for
      * @return the open store
      * @throws UncheckedIOException     if reading or writing the directory fails
-     * @throws IllegalStateException    if another open store holds the directory, a file is damaged anywhere but at the
-     *                                  end of the last log segment, a file was written in a format version that is not
-     *                                  known, or the generator does not accept the ID of an entity or a relationship that
-     *                                  the store holds; the message names the file and, for damage, the position, or
-     *                                  the ID
+     * @throws IllegalStateException    if another open store holds the directory, the directory holds a RocksDB store
+     *                                  (a subdirectory {@code rocksdb}), a file is damaged anywhere but at the end of the
+     *                                  last log segment, a file was written in a format version that is not known, or the
+     *                                  generator does not accept the ID of an entity or a relationship that the store
+     *                                  holds; the message names the file and, for damage, the position, or the ID
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two rules
      *                                  have the same name and version
      */
@@ -117,6 +124,7 @@ public final class DirectoryStore implements DurableStore {
         CommitLog log = null;
         boolean opened = false;
         try {
+            requireNoRocksDbStore(directory);
             Recovery.Result recovered = Recovery.recover(directory, new Restorer(store));
             store.requireIdsOfTheGenerator(generator);
             store.underWriterLock(() -> {
@@ -140,6 +148,22 @@ public final class DirectoryStore implements DurableStore {
                     lock.close();
                 }
             }
+        }
+    }
+
+    /**
+     * Refuses a directory that a RocksDB store wrote, before anything is read or created in it: the store would open as an
+     * empty store, with a log and snapshot files of its own beside the database, and the next opening of the directory as
+     * a RocksDB store would not see what it wrote. Called with the directory's lock held, so that a directory that is in
+     * use is reported as such.
+     *
+     * @throws IllegalStateException naming the directory and the kind of store that wrote it
+     */
+    private static void requireNoRocksDbStore(Path directory) {
+        if (Files.isDirectory(directory.resolve(ROCKSDB_SUBDIRECTORY))) {
+            throw new IllegalStateException("The directory " + directory + " holds a RocksDB store (subdirectory "
+                    + ROCKSDB_SUBDIRECTORY + "); open it with RocksDbStores.open in the module cairn-rocksdb, not as a "
+                    + "store kept through a commit log and snapshot files.");
         }
     }
 
