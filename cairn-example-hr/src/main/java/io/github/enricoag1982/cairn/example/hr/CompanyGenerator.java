@@ -217,7 +217,6 @@ public final class CompanyGenerator {
         String employedBy;
         String worksAt;
         String fills;
-        final List<String> decisions = new ArrayList<>();
         private int names;
 
         Employee(int number, boolean manager, LocalDate hired, Slot slot, PlaceSpec place, BigDecimal salary) {
@@ -551,7 +550,6 @@ public final class CompanyGenerator {
             int leave = ++leaves;
             String request = "leave" + leave;
             String decision = "decision" + leave;
-            employee.decisions.add(decision);
             String requester = employee.key;
             String code = employee.code;
             String deciding = decider.key;
@@ -597,7 +595,6 @@ public final class CompanyGenerator {
             String code = employee.code;
             List<String> relationships = new ArrayList<>(List.of(employee.employmentOf, employee.employedBy,
                     employee.worksAt, employee.fills));
-            relationships.addAll(employee.decisions);
             Instant from = instant(day);
             events.merge("terminations", 1, Integer::sum);
             steps.add(new Step(from, ids -> {

@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.PipedInputStream;
-import java.io.PipedOutputStream;
+import java.io.OutputStream;
 import java.io.PrintStream;
+import java.nio.channels.Channels;
+import java.nio.channels.Pipe;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 import tools.jackson.databind.JsonNode;
@@ -18,11 +20,15 @@ import tools.jackson.databind.node.ObjectNode;
  * A client that talks to {@link CairnAgentServer#run} in another thread over pipes, as an MCP client talks to a server
  * over standard input and output: one JSON-RPC message per line. It checks that every line the server writes is a
  * JSON-RPC message.
+ *
+ * <p>The pipes are {@link Pipe}s and not {@link java.io.PipedInputStream}s: a piped stream remembers the last thread
+ * that wrote to it and fails a read with "Write end dead" once that thread has ended and the buffer is empty. The MCP
+ * server writes its responses from pool threads that end between messages, so with piped streams a read fails
+ * depending on timing.
  */
 final class StdioSession implements AutoCloseable {
 
-    private final PipedOutputStream toServer = new PipedOutputStream();
-    private final PipedInputStream clientIn;
+    private final OutputStream toServer;
     private final BufferedReader fromServer;
     private final ByteArrayOutputStream errors = new ByteArrayOutputStream();
     private final Thread thread;
@@ -30,14 +36,26 @@ final class StdioSession implements AutoCloseable {
     private int nextId = 1;
 
     StdioSession(String... args) throws IOException {
-        PipedInputStream serverIn = new PipedInputStream(toServer, 1 << 16);
-        PipedOutputStream serverOut = new PipedOutputStream();
-        clientIn = new PipedInputStream(serverOut, 1 << 20);
-        fromServer = new BufferedReader(new InputStreamReader(clientIn, StandardCharsets.UTF_8));
+        Pipe requests = Pipe.open();
+        Pipe responses = Pipe.open();
+        toServer = Channels.newOutputStream(requests.sink());
+        InputStream serverIn = Channels.newInputStream(requests.source());
+        OutputStream serverOut = Channels.newOutputStream(responses.sink());
+        fromServer = new BufferedReader(new InputStreamReader(Channels.newInputStream(responses.source()),
+                StandardCharsets.UTF_8));
         PrintStream err = new PrintStream(errors, true, StandardCharsets.UTF_8);
-        thread = new Thread(() -> status.set(CairnAgentServer.run(args, serverIn, serverOut, err)), "agent-server");
+        thread = new Thread(() -> serve(args, serverIn, serverOut, err), "agent-server");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    /** Runs the server and then closes its ends of the pipes, as the end of a process does: the client sees the end. */
+    private void serve(String[] args, InputStream in, OutputStream out, PrintStream err) {
+        try (in; out) {
+            status.set(CairnAgentServer.run(args, in, out, err));
+        } catch (IOException e) {
+            err.println("Cannot close the pipes of the server: " + e);
+        }
     }
 
     /** What the server wrote to standard error. */

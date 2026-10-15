@@ -9,8 +9,8 @@ import java.util.Optional;
 
 /**
  * The proof that a transaction was committed (capability {@code transactions}): when and at which basis it was
- * recorded, which entities and relationships it created and which ones the composition of its writes ended, which
- * entities its unique keys named, and who and why it recorded.
+ * recorded, which entities and relationships it created and which ones composition cascades ended, with the other
+ * relationships of the targets they ended, which entities its unique keys named, and who and why it recorded.
  *
  * <p>A transaction with an idempotency key that is submitted again gets the receipt of the first submission.
  *
@@ -20,11 +20,13 @@ import java.util.Optional;
  *                        order of the writes; an {@link EntityId} or a {@link RelationshipId}
  * @param created         the ID of every entity and relationship the transaction created, in the order of the writes
  * @param ended           the ID of every relationship and entity that the engine ended because a composition ends with
- *                        its source (capability {@code relationships}), and that none of the transaction's own
- *                        writes ended, in the order in which the cascades reached them, depth first: for each entity
- *                        that a write ended, in the order of the writes, each of its composition relationships in the
- *                        order of their IDs, every one followed by its target and then by the compositions of that
- *                        target in the same way, before the next relationship; each ID once
+ *                        its source and a target ends with its other relationships (capability
+ *                        {@code relationships}), except those that the transaction's own writes had already ended
+ *                        from that instant or earlier, in the order in which the cascades reached them, depth first:
+ *                        for each entity that a write ended, in the order of the writes, each of its composition
+ *                        relationships in the order of their IDs, every one followed by its target, then by what the
+ *                        cascade ends from that target in the same way, and then by the other relationships of that
+ *                        target that end with it, in the order of their IDs, before the next relationship; each ID once
  * @param keys            what each {@linkplain UniqueKey unique key} that a write names resolved to (ADR-0026), in the
  *                        order of the writes, and, within a relate, the source before the target; empty if no write names
  *                        a key
@@ -52,7 +54,8 @@ public record Receipt(
      * @param transactionTime when the transaction was recorded
      * @param temporaryIds    the IDs of what the transaction named with temporary IDs
      * @param created         the IDs of what the transaction created
-     * @param ended           the IDs of what compositions ended
+     * @param ended           the IDs of what composition cascades ended: compositions, their targets and the other
+     *                        relationships of those targets
      * @param principal       who submitted the transaction
      * @param onBehalfOf      the party the principal acted for, if given
      * @param reason          why the transaction was submitted, if given

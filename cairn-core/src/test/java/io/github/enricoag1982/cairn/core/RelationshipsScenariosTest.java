@@ -4,6 +4,7 @@ import static io.github.enricoag1982.cairn.core.ReferenceStore.assertProblem;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.entity;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.relationship;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A2;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME_OWNS_BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
@@ -13,6 +14,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.CUSTOMER_RO
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA_OWNS_BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A2;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.PLAYED_BY;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
@@ -58,6 +60,8 @@ class RelationshipsScenariosTest {
     private static final TemporaryId HOME = new TemporaryId("home");
     private static final TemporaryId HAS_ADDRESS = new TemporaryId("hasAddress");
     private static final TemporaryId A3 = new TemporaryId("a3");
+    private static final TemporaryId OFFICE = new TemporaryId("office");
+    private static final TemporaryId MAILED_TO = new TemporaryId("mailedTo");
 
     /** The reference domain with the symmetric relationship type of the scenario "Related parties". */
     private static final SchemaDefinition WITH_RELATED_PARTY = Definitions.plus(ReferenceModel.definition(),
@@ -68,6 +72,17 @@ class RelationshipsScenariosTest {
                     .build());
 
     private final ReferenceStore reference = new ReferenceStore();
+
+    /**
+     * The reference domain with the test-only association {@code MailedTo} from an account to the address that its
+     * statements are mailed to, of the scenarios of cascades: many accounts may be mailed to one address.
+     */
+    private static SchemaDefinition withMailedTo(Multiplicity targetsPerSource) {
+        return Definitions.plus(ReferenceModel.definition(), SchemaDefinition.builder()
+                .relationshipType("MailedTo", r -> r.from("Account").to("Address").targetsPerSource(targetsPerSource)
+                        .sourcesPerTarget(Multiplicity.ZERO_OR_MORE).inverse("mailedFrom"))
+                .build());
+    }
 
     private static Problem only(List<Problem> problems) {
         assertThat(problems).hasSize(1);
@@ -443,5 +458,85 @@ class RelationshipsScenariosTest {
         assertThat(reference.view(on(6, 1)).entity(beta)).isEmpty();
         assertThat(reference.view(on(6, 1)).entity(home)).isEmpty();
         assertThat(reference.view(on(6, 1)).entities("Address")).extracting(EntityState::id).isEmpty();
+    }
+
+    // ------------------------------------------------------------------ the relationships of a target end with it
+
+    /**
+     * RD-1, then in one transaction: Beta has the address {@code home} and ACME the address {@code office}, through
+     * HasAddress; accounts A-1, held by Beta, and A-2, held by ACME, from 1 January; and A-1's statements are mailed to
+     * {@code home} and A-2's to {@code office}. The accounts are created with their MailedTo, so that the store may
+     * require it.
+     */
+    private static Receipt mailedAccounts(ReferenceStore store, Receipt parties) {
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        return store.commit(Transaction.by("importer")
+                .create(HOME, "Address", from(1, 1),
+                        values("street", "1 Main St", "city", "Springfield", "country", "US"))
+                .create(OFFICE, "Address", from(1, 1),
+                        values("street", "2 High St", "city", "Springfield", "country", "US"))
+                .relate(HAS_ADDRESS, "HasAddress", beta, HOME, from(1, 1), values())
+                .relate(new TemporaryId("hasOffice"), "HasAddress", acme, OFFICE, from(1, 1), values())
+                .create(A1, "Account", from(1, 1),
+                        values("number", "A-1", "currency", "EUR", "balance", money("1000")))
+                .create(A2, "Account", from(1, 1),
+                        values("number", "A-2", "currency", "EUR", "balance", money("2000")))
+                .relate(HELD_BY_A1, "HeldBy", A1, beta, from(1, 1), values())
+                .relate(HELD_BY_A2, "HeldBy", A2, acme, from(1, 1), values())
+                .relate(MAILED_TO, "MailedTo", A1, HOME, from(1, 1), values())
+                .relate(new TemporaryId("mailedToA2"), "MailedTo", A2, OFFICE, from(1, 1), values())
+                .build());
+    }
+
+    /**
+     * From 1 June, ends Beta and moves A-1 to ACME, as in RD-8: it ends A-1's HeldBy of Beta and relates A-1 to ACME
+     * with HeldBy. The cascade ends the rest: Beta's address, and the relationships of the address.
+     */
+    private static Transaction endBeta(Receipt parties, Receipt accounts) {
+        return Transaction.by("importer")
+                .endDate(entity(parties, BETA), on(6, 1))
+                .endDate(relationship(accounts, HELD_BY_A1), on(6, 1))
+                .relate("HeldBy", entity(accounts, A1), entity(parties, ACME), from(6, 1), values())
+                .build();
+    }
+
+    @Test
+    @DisplayName("Scenario: The relationships of a target end with it")
+    void theRelationshipsOfATargetEndWithIt() {
+        ReferenceStore store = ReferenceStore.with(withMailedTo(Multiplicity.ZERO_OR_ONE));
+        Receipt parties = store.createParties();
+        Receipt accounts = mailedAccounts(store, parties);
+        RelationshipId mailedTo = relationship(accounts, MAILED_TO);
+        RelationshipId mailedToA2 = relationship(accounts, new TemporaryId("mailedToA2"));
+
+        Receipt receipt = store.commit(endBeta(parties, accounts));
+
+        assertThat(receipt.ended()).as("what the cascade ended, in order: the composition, its target, then the "
+                + "target's other relationship").containsExactly(relationship(accounts, HAS_ADDRESS),
+                entity(accounts, HOME), mailedTo);
+        assertThat(store.view(on(5, 31)).relationship(mailedTo)).isPresent();
+        assertThat(store.view(on(6, 1)).relationship(mailedTo)).as("A-1's MailedTo ends from 1 June").isEmpty();
+        assertThat(store.view(on(6, 1)).navigate(entity(accounts, A1), "MailedTo")).isEmpty();
+        assertThat(store.view(on(6, 1)).entity(entity(accounts, A1))).as("A-1 itself goes on").isPresent();
+        assertThat(store.view(on(6, 1)).relationship(mailedToA2)).as("A-2's MailedTo is not touched").isPresent();
+        assertThat(store.view(on(6, 1)).entity(entity(accounts, OFFICE))).isPresent();
+    }
+
+    @Test
+    @DisplayName("Scenario: A cascade that leaves another entity without a required relationship")
+    void aCascadeThatLeavesAnotherEntityWithoutARequiredRelationship() {
+        ReferenceStore store = ReferenceStore.with(withMailedTo(Multiplicity.EXACTLY_ONE));
+        Receipt parties = store.createParties();
+        Receipt accounts = mailedAccounts(store, parties);
+        EntityId a1 = entity(accounts, A1);
+
+        List<Problem> problems = store.reject(endBeta(parties, accounts));
+
+        Problem problem = only(problems);
+        assertProblem(problem, ProblemCode.TOO_FEW_RELATIONSHIPS, a1.value() + "[MailedTo]");
+        assertThat(problem.message()).contains("MailedTo", "from 2026-06-01T00:00:00Z until further notice");
+        assertThat(store.view(on(6, 1)).entity(entity(parties, BETA))).as("nothing was ended").isPresent();
+        assertThat(store.view(on(6, 1)).navigate(a1, "MailedTo")).hasSize(1);
     }
 }

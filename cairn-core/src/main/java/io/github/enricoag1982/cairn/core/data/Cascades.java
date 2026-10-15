@@ -14,11 +14,21 @@ import java.util.Set;
 
 /**
  * Ends the compositions of every entity that a write ended (design D4 of {@code add-relationships}): the composition
- * relationships with the entity as their source end from the same instant, and so do their targets, recursively. The
- * added ends are part of the transaction. Only what exists before the instant and goes on past it is ended; a
- * relationship or target that starts at or after the instant is left as it is, for the integrity checks to report,
- * because ending it would erase it. A target that still has relationships that continue is reported by those checks
- * too.
+ * relationships with the entity as their source end from the same instant, and so do their targets, recursively. A
+ * target ends with its source, so every other relationship of a target that the cascade ends ends with it too, at
+ * either end and of any type, once the target's own compositions have ended (design D1 of
+ * {@code change-composition-cascades}), including one that the transaction itself relates or ends later.
+ *
+ * <p>An entity that a write ends from that instant or earlier is not a target: its other relationships, except those
+ * with a target, stay the writer's to end, for the integrity checks to report. An entity that a write ends later than
+ * the instant is a target, and is cut to the instant. The added ends are part of the transaction, and a relationship
+ * that a cascade ends counts as written by it, as one that a write ends does: it is checked as an explicit end of it
+ * is. The entities at its other ends become touched, as the ends of a relationship are, but only for their
+ * multiplicities and lifetimes; nothing else is validated again.
+ *
+ * <p>Only what exists before the instant and goes on past it is ended; a relationship or target that starts at or after
+ * the instant is left as it is, for the integrity checks to report, because ending it would erase it, and so is a
+ * relationship that the transaction already ends from the instant or earlier.
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.
  */
@@ -46,8 +56,10 @@ final class Cascades {
      *
      * @param ended the entities the writes ended, in the order of the writes
      * @return the IDs of the relationships and entities that the cascades ended, not those that writes ended: for each
-     *         ended entity in turn, each composition relationship in the order of its ID and then its target, and then
-     *         the compositions of that target, depth first; each ID once
+     *         ended entity in turn, each composition relationship in the order of its ID, then its target, then what
+     *         the cascade ends from that target in the same way, depth first, and then the other relationships of that
+     *         target that the cascade ends, in the order of their IDs, before the next composition relationship; each
+     *         ID once
      */
     List<Id> run(List<Ended> ended) {
         for (Ended end : ended) {
@@ -74,7 +86,22 @@ final class Cascades {
                 target.written = true;
                 endedIds.add(target.id);
                 cascadeFrom(target, from, visited);
+                endRelationshipsOf((EntityId) target.id, from);
             }
+        }
+    }
+
+    /**
+     * Ends the relationships of an entity that the cascade ended, of any type and at either end, that start before the
+     * instant and go on past it, in the order of their IDs. The entities at their other ends become touched.
+     */
+    private void endRelationshipsOf(EntityId entity, Instant from) {
+        for (Working relationship : relationshipsPast(entity, from)) {
+            relationship.timeline = relationship.timeline.endAt(from);
+            relationship.written = true;
+            endedIds.add(relationship.id);
+            workspace.loadEntity(relationship.source, false);
+            workspace.loadEntity(relationship.target, false);
         }
     }
 
@@ -94,6 +121,32 @@ final class Cascades {
             if (!workspace.working().containsKey(stored.id()) && source.equals(stored.source())
                     && workspace.index().relationshipType(stored.type())
                             .map(type -> type.kind() == RelationshipKind.COMPOSITION).orElse(false)) {
+                found.add(workspace.loadRelationship(stored.id(), false));
+            }
+        }
+        found.sort(Comparator.comparing(relationship -> (RelationshipId) relationship.id));
+        return found;
+    }
+
+    /**
+     * The relationships of types that the schema has, with an entity as their source or their target, that start before
+     * an instant and go on past it, whether the transaction touches them or not, in the order of their IDs. A
+     * relationship that the transaction does not touch is touched from here on, with its ends.
+     */
+    private List<Working> relationshipsPast(EntityId entity, Instant from) {
+        List<Working> found = new ArrayList<>();
+        for (Working subject : List.copyOf(workspace.working().values())) {
+            if (subject.isRelationship() && !subject.failed()
+                    && (entity.equals(subject.source) || entity.equals(subject.target))
+                    && goesPast(subject.timeline, from)) {
+                found.add(subject);
+            }
+        }
+        for (StoredRelationship stored : workspace.storedRelationships().values()) {
+            if (!workspace.working().containsKey(stored.id())
+                    && (entity.equals(stored.source()) || entity.equals(stored.target()))
+                    && goesPast(stored.latest(), from)
+                    && workspace.index().relationshipType(stored.type()).isPresent()) {
                 found.add(workspace.loadRelationship(stored.id(), false));
             }
         }
