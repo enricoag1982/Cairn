@@ -63,6 +63,8 @@ public final class CommitSequence {
     /** The number of writes refused while rules ran; guarded by the writer lock, as only the lock's holder is refused. */
     private long refusedWrites;
     private volatile Basis latest = Basis.NONE;
+    /** What runs after each published commit; nothing until a listener is set. */
+    private volatile Runnable afterPublish = () -> { };
 
     /**
      * Creates the sequence of an empty store.
@@ -189,6 +191,18 @@ public final class CommitSequence {
         }
         lastTime = commit.transactionTime();
         latest = commit.basis();
+        afterPublish.run();
+    }
+
+    /**
+     * Sets what runs after each commit is {@linkplain #publish(Commit) published}, in the thread that publishes it, which
+     * holds the writer lock: the change feed of a store learns of the new basis there (ADR-0029, design D5 of
+     * {@code add-change-feed}). The action must not block, and must not throw. Call it once, before the sequence is used.
+     *
+     * @param action what to run
+     */
+    public void afterPublish(Runnable action) {
+        this.afterPublish = Objects.requireNonNull(action, "action");
     }
 
     /**

@@ -42,8 +42,11 @@ import java.util.stream.Stream;
  */
 public final class StoredMetadata {
 
-    /** The format version that this version of Cairn writes and reads. */
-    public static final int FORMAT_VERSION = 1;
+    /**
+     * The format version that this version of Cairn writes and reads. Version 2 adds the index of the change feed to the
+     * ledger's keys (ADR-0029): a store written in version 1 lacks it, and is refused.
+     */
+    public static final int FORMAT_VERSION = 2;
 
     private static final byte FORMAT = 16;
     private static final byte LATEST = 17;

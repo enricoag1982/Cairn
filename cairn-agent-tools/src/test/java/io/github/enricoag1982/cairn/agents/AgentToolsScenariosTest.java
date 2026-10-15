@@ -323,6 +323,48 @@ class AgentToolsScenariosTest {
         assertThat(denying.queue.all()).isEmpty();
     }
 
+    // ------------------------------------------------------------------ reading changes
+
+    @Test
+    @DisplayName("Scenario: An agent polls for changes")
+    void anAgentPollsForChanges() {
+        Receipt parties = fixture.createParties();
+        ObjectNode none = Json.object();
+
+        JsonNode first = fixture.call("cairn_list_changes", none);
+        assertThat(first.get("changes")).as("the registration and RD-1").hasSize(2);
+        assertThat(first.get("next").longValue()).isEqualTo(parties.basis().value());
+        Receipt employment = fixture.replay(ReferenceStories.rd3Employment(entity(parties, BETA),
+                entity(parties, ReferenceStories.ALICE)));
+
+        JsonNode second = fixture.call("cairn_list_changes", Json.object().put("after", first.get("next").longValue()));
+
+        assertThat(second.get("changes")).singleElement().satisfies(change -> {
+            assertThat(change.get("basis").longValue()).isEqualTo(employment.basis().value());
+            assertThat(change.get("kind").stringValue()).isEqualTo("transaction");
+            assertThat(change.get("changed")).singleElement().satisfies(changed -> {
+                assertThat(changed.get("relationship").stringValue()).isEqualTo(
+                        relationship(employment, ReferenceStories.BETA_EMPLOYS_ALICE).value());
+                assertThat(changed.get("type").stringValue()).isEqualTo("Employs");
+                assertThat(changed.get("created").booleanValue()).isTrue();
+            });
+        });
+        assertThat(second.get("next").longValue()).isEqualTo(employment.basis().value());
+        assertThat(second.get("latestBasis").longValue()).isEqualTo(employment.basis().value());
+    }
+
+    @Test
+    @DisplayName("Scenario: A limit out of range")
+    void aLimitOutOfRange() {
+        JsonNode result = fixture.call("cairn_list_changes", Json.object().put("limit", 0));
+
+        assertThat(result.get("problems")).singleElement().satisfies(problem -> {
+            assertThat(problem.get("code").stringValue()).isEqualTo("INVALID_VALUE");
+            assertThat(problem.get("path").stringValue()).isEqualTo("@arguments.limit");
+        });
+        assertThat(result.has("changes")).isFalse();
+    }
+
     // ------------------------------------------------------------------ the adapter's principal
 
     @Test

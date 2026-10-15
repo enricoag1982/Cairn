@@ -169,6 +169,37 @@ final class Arguments {
     }
 
     /**
+     * An optional argument that is a whole number in a range; the default if it is absent, and, with a problem, if it is
+     * not a whole number or is outside the range.
+     *
+     * @param name         the name of the argument
+     * @param defaultValue what a call that does not give it gets
+     * @param minimum      the smallest value
+     * @param maximum      the largest value
+     * @return the value, or the default if the argument is absent or wrong
+     */
+    long optionalWholeNumber(String name, long defaultValue, long minimum, long maximum) {
+        JsonNode node = values.get(name);
+        if (node == null || node.isNull()) {
+            return defaultValue;
+        }
+        String expected = maximum == Long.MAX_VALUE ? "a whole number of at least " + minimum
+                : "a whole number from " + minimum + " to " + maximum;
+        if (!node.isIntegralNumber() || !node.canConvertToLong()) {
+            problems.add(wrongKind(name, expected, node));
+            return defaultValue;
+        }
+        long value = node.longValue();
+        if (value < minimum || value > maximum) {
+            problems.add(new Problem(ProblemCode.INVALID_VALUE, "@arguments." + name,
+                    "The argument '" + name + "' is out of range.", Optional.of(expected),
+                    Optional.of(String.valueOf(value)), Optional.empty()));
+            return defaultValue;
+        }
+        return value;
+    }
+
+    /**
      * A required argument that is an instant, in the form that payloads use ({@link Instants}); null, with a problem, if
      * it is missing or not one.
      */

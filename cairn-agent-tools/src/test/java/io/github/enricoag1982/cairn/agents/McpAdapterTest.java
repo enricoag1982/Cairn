@@ -25,7 +25,7 @@ class McpAdapterTest {
     private static final List<String> TOOLS = List.of("cairn_describe", "cairn_json_schema", "cairn_explain_problem",
             "cairn_plan_schema", "cairn_register_schema", "cairn_dry_run", "cairn_commit", "cairn_read_entity",
             "cairn_read_relationship", "cairn_list_entities", "cairn_timeline", "cairn_navigate", "cairn_traverse",
-            "cairn_query", "cairn_approval_status");
+            "cairn_query", "cairn_list_changes", "cairn_approval_status");
 
     private final AgentFixture fixture = new AgentFixture();
     private McpSyncServer server;
@@ -67,6 +67,11 @@ class McpAdapterTest {
         List<McpSchema.Tool> tools = client.listTools().tools();
 
         assertThat(tools).map(McpSchema.Tool::name).containsExactlyInAnyOrderElementsOf(TOOLS);
+        assertThat(TOOLS).as("the list of the spec, with cairn_list_changes between cairn_query and "
+                + "cairn_approval_status").hasSize(16).containsSubsequence("cairn_query", "cairn_list_changes",
+                "cairn_approval_status");
+        assertThat(AgentTools.toolDescriptions()).map(AgentTools.ToolDescription::name)
+                .containsExactlyElementsOf(TOOLS);
         assertThat(tools).allSatisfy(tool -> {
             assertThat(tool.description()).as("description of %s", tool.name()).isNotBlank();
             assertThat(tool.inputSchema()).as("input schema of %s", tool.name()).containsEntry("type", "object");
@@ -119,6 +124,25 @@ class McpAdapterTest {
         JsonNode description = Json.parse(text(result));
         assertThat(description.get("origins").get(0).get("name").stringValue()).isEqualTo("reference-model");
         assertThat(text(result)).isEqualTo(fixture.tools.describe("{}"));
+    }
+
+    @Test
+    void theChangesOfTheStoreAreReadOverTheProtocolAndAnOutOfRangeLimitIsAProblemResult() {
+        connect(fixture.tools);
+        fixture.createParties();
+
+        McpSchema.CallToolResult changes = call("cairn_list_changes", Map.of("after", 1, "limit", 5));
+        McpSchema.CallToolResult tooMany = call("cairn_list_changes", Map.of("limit", 1001));
+
+        assertThat(changes.isError()).isNotEqualTo(true);
+        JsonNode result = Json.parse(text(changes));
+        assertThat(result.get("changes")).singleElement().satisfies(change ->
+                assertThat(change.get("kind").stringValue()).isEqualTo("transaction"));
+        assertThat(result.get("next").longValue()).isEqualTo(2);
+        assertThat(text(changes)).isEqualTo(fixture.tools.listChanges("{\"after\": 1, \"limit\": 5}"));
+        assertThat(tooMany.isError()).isNotEqualTo(true);
+        assertThat(Json.parse(text(tooMany)).get("problems").get(0).get("path").stringValue())
+                .isEqualTo("@arguments.limit");
     }
 
     @Test

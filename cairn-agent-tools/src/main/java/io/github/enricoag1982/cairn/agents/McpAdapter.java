@@ -44,6 +44,8 @@ public final class McpAdapter {
             cairn_approval_status.
             Read data with cairn_read_entity, cairn_read_relationship, cairn_list_entities, cairn_timeline, \
             cairn_navigate and cairn_traverse; every read says the effective time and the basis it was made at.
+            To follow what changed, call cairn_list_changes with the basis you handled last as after, and keep the next \
+            it returns; a change names what changed, and you read the values with the tools above.
             To filter, join along relationships, follow ownership chains or total values, build a query from the JSON \
             Schema of cairn_json_schema (kind query) and run it with cairn_query; a query that does not fit the schema \
             comes back as located problems.""";

@@ -115,6 +115,7 @@ public final class AgentTools {
                 Map.entry(ToolCatalog.NAVIGATE, this::navigate),
                 Map.entry(ToolCatalog.TRAVERSE, this::traverse),
                 Map.entry(ToolCatalog.QUERY, this::query),
+                Map.entry(ToolCatalog.LIST_CHANGES, this::listChanges),
                 Map.entry(ToolCatalog.APPROVAL_STATUS, this::approvalStatus));
     }
 
@@ -124,8 +125,8 @@ public final class AgentTools {
      * @return the tools: {@code cairn_describe}, {@code cairn_json_schema}, {@code cairn_explain_problem},
      *         {@code cairn_plan_schema}, {@code cairn_register_schema}, {@code cairn_dry_run}, {@code cairn_commit},
      *         {@code cairn_read_entity}, {@code cairn_read_relationship}, {@code cairn_list_entities},
-     *         {@code cairn_timeline}, {@code cairn_navigate}, {@code cairn_traverse}, {@code cairn_query} and
-     *         {@code cairn_approval_status}
+     *         {@code cairn_timeline}, {@code cairn_navigate}, {@code cairn_traverse}, {@code cairn_query},
+     *         {@code cairn_list_changes} and {@code cairn_approval_status}
      */
     public static List<ToolDescription> toolDescriptions() {
         return ToolCatalog.all();
@@ -433,6 +434,19 @@ public final class AgentTools {
      */
     public String query(String arguments) {
         return Json.render(reads.query(arguments));
+    }
+
+    /**
+     * {@code cairn_list_changes}: the changes of the store after a basis (ADR-0029). It reads and does not write, so the
+     * approval policy does not apply to it.
+     *
+     * @param arguments the arguments: {@code {after?, limit?}}, the basis to read after (0 by default) and the most changes
+     *                  to return (1 to 1,000, 100 by default)
+     * @return {@code {changes, next, latestBasis}} as JSON text, with the changes in the form of the {@code json-payloads}
+     *         capability and {@code next} the basis to give as {@code after} to continue; or the problems
+     */
+    public String listChanges(String arguments) {
+        return Json.render(reads.changes(arguments));
     }
 
     // ------------------------------------------------------------------ approval

@@ -59,10 +59,11 @@ final class StoreEquivalence {
      * @param schemaHistory the schema transactions with their schemas
      * @param keyed        what committing each transaction with an idempotency key again gives
      * @param views        every answer of the views, by what was asked
+     * @param changes      the changes of every basis, with the schema changes by the values of their schemas (ADR-0029)
      */
     record Observation(Basis latest, List<TransactionRecord> transactions, List<PurgeRecord> purges,
             List<RuleDescriptor> declaredRules, List<SchemaState> schemaHistory, List<CommitResult> keyed,
-            Map<String, Object> views) {
+            Map<String, Object> views, List<Object> changes) {
     }
 
     private StoreEquivalence() {
@@ -134,7 +135,7 @@ final class StoreEquivalence {
             views.put("was purged " + id, store.wasPurged(id));
         }
         return new Observation(latest, store.transactions(), store.purges(), store.declaredRules(), schemaHistory,
-                keyedResults, views);
+                keyedResults, views, ComparableChanges.of(store.changes(Basis.NONE, Integer.MAX_VALUE)));
     }
 
     private static void observe(Map<String, Object> views, String where, View view, List<Id> ids) {
@@ -171,6 +172,7 @@ final class StoreEquivalence {
         assertThat(actual.purges()).as("purge records").isEqualTo(expected.purges());
         assertThat(actual.declaredRules()).as("declared rules").isEqualTo(expected.declaredRules());
         assertThat(actual.keyed()).as("idempotency keys").isEqualTo(expected.keyed());
+        assertThat(actual.changes()).as("changes").isEqualTo(expected.changes());
         assertThat(actual.views()).as("views").isEqualTo(expected.views());
         assertThat(actual.views()).as("the views asked").isNotEmpty();
     }

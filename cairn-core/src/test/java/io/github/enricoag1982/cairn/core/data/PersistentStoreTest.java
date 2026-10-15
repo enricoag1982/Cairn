@@ -432,11 +432,27 @@ class PersistentStoreTest {
         first.close();
         keys = keys.reopened();
         Batch other = new Batch();
-        StoredMetadata.putFormatVersion(other, 2);
+        StoredMetadata.putFormatVersion(other, 3);
         keys.data().apply(other);
 
-        assertThatThrownBy(() -> open()).isInstanceOf(IllegalStateException.class).hasMessageContaining("version 2");
+        assertThatThrownBy(() -> open()).isInstanceOf(IllegalStateException.class).hasMessageContaining("version 3");
 
+        assertThat(keys.isClosed()).isTrue();
+    }
+
+    @Test
+    void aStoreWrittenInFormatVersion1LacksTheIndexOfTheChangeFeedAndIsRefusedNamingTheVersion() {
+        DurableStore first = openWithReferenceModel();
+        first.close();
+        keys = keys.reopened();
+        Batch earlier = new Batch();
+        StoredMetadata.putFormatVersion(earlier, 1);
+        keys.data().apply(earlier);
+
+        assertThatThrownBy(() -> open()).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("format version 1").hasMessageContaining("reads version 2");
+
+        assertThat(StoredMetadata.FORMAT_VERSION).isEqualTo(2);
         assertThat(keys.isClosed()).isTrue();
     }
 

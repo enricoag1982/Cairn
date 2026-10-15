@@ -274,12 +274,12 @@ class RocksDbStoresScenariosTest {
         try (RocksDbKeyValueStore database = RocksDbKeyValueStore.open(directory.resolve(RocksDbStores.DATABASE),
                 () -> { })) {
             Batch other = new Batch();
-            StoredMetadata.putFormatVersion(other, 2);
+            StoredMetadata.putFormatVersion(other, 3);
             database.apply(other);
         }
 
         assertThatThrownBy(() -> rocks.open()).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("version 2").hasMessageContaining(directory.toString());
+                .hasMessageContaining("version 3").hasMessageContaining(directory.toString());
 
         KeyValueStores.lockDirectory(directory).run();
     }

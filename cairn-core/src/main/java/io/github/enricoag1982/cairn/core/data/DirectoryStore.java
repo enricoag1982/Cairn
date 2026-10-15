@@ -8,6 +8,7 @@ import io.github.enricoag1982.cairn.core.storage.PurgeFiles;
 import io.github.enricoag1982.cairn.core.storage.PurgeLogRecord;
 import io.github.enricoag1982.cairn.core.storage.Recovery;
 import io.github.enricoag1982.cairn.core.storage.Snapshots;
+import io.github.enricoag1982.cairn.data.Change;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -32,6 +33,7 @@ import java.time.InstantSource;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Flow;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -57,6 +59,9 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * <p>After {@code close}, every call but {@code close} throws an {@code IllegalStateException}, on the store and on its
  * schema registry. After a failed write, commits and registrations throw one, while reads and dry runs go on.
+ *
+ * <p>The index of the change feed (ADR-0029, design D6 of {@code add-change-feed}) is kept in memory with the rest of the
+ * ledger, and recovery writes it again as it writes the rest. Closing the store completes the subscriptions to its feed.
  */
 public final class DirectoryStore implements DurableStore {
 
@@ -239,6 +244,18 @@ public final class DirectoryStore implements DurableStore {
     }
 
     @Override
+    public List<Change> changes(Basis after, int limit) {
+        requireOpen();
+        return store.changes(after, limit);
+    }
+
+    @Override
+    public Flow.Publisher<Change> changeFeed(Basis after) {
+        requireOpen();
+        return store.changeFeed(after);
+    }
+
+    @Override
     public PurgeResult purge(Purge purge) {
         // A thread that holds the writer lock, such as a rule that purges, must not take the snapshot lock after it, which
         // close() takes first: refuse it before any lock is taken.
@@ -327,6 +344,8 @@ public final class DirectoryStore implements DurableStore {
                 closed = true;
                 return null;
             });
+            // The subscriptions to the change feed complete, and the reads they have running finish.
+            store.closeFeed();
             try {
                 snapshot();
             } finally {
@@ -360,6 +379,7 @@ public final class DirectoryStore implements DurableStore {
                 closed = true;
                 return null;
             });
+            store.closeFeed();
             release();
         } finally {
             snapshotLock.unlock();

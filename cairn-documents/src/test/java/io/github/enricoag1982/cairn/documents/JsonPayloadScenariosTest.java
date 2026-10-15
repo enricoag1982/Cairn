@@ -5,6 +5,7 @@ import static io.github.enricoag1982.cairn.documents.PayloadFixtures.locationOf;
 import static io.github.enricoag1982.cairn.documents.PayloadFixtures.payload;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.enricoag1982.cairn.data.Change;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -349,6 +350,30 @@ class JsonPayloadScenariosTest {
                 "write", 0,
                 "key", Map.of("entityType", "Account", "key", Map.of("number", "A-1")),
                 "entity", a1.value())));
+    }
+
+    @Test
+    @DisplayName("Scenario: A change as JSON")
+    void aChangeAsJson() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        Receipt customer = reference.replay(ReferenceStories.rd4CustomerRole(
+                parties.temporaryIds().get(ReferenceStories.BETA)));
+        EntityId role = (EntityId) customer.temporaryIds().get(ReferenceStories.CUSTOMER_ROLE);
+        RelationshipId playedBy = (RelationshipId) customer.temporaryIds().get(ReferenceStories.PLAYED_BY);
+        Change change = reference.store.changes(parties.basis(), 1).getFirst();
+        assertThat(change.basis()).isEqualTo(customer.basis());
+
+        Object json = DocumentTrees.load(Payloads.toJson(change));
+
+        assertThat(DocumentTrees.at(json, "basis")).isEqualTo((int) customer.basis().value());
+        assertThat(DocumentTrees.at(json, "transactionTime")).isEqualTo(customer.transactionTime().toString());
+        assertThat(DocumentTrees.at(json, "kind")).isEqualTo("transaction");
+        assertThat(DocumentTrees.at(json, "principal")).isEqualTo(ReferenceStories.PRINCIPAL);
+        Map<String, Object> period = Map.of("from", "2026-03-01T00:00:00Z", "until", "2026-10-01T00:00:00Z");
+        assertThat(DocumentTrees.listAt(json, "changed")).containsExactlyInAnyOrder(
+                Map.of("entity", role.value(), "type", "CustomerRole", "created", true, "periods", List.of(period)),
+                Map.of("relationship", playedBy.value(), "type", "PlayedBy", "created", true,
+                        "periods", List.of(period)));
     }
 
     @Test

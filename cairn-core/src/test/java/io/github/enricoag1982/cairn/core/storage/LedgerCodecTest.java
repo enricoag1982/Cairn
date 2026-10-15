@@ -2,9 +2,11 @@ package io.github.enricoag1982.cairn.core.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.enricoag1982.cairn.core.kv.Batch;
 import io.github.enricoag1982.cairn.core.kv.InMemoryKeyValueStore;
 import io.github.enricoag1982.cairn.core.kv.KeyRange;
 import io.github.enricoag1982.cairn.core.kv.KeyValueStore;
+import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.schema.AttributeId;
 import io.github.enricoag1982.cairn.schema.Basis;
@@ -47,7 +49,9 @@ class LedgerCodecTest {
         assertThat(LedgerCodec.kindOf(LedgerCodec.endKey("a1", ACCOUNT, true, "r1"))).isEqualTo(LedgerCodec.Kind.END);
         assertThat(LedgerCodec.kindOf(LedgerCodec.uniqueKey(NUMBER, Value.of("A-1"), "a1")))
                 .isEqualTo(LedgerCodec.Kind.UNIQUE);
-        assertThat(Arrays.stream(LedgerCodec.Kind.values()).map(LedgerCodec.Kind::prefix).distinct()).hasSize(6);
+        assertThat(LedgerCodec.kindOf(LedgerCodec.changeKey(basis, "a1"))).isEqualTo(LedgerCodec.Kind.CHANGE);
+        assertThat(LedgerCodec.Kind.CHANGE.prefix()).as("the change index is the seventh kind").isEqualTo((byte) 7);
+        assertThat(Arrays.stream(LedgerCodec.Kind.values()).map(LedgerCodec.Kind::prefix).distinct()).hasSize(7);
     }
 
     @Test
@@ -224,6 +228,65 @@ class LedgerCodecTest {
 
         assertThat(LedgerCodec.decodeCurrent(value)).isEqualTo(current);
         assertThat(LedgerCodec.isRelationship(value)).isTrue();
+    }
+
+    @Test
+    void theChangesOfABasisAreTogetherAndInTheOrderOfTheBases() {
+        List<byte[]> inOrder = List.of(
+                LedgerCodec.changeKey(new Basis(1), "b"),
+                LedgerCodec.changeKey(new Basis(1), "bb"),
+                LedgerCodec.changeKey(new Basis(2), "a"),
+                LedgerCodec.changeKey(new Basis(255), "a"),
+                LedgerCodec.changeKey(new Basis(256), "a"));
+
+        for (int i = 0; i + 1 < inOrder.size(); i++) {
+            assertThat(before(inOrder.get(i), inOrder.get(i + 1))).as("key %d before key %d", i, i + 1).isTrue();
+        }
+        assertThat(LedgerCodec.parseChangeKey(LedgerCodec.changeKey(new Basis(300), "a\uD800b")))
+                .isEqualTo(new LedgerCodec.ChangeKey(new Basis(300), "a\uD800b"));
+    }
+
+    @Test
+    void theRangeOfTheChangesAfterABasisHoldsTheBasesAboveItUpToAnotherInclusive() {
+        InMemoryKeyValueStore store = new InMemoryKeyValueStore();
+        Batch batch = new Batch();
+        for (long basis = 1; basis <= 5; basis++) {
+            batch.put(LedgerCodec.changeKey(new Basis(basis), "a"), new byte[] {1});
+            batch.put(LedgerCodec.changeKey(new Basis(basis), "b"), new byte[] {1});
+        }
+        batch.put(LedgerCodec.currentKey("a"), new byte[] {1});
+        batch.put(LedgerCodec.uniqueKey(NUMBER, Value.of("A-1"), "a"), new byte[] {1});
+        store.apply(batch);
+
+        assertThat(changedBases(store, new Basis(0), new Basis(5))).containsExactly(1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L,
+                5L, 5L);
+        assertThat(changedBases(store, new Basis(1), new Basis(3))).containsExactly(2L, 2L, 3L, 3L);
+        assertThat(changedBases(store, new Basis(4), new Basis(4))).isEmpty();
+        assertThat(changedBases(store, new Basis(5), new Basis(9))).isEmpty();
+        assertThat(changedBases(store, new Basis(3), new Basis(Long.MAX_VALUE))).containsExactly(4L, 4L, 5L, 5L);
+    }
+
+    private static List<Long> changedBases(KeyValueStore store, Basis after, Basis upTo) {
+        try (var entries = store.scan(LedgerCodec.changeKeys(after, upTo))) {
+            return entries.map(entry -> LedgerCodec.parseChangeKey(entry.key()).basis().value()).toList();
+        }
+    }
+
+    @Test
+    void aChangeHoldsWhetherItIsARelationshipItsTypeWhetherItWasCreatedAndThePeriodsItChangedIn() {
+        Instant mar1 = Instant.parse("2026-03-01T00:00:00Z");
+        Instant oct1 = Instant.parse("2026-10-01T00:00:00Z");
+        LedgerCodec.ChangeValue closed = new LedgerCodec.ChangeValue(true, new TypeId(20), true,
+                List.of(EffectivePeriod.between(mar1, oct1)));
+        LedgerCodec.ChangeValue several = new LedgerCodec.ChangeValue(false, new TypeId(3), false,
+                List.of(EffectivePeriod.between(JAN_1, mar1),
+                        EffectivePeriod.between(oct1.plusNanos(1_000), oct1.plusSeconds(5)),
+                        EffectivePeriod.from(oct1.plusSeconds(10))));
+
+        assertThat(LedgerCodec.decodeChange(LedgerCodec.encodeChange(closed))).isEqualTo(closed);
+        assertThat(LedgerCodec.decodeChange(LedgerCodec.encodeChange(several))).isEqualTo(several);
+        assertThat(LedgerCodec.decodeChange(LedgerCodec.encodeChange(several)).periods().getLast().until())
+                .as("an open end stays open").isEmpty();
     }
 
     @Test

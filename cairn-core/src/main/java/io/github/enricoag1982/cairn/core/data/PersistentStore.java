@@ -7,6 +7,7 @@ import io.github.enricoag1982.cairn.core.storage.Journal;
 import io.github.enricoag1982.cairn.core.storage.LogRecord;
 import io.github.enricoag1982.cairn.core.storage.SchemaRecord;
 import io.github.enricoag1982.cairn.core.storage.StoredMetadata;
+import io.github.enricoag1982.cairn.data.Change;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.Flow;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
@@ -66,6 +68,10 @@ import java.util.stream.Stream;
  * writes after a failure does not flush when it closes. After {@code close}, every call but {@code close} throws an
  * {@code IllegalStateException}, on the store and on its schema registry; closing closes the key-value store, also if the
  * flush fails, and then the call throws.
+ *
+ * <p>The index of the change feed (ADR-0029, design D6 of {@code add-change-feed}) is kept as keys of the ledger, in the
+ * batch of the commit it belongs to. Closing the store completes the subscriptions to its feed, before the key-value store
+ * is closed.
  */
 public final class PersistentStore implements DurableStore {
 
@@ -212,6 +218,18 @@ public final class PersistentStore implements DurableStore {
     }
 
     @Override
+    public List<Change> changes(Basis after, int limit) {
+        requireOpen();
+        return store.changes(after, limit);
+    }
+
+    @Override
+    public Flow.Publisher<Change> changeFeed(Basis after) {
+        requireOpen();
+        return store.changeFeed(after);
+    }
+
+    @Override
     public PurgeResult purge(Purge purge) {
         // A thread that holds the writer lock, such as a rule that purges, must not take the maintenance lock after it,
         // which close() takes first: refuse it before any lock is taken.
@@ -288,6 +306,9 @@ public final class PersistentStore implements DurableStore {
                 closed = true;
                 return null;
             });
+            // The subscriptions to the change feed complete, and the reads they have running finish, before the
+            // key-value store they read is closed.
+            store.closeFeed();
             // As a store kept in a directory writes a snapshot file when it closes, this one flushes, unless a write or
             // a purge's compaction failed: the key-value store may be unusable then, and the files are for the next
             // opening to finish. The key-value store is closed in any case, and a failure to flush is reported after.

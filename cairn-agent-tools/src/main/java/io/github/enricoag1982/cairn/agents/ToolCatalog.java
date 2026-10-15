@@ -27,6 +27,7 @@ final class ToolCatalog {
     static final String NAVIGATE = "cairn_navigate";
     static final String TRAVERSE = "cairn_traverse";
     static final String QUERY = "cairn_query";
+    static final String LIST_CHANGES = "cairn_list_changes";
     static final String APPROVAL_STATUS = "cairn_approval_status";
 
     private static final String READ_COORDINATES = " Reads through a view: effectiveAt says when the facts are true, "
@@ -152,6 +153,24 @@ final class ToolCatalog {
                 coordinates(List.of("query", "effectiveAt"),
                         "query", string("The text of the query, as JSON or YAML, in the form of the JSON Schema of "
                                 + "cairn_json_schema with kind \"query\"."))));
+        tools.add(tool(LIST_CHANGES,
+                "Lists what changed in the store after a basis, in basis order: one change for each basis, which is a "
+                        + "data transaction (kind transaction, with who recorded it and why, and changed: each entity or "
+                        + "relationship it changed, with its type, whether it created it, and the effective periods in "
+                        + "which it changed), a schema registration (kind schema, with its origin) or a purge (kind purge, "
+                        + "with the numbers it removed). A change names what changed and holds no values: read the values "
+                        + "with cairn_read_entity or cairn_read_relationship, knownAt the basis of the change and the "
+                        + "basis before it, at an effective time in a changed period. The result is {changes, next, "
+                        + "latestBasis}: to continue where you stopped, call again with after set to next. Without after "
+                        + "it starts at the first change. The tool only reads.",
+                object(List.of(),
+                        "after", Json.object().put("type", "integer").put("minimum", 0).put("default", 0)
+                                .put("description", "The basis to read after: the changes returned are those at the "
+                                        + "bases above it. Use the next of the previous result."),
+                        "limit", Json.object().put("type", "integer").put("minimum", 1)
+                                .put("maximum", Reads.MAXIMUM_CHANGES).put("default", Reads.DEFAULT_CHANGES)
+                                .put("description", "The largest number of changes to return, from 1 to "
+                                        + Reads.MAXIMUM_CHANGES + "."))));
         tools.add(tool(APPROVAL_STATUS,
                 "Reports where an approval request stands: pending, approved or rejected. Once decided, it holds "
                         + "the outcome: for an approved request what registering or committing it did (a receipt, "

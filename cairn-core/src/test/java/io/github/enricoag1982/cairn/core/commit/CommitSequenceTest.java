@@ -44,6 +44,35 @@ class CommitSequenceTest {
     }
 
     @Test
+    void whatIsSetToRunAfterPublishingRunsAfterEachPublishedCommitInTheThreadThatPublishesItWithTheLockHeld() {
+        CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
+        List<String> seen = new ArrayList<>();
+        sequence.afterPublish(() -> seen.add(Thread.currentThread().getName() + " " + sequence.latestBasis().value()));
+
+        commit(sequence);
+        commit(sequence);
+
+        assertThat(seen).containsExactly(Thread.currentThread().getName() + " 1",
+                Thread.currentThread().getName() + " 2");
+    }
+
+    @Test
+    void nothingRunsAfterAPublicationThatIsRefused() {
+        CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
+        List<Basis> seen = new ArrayList<>();
+        sequence.afterPublish(() -> seen.add(sequence.latestBasis()));
+        commit(sequence);
+
+        assertThatThrownBy(() -> sequence.underWriterLock(() -> {
+            sequence.publish(new CommitSequence.Commit(new Basis(5), NOW_MICROS.plusSeconds(1)));
+            return null;
+        })).isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(seen).containsExactly(new Basis(1));
+        assertThatThrownBy(() -> sequence.afterPublish(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void theFirstCommitGetsBasisOneAndTheClocksTimeTruncatedToMicroseconds() {
         CommitSequence sequence = new CommitSequence(InstantSource.fixed(NOW));
 

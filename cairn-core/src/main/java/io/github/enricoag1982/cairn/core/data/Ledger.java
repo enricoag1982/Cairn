@@ -4,6 +4,7 @@ import io.github.enricoag1982.cairn.core.kv.Batch;
 import io.github.enricoag1982.cairn.core.kv.KeyValueStore;
 import io.github.enricoag1982.cairn.core.storage.LedgerCodec;
 import io.github.enricoag1982.cairn.core.storage.SegmentData;
+import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.RelationshipId;
@@ -44,6 +45,12 @@ import java.util.stream.Stream;
  * the inserting basis of each segment, and a commit finds the rows it supersedes without reading the history. A new entity is added to the index of its type, a new relationship to the index of the ends at both of
  * its ends, and each value of a unique attribute that the entity or relationship has and the index does not hold for it
  * yet is added, with the commit's basis. Nothing is written for what a commit leaves as it was.
+ *
+ * <p><b>Changes.</b> Whenever a commit writes an entity or relationship, it also writes one {@code CHANGE} key, by the
+ * commit's basis and the identifier, which says whether it is a relationship, its type, whether the commit created it, and
+ * the effective periods in which it changed ({@link ChangedPeriods}); recovery writes them again as it writes the rest
+ * (ADR-0029, design D2 and D6 of {@code add-change-feed}). {@link #changes} reads them, and a purge deletes the ones of
+ * what it removes, at every basis that inserted a row of it or superseded one.
  *
  * <p><b>Reading.</b> A reader at a basis takes the current key if the basis of its last change is at or below the
  * reader's basis, which is the common case, else it rebuilds the timeline from the rows inserted at or below the basis
@@ -106,6 +113,18 @@ final class Ledger {
         Segment segment() {
             return LogRecords.segment(LedgerCodec.decodeRow(start, value));
         }
+    }
+
+    /**
+     * An entity or relationship that a basis changed, as the index of changes lists it.
+     *
+     * @param basis the basis of the transaction
+     * @param id    the entity or relationship
+     * @param type  the identifier of its type
+     * @param created whether the transaction created it
+     * @param periods the effective periods in which it changed
+     */
+    record ChangeEntry(Basis basis, Id id, TypeId type, boolean created, List<EffectivePeriod> periods) {
     }
 
     private final KeyValueStore store;
@@ -445,6 +464,31 @@ final class Ledger {
         return found;
     }
 
+    // ------------------------------------------------------------------ reading changes
+
+    /**
+     * What the bases after one basis, up to and including another, changed, read from the index of changes: the entities
+     * and relationships that each basis wrote, with their types, whether they were created and the periods in which they
+     * changed.
+     *
+     * @param after the basis before the first one that is wanted, which must be below {@link Long#MAX_VALUE}
+     * @param upTo  the last basis that is wanted
+     * @return the entries, in the order of the bases, and within a basis in the order of the keys, which is not the order
+     *         of the identifiers as text
+     */
+    List<ChangeEntry> changes(Basis after, Basis upTo) {
+        List<ChangeEntry> entries = new ArrayList<>();
+        try (Stream<KeyValueStore.Entry> found = store.scan(LedgerCodec.changeKeys(after, upTo))) {
+            found.forEach(entry -> {
+                LedgerCodec.ChangeKey key = LedgerCodec.parseChangeKey(entry.key());
+                LedgerCodec.ChangeValue value = LedgerCodec.decodeChange(entry.value());
+                Id id = value.relationship() ? new RelationshipId(key.id()) : new EntityId(key.id());
+                entries.add(new ChangeEntry(key.basis(), id, value.type(), value.created(), value.periods()));
+            });
+        }
+        return entries;
+    }
+
     // ------------------------------------------------------------------ writing
 
     /**
@@ -538,6 +582,11 @@ final class Ledger {
         batch.put(LedgerCodec.currentKey(id), LedgerCodec.encodeCurrent(new LedgerCodec.CurrentValue(relationship,
                 change.type(), Optional.ofNullable(change.source()), Optional.ofNullable(change.target()), basis,
                 placed)));
+        List<EffectivePeriod> periods = ChangedPeriods.of(before, after);
+        if (!periods.isEmpty()) {
+            batch.put(LedgerCodec.changeKey(basis, id), LedgerCodec.encodeChange(new LedgerCodec.ChangeValue(
+                    relationship, change.type(), change.created(), periods)));
+        }
         if (change.created()) {
             byte[] added = LedgerCodec.encodeBasis(basis);
             if (relationship) {
@@ -579,7 +628,8 @@ final class Ledger {
      * Removes entities and relationships and every key that mentions them, as one batch applied at once: the relationships
      * first and the entities after them, so that a single lookup never finds a relationship whose end is missing. For
      * each, the current key, every row and marker, the index entries (the entity's in the index of types, the
-     * relationship's at both of its ends), and the entries of the index of unique values for every value it ever held.
+     * relationship's at both of its ends), the entries of the index of unique values for every value it ever held, and
+     * its entries in the index of changes, at the bases of its rows and of the markers that superseded them.
      *
      * @param entities      the entities to remove
      * @param relationships the relationships to remove
@@ -618,10 +668,13 @@ final class Ledger {
         String text = id.value();
         batch.delete(LedgerCodec.currentKey(text));
         Set<ByteBuffer> unique = new HashSet<>();
+        // The bases that changed it: each inserted a row of it or superseded one, and has a change key.
+        Set<Long> changedAt = new TreeSet<>();
         try (Stream<KeyValueStore.Entry> rows = store.scan(LedgerCodec.rows(text, LATEST))) {
             rows.forEach(entry -> {
                 batch.delete(entry.key());
                 LedgerCodec.RowKey key = LedgerCodec.parseRowKey(entry.key());
+                changedAt.add(key.inserted().value());
                 Segment segment = LogRecords.segment(LedgerCodec.decodeRow(key.start(), entry.value()));
                 segment.values().forEach((attribute, value) -> {
                     byte[] valueKey = LedgerCodec.uniqueKey(attribute, value, text);
@@ -632,8 +685,12 @@ final class Ledger {
             });
         }
         try (Stream<KeyValueStore.Entry> markers = store.scan(LedgerCodec.markers(text, LATEST))) {
-            markers.forEach(entry -> batch.delete(entry.key()));
+            markers.forEach(entry -> {
+                batch.delete(entry.key());
+                changedAt.add(LedgerCodec.decodeBasis(entry.value()).value());
+            });
         }
+        changedAt.forEach(basis -> batch.delete(LedgerCodec.changeKey(new Basis(basis), text)));
         if (held.isRelationship()) {
             batch.delete(LedgerCodec.endKey(held.source().value(), held.type(), true, text));
             batch.delete(LedgerCodec.endKey(held.target().value(), held.type(), false, text));

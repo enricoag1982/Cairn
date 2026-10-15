@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.agents;
 
+import io.github.enricoag1982.cairn.data.Change;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
@@ -18,6 +19,7 @@ import io.github.enricoag1982.cairn.documents.QueryReadResult;
 import io.github.enricoag1982.cairn.documents.UniqueKeyReadResult;
 import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.Attribute;
+import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -34,7 +36,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The tools that read a store through a view (design D2 of {@code add-agent-tools}): an entity, a relationship, the
- * entities of a type, a timeline, navigation and traversal, and queries. Every result reports the coordinates it was read at, as
+ * entities of a type, a timeline, navigation and traversal, and queries; and the one that reads the store's changes
+ * (design D7 of {@code add-change-feed}). Every result reports the coordinates it was read at, as
  * {@code {effectiveAt, basis, result}}; a timeline has no effective time, so it reports the basis only.
  *
  * <p>The tools that start from an entity, {@code cairn_read_entity}, {@code cairn_navigate} and {@code cairn_traverse},
@@ -42,6 +45,12 @@ import tools.jackson.databind.node.ObjectNode;
  * is found at the call's effective time, through the view; one that no entity has then reads as nothing (ADR-0026).
  */
 final class Reads {
+
+    /** The number of changes that {@code cairn_list_changes} returns if the call gives no limit. */
+    static final int DEFAULT_CHANGES = 100;
+
+    /** The largest number of changes that {@code cairn_list_changes} returns. */
+    static final int MAXIMUM_CHANGES = 1_000;
 
     private final Store store;
 
@@ -73,6 +82,28 @@ final class Reads {
             return Operations.problemsOnly(List.of(unknown.get()));
         }
         return result(view, true, view.entity(new EntityId(id.get())).map(Reads::json).orElse(null));
+    }
+
+    /**
+     * {@code cairn_list_changes} (ADR-0029): the changes of the store after a basis, in basis order, at most a limit of
+     * them, as {@code {changes, next, latestBasis}}. It reads the store's feed and no view, and only reads, so no approval
+     * policy applies. {@code next} is the basis to give as {@code after} to continue: the basis of the last change, or the
+     * given one if there is none. The latest basis is read after the changes, so it is never below {@code next}.
+     */
+    ObjectNode changes(String text) {
+        Arguments in = Arguments.parse(text, "after", "limit");
+        long after = in.optionalWholeNumber("after", 0, 0, Long.MAX_VALUE);
+        int limit = (int) in.optionalWholeNumber("limit", DEFAULT_CHANGES, 1, MAXIMUM_CHANGES);
+        if (!in.valid()) {
+            return Operations.problemsOnly(in.problems());
+        }
+        List<Change> changes = store.changes(new Basis(after), limit);
+        long next = changes.isEmpty() ? after : changes.getLast().basis().value();
+        ObjectNode result = Json.object();
+        result.set("changes", Json.parse(Payloads.changesToJson(changes)));
+        result.put("next", next);
+        result.put("latestBasis", store.latestBasis().value());
+        return result;
     }
 
     /** {@code cairn_read_relationship}. */

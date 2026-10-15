@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.storage;
 
 import io.github.enricoag1982.cairn.core.kv.KeyRange;
+import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.schema.AttributeId;
 import io.github.enricoag1982.cairn.schema.Basis;
@@ -33,6 +34,8 @@ import java.util.Optional;
  *   <tr><td>end</td><td>entity identifier, relationship type, direction, relationship identifier</td><td>the basis
  *       that added the relationship</td></tr>
  *   <tr><td>unique</td><td>attribute, encoded value, identifier</td><td>the basis that added the value</td></tr>
+ *   <tr><td>change</td><td>basis, identifier</td><td>entity or relationship, type, whether the transaction created it,
+ *       and the effective periods in which it changed (ADR-0029, the change feed)</td></tr>
  * </table>
  *
  * <p>The values reuse the encodings of the commit log: segments and values are written as the log writes them, so that
@@ -54,7 +57,9 @@ public final class LedgerCodec {
         /** A relationship at one of its ends. */
         END(5),
         /** An entity or relationship that has or had a value of a unique attribute. */
-        UNIQUE(6);
+        UNIQUE(6),
+        /** An entity or relationship that a basis changed: the index of the change feed. */
+        CHANGE(7);
 
         private final byte prefix;
 
@@ -421,6 +426,70 @@ public final class LedgerCodec {
         return in.readText();
     }
 
+
+    /**
+     * The key of an entity or relationship in the index of what each basis changed.
+     *
+     * @param basis the basis of the transaction that changed it
+     * @param id    the identifier of the entity or relationship
+     * @return the key
+     */
+    public static byte[] changeKey(Basis basis, String id) {
+        Encoder out = key(Kind.CHANGE);
+        out.writeLong(basis.value());
+        out.writeText(id);
+        return out.toByteArray();
+    }
+
+    /**
+     * The keys of what the bases after one basis, up to and including another, changed.
+     *
+     * @param after the basis before the first one that is wanted; its changes are not in the range
+     * @param upTo  the last basis that is wanted
+     * @return the range, which is empty if {@code upTo} is not above {@code after}
+     */
+    public static KeyRange changeKeys(Basis after, Basis upTo) {
+        Encoder from = key(Kind.CHANGE);
+        from.writeLong(after.value() + 1);
+        if (upTo.value() == Long.MAX_VALUE) {
+            return KeyRange.between(from.toByteArray(), KeyRange.prefix(new byte[] {Kind.CHANGE.prefix}).to());
+        }
+        Encoder to = key(Kind.CHANGE);
+        to.writeLong(upTo.value() + 1);
+        return KeyRange.between(from.toByteArray(), to.toByteArray());
+    }
+
+    /**
+     * What a key of the index of changes names.
+     *
+     * @param basis the basis of the transaction that changed the entity or relationship
+     * @param id    the identifier of the entity or relationship
+     */
+    public record ChangeKey(Basis basis, String id) {
+
+        /**
+         * Rejects null components.
+         */
+        public ChangeKey {
+            Objects.requireNonNull(basis, "basis");
+            Objects.requireNonNull(id, "id");
+        }
+    }
+
+    /**
+     * Reads a key of the index of changes.
+     *
+     * @param key the key
+     * @return what it names
+     */
+    public static ChangeKey parseChangeKey(byte[] key) {
+        Decoder in = new Decoder(key, 1);
+        Basis basis = new Basis(in.readLong());
+        String id = in.readText();
+        in.requireEnd();
+        return new ChangeKey(basis, id);
+    }
+
     // ------------------------------------------------------------------ values
 
     /**
@@ -550,6 +619,61 @@ public final class LedgerCodec {
         SegmentData segment = EffectCodec.readSegmentBody(in, start);
         in.requireEnd();
         return segment;
+    }
+
+    /**
+     * What an entry of the index of changes holds.
+     *
+     * @param relationship whether it is a relationship; an entity otherwise
+     * @param type         the identifier of its type
+     * @param created      whether the transaction created it
+     * @param periods      the effective periods in which it changed, in order, not overlapping and not touching
+     */
+    public record ChangeValue(boolean relationship, TypeId type, boolean created, List<EffectivePeriod> periods) {
+
+        /**
+         * Rejects null components and copies the periods.
+         */
+        public ChangeValue {
+            Objects.requireNonNull(type, "type");
+            periods = List.copyOf(periods);
+        }
+    }
+
+    /**
+     * Writes the value of an entry of the index of changes.
+     *
+     * @param change what the entry holds
+     * @return the value
+     */
+    public static byte[] encodeChange(ChangeValue change) {
+        Encoder out = Encoder.plain();
+        out.writeBoolean(change.relationship());
+        out.writeLong(change.type().value());
+        out.writeBoolean(change.created());
+        out.writeAll(change.periods(), (encoder, period) -> {
+            encoder.writeInstant(period.from());
+            encoder.writeOptionalInstant(period.until());
+        });
+        return out.toByteArray();
+    }
+
+    /**
+     * Reads the value of an entry of the index of changes.
+     *
+     * @param value the value
+     * @return what the entry holds
+     * @throws CorruptRecordException if the value is not one that {@link #encodeChange} wrote
+     */
+    public static ChangeValue decodeChange(byte[] value) {
+        Decoder in = new Decoder(value);
+        boolean relationship = in.readBoolean();
+        TypeId type = new TypeId(in.readLong());
+        boolean created = in.readBoolean();
+        List<EffectivePeriod> periods = in.readAll(decoder -> new EffectivePeriod(decoder.readInstant(),
+                decoder.readOptionalInstant()));
+        in.requireEnd();
+        return new ChangeValue(relationship, type, created, periods);
     }
 
     /**
