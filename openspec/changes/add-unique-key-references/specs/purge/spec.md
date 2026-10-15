@@ -2,7 +2,7 @@
 
 ### Requirement: What a purge leaves unusable
 
-The ID of a purged entity or relationship SHALL never be given to a new one, and SHALL be refused when a write supplies it. A transaction that repeats the idempotency key of a transaction that wrote purged data, or that named a purged entity by its ID or by a unique key (see the `transactions` capability), SHALL be rejected with a problem, so that a retry cannot record the purged data again, and the store SHALL NOT keep that transaction's writes.
+The ID of a purged entity or relationship SHALL never be given to a new one, and SHALL be refused when a write supplies it. A transaction that repeats the idempotency key of an earlier transaction that wrote purged data or named a purged entity, by its ID or by a unique key (see the `transactions` capability), SHALL be rejected with a problem, so that a retry cannot record the purged data again, and the store SHALL NOT keep the earlier transaction's writes.
 
 #### Scenario: A purged ID supplied again
 

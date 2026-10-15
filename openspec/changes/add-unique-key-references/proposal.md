@@ -18,7 +18,7 @@ ADR-0026 decides that a *unique key*, an entity type with one of its unique attr
 ### Non-goals
 
 - Keys over several attributes, keys of relationships, and purges by key (ADR-0026: later).
-- Keys that name what the same transaction creates or changes: temporary IDs do that.
+- Keys that see what the same transaction creates or writes: a key resolves against the store before the transaction, and temporary IDs name what it creates.
 - Indexes: the in-memory store scans the type, as it does for uniqueness.
 
 ## Capabilities
@@ -35,10 +35,11 @@ None.
 - `agent-tools`: keys in the read tools.
 - `java-types`: a method per unique attribute that makes a key.
 - `entity-rules`: a lookup by key is a read of the entities of the type.
+- `relationships`: the ends of a relationship may be given by unique keys.
 - `purge`: transactions that named a purged entity by key count as having written purged data.
 
 ## Impact
 
 - **Decisions:** ADR-0026, accepted under the standing approval with this proposal. It relies on ADR-0019 (IDs stay the identity), ADR-0007 (resolution inside the single writer), ADR-0022 (the log keeps the transaction as submitted) and ADR-0025 (reads of rules).
 - **Code:** `cairn-api` gains `UniqueKey`, a third kind of `Ref`, `View.entity(UniqueKey)`, the key resolutions of a `Receipt` and two problem codes; `cairn-core` resolves keys in transactions, finds them in views, records them in the log and records rule reads; `cairn-documents` reads keys in payloads and locates their problems; `cairn-agent-tools` takes keys in three tools; `cairn-codegen` generates the `by` methods. No new dependencies.
-- **Docs:** the glossary (unique key), the guides for payloads and agents, generated types and queries, the architecture page and the HR domain page.
+- **Docs:** the glossary (unique key, receipt, idempotency key, generated type), the guides for agents, generated types, queries and durable stores, the architecture page, the reference domain and the HR domain page.

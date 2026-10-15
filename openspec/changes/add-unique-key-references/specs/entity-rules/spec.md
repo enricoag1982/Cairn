@@ -27,5 +27,5 @@ WHEN a transaction would change, at an effective time that a read covers, the va
 
 #### Scenario: A rule that finds by a key
 
-- **WHEN** a test rule for Employs requires the Account with the number `A-1`, which it finds by its key, to have a balance of at least 1,000, Beta employs Alice from 1 March, and a transaction patches A-1's balance to 500 from 1 March
-- **THEN** the transaction is rejected with a problem from that rule about Beta's Employs of Alice
+- **WHEN** Employs names the test-only rule `account-a1-funded`, which requires the Account with the number `A-1`, found by its key, to have a balance of at least 1,000, Beta employs Alice from 1 March, and a transaction patches A-1's balance to 500 from 1 March
+- **THEN** the transaction is rejected with a problem from the rule `account-a1-funded` about Beta's Employs of Alice

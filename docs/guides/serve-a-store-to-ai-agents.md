@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-13
+last-reviewed: 2026-10-15
 owner: ""
 ---
 
@@ -85,7 +85,7 @@ Every tool returns JSON. A call that cannot be done returns problems instead of 
 
 A typical agent session reads `cairn_describe`, asks `cairn_json_schema` for the payload schema, writes a payload, runs it with `cairn_dry_run` until it has no problems, and then commits it. To answer questions over many entities, it asks `cairn_json_schema` for the kind `query` and sends queries to `cairn_query`.
 For a schema change it edits the document from `cairn_describe`, raises the origin's version, plans and registers it.
-Payloads and the read tools name an existing entity by its ID, or by a unique key, such as `{ "entityType": "Account", "key": { "number": "A-1" } }`, so an agent rarely needs a query to find an ID. The store resolves a write's key when it commits, at the start of the write's period ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)).
+Payloads, `cairn_read_entity`, `cairn_navigate` and `cairn_traverse` name an existing entity by its ID, or by a unique key, such as `{ "entityType": "Account", "key": { "number": "A-1" } }`, so an agent rarely needs a query to find an ID. The store resolves a write's key when it commits, at the start of the write's period ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)).
 
 ## Rules
 

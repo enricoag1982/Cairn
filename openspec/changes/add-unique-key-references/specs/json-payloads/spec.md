@@ -40,3 +40,41 @@ Values SHALL be read by the value type of the attribute they belong to, in the e
 
 - **WHEN** a payload's reference is `{ entityType: Account, key: { number: A-1, currency: EUR } }`
 - **THEN** reading fails with a problem located at that `key`
+
+### Requirement: Payload problems are located
+
+Every problem from reading a payload SHALL be located in it by a JSON Pointer, a line and a column. For a payload that was read, THE SYSTEM SHALL locate the problems that a dry run or a commit of its transaction reports: a problem about the transaction as a whole SHALL be located at the payload's root, or at the top-level key it concerns; a problem about an entity, relationship or attribute SHALL be located at the last write in the payload that concerns it, at the attribute's key where there is one; and a problem about something no write names SHALL be located at the last write concerning a subject it names, or else at the payload's root. A write that names an entity by a unique key SHALL concern that entity when the key names one, at the start of the write's period, in the store the payload is read against; then the write's values SHALL also be read by the type of that entity. Without a store, or when the key names no entity then, the write concerns no stored entity, and its values are read by the key's entity type. The problems of invalid keys and of keys that name no entity SHALL be located at the write.
+
+#### Scenario: Locating a value problem
+
+- **WHEN** a payload's second write creates account A-1 with the currency `eur`, a later write relates it to its holder, and its dry run's problems are located in the payload
+- **THEN** the problem is located at `/writes/1/create/values/currency`
+
+#### Scenario: Locating a problem about an entity named by a key
+
+- **WHEN** A-1 exists (RD-5), a payload's first write patches `{ entityType: Account, key: { number: A-1 } }` with the currency `eur`, and its dry run's problems are located in the payload
+- **THEN** the problem is located at `/writes/0/patch/values/currency`
+
+### Requirement: Results as JSON
+
+THE SYSTEM SHALL write receipts, entity states, relationship states, timelines, navigation results, traversal results and problems as JSON, with the field names of the Java API, IDs as strings, instants as ISO 8601 UTC strings, dates as ISO 8601 dates, and decimals as JSON numbers that keep every digit. Fields without a value and empty lists SHALL be left out, except the `values` of a state, which SHALL always be written. In a receipt, where an ID may name an entity or a relationship, each ID SHALL be written as `{ "entity": "<id>" }` or `{ "relationship": "<id>" }`, and temporary IDs as keys with their `$`. The `values` of an entity or relationship state written as JSON SHALL be readable as the values of a `replace` write. A receipt's key resolutions SHALL be written as `keys`, a list of `{ write, key, entity }`, with each key in the form that payloads use for references, so that an agent can use it again in a payload.
+
+#### Scenario: Reading back what was written
+
+- **WHEN** ACME's state is written as JSON, its `values` are used in a replace payload, and the payload is read
+- **THEN** the replace sets exactly ACME's values
+
+#### Scenario: A receipt as JSON
+
+- **WHEN** a payload creates ACME with the temporary ID `acme` and is committed, and the receipt is written as JSON
+- **THEN** its `temporaryIds` map `$acme` to `{ "entity": "<ACME's ID>" }`, and `created` lists the same
+
+#### Scenario: Problems as JSON
+
+- **WHEN** a commit is rejected with a problem that has a hint and a location, and the problem is written as JSON
+- **THEN** the JSON has the code, path, message, expected value, found value, hint and location
+
+#### Scenario: Key resolutions in a receipt as JSON
+
+- **WHEN** a payload patches `{ entityType: Account, key: { number: A-1 } }` and is committed, and the receipt is written as JSON
+- **THEN** its `keys` hold one entry with `write` 0, the key `{ "entityType": "Account", "key": { "number": "A-1" } }` and A-1's ID as `entity`

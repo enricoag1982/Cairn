@@ -29,7 +29,7 @@ The receipt lists each resolution, `KeyResolution(int write, UniqueKey key, Enti
 
 ### D4. The log of durable stores
 
-The transaction codec gains a tag for unique keys, with the type, the attribute and the value as values are encoded. Receipts, which the log records, gain their key resolutions. Files keep format version 1: no release of Cairn has written them, and a log without keys reads as before.
+The transaction codec gains a tag for unique keys, with the type, the attribute and the value as values are encoded. Receipts gain their key resolutions, which log records and the snapshot frames of idempotent transactions carry as an optional trailer, so that a purge after reopening still finds them. Files keep format version 1, as `add-purge` did: no release of Cairn has written them, and records and frames without keys read as before.
 
 ### D4a. Purges
 
@@ -37,7 +37,8 @@ A purge decides which stored idempotent transactions wrote purged data from thei
 
 ### D5. Payloads
 
-`cairn-documents` reads a reference that is a mapping with `entityType` and a `key` of exactly one entry as a `UniqueKey`, typing the value by the attribute in the named type, or by its own YAML type if the schema does not have them. Other shapes are read problems located at the reference or at its `key`. To locate the transaction's problems, the locator resolves each key of the payload through the store's latest view at the write's start, so that a problem about that entity, which names its ID, is located at the writes that name it by key; if the key names no entity then, such problems fall back as for subjects that no write names.
+`cairn-documents` reads a reference that is a mapping with `entityType` and a `key` of exactly one entry as a `UniqueKey`, typing the value by the attribute in the named type, or by its own YAML type if the schema does not have them. Other shapes are read problems located at the reference or at its `key`.
+The reader also resolves each key while it reads, through its `IdLookup` (`IdLookup.find(UniqueKey, Instant)`, at the write's start; `IdLookup.fromStore` reads the store's latest view, as the agent tools do). A key that resolves makes the write concern that entity, so problems that name its ID are located at the writes that name it by key, and the write's values are typed by that entity's type, which may be a subtype of the key's. Without a store, or when the key names no entity, the write concerns no stored entity, values are typed by the key's type, and problems about the entity fall back as for subjects that no write names.
 
 ### D6. Agent tools
 
@@ -55,4 +56,4 @@ The agent of HR-13 writes its payload with keys for the unit, the location, the 
 
 - **Scans:** each key scans its type. Fine for the fixtures; indexes come with the key-value store.
 - **A key that moved** changes a different entity on a different date. The scenario "A key whose value moved" pins it, and problems name the ID.
-- **Locating payload problems** resolves keys again after the fact; if the store changed in between, a problem is located less precisely, never wrongly.
+- **Reading and committing are two steps:** the reader resolves keys to locate problems and type values, and the commit resolves them again. If the store changes in between, a problem is located less precisely, and a value may be typed for the entity found when reading; the commit validates against the entity it resolves, so a wrongly typed value is reported, never stored.

@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-13
+last-reviewed: 2026-10-15
 owner: ""
 ---
 
@@ -94,6 +94,7 @@ The first gap it found is closed: a rule ran only when a type that names it was 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |
 | Ending an entity does not end the relationships of the targets that its compositions end | Gus leaving (HR-11) must end his sick leave's `DecidedBy` by ID, or the commit is rejected | Cascades that end every relationship of the entities they end, or a way to list all of an entity's relationships |
+| Purges by unique key | An erasure request starts from a name or number: the caller finds the entity by its unique key, then purges it by ID | Purges that take unique keys, on the same rules ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)) |
 | "At every point in effective time" is the rule author's work | `vacation-within-entitlement` and `no-unit-cycles` collect the instants at which what they read changes, and query or traverse at each | A rule context that lists those instants, or queries over a period |
 | Rules see only the new version | No rule can say that a rejected leave request never changes again | The previous version in the rule context |
 | Typed inverse names | Relationship types have `TYPE` constants, but inverse names such as `subunits` and `requester` are strings in rules and queries | Generated constants for inverse names |
