@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-09-30
+last-reviewed: 2026-10-13
 owner: ""
 ---
 
@@ -27,7 +27,7 @@ flowchart TD
 | Area rules | `docs/CLAUDE.md`, `openspec/CLAUDE.md` | When Claude works in that folder | Rules that only apply there |
 | Skills | `.claude/skills/<name>/SKILL.md` | When the task matches the skill's `description` | Step-by-step procedures: recording a decision, maintaining docs |
 | OpenSpec workflows | `.claude/commands/opsx/*.md` (generated) + `openspec/config.yaml` | When you run `/opsx:*` | Project context and per-artifact rules for proposals, specs, designs, tasks |
-| Subagents | `.claude/agents/*.md` | When delegated to | Focused reviewers, e.g. `docs-reviewer` |
+| Subagents | `.claude/agents/*.md` | When delegated to | Focused helpers: `docs-reviewer` reviews drift; `implementer` writes code on a smaller model |
 | Settings | `.claude/settings.json` | By Claude Code | Pre-approved safe commands |
 
 Other tools that read `AGENTS.md` natively (Codex, Copilot, Cursor and others) still get the root guide. Cursor and Copilot also read `.claude/skills/`.
@@ -39,7 +39,7 @@ Other tools that read `AGENTS.md` natively (Codex, Copilot, Cursor and others) s
 | Think through an idea without writing code | `/opsx:explore` |
 | Turn an idea into a proposal with specs, design and tasks | `/opsx:propose "<what and why>"` |
 | Record a decision | "Record a decision about X". Triggers the `record-decision` skill |
-| Implement an agreed change | `/opsx:apply <change-id>` |
+| Implement an agreed change | `/opsx:apply <change-id>`. Claude Code hands the code to the `implementer` subagent |
 | Adjust a change after feedback | `/opsx:update <change-id>` |
 | Check docs are in sync before a PR | "Review docs drift", `docs-reviewer` subagent, `maintain-docs` skill |
 | Finish a change | `npm run check`, then `/opsx:archive <change-id>` |

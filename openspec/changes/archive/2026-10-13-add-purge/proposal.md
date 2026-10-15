@@ -1,0 +1,40 @@
+# Proposal
+
+## Why
+
+Cairn never changes or deletes what it recorded, but a system of record that holds personal data must be able to erase it for good when the law requires it, history included.
+RD-11 of the reference domain asks for it, and it is the last story that Cairn cannot tell yet. ADR-0024 decides how: remove the entities from all of history, rewrite the files of durable stores, and record that a purge happened.
+
+## What Changes
+
+- `Store.purge`: purging entities by ID, with a principal, a party acted for and a reason, removing every version of them at every basis, every relationship from or to them, and the targets of their compositions.
+- Refused purges: unknown IDs, and purges that would leave an entity without a relationship its type requires, with problems that name the entities to purge too.
+- A record of each purge, with the IDs it removed, listed by the store.
+- Purged IDs are never used again, and idempotency keys of transactions that wrote purged data are refused.
+- Durable stores write the purge to their log, then a snapshot file without the purged data, and delete every older file before the purge returns; recovery completes a purge that was interrupted.
+
+### Non-goals
+
+- Purging single attributes or single versions: a purge removes whole entities.
+- A purge tool for agents, and the approval policy for purges (ADR-0024: later, with approval by default).
+- Erasing copies outside the store, such as backups.
+
+## Capabilities
+
+### New Capabilities
+
+- `purge`: purging entities from all of history, refused purges, purge records, what stays unusable, and purges in durable stores
+
+### Modified Capabilities
+
+- `views`: a purge is the one thing that changes what an existing view returns.
+- `transactions`: purges take bases, and idempotency keys of purged data are refused.
+- `durability`: after a purge a store keeps one snapshot file, and a store that cannot recover what the deleted files held refuses to open.
+
+Every other capability keeps its behavior, and stores that never purge behave as before.
+
+## Impact
+
+- **Decisions:** ADR-0024 (purge), accepted under the standing approval with this proposal; it makes the one exception to the immutability of ADR-0008 and ADR-0013, which both now refer to it, as does ADR-0007 for views; it keeps ADR-0008's rule that a purge records that it happened, not what was purged; and it relies on ADR-0022 (durable stores), ADR-0010 (relationships and compositions), ADR-0019 (IDs never reused) and ADR-0007 (one writer).
+- **Code:** `cairn-api` gains `Purge`, `PurgeResult` and `PurgeRecord`, and `Store.purge`, `Store.purges` and `Store.wasPurged`; `cairn-core` removes data from the in-memory store, and durable stores log purges, rewrite their files and complete purges at recovery. No new dependencies.
+- **Docs:** the glossary (purge, purge record), the guide for durable stores, the architecture page, the reference domain.

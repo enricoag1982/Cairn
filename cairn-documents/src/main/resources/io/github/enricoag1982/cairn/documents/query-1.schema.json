@@ -1,0 +1,490 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cairn:query:1",
+  "title": "Cairn query, format version 1",
+  "description": "A Cairn query starts from an entity type and binds each of its entities to a name. Its steps then apply in order, each to the rows that the steps before it produced: a step filters the rows, follows relationships, or traverses them up to a depth, and binds more names. Then the query can group the rows and aggregate, name the columns to return, order the rows and limit them. A view runs it and returns rows, or problems that name the part of the query they concern, such as @query.steps.1. Write it as JSON or as YAML 1.2. Names of types, attributes and relationships are those of the schema (see cairn_describe); names of bindings are those that the query gives, and are compared exactly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["from"],
+  "properties": {
+    "$schema": {
+      "description": "The location of the JSON Schema that describes this query, for editors that look for it. Cairn does not read it.",
+      "type": "string"
+    },
+    "cairn": {
+      "description": "The version of the query format. If it is there, it must be the integer 1.",
+      "type": "integer",
+      "const": 1
+    },
+    "from": {
+      "description": "Where the query starts: the entities of an entity type that are effective at the effective time of the view.",
+      "$ref": "#/$defs/from"
+    },
+    "steps": {
+      "description": "The steps after the start, applied in order. Each is an object with exactly one key: where, follow, optionalFollow or traverse.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "groupBy": {
+      "description": "The keys to group the rows by. With keys, a group exists only for keys that rows have. Without keys but with aggregates, all rows form one group, which exists even if there are no rows. After grouping, only the keys and the aggregates are available as columns and orders.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/groupKey" }
+    },
+    "aggregates": {
+      "description": "What to compute for each group: counts, sums, minimums, maximums and averages. Values that are missing are left out.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/aggregate" }
+    },
+    "columns": {
+      "description": "The columns to return, in order. Without columns, an ungrouped query returns its bindings, in the order they were bound, and a grouped query returns its keys and then its aggregates.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/column" }
+    },
+    "order": {
+      "description": "How to order the rows, the most important first. After these, rows are ordered by the IDs of their bindings in the order they were bound, or for grouped rows by their group keys, so that the order is always the same. Missing values come first when ascending.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/order" }
+    },
+    "limit": {
+      "description": "The largest number of rows to return, taken after the order.",
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "from": {
+      "description": "The start of a query: an entity type, and the name that each of its entities is bound to.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "as"],
+      "properties": {
+        "type": {
+          "description": "The name or an alias of the entity type, without regard to case. Its subtypes are included unless exact is true.",
+          "type": "string"
+        },
+        "as": {
+          "description": "The name that each entity is bound to. Later steps, conditions and columns refer to it.",
+          "type": "string"
+        },
+        "exact": {
+          "description": "True to take only the entities whose concrete type is the type, without those of its subtypes. An abstract type has none.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "step": {
+      "description": "A step of a query: an object with exactly one key that says what kind of step it is.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "where": {
+          "description": "Keeps the rows for which the condition holds.",
+          "$ref": "#/$defs/condition"
+        },
+        "follow": {
+          "description": "For each row, binds the entity at the other end of each relationship that leads away from a bound entity by a relationship name or an inverse name, giving one row for each relationship. A row without such a relationship is dropped.",
+          "$ref": "#/$defs/follow"
+        },
+        "optionalFollow": {
+          "description": "Like follow, but keeps a row that has no such relationship, with the new bindings empty.",
+          "$ref": "#/$defs/follow"
+        },
+        "traverse": {
+          "description": "For each row, binds each entity reached from a bound entity by a relationship name or an inverse name, at depths from a minimum to a maximum. Depth 0 is the entity itself, reached by no relationship. Each reached entity is bound once per row, at the smallest depth at which it is reached. With along, only the relationships that meet a condition are followed. With a minimum depth of 0 the bound entity can be the one the traversal starts from, so its type is the closest common supertype of that entity's type and the type at the other end of the relationship, and without such a type only its ID, type and links can be used.",
+          "$ref": "#/$defs/traverse"
+        }
+      }
+    },
+    "follow": {
+      "description": "A follow step: the binding to lead away from, the relationship name, and the names to bind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "name", "as"],
+      "properties": {
+        "from": {
+          "description": "The name of the binding of the entity to lead away from, bound by the start or an earlier step.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name or an alias of a relationship type, which leads from its source to its targets, or its inverse name or an alias of it, which leads from the target to the sources.",
+          "type": "string"
+        },
+        "as": {
+          "description": "The name that the entity at the other end is bound to.",
+          "type": "string"
+        },
+        "relationship": {
+          "description": "The name that the relationship is bound to, if later steps, conditions or columns need it, for example to read its attributes.",
+          "type": "string"
+        }
+      }
+    },
+    "traverse": {
+      "description": "A traverse step: the binding to start from, the relationship name, the depths, and the names to bind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "name", "as", "maxDepth"],
+      "properties": {
+        "from": {
+          "description": "The name of the binding of the entity to start from, bound by the start or an earlier step.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name or an alias of a relationship type, or its inverse name or an alias of it.",
+          "type": "string"
+        },
+        "as": {
+          "description": "The name that each reached entity is bound to.",
+          "type": "string"
+        },
+        "minDepth": {
+          "description": "The smallest depth to bind. 0, the default, binds the entity itself.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "maxDepth": {
+          "description": "The largest depth to bind, at least minDepth. A chain longer than this is cut short.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationship": {
+          "description": "The name that the relationship that reached the entity is bound to; it is empty at depth 0.",
+          "type": "string"
+        },
+        "depth": {
+          "description": "The name that the depth is bound to, as an int value.",
+          "type": "string"
+        },
+        "along": {
+          "description": "A condition on a relationship that decides whether the traversal follows it: only the relationships for which it holds are followed, and an entity that can be reached only through other relationships is not reached. It can refer only to the relationship of this traversal, which must then be named with relationship, and to constants.",
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "condition": {
+      "description": "A condition: an object with exactly one key that says what kind of condition it is. A comparison with a value that is missing, or of an empty binding, is false; only hasValue tells missing values apart. Conditions nest at most 100 deep, through and, or and not.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "compare": {
+          "description": "Compares two operands. Numbers compare by value whatever their value types, dates, instants and strings in their order (strings by code point), and booleans for equality only.",
+          "$ref": "#/$defs/compare"
+        },
+        "in": {
+          "description": "Holds if the operand equals one of the values.",
+          "$ref": "#/$defs/in"
+        },
+        "hasValue": {
+          "description": "Holds if an attribute of a binding has a value.",
+          "$ref": "#/$defs/hasValue"
+        },
+        "hasLink": {
+          "description": "Holds if a bound entity has a link by a relationship name or an inverse name at the effective time, and with along, a link whose relationship meets a condition.",
+          "$ref": "#/$defs/hasLink"
+        },
+        "isA": {
+          "description": "Holds if a bound entity is of an entity type or of one of its subtypes.",
+          "$ref": "#/$defs/isA"
+        },
+        "and": {
+          "description": "Holds if every condition of the list holds; an empty list holds.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "or": {
+          "description": "Holds if at least one condition of the list holds; an empty list does not hold.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "not": {
+          "description": "Holds if the condition does not hold.",
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "compare": {
+      "description": "A comparison of two operands.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "op", "right"],
+      "properties": {
+        "left": {
+          "description": "The left operand.",
+          "$ref": "#/$defs/operand"
+        },
+        "op": {
+          "description": "How to compare: eq (equal), ne (not equal), lt (less than), le (less than or equal), gt (greater than) or ge (greater than or equal). Booleans have eq and ne only.",
+          "enum": ["eq", "ne", "lt", "le", "gt", "ge"]
+        },
+        "right": {
+          "description": "The right operand.",
+          "$ref": "#/$defs/operand"
+        }
+      }
+    },
+    "in": {
+      "description": "A test of an operand against a list of values.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operand", "values"],
+      "properties": {
+        "operand": {
+          "description": "The operand to test.",
+          "$ref": "#/$defs/operand"
+        },
+        "values": {
+          "description": "The values to compare with. A string that spells a date or an instant is read as one if the operand is a date or an instant attribute.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/literal" }
+        }
+      }
+    },
+    "hasValue": {
+      "description": "A test for the value of an attribute of a binding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attribute", "of"],
+      "properties": {
+        "attribute": {
+          "description": "The name or an alias of the attribute.",
+          "type": "string"
+        },
+        "of": {
+          "description": "The name of the binding of an entity or a relationship.",
+          "type": "string"
+        }
+      }
+    },
+    "hasLink": {
+      "description": "A test for the links of a bound entity: it has a link by the name, and with along, a link whose relationship meets a condition.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["of", "name"],
+      "properties": {
+        "of": {
+          "description": "The name of the binding of an entity.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name or an alias of a relationship type, or its inverse name or an alias of it.",
+          "type": "string"
+        },
+        "relationship": {
+          "description": "The name that along refers to the relationship of a link by. It belongs to this test alone, so it may be a name that the query binds already; inside along it is the relationship.",
+          "type": "string"
+        },
+        "along": {
+          "description": "A condition on the relationship of a link: the test holds if the entity has at least one link by the name whose relationship meets it. It can refer only to the relationship, by the name given with relationship, and to constants.",
+          "$ref": "#/$defs/condition"
+        }
+      },
+      "dependentRequired": {
+        "along": ["relationship"]
+      }
+    },
+    "isA": {
+      "description": "A test for the type of a bound entity, subtypes included.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["of", "type"],
+      "properties": {
+        "of": {
+          "description": "The name of the binding of an entity.",
+          "type": "string"
+        },
+        "type": {
+          "description": "The name or an alias of an entity type.",
+          "type": "string"
+        }
+      }
+    },
+    "operand": {
+      "description": "Something to compare: an attribute of a binding, the ID or the exact type of a binding (strings), or a constant. It has exactly one of attribute, id, type and value, and of goes with attribute only.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attribute": {
+          "description": "The name or an alias of an attribute of the binding named by of.",
+          "type": "string"
+        },
+        "of": {
+          "description": "The name of the binding of an entity or a relationship that the attribute belongs to.",
+          "type": "string"
+        },
+        "id": {
+          "description": "The name of a binding whose ID, as a string, is the operand.",
+          "type": "string"
+        },
+        "type": {
+          "description": "The name of a binding whose exact type, as the name of its concrete type, is the operand. Use isA to include subtypes.",
+          "type": "string"
+        },
+        "value": {
+          "description": "A constant: a string, a number or a boolean.",
+          "$ref": "#/$defs/literal"
+        }
+      },
+      "oneOf": [
+        { "required": ["attribute"] },
+        { "required": ["id"] },
+        { "required": ["type"] },
+        { "required": ["value"] }
+      ],
+      "dependentRequired": {
+        "attribute": ["of"],
+        "of": ["attribute"]
+      }
+    },
+    "literal": {
+      "description": "A constant: a string, a number written as JSON writes it, or a boolean. A whole number is an int, or a long if it is large, and any other number is a decimal.",
+      "type": ["string", "number", "boolean"]
+    },
+    "groupKey": {
+      "description": "A key to group by: a binding, which is told apart by its ID, or an attribute of a binding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["of"],
+      "properties": {
+        "of": {
+          "description": "The name of the binding.",
+          "type": "string"
+        },
+        "attribute": {
+          "description": "The name or an alias of an attribute of the binding; without it, the key is the binding itself.",
+          "type": "string"
+        },
+        "as": {
+          "description": "The name of the key's column. Without it, the name of the binding, or the binding and the attribute joined by a dot.",
+          "type": "string"
+        }
+      }
+    },
+    "aggregate": {
+      "description": "A value computed for each group. count without an attribute counts rows, and with one the values; sum and avg need numbers; min and max need numbers, dates, instants or strings.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["function", "as"],
+      "properties": {
+        "function": {
+          "description": "What to compute: count, sum (an exact decimal), min and max (of the attribute's value type), or avg (a decimal rounded to 34 significant digits).",
+          "enum": ["count", "sum", "min", "max", "avg"]
+        },
+        "attribute": {
+          "description": "The name or an alias of the attribute to aggregate; not for a count of rows. It goes with of.",
+          "type": "string"
+        },
+        "of": {
+          "description": "The name of the binding that the attribute belongs to. It goes with attribute.",
+          "type": "string"
+        },
+        "as": {
+          "description": "The name of the aggregate's column.",
+          "type": "string"
+        }
+      },
+      "dependentRequired": {
+        "attribute": ["of"],
+        "of": ["attribute"]
+      }
+    },
+    "column": {
+      "description": "A column of the result: exactly one of binding (its state), attribute with of (its value), depth (a traversal's depth), key (a group key) or aggregate, and optionally its name. Before grouping, a column is a binding, an attribute or a depth; after it, a key or an aggregate.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "description": "The name of a binding of an entity or a relationship, returned as its state.",
+          "type": "string"
+        },
+        "attribute": {
+          "description": "The name or an alias of an attribute of the binding named by of, returned as its value.",
+          "type": "string"
+        },
+        "of": {
+          "description": "The name of the binding that the attribute belongs to. It goes with attribute.",
+          "type": "string"
+        },
+        "depth": {
+          "description": "The name that a traverse step bound the depth to, returned as an int value.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The name of a group key of a grouped query.",
+          "type": "string"
+        },
+        "aggregate": {
+          "description": "The name of an aggregate of a grouped query.",
+          "type": "string"
+        },
+        "as": {
+          "description": "The name of the column. Without it, the name of the binding, depth, key or aggregate, or the binding and the attribute joined by a dot.",
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        { "required": ["binding"] },
+        { "required": ["attribute"] },
+        { "required": ["depth"] },
+        { "required": ["key"] },
+        { "required": ["aggregate"] }
+      ],
+      "dependentRequired": {
+        "attribute": ["of"],
+        "of": ["attribute"]
+      }
+    },
+    "order": {
+      "description": "One part of the order of the rows: a column, which need not be one of the query's columns, ascending or descending. A binding is ordered by its ID; false comes before true.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "description": "The name of a binding of an entity or a relationship, ordered by its ID.",
+          "type": "string"
+        },
+        "attribute": {
+          "description": "The name or an alias of an attribute of the binding named by of.",
+          "type": "string"
+        },
+        "of": {
+          "description": "The name of the binding that the attribute belongs to. It goes with attribute.",
+          "type": "string"
+        },
+        "depth": {
+          "description": "The name that a traverse step bound the depth to.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The name of a group key of a grouped query.",
+          "type": "string"
+        },
+        "aggregate": {
+          "description": "The name of an aggregate of a grouped query.",
+          "type": "string"
+        },
+        "descending": {
+          "description": "True for the largest first, with missing values last.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "oneOf": [
+        { "required": ["binding"] },
+        { "required": ["attribute"] },
+        { "required": ["depth"] },
+        { "required": ["key"] },
+        { "required": ["aggregate"] }
+      ],
+      "dependentRequired": {
+        "attribute": ["of"],
+        "of": ["attribute"]
+      }
+    }
+  }
+}

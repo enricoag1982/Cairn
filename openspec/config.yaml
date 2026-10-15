@@ -10,8 +10,13 @@ context: |
     Accepted ADRs are binding; proposed ADRs are open questions and must not be assumed decided.
   Vocabulary: docs/glossary.md. Use its terms verbatim in specs.
   Architecture (current state): docs/architecture/README.md.
-  Implementation language: NOT decided yet (ADR-0005, Java is the leading candidate).
-    Until it is accepted, do not add build files, source trees or language-specific tooling.
+  Implementation language: Java 25 (ADR-0005), built with Gradle (ADR-0015), both accepted.
+  Core design (accepted): ADR-0007 to ADR-0013, ADR-0017 (AI agents as first-class users), ADR-0018 (rules in Java),
+    ADR-0019 (entity IDs), ADR-0020 (patterns as I-Regexp), ADR-0021 (generated Java types), ADR-0022 (durable stores), ADR-0023 (queries as data), ADR-0024 (purge) and ADR-0025 (rules run again when what they read changes).
+    Types are defined in YAML 1.2 schema documents (ADR-0012).
+    Build and test with ./gradlew build; shared build configuration only in build-logic/, versions in gradle/libs.versions.toml.
+  Spec scenarios use the reference domain in docs/reference/reference-domain.md (cite stories by ID, RD-n);
+    its names never appear in normative requirement text.
   Process: docs/process/development-workflow.md.
 
 # Per-artifact rules, applied on top of the schema's own instructions.

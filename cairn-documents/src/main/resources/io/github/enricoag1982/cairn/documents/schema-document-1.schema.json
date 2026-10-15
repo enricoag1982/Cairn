@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cairn:schema-document:1",
+  "title": "Cairn schema document, format version 1",
+  "description": "A Cairn schema document defines the traits, entity types and relationship types of one origin. Write it as YAML 1.2 or as JSON. The same keys are used in both. A key that is left out takes its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, aliases, inverse aliases, constraints, examples, description or rules. Anchors, aliases, explicit tags, merge keys, duplicate keys and several documents in one stream are not part of the format.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cairn", "origin"],
+  "properties": {
+    "$schema": {
+      "description": "The location of the JSON Schema that describes this document, for editors that look for it. Cairn does not read it and does not write it.",
+      "type": "string"
+    },
+    "cairn": {
+      "description": "The version of the document format. It must be the integer 1.",
+      "type": "integer",
+      "const": 1
+    },
+    "origin": {
+      "description": "The origin of the definitions: the name of the model and its version.",
+      "$ref": "#/$defs/origin"
+    },
+    "traits": {
+      "description": "The traits of the origin, by name. A trait declares attributes that entity types include.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/trait" }
+    },
+    "entityTypes": {
+      "description": "The entity types of the origin, by name.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/entityType" }
+    },
+    "relationshipTypes": {
+      "description": "The relationship types of the origin, by name. The name of a relationship type is also the name of navigation from source to target.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/relationshipType" }
+    }
+  },
+  "$defs": {
+    "origin": {
+      "description": "The name and the version of an origin.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "description": "The name of the origin, for example the name of the model.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version of the origin. Always a string: write it in quotes, because a plain 1.10 is the number 1.1.",
+          "type": "string"
+        }
+      }
+    },
+    "trait": {
+      "description": "A trait: attributes that entity types include. A trait cannot be a supertype or an end of a relationship type.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "What the trait means.",
+          "type": "string"
+        },
+        "attributes": {
+          "description": "The attributes the trait declares, by name.",
+          "$ref": "#/$defs/attributes"
+        },
+        "aliases": {
+          "description": "Previous names of the trait.",
+          "$ref": "#/$defs/strings"
+        },
+        "deprecated": {
+          "description": "True if the trait should no longer be used.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "entityType": {
+      "description": "An entity type: concrete or abstract, with attributes, traits and at most one supertype.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "What the entity type means.",
+          "type": "string"
+        },
+        "abstract": {
+          "description": "True if entities cannot be of exactly this type, only of its subtypes.",
+          "type": "boolean",
+          "default": false
+        },
+        "supertype": {
+          "description": "The name of the supertype, which must be an entity type.",
+          "type": "string"
+        },
+        "traits": {
+          "description": "The names of the traits whose attributes the entity type includes.",
+          "$ref": "#/$defs/strings"
+        },
+        "attributes": {
+          "description": "The attributes the entity type declares itself, by name.",
+          "$ref": "#/$defs/attributes"
+        },
+        "aliases": {
+          "description": "Previous names of the entity type.",
+          "$ref": "#/$defs/strings"
+        },
+        "deprecated": {
+          "description": "True if the entity type should no longer be used.",
+          "type": "boolean",
+          "default": false
+        },
+        "rules": {
+          "description": "The rules that apply to the entity type and its subtypes.",
+          "$ref": "#/$defs/rules"
+        }
+      }
+    },
+    "relationshipType": {
+      "description": "A relationship type from a source entity type to a target entity type.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "target", "inverseName", "targetsPerSource", "sourcesPerTarget"],
+      "properties": {
+        "description": {
+          "description": "What the relationship type means.",
+          "type": "string"
+        },
+        "source": {
+          "description": "The name of the source entity type.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The name of the target entity type.",
+          "type": "string"
+        },
+        "targetsPerSource": {
+          "description": "How many targets each source can have: 0..1, 1..1, 0..* or 1..*.",
+          "$ref": "#/$defs/multiplicity"
+        },
+        "sourcesPerTarget": {
+          "description": "How many sources each target can have: 0..1, 1..1, 0..* or 1..*.",
+          "$ref": "#/$defs/multiplicity"
+        },
+        "inverseName": {
+          "description": "The name of navigation from target to source.",
+          "type": "string"
+        },
+        "inverseAliases": {
+          "description": "Previous inverse names.",
+          "$ref": "#/$defs/strings"
+        },
+        "kind": {
+          "description": "A composition owns its targets: each target has exactly one source. An association does not.",
+          "enum": ["association", "composition"],
+          "default": "association"
+        },
+        "symmetric": {
+          "description": "True if the two ends are interchangeable. Source and target must then be the same entity type, with the same multiplicity at both ends.",
+          "type": "boolean",
+          "default": false
+        },
+        "supertype": {
+          "description": "The name of the supertype, which must be a relationship type.",
+          "type": "string"
+        },
+        "attributes": {
+          "description": "The attributes the relationship type declares itself, by name.",
+          "$ref": "#/$defs/attributes"
+        },
+        "aliases": {
+          "description": "Previous names of the relationship type.",
+          "$ref": "#/$defs/strings"
+        },
+        "deprecated": {
+          "description": "True if the relationship type should no longer be used.",
+          "type": "boolean",
+          "default": false
+        },
+        "rules": {
+          "description": "The rules that apply to the relationship type and its subtypes.",
+          "$ref": "#/$defs/rules"
+        }
+      }
+    },
+    "attribute": {
+      "description": "An attribute: a value type, and constraints on the values. Ranges are for int, long, decimal, date and instant attributes. Allowed values, a pattern and lengths are for string attributes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "description": "The kind of value the attribute holds. A date is ISO 8601 (2026-01-05). An instant is ISO 8601 with Z or an offset (2026-01-05T09:00:00Z); an offset other than UTC, such as +01:00, is converted to UTC.",
+          "enum": ["string", "boolean", "int", "long", "decimal", "date", "instant"]
+        },
+        "required": {
+          "description": "True if every entity or relationship must have a value.",
+          "type": "boolean",
+          "default": false
+        },
+        "unique": {
+          "description": "True if no two entities may have the same value at the same time.",
+          "type": "boolean",
+          "default": false
+        },
+        "range": {
+          "description": "The interval that values must lie in.",
+          "$ref": "#/$defs/range"
+        },
+        "aliases": {
+          "description": "Previous names of the attribute.",
+          "$ref": "#/$defs/strings"
+        },
+        "deprecated": {
+          "description": "True if the attribute should no longer be used.",
+          "type": "boolean",
+          "default": false
+        },
+        "description": {
+          "description": "What the attribute means.",
+          "type": "string"
+        },
+        "examples": {
+          "description": "Typical values. Each must have the value type of the attribute and satisfy its constraints.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/literal" }
+        },
+        "allowedValues": {
+          "description": "The values a string attribute may have. If the list is left out, any value is allowed.",
+          "$ref": "#/$defs/strings"
+        },
+        "pattern": {
+          "description": "A regular expression in I-Regexp (RFC 9485) that a string value must match as a whole.",
+          "type": "string"
+        },
+        "minLength": {
+          "description": "The smallest length of a string value, counted in Unicode code points.",
+          "$ref": "#/$defs/int32"
+        },
+        "maxLength": {
+          "description": "The largest length of a string value, counted in Unicode code points.",
+          "$ref": "#/$defs/int32"
+        }
+      }
+    },
+    "range": {
+      "description": "The interval that values must lie in: at most one lower bound (atLeast or greaterThan) and at most one upper bound (atMost or lessThan). The bounds must have the value type of the attribute.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "atLeast": {
+          "description": "The lower bound, included in the range.",
+          "$ref": "#/$defs/literal"
+        },
+        "greaterThan": {
+          "description": "The lower bound, excluded from the range.",
+          "$ref": "#/$defs/literal"
+        },
+        "atMost": {
+          "description": "The upper bound, included in the range.",
+          "$ref": "#/$defs/literal"
+        },
+        "lessThan": {
+          "description": "The upper bound, excluded from the range.",
+          "$ref": "#/$defs/literal"
+        }
+      },
+      "allOf": [
+        { "not": { "required": ["atLeast", "greaterThan"] } },
+        { "not": { "required": ["atMost", "lessThan"] } }
+      ]
+    },
+    "ruleReference": {
+      "description": "A reference to a rule that is written in Java, by name and version.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "description": "The name of the rule: lowercase ASCII letters, digits and hyphens, starting with a letter.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version of the rule, a whole number.",
+          "$ref": "#/$defs/int32"
+        }
+      }
+    },
+    "attributes": {
+      "description": "A mapping from attribute names to attribute definitions.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/attribute" }
+    },
+    "rules": {
+      "description": "A list of rule references.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/ruleReference" }
+    },
+    "strings": {
+      "description": "A list of strings.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "multiplicity": {
+      "description": "A minimum of 0 or 1 and a maximum of 1 or unbounded (*). Write it in quotes.",
+      "enum": ["0..1", "1..1", "0..*", "1..*"]
+    },
+    "literal": {
+      "description": "A value of the attribute's value type: a number for int, long and decimal, true or false for boolean, and a string for string, date and instant.",
+      "type": ["number", "string", "boolean"]
+    },
+    "int32": {
+      "description": "A whole number that fits 32 bits.",
+      "type": "integer",
+      "minimum": -2147483648,
+      "maximum": 2147483647
+    }
+  }
+}

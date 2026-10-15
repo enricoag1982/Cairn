@@ -4,6 +4,7 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 
 - **New decision:** `npm run adr:new -- "Short title of problem and solution"` creates the next number from [the template](../templates/decision.md) with status `proposed`.
 - **Change a decision:** write a new ADR, then set the old one to `superseded by ADR-NNNN`. Never rewrite an accepted decision.
+- **Replace part of a decision:** write a new ADR, and add a line under the old one's "More Information" that names the new ADR and the part it replaces; the old one stays accepted for the rest. Read an accepted ADR together with the ADRs its "More Information" points to.
 - **Open questions:** every `proposed` entry below is a decision still to be made.
 
 ## Decision log
@@ -17,7 +18,26 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0002](0002-use-openspec-for-spec-driven-development.md) | Use OpenSpec for spec-driven development | accepted | 2026-09-30 |
 | [ADR-0003](0003-use-agents-md-as-canonical-agent-guidance.md) | Use AGENTS.md as the canonical agent guidance, with thin tool-specific adapters | superseded by ADR-0006 | 2026-09-30 |
 | [ADR-0004](0004-keep-docs-as-plain-markdown-browsable-in-obsidian.md) | Keep all project knowledge as plain Markdown in the repository, browsable in Obsidian | accepted | 2026-09-30 |
-| [ADR-0005](0005-choose-primary-implementation-language.md) | Choose the primary implementation language | proposed | 2026-09-30 |
+| [ADR-0005](0005-choose-primary-implementation-language.md) | Choose the primary implementation language | accepted | 2026-10-12 |
 | [ADR-0006](0006-target-claude-code-without-duplicated-agent-files.md) | Target Claude Code, keep AGENTS.md canonical, and store each agent file once | accepted | 2026-09-30 |
+| [ADR-0007](0007-run-sysrec-as-an-embedded-single-node-engine-with-a-single-writer.md) | Run Cairn as an embedded single-node engine with a single writer | accepted | 2026-10-13 |
+| [ADR-0008](0008-record-history-on-two-time-axes-effective-time-and-transaction-time.md) | Record history on two time axes: effective time and transaction time | accepted | 2026-10-13 |
+| [ADR-0009](0009-version-whole-entities-rather-than-single-attributes.md) | Version whole entities rather than single attributes | accepted | 2026-10-13 |
+| [ADR-0010](0010-model-data-as-a-typed-property-graph-with-single-inheritance-and-traits.md) | Model data as a typed property graph with single inheritance and traits | accepted | 2026-10-13 |
+| [ADR-0011](0011-hide-storage-behind-an-ordered-key-value-store-and-a-commit-log.md) | Hide storage behind an ordered key-value store and a commit log | accepted | 2026-10-13 |
+| [ADR-0012](0012-define-types-as-annotated-java-interfaces-processed-at-compile-time.md) | Define types in schema documents and generate Java types from them | accepted | 2026-10-13 |
+| [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md) | Read through immutable views and take feature flags resolved by the caller | accepted | 2026-10-13 |
+| [ADR-0014](0014-build-the-java-code-with-maven.md) | Build the Java code with Maven | rejected | 2026-10-12 |
+| [ADR-0015](0015-build-the-java-code-with-gradle.md) | Build the Java code with Gradle | accepted | 2026-10-12 |
+| [ADR-0016](0016-name-the-project-cairn.md) | Name the project Cairn | accepted | 2026-10-13 |
+| [ADR-0017](0017-design-cairn-so-that-ai-agents-are-first-class-users.md) | Design Cairn so that AI agents are first-class users | accepted | 2026-10-13 |
+| [ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md) | Validate with declarative constraints and named Java rules | accepted | 2026-10-13 |
+| [ADR-0019](0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md) | Identify entities by opaque IDs from one generator per store | accepted | 2026-10-13 |
+| [ADR-0020](0020-write-attribute-patterns-as-i-regexp-and-match-them-in-linear-time.md) | Write attribute patterns as I-Regexp and match them in linear time | accepted | 2026-10-13 |
+| [ADR-0021](0021-generate-java-types-as-interfaces-with-snapshot-records-builders-of-writes-and-rule-base-classes.md) | Generate Java types as interfaces with snapshot records, builders of writes and rule base classes | accepted | 2026-10-13 |
+| [ADR-0022](0022-make-stores-durable-with-a-commit-log-of-effects-and-snapshots.md) | Make stores durable with a commit log of effects and snapshots | accepted | 2026-10-13 |
+| [ADR-0023](0023-express-queries-as-data-a-pipeline-of-steps-over-named-bindings-with-a-java-builder-and-a-json-form.md) | Express queries as data: a pipeline of steps over named bindings, with a Java builder and a JSON form | accepted | 2026-10-13 |
+| [ADR-0024](0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md) | Purge entities by removing them from all of history, and record that a purge happened | accepted | 2026-10-13 |
+| [ADR-0025](0025-run-a-rule-again-when-the-data-it-read-changes.md) | Run a rule again when the data it read changes | accepted | 2026-10-13 |
 
 <!-- decision-log:end -->

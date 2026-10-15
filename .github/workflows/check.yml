@@ -28,3 +28,32 @@ jobs:
         run: npm run docs:lint
       - name: Check decisions, links, review dates, skills
         run: npm run docs:check
+
+  java-build:
+    name: java-build (Java ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    # Java 25 is required (ADR-0005). The newest Java release is tested too, but does not block.
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - java: "25"
+            experimental: false
+          - java: "27"
+            experimental: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          # The last version listed runs Gradle; the matrix version is the toolchain.
+          java-version: |
+            ${{ matrix.java }}
+            25
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build and test
+        run: >-
+          ./gradlew build
+          -Pcairn.javaVersion=${{ matrix.java }}
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_${{ matrix.java }}_X64

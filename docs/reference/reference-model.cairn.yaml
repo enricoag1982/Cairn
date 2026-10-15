@@ -1,0 +1,79 @@
+# The reference domain model as a schema document (ADR-0012).
+# The reference domain page (reference-domain.md) is canonical; a test checks this document against it.
+cairn: 1
+origin:
+  name: reference-model
+  version: "1.0.0"
+
+traits:
+  Named:
+    attributes:
+      name: { type: string, required: true }
+
+entityTypes:
+  Party:
+    abstract: true
+    traits: [Named]
+  Person:
+    supertype: Party
+    attributes:
+      birthDate: { type: date }
+  Organization:
+    supertype: Party
+    attributes:
+      # Legal Entity Identifier (ISO 17442)
+      lei: { type: string, unique: true, pattern: "[A-Z0-9]{18}[0-9]{2}" }
+    rules:
+      - { name: lei-checksum, version: 1 }
+  Address:
+    attributes:
+      street: { type: string, required: true }
+      city: { type: string, required: true }
+      country: { type: string, required: true }
+  Account:
+    attributes:
+      number: { type: string, required: true, unique: true }
+      currency: { type: string, required: true, pattern: "[A-Z]{3}" }
+      balance: { type: decimal, required: true }
+  CustomerRole:
+    attributes:
+      segment: { type: string, required: true, allowedValues: [Corporate, Retail] }
+
+relationshipTypes:
+  Owns:
+    source: Organization
+    target: Party
+    targetsPerSource: "0..*"
+    sourcesPerTarget: "0..*"
+    inverseName: ownedBy
+    attributes:
+      share: { type: decimal, required: true, range: { greaterThan: 0, atMost: 100 } }
+    rules:
+      - { name: total-ownership-at-most-100, version: 1 }
+  Employs:
+    source: Organization
+    target: Person
+    targetsPerSource: "0..*"
+    sourcesPerTarget: "0..*"
+    inverseName: employedBy
+    attributes:
+      title: { type: string }
+  HeldBy:
+    source: Account
+    target: Party
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..*"
+    inverseName: holds
+  HasAddress:
+    source: Party
+    target: Address
+    kind: composition
+    targetsPerSource: "0..*"
+    sourcesPerTarget: "1..1"
+    inverseName: party
+  PlayedBy:
+    source: CustomerRole
+    target: Party
+    targetsPerSource: "1..1"
+    sourcesPerTarget: "0..*"
+    inverseName: roles

@@ -20,8 +20,10 @@ Thumbs.db
 !.vscode/extensions.json
 *.iml
 
-# Build output (add language-specific entries once ADR-0005 is decided)
+# Build output (Gradle, ADR-0015)
 build/
+.gradle/
+.kotlin/
 target/
 out/
 dist/

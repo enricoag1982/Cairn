@@ -5,9 +5,10 @@ Keep it short and link rather than copy. Every line should prevent a real mistak
 
 ## Project overview
 
-<!-- Replace this paragraph: what the product is, who it is for, the one or two things that make it hard. -->
-A long-lived project run with spec-driven development. Behavior is specified in OpenSpec and decisions are recorded as ADRs.
-**Status:** no implementation yet. The implementation language is **not decided** ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md), Java is the leading candidate).
+Cairn is a system of record for enterprise data. People and AI agents define typed entities and relationships, with inheritance, in schema documents; custom validation is written in Java. An engine embedded in the application's JVM stores them with history on two time axes (effective time and transaction time), commits consistent transactions, and answers traversals and aggregations through an API that hides the storage implementation (in memory, or a key-value store on disk).
+What makes it hard: identical behavior across storage implementations, integrity rules that must hold over whole timelines, and aggregations over a key-value store.
+Run with spec-driven development: behavior is specified in OpenSpec and decisions are recorded as ADRs.
+**Status:** the schema API is built in `cairn-api` and `cairn-core` (capabilities `type-model` and `schema-evolution`), with schema documents in `cairn-documents`, and an in-memory store for entities and relationships with history on two time axes that runs Java rules at commit, and again when what they read changes (capabilities `transactions`, `entity-versions`, `views`, `entity-rules` and `relationships`); transaction payloads and JSON results in `cairn-documents` (`json-payloads`); agent tools over the Model Context Protocol, with an approval policy and a server, in `cairn-agent-tools` (`agent-tools`); Java types generated from schema documents by `cairn-codegen` and a Gradle plugin in `cairn-gradle-plugin` (`java-types`); durable stores kept in a directory through a commit log and snapshot files (`durability`); queries with aggregation, in Java, with generated types and as JSON (`queries`); and purges for legal erasure (`purge`). A key-value store is not built. Java 25 ([ADR-0005](docs/decisions/0005-choose-primary-implementation-language.md)), built with Gradle ([ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). The core design is in accepted ADRs 0007 to 0013 and 0017 to 0025, explored in the [API research note](docs/research/2026-10-12-graph-system-of-record-api.md) and the [AI-native research note](docs/research/2026-10-13-ai-native-schema-and-rules.md). Spec scenarios use the [reference domain](docs/reference/reference-domain.md); the [HR domain](docs/reference/hr-domain.md) tests the platform end to end.
 
 ## Sources of truth
 
@@ -36,7 +37,13 @@ Documentation and spec tooling (Node.js 20.19 or later):
 - `npx openspec list [--specs]`, `npx openspec show <id>`, `npx openspec validate <id> --strict`, `npx openspec archive <id> -y`
 - The `/opsx:*` commands call `openspec` directly. If it is not on `PATH`, run the same command with `npx openspec`.
 
-Application build and test: **none yet**. Replace this line with the exact commands once ADR-0005 is accepted.
+Application build and test (Gradle, [ADR-0015](docs/decisions/0015-build-the-java-code-with-gradle.md)). Needs a local JDK 25, which Gradle finds as a toolchain; nothing is downloaded automatically:
+
+- `./gradlew build`: compile (lint warnings are errors), run the tests, and build Javadoc (warnings are errors)
+- If Maven Central rate-limits downloads (HTTP 429), rerun with `--max-workers=1`
+- `./gradlew :cairn-core:test --tests '<TestClass>'`: run one test class
+- `./gradlew :cairn-agent-tools:installDist`: build the agent server; see the [guide](docs/guides/serve-a-store-to-ai-agents.md)
+- Shared build configuration lives only in the convention plugins in `build-logic/`; versions live in `gradle/libs.versions.toml`. Module build files stay declarative.
 
 ## Workflow
 
@@ -44,7 +51,7 @@ Application build and test: **none yet**. Replace this line with the exact comma
 2. **Costly-to-reverse decision:** `npm run adr:new -- "Title"` and link it from the change's `design.md`. See the `record-decision` skill.
 3. **Implement:** `/opsx:apply`, and tick `tasks.md` as you go. If the spec turns out to be wrong, fix the delta spec first.
 4. **Document:** update affected docs in the same change and bump `last-reviewed`. See the `maintain-docs` skill.
-5. **Finish:** `npm run check`, then `/opsx:archive` so the specs reflect the new behavior.
+5. **Finish:** `npm run check` and `./gradlew build`, then `/opsx:archive` so the specs reflect the new behavior.
 
 Bug fixes that restore specified behavior and pure refactors need no spec change. Full details: [development workflow](docs/process/development-workflow.md).
 
@@ -59,7 +66,7 @@ Bug fixes that restore specified behavior and pure refactors need no spec change
 
 ### Ask first
 
-- Adding dependencies, build files, source trees or CI jobs. The stack is undecided (ADR-0005).
+- Adding dependencies, subprojects, source trees or CI jobs, or build logic outside `build-logic/` (ADR-0015).
 - Anything that contradicts an accepted ADR. Propose a superseding ADR instead of working around it.
 - Changing `AGENTS.md` boundaries, `.claude/settings.json`, `openspec/config.yaml` or CI workflows.
 - Deleting or renaming specs, ADRs or docs.
@@ -77,9 +84,16 @@ Bug fixes that restore specified behavior and pure refactors need no spec change
 AGENTS.md, CLAUDE.md     agent guidance (this file is canonical)
 openspec/                specs (current behavior) and changes (proposals + archive); rules in openspec/CLAUDE.md
 docs/                    decisions, architecture, guides, reference, process, research, templates; rules in docs/CLAUDE.md
-.claude/                 Claude Code: skills, /opsx commands (generated), docs-reviewer subagent, settings
+.claude/                 Claude Code: skills, /opsx commands (generated), docs-reviewer and implementer subagents, settings
 .github/                 PR/issue templates, CI
 scripts/                 docs.mjs (checks, ADRs, decision log); openspec-update.mjs (agents:update)
+cairn-api/, cairn-core/  Java modules: public API, and the engine
+cairn-documents/         Java module: schema documents, transaction payloads and queries (YAML 1.2, JSON), JSON results, JSON Schemas
+cairn-agent-tools/       agent tools over MCP, approval policy and server (class path, no module-info)
+cairn-codegen/           Java module: generator of Java types from schema documents, with a command line
+cairn-gradle-plugin/     Gradle plugin that runs the generator (Java 17, no module-info)
+cairn-example-hr/        end-to-end example and test: an HR system on Cairn's public API (docs/reference/hr-domain.md)
+build-logic/, gradle/    Gradle convention plugins, version catalog and wrapper
 ```
 
 ## Maintaining this guidance
