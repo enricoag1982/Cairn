@@ -67,7 +67,7 @@ All employments are permanent, 40 hours a week, effective from 1 January 2026. L
 
 ## Stories
 
-Dates are in 2026. Each story has a test whose display name starts with its ID; the tests replay the stories in the order of their recording dates, and the queries HR-9 and HR-10 before HR-4.
+Dates are in 2026. Each story has a test whose display name starts with its ID; the tests replay the stories in the order of their recording dates, and the queries HR-9 and HR-10 before HR-4; HR-14 and HR-15 run on stores of their own.
 
 | ID | Story | Exercises |
 | --- | --- | --- |

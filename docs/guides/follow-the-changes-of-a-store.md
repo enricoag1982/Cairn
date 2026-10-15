@@ -20,7 +20,7 @@ Every basis of a store has one change, in basis order, without gaps:
 | `PurgeChange` | A purge ran | Its `PurgeRecord` |
 
 Each `Changed` entry of a transaction names an entity or relationship by its ID, with its type, whether the transaction created it, and the effective periods in which its versions differ from before the transaction, being absent included.
-A correction of A-1's balance from 15 March changes A-1 from 15 March on, not before. A write that repeats the same values still records a new version, so it is a change.
+A correction of A-1's balance from 15 March changes A-1 from 15 March on, not before. A write that leaves the values as they were records no new version, so it is no change; a transaction that changes nothing still has its change, with its record and nothing in `changed`.
 Dry runs and rejected transactions leave no change.
 
 A change carries no values. Read them through views at the change's basis, and at the basis before for what was there:

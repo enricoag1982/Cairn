@@ -44,7 +44,7 @@ Durable and RocksDB stores refuse both once closed, as they refuse every other c
   - whether the transaction created it;
   - the changed periods, as instants, with a mark for an open end.
 
-`Ledger.add` writes one such key whenever the timeline before and after differ, which is exactly when it writes anything today. It computes the periods by sweeping the boundaries of both timelines. At each instant, the version is the segment that covers it, or nothing; segments are compared with `equals`, which includes the recorded basis and transaction time. Neighboring changed intervals merge.
+`Ledger.add` writes one such key whenever the timeline before and after differ, which is exactly when it writes anything today. It computes the periods by sweeping the boundaries of both timelines. At each instant, the version is the segment that covers it, or nothing; the versions of the covering segments are compared: their values, transaction time and recorded basis, not their bounds, as `Timeline.of` merges them. Neighboring changed intervals merge. A write that leaves a period's values as they were records no new version there (`Timeline.update`), so it changes nothing there; a transaction that changes nothing has a change with an empty `changed`.
 
 A read scans the range of the bases it needs. It resolves type IDs to names through the schema index at each basis, and sorts each basis's entries by ID text.
 
@@ -74,6 +74,8 @@ The thread works in a loop:
 2. When it has demand but no new change, it waits until the store publishes a basis.
 
 The store signals publications without blocking its writer: a counter that the thread rechecks, and an unpark of each waiting subscription.
+
+The store signals publications through a hook of the commit sequence, run under the writer lock after each publication, which only bumps the counter and unparks. A failed read ends the subscription with `onError`. Closing waits for reads in progress, never for `onNext`, so that no read reaches a closed RocksDB database.
 
 The thread ends when one of these happens:
 

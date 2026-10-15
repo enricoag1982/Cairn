@@ -22,7 +22,7 @@ THE SYSTEM SHALL give, for every basis of a store, one change, in basis order, w
 
 ### Requirement: What a transaction changed
 
-THE SYSTEM SHALL list, in the change of a data transaction, every entity and relationship whose timeline at the transaction's basis differs from its timeline at the basis before, ordered by ID, each with its ID, the name of its type at that basis, whether the transaction created it, and the effective periods in which a view at the basis and a view at the basis before read different versions of it, being absent included. A version recorded again with the same values SHALL count as different. The periods SHALL be ordered and SHALL neither overlap nor touch. What composition cascades end SHALL be listed like what the transaction names.
+THE SYSTEM SHALL list, in the change of a data transaction, every entity and relationship whose timeline at the transaction's basis differs from its timeline at the basis before, ordered by ID, each with its ID, the name of its type at that basis, whether the transaction created it, and the effective periods in which a view at the basis and a view at the basis before read different versions of it, being absent included. A write that leaves the values of a period as they were records no new version there, so it SHALL NOT make that period changed; a transaction that changes nothing SHALL keep its change, with its transaction record and nothing listed. The periods SHALL be ordered and SHALL neither overlap nor touch. What composition cascades end SHALL be listed like what the transaction names.
 
 #### Scenario: Entities created
 
@@ -39,10 +39,10 @@ THE SYSTEM SHALL list, in the change of a data transaction, every entity and rel
 - **WHEN** the transactions of RD-4 are committed
 - **THEN** the change lists Beta's customer role and its PlayedBy relationship, both created, each changed from 1 March until 1 October
 
-#### Scenario: The same values recorded again
+#### Scenario: A transaction that changes nothing
 
 - **WHEN** the transactions of RD-1 are committed, and a transaction replaces ACME's values from 1 January with the same values
-- **THEN** its change lists ACME, not created, changed from 1 January with no end
+- **THEN** its change has its transaction record and lists nothing
 
 #### Scenario: Ended by a cascade
 
