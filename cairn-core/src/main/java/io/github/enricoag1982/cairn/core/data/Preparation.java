@@ -26,8 +26,9 @@ import java.util.Set;
  *
  * <p>A Preparation only orders the work; each part does one kind of it, on the {@link Workspace} that they share:
  * {@link Creations} and {@link Amendments} apply the writes, {@link Cascades} ends the compositions of what the writes
- * end, their targets and the other relationships of those, {@link Validation} and {@link Integrity} check the state
- * that results, and {@link RuleStage} runs the rules. The {@link ProblemLog} keeps what they find.
+ * end, their targets and the other relationships of those, {@link DerivationRunner} computes derived values,
+ * {@link Validation} and {@link Integrity} check the state that results, and {@link RuleStage} runs the rules. The
+ * {@link ProblemLog} keeps what they find.
  *
  * <p>Writes are applied in order. A write with problems is applied as far as it can be, so that the problems of the
  * resulting state are found too: every problem of the transaction is reported, not only the first. When the writes are
@@ -64,6 +65,7 @@ final class Preparation {
     private final Creations creations;
     private final Amendments amendments;
     private final Cascades cascades;
+    private final DerivationRunner derivations;
     private final Validation validation;
     private final RuleStage ruleStage;
     private final Rechecks rechecks;
@@ -116,6 +118,7 @@ final class Preparation {
         this.creations = new Creations(workspace, writeChecks, commit);
         this.amendments = new Amendments(workspace, writeChecks, commit);
         this.cascades = new Cascades(workspace);
+        this.derivations = new DerivationRunner(workspace);
         this.validation = new Validation(workspace, checks);
         this.ruleStage = new RuleStage(workspace, commit.basis(), rules, sequence, readStage);
         this.rechecks = new Rechecks(workspace, ruleStage, reads, readStage);
@@ -155,7 +158,9 @@ final class Preparation {
 
     /**
      * Checks the state that the writes leave every entity and relationship in, in the order in which the writes first
-     * touched them: its values, if a write set them, then its integrity.
+     * touched them: its values, if a write set them, then its integrity. The derived values of what a write changed are
+     * computed first (design D4 of {@code add-derived-attributes}), after all writes and cascades, so that constraints,
+     * checks and rules see them.
      */
     private void checkSubjects() {
         Integrity integrity = new Integrity(workspace.index(), workspace.working(), workspace.ledger(), Set.of());
@@ -164,6 +169,7 @@ final class Preparation {
                 continue;
             }
             if (subject.written) {
+                derivations.run(subject);
                 validation.validate(subject);
             }
             problems.addAll(subject.isRelationship() ? integrity.relationshipProblems(subject)

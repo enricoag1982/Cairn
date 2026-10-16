@@ -116,7 +116,7 @@ class CheckDefinitionsTest {
         assertThat(ProblemCode.INVALID_CHECK_NAME.explanation()).contains("lowercase");
         assertThat(ProblemCode.DUPLICATE_CHECK.explanation()).contains("subtypes");
         assertThat(ProblemCode.INVALID_CHECK.explanation()).contains("self").contains("4,000").contains("boolean");
-        assertThat(ProblemCode.CHECKS_UNAVAILABLE.explanation()).contains("cairn-cel");
+        assertThat(ProblemCode.EXPRESSIONS_UNAVAILABLE.explanation()).contains("cairn-cel");
         assertThat(ProblemCode.CHECK_VIOLATED.explanation()).contains("message");
         assertThat(ProblemCode.CHECK_FAILED.explanation()).contains("has(");
     }

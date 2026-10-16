@@ -20,7 +20,7 @@ Person <--EmploymentOf-- Employment --Fills------> Position --BelongsTo--> OrgUn
 
 | Entity type | Attributes |
 | --- | --- |
-| `Person` | `givenName` and `familyName` (required), `birthDate` |
+| `Person` | `givenName` and `familyName` (required), `birthDate`, `fullName` (required, derived from `self.givenName + ' ' + self.familyName`) |
 | `LegalEntity` | `name` (required, unique), `country` (required, two capital letters) |
 | `Location` | `name` (required, unique), `city`, `country` (required) |
 | `Job` | `code` (required, unique), `title` (required) |
@@ -95,7 +95,7 @@ Dates are in 2026. Each story has a test whose display name starts with its ID; 
 ## Gaps
 
 What the example could not express directly, found while building it. Each is a candidate for a later change.
-The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request (see the `relationships` spec). And the fourth: approvers no longer poll, because a notifier follows the change feed (HR-15, [ADR-0029](../decisions/0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md)). And the fifth: "the last day is not before the first day" is a check in CEL in the schema document, not a Java rule.
+The first gap it found is closed: a rule ran only when a type that names it was written, so ending Cleo's `ManagedBy` committed; now rules run again when what they read changes ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)), as HR-5 shows. So is the second: entities can be named and found by unique keys ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)), as the agent of HR-13 does. And the third: a composition cascade ends the other relationships of the targets it ends, so Gus leaving (HR-11) ends the decision of his sick leave with the request (see the `relationships` spec). And the fourth: approvers no longer poll, because a notifier follows the change feed (HR-15, [ADR-0029](../decisions/0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md)). And the fifth: "the last day is not before the first day" is a check in CEL in the schema document, not a Java rule. And the sixth: a person's `fullName` is derived from the given and family names in the schema document, not composed by every caller.
 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |
@@ -107,5 +107,5 @@ The first gap it found is closed: a rule ran only when a type that names it was 
 | A query starts from every entity of its start type | `vacation-within-entitlement` queries from `Employment`, so it reads every employment at the instants it checks, and any change to an employment there, such as a pay change, checks every approved vacation again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)) | Queries that start from given entities |
 | Traversals need a maximum depth | Queries cap the unit hierarchy at 20 levels, so a deeper one would be cut off without notice; rules pass `Integer.MAX_VALUE` and a condition that always holds to `View.traverse` | Traversals to the end, and a `traverse` without a condition |
 | Relationships that record past facts end with their ends | The generated company never ends a manager's employment, because that would end every `DecidedBy` pointing to it, and past decisions would drop out of current views | Relationships that may outlive an end that they only record, such as who decided |
-| Derived values | A person's full name is composed by the caller; a leave's `days` is entered, not derived from its dates | Derived attributes, on the [roadmap](../research/2026-10-13-ai-native-schema-and-rules.md#conclusion) |
+| Derived values from other data | A leave's `days` is entered, not derived from its dates, because working days need a calendar that a version's own values do not hold | Derived values that read other data, or functions of Cairn's own in expressions ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)) |
 | Access | Every reader, agents included, reads pay | Field-level access control, which no roadmap names yet |

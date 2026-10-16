@@ -21,6 +21,8 @@ import java.util.OptionalInt;
  * @param pattern       the I-Regexp (RFC 9485) a string value must match as a whole, if any
  * @param minLength     the smallest length of a string value in Unicode code points, if any
  * @param maxLength     the largest length of a string value in Unicode code points, if any
+ * @param derived       the expression that computes the attribute's value at commit, if the attribute is derived
+ *                      (capability {@code derived-attributes}, ADR-0031); a write cannot set a derived attribute
  * @param declaredBy    the name of the entity type, trait or relationship type that declares the attribute
  */
 public record Attribute(
@@ -38,6 +40,7 @@ public record Attribute(
         Optional<String> pattern,
         OptionalInt minLength,
         OptionalInt maxLength,
+        Optional<String> derived,
         String declaredBy) {
 
     /**

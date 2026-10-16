@@ -111,6 +111,10 @@ class DocumentReaderTest {
                         range: { atLeast: 0, lessThan: 150 }
                         examples: [42]
                       born: { type: date, examples: ["1990-04-01"] }
+                      contact:
+                        type: string
+                        required: true
+                        derived: "has(self.email) ? self.email : 'none'"
                       weight: { type: decimal, range: { greaterThan: 0, atMost: 700.5 } }
                 relationshipTypes:
                   Knows:
@@ -159,6 +163,8 @@ class DocumentReaderTest {
                                 Bound.inclusive(Value.of(0)), Bound.exclusive(Value.of(150))))
                                 .examples(Value.of(42)).build(),
                         AttributeDefinition.builder("born", DATE).examples(Value.of(LocalDate.of(1990, 4, 1))).build(),
+                        AttributeDefinition.builder("contact", STRING).required()
+                                .derived("has(self.email) ? self.email : 'none'").build(),
                         AttributeDefinition.builder("weight", DECIMAL).range(Range.between(
                                 Bound.exclusive(Value.of(new BigDecimal("0"))),
                                 Bound.inclusive(Value.of(new BigDecimal("700.5"))))).build()),

@@ -230,7 +230,14 @@ final class GeneratedDefinitions {
                 allowedValues,
                 string && chance(0.3) ? Optional.of(pick(PATTERNS)) : Optional.empty(),
                 string && chance(0.3) ? OptionalInt.of(between(0, 50)) : OptionalInt.empty(),
-                string && chance(0.3) ? OptionalInt.of(between(0, 500)) : OptionalInt.empty());
+                string && chance(0.3) ? OptionalInt.of(between(0, 500)) : OptionalInt.empty(),
+                chance(0.25) ? Optional.of(expression()) : Optional.empty());
+    }
+
+    /** The expression of a derived attribute or a check: any text but a blank one, as a document keeps it. */
+    private String expression() {
+        String expression = text();
+        return expression.isBlank() ? "x" : expression;
     }
 
     /** A range whose bounds have the attribute's value type; each bound is optional, so a range may have none. */
@@ -399,7 +406,7 @@ final class GeneratedDefinitions {
                         range.upper().map(bound -> new Bound(widened(bound.value(), type), bound.inclusive())))),
                 attribute.aliases(), attribute.deprecated(), attribute.description(),
                 attribute.examples().stream().map(example -> widened(example, type)).toList(), attribute.allowedValues(),
-                attribute.pattern(), attribute.minLength(), attribute.maxLength());
+                attribute.pattern(), attribute.minLength(), attribute.maxLength(), attribute.derived());
     }
 
     /** A number in the value type of its attribute: an int becomes a long or a decimal, and a long a decimal. */

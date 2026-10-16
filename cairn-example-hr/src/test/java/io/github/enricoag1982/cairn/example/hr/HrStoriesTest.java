@@ -15,6 +15,7 @@ import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.DurableStore;
+import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
@@ -149,7 +150,7 @@ class HrStoriesTest {
     /** What a state is called in a story: the code, number or name that its page uses. */
     private static String label(EntityState state) {
         return switch (state.entityType()) {
-            case Person.TYPE -> Person.from(state).givenName() + " " + Person.from(state).familyName();
+            case Person.TYPE -> Person.from(state).fullName();
             case LegalEntity.TYPE -> LegalEntity.from(state).name();
             case Location.TYPE -> Location.from(state).name();
             case Job.TYPE -> Job.from(state).code();
@@ -274,6 +275,18 @@ class HrStoriesTest {
             assertThat(employment.weeklyHours()).contains(40);
             assertThat(employment.currency()).isEqualTo("EUR");
         });
+
+        // The full name of a person is derived (ADR-0031): the store composes it when it commits the person, and no
+        // write sets it.
+        assertThat(january.entities("Person")).extracting(state -> Person.from(state).fullName())
+                .containsExactlyInAnyOrder("Ana Berg", "Ben Ito", "Cleo Rossi", "Dev Patel", "Eli Novak", "Fay Moreau",
+                        "Gus Lind");
+        EntityState dev = january.entities("Person").stream()
+                .filter(state -> Person.from(state).givenName().equals("Dev")).findFirst().orElseThrow();
+        assertThat(Person.from(dev).fullName()).isEqualTo("Dev Patel");
+        assertThat(problemCodes(Transaction.by(Brightwater.HR_ADMIN)
+                .patch(dev.id(), EffectivePeriod.from(JANUARY_1), Map.of("fullName", Value.of("Devi Patel"))).build()))
+                .as("a write cannot set the full name").containsExactly(ProblemCode.DERIVED_ATTRIBUTE_WRITTEN);
 
         // The model's constraints and multiplicities, tried with dry runs that record nothing.
         assertThat(problemCodes(Transaction.by(Brightwater.HR_ADMIN)
@@ -644,7 +657,8 @@ class HrStoriesTest {
         assertThat(tools.call("cairn_approval_status", arguments("requestId", requestId)))
                 .contains("\"status\":\"approved\"").contains("\"decidedBy\":\"hr-director\"");
         String hana = findHana(tools);
-        assertThat(hana).contains("\"givenName\":\"Hana\"").contains("\"familyName\":\"Kim\"");
+        assertThat(hana).contains("\"givenName\":\"Hana\"").contains("\"familyName\":\"Kim\"")
+                .contains("\"fullName\":\"Hana Kim\"");
         View august1 = view(on(8, 1));
         EntityState person = august1.entities("Person").stream().filter(state -> Person.from(state).givenName()
                 .equals("Hana")).findFirst().orElseThrow();

@@ -5,9 +5,9 @@ import io.github.enricoag1982.cairn.schema.TypeId;
 import java.util.List;
 
 /**
- * A {@link Schema} that keeps the checks of its types compiled (design D2 of {@code add-cel-expressions}). The schemas
- * of the registries of this module are checked schemas; a store runs the checks of the types it writes through this
- * interface.
+ * A {@link Schema} that keeps the checks and the derived attributes of its types compiled (design D2 of
+ * {@code add-cel-expressions} and D3 of {@code add-derived-attributes}). The schemas of the registries of this module
+ * are checked schemas; a store runs the checks and the derivations of the types it writes through this interface.
  */
 public interface CheckedSchema extends Schema {
 
@@ -18,4 +18,12 @@ public interface CheckedSchema extends Schema {
      * @return the checks, none if the type has none or the schema has no such type
      */
     List<AppliedCheck> checks(TypeId type);
+
+    /**
+     * The derived attributes of an entity type or relationship type, compiled, in the order of the type's attributes.
+     *
+     * @param type the identifier of the type
+     * @return the derivations, none if the type has no derived attribute or the schema has no such type
+     */
+    List<AppliedDerivation> derivations(TypeId type);
 }

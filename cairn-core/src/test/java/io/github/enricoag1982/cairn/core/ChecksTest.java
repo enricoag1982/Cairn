@@ -162,7 +162,7 @@ class ChecksTest {
         SchemaRegistry defaults = SchemaRegistries.inMemory();
 
         assertThat(only(without.validate(ReferenceModel.origin("1.0.0"), accountChecked(NON_NEGATIVE))).code())
-                .isEqualTo(ProblemCode.CHECKS_UNAVAILABLE);
+                .isEqualTo(ProblemCode.EXPRESSIONS_UNAVAILABLE);
         assertThat(found.validate(ReferenceModel.origin("1.0.0"), accountChecked(NON_NEGATIVE))).isEmpty();
         assertThat(SchemaRegistries.inMemory(new TestClock()).validate(ReferenceModel.origin("1.0.0"),
                 withCheck(SchemaDefinition.builder().entityType("Account", e -> e.attribute("balance",

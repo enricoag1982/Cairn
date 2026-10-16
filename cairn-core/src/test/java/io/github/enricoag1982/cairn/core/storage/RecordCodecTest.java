@@ -105,9 +105,12 @@ class RecordCodecTest {
 
     /** An attribute with every field set, of a value type with a range that fits it. */
     private static AttributeDefinition attribute(String name, ValueType type, Range range, List<Value> examples) {
+        // Some are derived and some are not, with an expression that has quotes, a colon and non-ASCII text.
+        Optional<String> derived = name.length() % 2 == 0 ? Optional.of("has(self.text) ? self.text : 'ünïcode 😀'")
+                : Optional.empty();
         return new AttributeDefinition(name, type, true, true, Optional.ofNullable(range), List.of("old" + name, "older"),
                 true, Optional.of("The " + name + " with ünïcode and 😀."), examples, List.of("A", "B"),
-                Optional.of("[A-Z]+"), OptionalInt.of(1), OptionalInt.of(12));
+                Optional.of("[A-Z]+"), OptionalInt.of(1), OptionalInt.of(12), derived);
     }
 
     private static SchemaDefinition everythingSet() {
@@ -159,6 +162,123 @@ class RecordCodecTest {
 
         assertThat(read).isEqualTo(record);
         assertThat(read.definition()).isEqualTo(definition);
+    }
+
+    // ------------------------------------------------------------------ derived attributes (D6)
+
+    /** A definition with one derived attribute and no check. */
+    private static SchemaDefinition derivedWithoutChecks() {
+        AttributeDefinition plain = AttributeDefinition.builder("givenName", ValueType.STRING).required().build();
+        AttributeDefinition derived = AttributeDefinition.builder("shout", ValueType.STRING)
+                .derived("self.givenName + '!'").build();
+        return new SchemaDefinition(List.of(new EntityTypeDefinition("Person", false, Optional.empty(), List.of(),
+                List.of(plain, derived), List.of(), false, Optional.empty(), List.of())), List.of(), List.of());
+    }
+
+    private static List<AttributeDefinition> plain(List<AttributeDefinition> attributes) {
+        return attributes.stream().map(attribute -> new AttributeDefinition(attribute.name(), attribute.valueType(),
+                attribute.required(), attribute.unique(), attribute.range(), attribute.aliases(), attribute.deprecated(),
+                attribute.description(), attribute.examples(), attribute.allowedValues(), attribute.pattern(),
+                attribute.minLength(), attribute.maxLength())).toList();
+    }
+
+    /** The definition with every derived attribute made plain. */
+    private static SchemaDefinition withoutDerived(SchemaDefinition definition) {
+        return new SchemaDefinition(
+                definition.entityTypes().stream().map(type -> new EntityTypeDefinition(type.name(), type.isAbstract(),
+                        type.supertype(), type.traits(), plain(type.attributes()), type.aliases(), type.deprecated(),
+                        type.description(), type.rules(), type.checks())).toList(),
+                definition.traits().stream().map(trait -> new TraitDefinition(trait.name(), plain(trait.attributes()),
+                        trait.aliases(), trait.deprecated(), trait.description())).toList(),
+                definition.relationshipTypes().stream().map(type -> new RelationshipTypeDefinition(type.name(),
+                        type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(),
+                        type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(),
+                        plain(type.attributes()), type.aliases(), type.deprecated(), type.description(), type.rules(),
+                        type.checks())).toList());
+    }
+
+    private static byte[] payload(LogRecord record) {
+        byte[] frame = RecordCodec.encode(record);
+        return Arrays.copyOfRange(frame, Encoder.FRAME_HEADER, frame.length);
+    }
+
+    @Test
+    void derivedAttributesWithoutChecksReadBackEqual() {
+        SchemaRecord record = schemaRecord(derivedWithoutChecks());
+
+        SchemaRecord read = (SchemaRecord) roundTrip(record);
+
+        assertThat(read).isEqualTo(record);
+        assertThat(read.definition().entityTypes().getFirst().attributes().get(1).derived())
+                .hasValue("self.givenName + '!'");
+        assertThat(read.definition().entityTypes().getFirst().attributes().get(0).derived()).isEmpty();
+    }
+
+    @Test
+    void theDerivationsFollowTheChecksAsASectionOfTheirOwnThatIsLeftOutWhenNoAttributeIsDerived() {
+        SchemaDefinition definition = derivedWithoutChecks();
+        byte[] without = payload(schemaRecord(withoutDerived(definition)));
+        byte[] with = payload(schemaRecord(definition));
+
+        Encoder section = Encoder.plain();
+        section.writeInt(0); // The checks of the entity types: none, but present, so that the sections are told apart.
+        section.writeInt(0); // The checks of the relationship types.
+        section.writeInt(1);
+        section.writeText("Person");
+        section.writeText("shout");
+        section.writeText("self.givenName + '!'");
+        byte[] expected = section.toByteArray();
+
+        assertThat(Arrays.copyOf(with, without.length)).as("the record up to the sections").isEqualTo(without);
+        assertThat(Arrays.copyOfRange(with, without.length, with.length)).as("the sections").isEqualTo(expected);
+    }
+
+    @Test
+    void aRecordWithoutDerivedAttributesIsTheSameAsItWasBeforeTheyExisted() {
+        // Checks follow the identifiers, and nothing follows the checks, as in a record written before derived attributes.
+        SchemaRecord record = schemaRecord(withoutDerived(everythingSet()));
+        byte[] payload = payload(record);
+
+        assertThat(RecordCodec.decode(RecordCodec.VERSION, payload)).isEqualTo(record);
+        Encoder checks = Encoder.plain();
+        DefinitionCodec.writeChecks(checks, record.definition());
+        byte[] tail = checks.toByteArray();
+        assertThat(Arrays.copyOfRange(payload, payload.length - tail.length, payload.length)).isEqualTo(tail);
+    }
+
+    @Test
+    void derivedAttributesAndChecksTogetherReadBackEqual() {
+        SchemaRecord record = schemaRecord(everythingSet());
+
+        assertThat(roundTrip(record)).isEqualTo(record);
+    }
+
+    @Test
+    void aDerivedAttributeThatTheDefinitionDoesNotHaveIsCorrupt() {
+        Encoder section = Encoder.plain();
+        section.writeInt(1);
+        section.writeText("Person");
+        section.writeText("nothing");
+        section.writeText("self.givenName");
+        SchemaDefinition definition = withoutDerived(derivedWithoutChecks());
+
+        assertThatThrownBy(() -> DefinitionCodec.readDerivations(new Decoder(section.toByteArray()), definition))
+                .isInstanceOf(CorruptRecordException.class).hasMessageContaining("Person.nothing");
+    }
+
+    @Test
+    void aDerivedAttributeRecordedTwiceIsCorrupt() {
+        Encoder section = Encoder.plain();
+        section.writeInt(2);
+        for (int i = 0; i < 2; i++) {
+            section.writeText("Person");
+            section.writeText("shout");
+            section.writeText("self.givenName");
+        }
+
+        assertThatThrownBy(() -> DefinitionCodec.readDerivations(new Decoder(section.toByteArray()),
+                withoutDerived(derivedWithoutChecks()))).isInstanceOf(CorruptRecordException.class)
+                .hasMessageContaining("twice");
     }
 
     @Test

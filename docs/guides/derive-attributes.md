@@ -41,13 +41,13 @@ The result must fit the attribute's type:
 | `instant` | timestamp |
 | `date` | timestamp at 00:00 UTC |
 
-An optional derived attribute has no value when the expression gives `null`, for example `has(self.birthDate) ? self.birthDate.getFullYear() : null`.
+An optional derived attribute has no value when the expression gives `null`, for example `has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null`. CEL's checker accepts `null` beside an integer, a string, a boolean or a double only when that branch is wrapped in `dyn(...)`; timestamps need no wrapping.
 
 ## When values are computed
 
 At commit, for every segment of a timeline that the transaction writes, before constraints, checks and rules, which all see the derived value. The value is stored with the version: views, queries, unique constraints and the change feed read it like any other value, and a view as of an older basis reads the value derived then.
 
-- A write that sets a derived attribute is rejected with `DERIVED_ATTRIBUTE_WRITTEN`. Creates need not give derived attributes, even required ones. Generated payload schemas leave them out of writes, and generated Java builders have no setter for them.
+- A write that sets or clears a derived attribute is rejected with `DERIVED_ATTRIBUTE_WRITTEN`. Creates need not give derived attributes, even required ones. Generated payload schemas leave them out of writes, and generated Java builders have no setter for them.
 - A result that does not fit, an evaluation error, or no value for a required derived attribute rejects the transaction with `DERIVATION_FAILED`.
 - An expression that does not compile, reads a derived or unknown attribute, or gives the wrong type is a problem `INVALID_DERIVATION` at registration.
 

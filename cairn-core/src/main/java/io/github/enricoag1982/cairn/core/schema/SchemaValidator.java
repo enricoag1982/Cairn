@@ -1,6 +1,6 @@
 package io.github.enricoag1982.cairn.core.schema;
 
-import io.github.enricoag1982.cairn.expressions.CheckCompilationException;
+import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.Check;
@@ -26,14 +26,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
  * Validates a complete schema definition and reports every problem (capability {@code type-model}, design D3).
  *
- * <p>Phases: names and syntax, references, hierarchies, attributes, relationship rules, rule references, checks. A later
- * phase skips only the elements an earlier phase found broken, so one mistake does not cause a cascade of follow-up
- * problems.
+ * <p>Phases: names and syntax, references, hierarchies, attributes, relationship rules, rule references, checks, derived
+ * attributes. A later phase skips only the elements an earlier phase found broken, so one mistake does not cause a
+ * cascade of follow-up problems.
  */
 final class SchemaValidator {
 
@@ -50,6 +51,13 @@ final class SchemaValidator {
     private record Declared(String declarer, String declarerLabel, AttributeDefinition attribute) {
     }
 
+    /** A derived attribute with the element that declares it. */
+    private record DerivedAttribute(String declarer, String declarerKey, AttributeDefinition attribute) {
+        String path() {
+            return Names.path(declarer, attribute.name());
+        }
+    }
+
     /** The string constraints of an attribute that can be checked; a constraint that is itself invalid is left out. */
     private record TextConstraints(
             List<String> allowedValues, Optional<IRegexp> pattern, OptionalInt minLength, OptionalInt maxLength) {
@@ -59,8 +67,8 @@ final class SchemaValidator {
 
     private final SchemaDefinition definition;
     private final List<RuleDescriptor> availableRules;
-    private final CheckCompiler checkCompiler;
-    /** The keys of the names of the types whose checks need a language, or null if all of them do. */
+    private final ExpressionCompiler expressionCompiler;
+    /** The keys of the names of the types whose checks and derived attributes need a language, or null if all of them do. */
     private final Set<String> checkedTypes;
     private final List<Problem> problems = new ArrayList<>();
     private final Map<String, TypeRef> types = new HashMap<>();
@@ -73,10 +81,10 @@ final class SchemaValidator {
     private final Set<String> reportedConflicts = new HashSet<>();
 
     private SchemaValidator(SchemaDefinition definition, List<RuleDescriptor> availableRules,
-            CheckCompiler checkCompiler, Set<String> checkedTypes) {
+            ExpressionCompiler expressionCompiler, Set<String> checkedTypes) {
         this.definition = definition;
         this.availableRules = availableRules;
-        this.checkCompiler = checkCompiler;
+        this.expressionCompiler = expressionCompiler;
         this.checkedTypes = checkedTypes;
     }
 
@@ -88,7 +96,7 @@ final class SchemaValidator {
      * @return every problem found
      */
     static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules) {
-        return validate(definition, availableRules, CheckCompiler.NONE);
+        return validate(definition, availableRules, ExpressionCompiler.NONE);
     }
 
     /**
@@ -96,12 +104,12 @@ final class SchemaValidator {
      *
      * @param definition     the types of every origin
      * @param availableRules the rules that types may name
-     * @param checkCompiler  compiles the expressions of checks; without an expression language, a check is a problem
+     * @param expressionCompiler  compiles the expressions of checks; without an expression language, a check is a problem
      * @return every problem found
      */
     static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules,
-            CheckCompiler checkCompiler) {
-        return validate(definition, availableRules, checkCompiler, null);
+            ExpressionCompiler expressionCompiler) {
+        return validate(definition, availableRules, expressionCompiler, null);
     }
 
     /**
@@ -111,14 +119,14 @@ final class SchemaValidator {
      *
      * @param definition     the types of every origin
      * @param availableRules the rules that types may name
-     * @param checkCompiler  compiles the expressions of checks
+     * @param expressionCompiler  compiles the expressions of checks
      * @param checkedTypes   the keys of the names of the types whose checks are a problem if there is no expression
      *                       language; {@code null} for every type
      * @return every problem found
      */
     static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules,
-            CheckCompiler checkCompiler, Set<String> checkedTypes) {
-        return new SchemaValidator(definition, availableRules, checkCompiler, checkedTypes).run();
+            ExpressionCompiler expressionCompiler, Set<String> checkedTypes) {
+        return new SchemaValidator(definition, availableRules, expressionCompiler, checkedTypes).run();
     }
 
     private List<Problem> run() {
@@ -130,6 +138,7 @@ final class SchemaValidator {
         checkRelationships();
         checkRules();
         checkChecks();
+        checkDerivations();
         return List.copyOf(problems);
     }
 
@@ -917,9 +926,9 @@ final class SchemaValidator {
                     null));
             return;
         }
-        if (!checkCompiler.available()) {
+        if (!expressionCompiler.available()) {
             if (needsLanguage) {
-                problems.add(Problems.of(ProblemCode.CHECKS_UNAVAILABLE, path, "The check " + check.name() + " of "
+                problems.add(Problems.of(ProblemCode.EXPRESSIONS_UNAVAILABLE, path, "The check " + check.name() + " of "
                         + typeName + " cannot be compiled: this schema registry has no expression language.",
                         "a schema registry with an expression language", "no expression language",
                         "Put the module cairn-cel on the class path, or give the store settings an "
@@ -933,8 +942,8 @@ final class SchemaValidator {
         Map<String, ValueType> types = new LinkedHashMap<>();
         attributes.values().forEach(declared -> types.put(declared.attribute().name(), declared.attribute().valueType()));
         try {
-            checkCompiler.compile(expression, types);
-        } catch (CheckCompilationException e) {
+            expressionCompiler.compile(expression, types);
+        } catch (ExpressionCompilationException e) {
             String position = e.line().isPresent() && e.column().isPresent()
                     ? " at line " + e.line().getAsInt() + ", column " + e.column().getAsInt() : "";
             problems.add(Problems.of(ProblemCode.INVALID_CHECK, path, "The expression of the check " + check.name()
@@ -965,6 +974,168 @@ final class SchemaValidator {
             current = supertypes.get(current);
         }
         return Optional.empty();
+    }
+
+    // ------------------------------------------------------------------ phase 8: derived attributes
+
+    /**
+     * Checks the derived attributes (design D3 of {@code add-derived-attributes}): that each expression is not blank and
+     * not too long, that there is an expression language to compile it, and that it compiles for each concrete type that
+     * has the attribute, against the attributes of that type that are not derived, with a result that can be a value of
+     * the attribute's type. A derived attribute of a trait, or inherited, is compiled for each type that includes or
+     * inherits it, because only a type knows what the expression may read. A problem is located at the attribute of the
+     * element that declares it. The types whose attributes cannot be known, because the hierarchy is broken, are skipped.
+     */
+    private void checkDerivations() {
+        List<DerivedAttribute> declared = new ArrayList<>();
+        definition.traits().forEach(trait -> derivedOf(trait.name(), trait.attributes(), declared));
+        definition.entityTypes().forEach(type -> derivedOf(type.name(), type.attributes(), declared));
+        definition.relationshipTypes().forEach(type -> derivedOf(type.name(), type.attributes(), declared));
+        if (declared.isEmpty()) {
+            return;
+        }
+        Set<DerivedAttribute> usable = new HashSet<>();
+        for (DerivedAttribute derived : declared) {
+            if (expressionIsUsable(derived)) {
+                usable.add(derived);
+            }
+        }
+        if (!expressionCompiler.available() || usable.isEmpty()) {
+            return;
+        }
+        Set<String> reported = new HashSet<>();
+        for (EntityTypeDefinition type : definition.entityTypes()) {
+            String key = Names.key(type.name());
+            if (!type.isAbstract() && !isBroken(key, entitySupertype)) {
+                compileDerivations(type.name(), effective.get(key), usable, reported);
+            }
+        }
+        for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
+            String key = Names.key(type.name());
+            if (!isBroken(key, relationshipSupertype)) {
+                compileDerivations(type.name(), effective.get(key), usable, reported);
+            }
+        }
+    }
+
+    private static void derivedOf(String declarer, List<AttributeDefinition> attributes, List<DerivedAttribute> into) {
+        for (AttributeDefinition attribute : attributes) {
+            if (attribute.derived().isPresent()) {
+                into.add(new DerivedAttribute(declarer, Names.key(declarer), attribute));
+            }
+        }
+    }
+
+    /**
+     * Reports an expression that is blank or too long, or that there is no expression language to compile; tells whether
+     * the expression can be compiled.
+     */
+    private boolean expressionIsUsable(DerivedAttribute derived) {
+        AttributeDefinition attribute = derived.attribute();
+        String expression = attribute.derived().orElseThrow();
+        String what = "the derived attribute " + attribute.name() + " of " + derived.declarer();
+        String form = derivationForm(attribute.valueType());
+        if (expression.isBlank()) {
+            problems.add(Problems.of(ProblemCode.INVALID_DERIVATION, derived.path(), "The expression of " + what
+                    + " is blank.", form, "a blank expression", null));
+            return false;
+        }
+        int length = expression.codePointCount(0, expression.length());
+        if (length > Check.MAXIMUM_EXPRESSION_LENGTH) {
+            problems.add(Problems.of(ProblemCode.INVALID_DERIVATION, derived.path(), "The expression of " + what + " has "
+                    + length + " characters, but at most " + Check.MAXIMUM_EXPRESSION_LENGTH + " are allowed.", form,
+                    length + " characters", null));
+            return false;
+        }
+        if (!expressionCompiler.available()) {
+            if (checkedTypes == null || checkedTypes.contains(derived.declarerKey())) {
+                problems.add(Problems.of(ProblemCode.EXPRESSIONS_UNAVAILABLE, derived.path(), "The expression of " + what
+                        + " cannot be compiled: this schema registry has no expression language.",
+                        "a schema registry with an expression language", "no expression language",
+                        "Put the module cairn-cel on the class path, or give the store settings an "
+                        + "expression language, or remove the derived attributes from the definition."));
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Compiles the derived attributes that a concrete type has, whoever declares them, against its attributes that are
+     * not derived. A problem is reported once for the attribute and the error, whatever the type.
+     */
+    private void compileDerivations(String typeName, Map<String, Declared> attributes, Set<DerivedAttribute> usable,
+            Set<String> reported) {
+        if (attributes == null) {
+            return;
+        }
+        Map<String, ValueType> readable = new LinkedHashMap<>();
+        List<String> derivedNames = new ArrayList<>();
+        Set<Declared> seen = new HashSet<>();
+        for (Declared declared : attributes.values()) {
+            if (!seen.add(declared)) {
+                continue;
+            }
+            if (declared.attribute().derived().isPresent()) {
+                derivedNames.add(declared.attribute().name());
+            } else {
+                readable.put(declared.attribute().name(), declared.attribute().valueType());
+            }
+        }
+        seen.clear();
+        for (Declared declared : attributes.values()) {
+            AttributeDefinition attribute = declared.attribute();
+            DerivedAttribute derived = new DerivedAttribute(declared.declarer(), Names.key(declared.declarer()), attribute);
+            if (attribute.derived().isEmpty() || !usable.contains(derived) || !seen.add(declared)) {
+                continue;
+            }
+            String expression = attribute.derived().get();
+            try {
+                expressionCompiler.compileDerivation(expression, readable, attribute.valueType());
+            } catch (ExpressionCompilationException e) {
+                String position = e.line().isPresent() && e.column().isPresent()
+                        ? " at line " + e.line().getAsInt() + ", column " + e.column().getAsInt() : "";
+                String where = Names.same(typeName, declared.declarer()) ? "" : " for " + typeName;
+                if (reported.add(derived.path() + "|" + position + "|" + e.getMessage())) {
+                    problems.add(Problems.of(ProblemCode.INVALID_DERIVATION, derived.path(), "The expression of the "
+                            + "derived attribute " + attribute.name() + " of " + declared.declarer() + " does not compile"
+                            + where + position + ": " + e.getMessage(), derivationForm(attribute.valueType()),
+                            expression, derivationHint(typeName, readable, derivedNames, expression)));
+                }
+            }
+        }
+    }
+
+    /** What the expression of a derived attribute must be, as text for problem details. */
+    private static String derivationForm(ValueType type) {
+        return "a non-blank expression over self with at most 4,000 characters, whose result is "
+                + switch (type) {
+                    case STRING -> "a string";
+                    case BOOLEAN -> "a bool";
+                    case INT -> "an int";
+                    case LONG -> "an int (an integer in CEL)";
+                    case DECIMAL -> "a double";
+                    case DATE -> "a timestamp at the start of a day in UTC";
+                    case INSTANT -> "a timestamp";
+                };
+    }
+
+    /**
+     * What an expression may read, as a hint for a derivation that does not compile: the attributes that are not derived,
+     * and, if the expression names derived ones, that it cannot read them.
+     */
+    private static String derivationHint(String typeName, Map<String, ValueType> readable, List<String> derivedNames,
+            String expression) {
+        List<String> read = derivedNames.stream()
+                .filter(name -> expression.matches("(?s).*\\bself\\s*\\.\\s*" + Pattern.quote(name) + "\\b.*"))
+                .toList();
+        String derivedHint = read.isEmpty() ? ""
+                : "It reads the derived " + (read.size() == 1 ? "attribute " : "attributes ") + String.join(", ", read)
+                        + ", but self holds only the attributes that are not derived. ";
+        return derivedHint + (readable.isEmpty()
+                ? typeName + " has no attributes to read."
+                : "Read the attributes of " + typeName + " that are not derived as self.<name>, and test an optional one "
+                        + "with has(self.<name>): " + String.join(", ", readable.keySet()) + ".");
     }
 
     // ------------------------------------------------------------------ lookups

@@ -24,11 +24,11 @@ class CheckValidationTest {
     private final StubLanguage language = new StubLanguage();
 
     private List<Problem> validate(SchemaDefinition definition) {
-        return SchemaValidator.validate(definition, List.of(), new CheckCompiler(Optional.of(language)));
+        return SchemaValidator.validate(definition, List.of(), new ExpressionCompiler(Optional.of(language)));
     }
 
     private static List<Problem> validateWithoutLanguage(SchemaDefinition definition) {
-        return SchemaValidator.validate(definition, List.of(), CheckCompiler.NONE);
+        return SchemaValidator.validate(definition, List.of(), ExpressionCompiler.NONE);
     }
 
     private static SchemaDefinition account(String name, String expression) {
@@ -54,7 +54,7 @@ class CheckValidationTest {
 
         List<Problem> problems = validateWithoutLanguage(definition);
 
-        assertThat(problems).extracting(Problem::code).containsOnly(ProblemCode.CHECKS_UNAVAILABLE);
+        assertThat(problems).extracting(Problem::code).containsOnly(ProblemCode.EXPRESSIONS_UNAVAILABLE);
         assertThat(problems).extracting(Problem::path)
                 .containsExactly("Account.first-check", "Account.second-check", "Owns.third-check");
         assertThat(problems).allSatisfy(problem -> assertThat(problem.hint()).hasValueSatisfying(hint ->
@@ -186,7 +186,7 @@ class CheckValidationTest {
                 .build();
 
         List<Problem> problems = SchemaValidator.validate(definition, List.of(lei, notBlank),
-                new CheckCompiler(Optional.of(language)));
+                new ExpressionCompiler(Optional.of(language)));
 
         assertThat(problems).extracting(Problem::path)
                 .containsExactly("Organization.lei-checksum", "Organization.name-not-blank");
@@ -206,7 +206,7 @@ class CheckValidationTest {
                 .build();
 
         List<Problem> problems = SchemaValidator.validate(definition, List.of(rule),
-                new CheckCompiler(Optional.of(language)));
+                new ExpressionCompiler(Optional.of(language)));
 
         assertThat(problems).extracting(Problem::path).containsExactly("Owns.share", "Owns.share-total");
         assertThat(problems.get(0).message()).contains("taken by an attribute");
@@ -358,7 +358,7 @@ class CheckValidationTest {
 
     @Test
     void theCompilerKeepsWhatItCompiled() throws Exception {
-        CheckCompiler compiler = new CheckCompiler(Optional.of(language));
+        ExpressionCompiler compiler = new ExpressionCompiler(Optional.of(language));
         Map<String, ValueType> attributes = Map.of("balance", ValueType.DECIMAL);
 
         var first = compiler.compile("true", attributes);

@@ -5,9 +5,9 @@ import java.util.Optional;
 import java.util.ServiceLoader;
 
 /**
- * Finds the expression language that runs checks (design D2 of {@code add-cel-expressions}, ADR-0030): the first one
- * that Java's {@link ServiceLoader} finds, on the class path or the module path, such as the one of the module
- * {@code cairn-cel}.
+ * Finds the expression language that runs checks and derivations (design D2 of {@code add-cel-expressions}, ADR-0030
+ * and ADR-0031): the first one that Java's {@link ServiceLoader} finds, on the class path or the module path, such as the
+ * one of the module {@code cairn-cel}.
  */
 final class ExpressionLanguages {
 

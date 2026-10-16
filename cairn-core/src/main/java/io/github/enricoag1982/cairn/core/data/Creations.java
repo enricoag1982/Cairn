@@ -93,6 +93,7 @@ final class Creations {
             entity = Working.createdEntity(id, path, type, timeline);
             entity.written = true;
             entity.namesUnresolved = resolved.unresolvedNames();
+            entity.derivedUnresolved = resolved.derivedNamed();
             created.add(id);
             temporaryId.ifPresent(temporary -> temporaryIds.put(temporary, id));
         } else {
@@ -149,6 +150,7 @@ final class Creations {
                     timeline);
             relationship.written = true;
             relationship.namesUnresolved = resolved.unresolvedNames();
+            relationship.derivedUnresolved = resolved.derivedNamed();
             created.add(id);
             temporaryId.ifPresent(temporary -> temporaryIds.put(temporary, id));
         } else {

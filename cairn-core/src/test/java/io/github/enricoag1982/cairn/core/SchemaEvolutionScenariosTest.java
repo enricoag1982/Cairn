@@ -13,6 +13,7 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.plus;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withCheck;
+import static io.github.enricoag1982.cairn.fixtures.Definitions.withDerivedAttribute;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -418,6 +419,26 @@ class SchemaEvolutionScenariosTest {
         assertThat(after.entityType("Account").orElseThrow().effectiveChecks()).isEmpty();
     }
 
+    @Test
+    @DisplayName("Scenario: Making a derived attribute plain")
+    void makingADerivedAttributePlain() {
+        Schema before = applied(register("1.0.0", withDerivedAttribute(ReferenceModel.definition(), "Account", "label",
+                ValueType.STRING, false, "self.number + ' ' + self.currency"))).schema();
+        SchemaDefinition plain = changeEntityType(ReferenceModel.definition(), "Account", type ->
+                withAttribute(type, AttributeDefinition.builder("label", ValueType.STRING).build()));
+
+        Schema after = applied(register("1.1.0", plain)).schema();
+
+        Attribute labelBefore = before.entityType("Account").orElseThrow().attributes().stream()
+                .filter(attribute -> attribute.name().equals("label")).findFirst().orElseThrow();
+        Attribute labelAfter = after.entityType("Account").orElseThrow().attributes().stream()
+                .filter(attribute -> attribute.name().equals("label")).findFirst().orElseThrow();
+        assertThat(labelBefore.derived()).isPresent();
+        assertThat(labelAfter.derived()).isEmpty();
+        assertThat(labelAfter.id()).as("the attribute keeps its identifier, and so its stored values")
+                .isEqualTo(labelBefore.id());
+    }
+
     // ------------------------------------------------------------------ breaking changes
 
     @Test
@@ -541,6 +562,21 @@ class SchemaEvolutionScenariosTest {
         assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Account");
         assertThat(problems.getFirst().path()).isEqualTo("Account.balance-not-negative");
         assertThat(registry.current().entityType("Account").orElseThrow().checks()).as("nothing changed").isEmpty();
+    }
+
+    @Test
+    @DisplayName("Scenario: Adding a derived attribute to an existing type")
+    void addingADerivedAttributeToAnExistingType() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+        SchemaDefinition withLabel = withDerivedAttribute(ReferenceModel.definition(), "Account", "label",
+                ValueType.STRING, false, "self.number + ' ' + self.currency");
+
+        List<Problem> problems = rejected(register("1.1.0", withLabel));
+
+        assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "Account");
+        assertThat(problems.getFirst().path()).isEqualTo("Account.label");
+        assertThat(registry.current().entityType("Account").orElseThrow().attributes()).as("nothing changed")
+                .extracting(Attribute::name).doesNotContain("label");
     }
 
     @Test

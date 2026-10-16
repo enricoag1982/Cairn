@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.schema.AppliedCheck;
+import io.github.enricoag1982.cairn.core.schema.AppliedDerivation;
 import io.github.enricoag1982.cairn.core.schema.CheckedSchema;
 import io.github.enricoag1982.cairn.schema.EntityType;
 import io.github.enricoag1982.cairn.schema.RelationshipType;
@@ -43,6 +44,14 @@ final class SchemaIndex {
      */
     List<AppliedCheck> checks(TypeId id) {
         return schema instanceof CheckedSchema checked ? checked.checks(id) : List.of();
+    }
+
+    /**
+     * The derived attributes of an entity type or relationship type, compiled, in the order of the type's attributes;
+     * none if the schema does not keep compiled derivations.
+     */
+    List<AppliedDerivation> derivations(TypeId id) {
+        return schema instanceof CheckedSchema checked ? checked.derivations(id) : List.of();
     }
 
     Optional<EntityType> entityType(TypeId id) {

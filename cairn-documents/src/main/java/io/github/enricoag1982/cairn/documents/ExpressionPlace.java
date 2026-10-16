@@ -13,8 +13,9 @@ import org.snakeyaml.engine.v2.exceptions.Mark;
 import org.snakeyaml.engine.v2.nodes.ScalarNode;
 
 /**
- * Where the expression of a check is in a schema document (capability {@code schema-documents}, design D6 of
- * {@code add-cel-expressions}): the key {@code expression}, and, where the text allows it, where each line of the
+ * Where the expression of a check or of a derived attribute is in a schema document (capability
+ * {@code schema-documents}, design D6 of {@code add-cel-expressions} and D6 of {@code add-derived-attributes}): the key
+ * {@code expression} of a check or {@code derived} of an attribute, and, where the text allows it, where each line of the
  * expression starts, so that a position in the expression, as the expression language reports it, becomes a position in
  * the document.
  *
@@ -23,7 +24,7 @@ import org.snakeyaml.engine.v2.nodes.ScalarNode;
  * line together. Any other way of writing it (a folded block, an expression on several plain or quoted lines, or escape
  * sequences) has no exact map, and a position in it is located at the key.
  *
- * @param key        the key {@code expression}, with the pointer of the expression
+ * @param key        the key {@code expression} or {@code derived}, with the pointer of the expression
  * @param lineStarts the position in the document of the first character of each line of the expression, if the text
  *                   can be mapped; empty otherwise
  */
@@ -41,7 +42,7 @@ record ExpressionPlace(DocumentLocation key, List<DocumentLocation> lineStarts) 
      * Finds where the expression is.
      *
      * @param codePoints the text of the document, as code points, which the marks of the nodes index
-     * @param entry      the member {@code expression} of the check
+     * @param entry      the member {@code expression} of the check, or {@code derived} of the attribute
      * @param scalar     the value of the member
      */
     static ExpressionPlace of(int[] codePoints, Entry entry, ScalarNode scalar) {

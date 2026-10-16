@@ -71,11 +71,21 @@ final class Docs {
     }
 
     /**
-     * The facts about an attribute that its Javadoc states besides its description: allowed values, pattern, lengths,
-     * range and uniqueness. Each is a paragraph.
+     * The paragraph that says an attribute is derived and gives its expression, if it is (design D7 of
+     * {@code add-derived-attributes}).
+     */
+    static List<String> derived(Attribute attribute) {
+        return attribute.derived().map(expression -> List.of("<p>Derived: the store computes the value from the other "
+                + "values of the same version when a transaction commits, with the expression " + code(expression)
+                + "; a write cannot set it.")).orElse(List.of());
+    }
+
+    /**
+     * The facts about an attribute that its Javadoc states besides its description: that it is derived, with its
+     * expression, allowed values, pattern, lengths, range and uniqueness. Each is a paragraph.
      */
     static List<String> constraints(Attribute attribute, String things) {
-        List<String> paragraphs = new ArrayList<>();
+        List<String> paragraphs = new ArrayList<>(derived(attribute));
         if (!attribute.allowedValues().isEmpty()) {
             paragraphs.add("<p>Allowed values: " + attribute.allowedValues().stream().map(Docs::code)
                     .collect(Collectors.joining(", ")) + ".");

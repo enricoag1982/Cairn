@@ -9,6 +9,11 @@ final class Changes {
     /** The hint for a change that makes existing data or users face something stricter. */
     static final String KEEP_UNCONSTRAINED = "Keep it optional or unconstrained until migrations exist.";
 
+    /** The hint for a change that would leave versions that are stored already without the values it derives. */
+    static final String DERIVE_WITH_THE_TYPE =
+            "Declare a derived attribute together with its type: versions that are stored are not derived again until "
+                    + "migrations exist.";
+
     /** The hint for the removal of a type or attribute. */
     static final String DEPRECATE_INSTEAD =
             "Mark it deprecated instead of removing it, or, if it was renamed, keep the old name as an alias.";

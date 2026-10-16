@@ -3,9 +3,9 @@ package io.github.enricoag1982.cairn.cel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.enricoag1982.cairn.expressions.CheckCompilationException;
-import io.github.enricoag1982.cairn.expressions.CheckEvaluationException;
 import io.github.enricoag1982.cairn.expressions.CompiledCheck;
+import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
+import io.github.enricoag1982.cairn.expressions.ExpressionEvaluationException;
 import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
@@ -39,17 +39,17 @@ class CelLanguageTest {
 
     private final CelLanguage language = new CelLanguage();
 
-    private CompiledCheck compile(String expression) throws CheckCompilationException {
+    private CompiledCheck compile(String expression) throws ExpressionCompilationException {
         return language.compile(expression, ATTRIBUTES);
     }
 
     private boolean evaluate(String expression, Map<String, Value> values)
-            throws CheckCompilationException, CheckEvaluationException {
+            throws ExpressionCompilationException, ExpressionEvaluationException {
         return compile(expression).evaluate(values);
     }
 
-    private CheckCompilationException failure(String expression) {
-        return org.assertj.core.api.Assertions.catchThrowableOfType(CheckCompilationException.class,
+    private ExpressionCompilationException failure(String expression) {
+        return org.assertj.core.api.Assertions.catchThrowableOfType(ExpressionCompilationException.class,
                 () -> language.compile(expression, ATTRIBUTES));
     }
 
@@ -151,9 +151,9 @@ class CelLanguageTest {
         CompiledCheck check = compile("self.count > 0");
 
         assertThatThrownBy(() -> check.evaluate(Map.of("count", Value.of("seven"))))
-                .isInstanceOf(CheckEvaluationException.class).hasMessageContaining("count");
+                .isInstanceOf(ExpressionEvaluationException.class).hasMessageContaining("count");
         assertThatThrownBy(() -> compile("self.big > 0").evaluate(Map.of("big", Value.of(new BigDecimal("1")))))
-                .isInstanceOf(CheckEvaluationException.class);
+                .isInstanceOf(ExpressionEvaluationException.class);
     }
 
     // ------------------------------------------------------------------ absent attributes
@@ -167,7 +167,7 @@ class CelLanguageTest {
         assertThat(evaluate("!has(self.birthDate) || self.birthDate < timestamp('2026-01-01T00:00:00Z')", none)).isTrue();
         assertThat(evaluate("has(self.count) && self.count > 0", none)).isFalse();
         assertThatThrownBy(() -> compile("self.birthDate < timestamp('2026-01-01T00:00:00Z')").evaluate(none))
-                .isInstanceOf(CheckEvaluationException.class).hasMessageContaining("birthDate");
+                .isInstanceOf(ExpressionEvaluationException.class).hasMessageContaining("birthDate");
         assertThat(evaluate("has(self.count)", Map.of("count", Value.of(0)))).isTrue();
     }
 
@@ -189,7 +189,7 @@ class CelLanguageTest {
         assertThat(CelLanguage.COST_LIMIT).isEqualTo(10_000);
         assertThat(evaluate(cheap, Map.of())).as("about 1,100 steps").isTrue();
         assertThatThrownBy(() -> evaluate(costly, Map.of()))
-                .isInstanceOf(CheckEvaluationException.class)
+                .isInstanceOf(ExpressionEvaluationException.class)
                 .hasMessageContaining("10000").hasMessageContaining("steps");
     }
 
@@ -198,7 +198,7 @@ class CelLanguageTest {
     @Test
     @DisplayName("A syntax error gives its line and column, counted from 1")
     void aSyntaxErrorGivesItsPosition() {
-        CheckCompilationException error = failure("self.balance >=");
+        ExpressionCompilationException error = failure("self.balance >=");
 
         assertThat(error.line()).hasValue(1);
         assertThat(error.column()).hasValue(16);
@@ -208,7 +208,7 @@ class CelLanguageTest {
     @Test
     @DisplayName("An unknown attribute is a compilation error at the select, and names the attribute")
     void anUnknownAttributeIsACompilationError() {
-        CheckCompilationException error = failure("self.amount >= 0.0");
+        ExpressionCompilationException error = failure("self.amount >= 0.0");
 
         assertThat(error.getMessage()).contains("amount");
         assertThat(error.line()).hasValue(1);
@@ -225,7 +225,7 @@ class CelLanguageTest {
     @Test
     @DisplayName("The position of an error on a later line counts from the start of that line")
     void thePositionOfAnErrorOnALaterLine() {
-        CheckCompilationException error = failure("self.count > 0 &&\n  self.cnt > 1");
+        ExpressionCompilationException error = failure("self.count > 0 &&\n  self.cnt > 1");
 
         assertThat(error.line()).hasValue(2);
         assertThat(error.column()).hasValue(7);
@@ -234,7 +234,7 @@ class CelLanguageTest {
     @Test
     @DisplayName("Columns count code points")
     void columnsCountCodePoints() {
-        CheckCompilationException error = failure("'日本😀' + self.nme");
+        ExpressionCompilationException error = failure("'日本😀' + self.nme");
 
         assertThat(error.line()).hasValue(1);
         assertThat(error.column()).as("the dot after self is the 13th code point and the 14th char").hasValue(13);
@@ -258,9 +258,9 @@ class CelLanguageTest {
     @Test
     @DisplayName("A result that is not a boolean is a compilation error")
     void aResultThatIsNotABooleanIsACompilationError() {
-        CheckCompilationException number = failure("self.balance + 1.0");
-        CheckCompilationException text = failure("self.name");
-        CheckCompilationException list = failure("[self.count]");
+        ExpressionCompilationException number = failure("self.balance + 1.0");
+        ExpressionCompilationException text = failure("self.name");
+        ExpressionCompilationException list = failure("[self.count]");
 
         assertThat(number.getMessage()).contains("double").contains("boolean");
         assertThat(text.getMessage()).contains("string").contains("boolean");
@@ -275,7 +275,7 @@ class CelLanguageTest {
         assertThat(evaluate("dyn(true)", Map.of())).isTrue();
         assertThat(evaluate("dyn(self.count) == 3", Map.of("count", Value.of(3)))).isTrue();
         assertThatThrownBy(() -> evaluate("dyn(1)", Map.of()))
-                .isInstanceOf(CheckEvaluationException.class).hasMessageContaining("boolean");
+                .isInstanceOf(ExpressionEvaluationException.class).hasMessageContaining("boolean");
     }
 
     @Test
@@ -291,7 +291,7 @@ class CelLanguageTest {
         String longest = "true" + " && true".repeat(499);
 
         assertThat(longest.length()).isEqualTo(3_996);
-        assertThatThrownBy(() -> compile(longest + " && true && true")).isInstanceOf(CheckCompilationException.class);
+        assertThatThrownBy(() -> compile(longest + " && true && true")).isInstanceOf(ExpressionCompilationException.class);
         assertThat(compileQuietly(longest)).isNotNull();
     }
 
@@ -300,14 +300,14 @@ class CelLanguageTest {
     void aTooDeeplyNestedExpressionDoesNotCompile() {
         String nested = "(".repeat(300) + "true" + ")".repeat(300);
 
-        assertThatThrownBy(() -> compile(nested)).isInstanceOf(CheckCompilationException.class);
+        assertThatThrownBy(() -> compile(nested)).isInstanceOf(ExpressionCompilationException.class);
     }
 
     @Test
     @DisplayName("An attribute whose name is not an attribute of the type is unknown, also if the type has no attributes")
     void aTypeWithoutAttributesHasNothingToRead() throws Exception {
         assertThatThrownBy(() -> language.compile("self.count > 0", Map.of()))
-                .isInstanceOf(CheckCompilationException.class).hasMessageContaining("count");
+                .isInstanceOf(ExpressionCompilationException.class).hasMessageContaining("count");
         assertThat(language.compile("true", Map.of()).evaluate(Map.of())).isTrue();
     }
 
@@ -336,7 +336,7 @@ class CelLanguageTest {
     private CompiledCheck compileQuietly(String expression) {
         try {
             return compile(expression);
-        } catch (CheckCompilationException e) {
+        } catch (ExpressionCompilationException e) {
             throw new AssertionError(e);
         }
     }

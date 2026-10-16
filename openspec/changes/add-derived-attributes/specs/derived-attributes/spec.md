@@ -27,7 +27,7 @@ An attribute of an entity type, relationship type or trait MAY be derived: it st
 
 ### Requirement: Derived values are computed at commit
 
-WHEN a transaction writes a segment of the timeline of an entity or relationship, THE SYSTEM SHALL compute each of its derived attributes from that segment's other values, before value constraints, checks and rules, and SHALL store the results with the version, so that views, queries, uniqueness and the change feed read them as any other value. A result SHALL fit the attribute's value type: a CEL string, boolean, integer within the range of the type, double for a decimal, or timestamp for an instant and, at the start of a day in UTC, for a date. An optional derived attribute SHALL have no value when its expression gives `null`. An evaluation error, a result that does not fit, or no value for a required derived attribute SHALL reject the transaction with a problem of the code `DERIVATION_FAILED` at the write. A store whose schema has derived attributes, opened without an expression language, SHALL reject writes to their types with a problem of the code `EXPRESSIONS_UNAVAILABLE`.
+WHEN a transaction writes a segment of the timeline of an entity or relationship, THE SYSTEM SHALL compute each of its derived attributes from that segment's other values, before value constraints, checks and rules, and SHALL store the results with the version, so that views, queries, uniqueness and the change feed read them as any other value. A result SHALL fit the attribute's value type: a CEL string, boolean, integer within the range of the type, double for a decimal, or timestamp for an instant and, at the start of a day in UTC, for a date. An optional derived attribute SHALL have no value when its expression gives `null`. An evaluation error, a result that does not fit, or no value for a required derived attribute SHALL reject the transaction with a problem of the code `DERIVATION_FAILED` at the write. A store whose schema has derived attributes, opened without an expression language, SHALL reject writes to their types with a problem of the code `EXPRESSIONS_UNAVAILABLE`, and a recorded derivation that the store's expression language cannot compile when the store is opened SHALL make writes to its types fail with `DERIVATION_FAILED`.
 
 #### Scenario: Derived on creation
 
@@ -41,7 +41,7 @@ WHEN a transaction writes a segment of the timeline of an entity or relationship
 
 #### Scenario: An optional derived attribute without a value
 
-- **WHEN** Person declares the derived optional int attribute `birthYear` with the expression `has(self.birthDate) ? self.birthDate.getFullYear() : null`, and Alice is created without a birth date and Bob with the birth date 1990-05-01
+- **WHEN** Person declares the derived optional int attribute `birthYear` with the expression `has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null`, and Alice is created without a birth date and Bob with the birth date 1990-05-01
 - **THEN** Alice reads without a birth year, and Bob with 1990
 
 #### Scenario: A derived value that does not fit
@@ -56,7 +56,7 @@ WHEN a transaction writes a segment of the timeline of an entity or relationship
 
 ### Requirement: Derived attributes are not written
 
-A write SHALL NOT set a derived attribute: a create, patch or replace that names one SHALL be rejected with a problem of the code `DERIVED_ATTRIBUTE_WRITTEN` at the write, located in the payload when the transaction was read from one. A create SHALL NOT need to give a derived attribute, even a required one. The generated JSON Schema of a type's values SHALL mark derived attributes as read-only, and the generated JSON Schema of transaction payloads SHALL NOT accept them in the values of writes. Generated Java builders of writes SHALL have no setter for a derived attribute, and generated snapshot records SHALL read it.
+A write SHALL NOT set a derived attribute: a create, patch, replace or clear that names one SHALL be rejected with a problem of the code `DERIVED_ATTRIBUTE_WRITTEN` at the write, located in the payload when the transaction was read from one. A create SHALL NOT need to give a derived attribute, even a required one. The generated JSON Schema of a type's values SHALL mark derived attributes as read-only, and the generated JSON Schema of transaction payloads SHALL NOT accept them in the values of writes. Generated Java builders of writes SHALL have no setter for a derived attribute, and generated snapshot records SHALL read it.
 
 #### Scenario: Setting a derived attribute
 

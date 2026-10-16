@@ -1,8 +1,9 @@
 package io.github.enricoag1982.cairn.core.schema;
 
 import io.github.enricoag1982.cairn.core.storage.SchemaIdentifiers;
-import io.github.enricoag1982.cairn.expressions.CheckCompilationException;
 import io.github.enricoag1982.cairn.expressions.CompiledCheck;
+import io.github.enricoag1982.cairn.expressions.CompiledDerivation;
+import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.AttributeId;
@@ -59,7 +60,7 @@ final class SchemaCompiler {
     private final SchemaDefinition definition;
     private final Function<String, Origin> originOf;
     private final CompiledSchema previous;
-    private final CheckCompiler checkCompiler;
+    private final ExpressionCompiler expressionCompiler;
     private long nextId;
     /** The identifiers a logged registration holds, by name key; null when matching and numbering. */
     private final Map<String, TypeId> loggedTypes;
@@ -72,11 +73,11 @@ final class SchemaCompiler {
     private final Map<String, AttributeId> attributeIds = new HashMap<>();
 
     private SchemaCompiler(SchemaDefinition definition, Function<String, Origin> originOf, CompiledSchema previous,
-            long nextId, SchemaIdentifiers logged, CheckCompiler checkCompiler) {
+            long nextId, SchemaIdentifiers logged, ExpressionCompiler expressionCompiler) {
         this.definition = definition;
         this.originOf = originOf;
         this.previous = previous;
-        this.checkCompiler = checkCompiler;
+        this.expressionCompiler = expressionCompiler;
         this.nextId = nextId;
         if (logged == null) {
             loggedTypes = null;
@@ -112,7 +113,7 @@ final class SchemaCompiler {
      * @param checks     compiles the checks of the types
      */
     static Result compile(SchemaDefinition definition, Function<String, Origin> originOf, List<Origin> origins,
-            CompiledSchema previous, long nextId, CheckCompiler checks) {
+            CompiledSchema previous, long nextId, ExpressionCompiler checks) {
         return new SchemaCompiler(definition, originOf, previous, nextId, null, checks).run(origins);
     }
 
@@ -131,7 +132,7 @@ final class SchemaCompiler {
      *                               elements, or if one is not below the logged next identifier
      */
     static Result restore(SchemaDefinition definition, Function<String, Origin> originOf, List<Origin> origins,
-            SchemaIdentifiers logged, CheckCompiler checks) {
+            SchemaIdentifiers logged, ExpressionCompiler checks) {
         return new SchemaCompiler(definition, originOf, CompiledSchema.EMPTY, logged.nextId(), logged, checks)
                 .run(origins);
     }
@@ -153,6 +154,7 @@ final class SchemaCompiler {
         List<CompiledSchema.TypeEntry> entries = new ArrayList<>();
         List<CompiledSchema.Declaration> declarations = new ArrayList<>();
         Map<TypeId, List<AppliedCheck>> checks = new HashMap<>();
+        Map<TypeId, List<AppliedDerivation>> derivations = new HashMap<>();
         List<EntityType> compiledEntities = new ArrayList<>();
         List<Trait> compiledTraits = new ArrayList<>();
         List<RelationshipType> compiledRelationships = new ArrayList<>();
@@ -180,6 +182,7 @@ final class SchemaCompiler {
             if (!type.isAbstract()) {
                 checks.put(typeId(type.name()), applied(compiledEntities.getLast().effectiveChecks(),
                         attributeTypes(entityAttributes(type.name()))));
+                derivations.put(typeId(type.name()), appliedDerivations(entityAttributes(type.name())));
             }
             entries.add(new CompiledSchema.TypeEntry(typeId(type.name()), Kind.ENTITY_TYPE, type.name(), type,
                     originOf.apply(type.name())));
@@ -200,12 +203,13 @@ final class SchemaCompiler {
                     originOf.apply(type.name())));
             checks.put(typeId(type.name()), applied(compiledRelationships.getLast().effectiveChecks(),
                     attributeTypes(relationshipAttributes(type.name()))));
+            derivations.put(typeId(type.name()), appliedDerivations(relationshipAttributes(type.name())));
             entries.add(new CompiledSchema.TypeEntry(typeId(type.name()), Kind.RELATIONSHIP_TYPE, type.name(), type,
                     originOf.apply(type.name())));
             type.attributes().forEach(attribute -> declarations.add(declaration(new Declared(type.name(), attribute))));
         }
         CompiledSchema schema = new CompiledSchema(compiledEntities, compiledTraits, compiledRelationships, origins,
-                entries, declarations, checks);
+                entries, declarations, checks, derivations);
         return new Result(schema, nextId);
     }
 
@@ -321,7 +325,8 @@ final class SchemaCompiler {
         return new Attribute(attributeIds.get(declared.key()), definition.name(), definition.aliases(),
                 definition.valueType(), definition.required(), definition.unique(), definition.range(),
                 definition.deprecated(), definition.description(), definition.examples(), definition.allowedValues(),
-                definition.pattern(), definition.minLength(), definition.maxLength(), declared.declarer());
+                definition.pattern(), definition.minLength(), definition.maxLength(), definition.derived(),
+                declared.declarer());
     }
 
     private CompiledSchema.Declaration declaration(Declared declared) {
@@ -382,10 +387,18 @@ final class SchemaCompiler {
         return result;
     }
 
-    /** The value type of each attribute of a type by the attribute's name. */
+    /** The value type of each attribute of a type, derived ones included, by the attribute's name: what checks read. */
     private static Map<String, ValueType> attributeTypes(List<Declared> attributes) {
         Map<String, ValueType> types = new LinkedHashMap<>();
         attributes.forEach(declared -> types.put(declared.attribute().name(), declared.attribute().valueType()));
+        return types;
+    }
+
+    /** The value type of each attribute of a type that is not derived, by the attribute's name: what derivations read. */
+    private static Map<String, ValueType> readableTypes(List<Declared> attributes) {
+        Map<String, ValueType> types = new LinkedHashMap<>();
+        attributes.stream().filter(declared -> declared.attribute().derived().isEmpty())
+                .forEach(declared -> types.put(declared.attribute().name(), declared.attribute().valueType()));
         return types;
     }
 
@@ -397,15 +410,44 @@ final class SchemaCompiler {
     private List<AppliedCheck> applied(List<EffectiveCheck> effective, Map<String, ValueType> attributes) {
         List<AppliedCheck> result = new ArrayList<>();
         for (EffectiveCheck check : effective) {
-            if (!checkCompiler.available()) {
+            if (!expressionCompiler.available()) {
                 result.add(new AppliedCheck(check, Optional.empty(), Optional.empty()));
                 continue;
             }
             try {
-                CompiledCheck compiled = checkCompiler.compile(check.check().expression(), attributes);
+                CompiledCheck compiled = expressionCompiler.compile(check.check().expression(), attributes);
                 result.add(new AppliedCheck(check, Optional.of(compiled), Optional.empty()));
-            } catch (CheckCompilationException e) {
+            } catch (ExpressionCompilationException e) {
                 result.add(new AppliedCheck(check, Optional.empty(), Optional.of(e.getMessage())));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Compiles the derived attributes of a concrete type against the attributes it has that are not derived. A
+     * derivation that cannot be compiled is kept with the reason: a schema that was valid when it was registered can fail
+     * to compile when it is restored by another version of the expression language. Without an expression language, the
+     * derivations are kept as unavailable.
+     */
+    private List<AppliedDerivation> appliedDerivations(List<Declared> attributes) {
+        Map<String, ValueType> readable = readableTypes(attributes);
+        List<AppliedDerivation> result = new ArrayList<>();
+        for (Declared declared : attributes) {
+            if (declared.attribute().derived().isEmpty()) {
+                continue;
+            }
+            Attribute attribute = attribute(declared);
+            if (!expressionCompiler.available()) {
+                result.add(new AppliedDerivation(attribute, Optional.empty(), Optional.empty()));
+                continue;
+            }
+            try {
+                CompiledDerivation compiled = expressionCompiler.compileDerivation(declared.attribute().derived().get(),
+                        readable, declared.attribute().valueType());
+                result.add(new AppliedDerivation(attribute, Optional.of(compiled), Optional.empty()));
+            } catch (ExpressionCompilationException e) {
+                result.add(new AppliedDerivation(attribute, Optional.empty(), Optional.of(e.getMessage())));
             }
         }
         return result;

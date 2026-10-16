@@ -3,13 +3,15 @@ package io.github.enricoag1982.cairn.expressions;
 import java.util.OptionalInt;
 
 /**
- * An expression that an {@link ExpressionLanguage} cannot compile (ADR-0030, capability {@code checks}): it is not
- * valid in the language, it reads an attribute that the type does not have, or its result cannot be a boolean.
+ * An expression that an {@link ExpressionLanguage} cannot compile (ADR-0030 and ADR-0031, capabilities {@code checks}
+ * and {@code derived-attributes}): it is not valid in the language, it reads an attribute that the type does not have,
+ * or its result cannot be what the expression is for: a boolean for a check, a value of the attribute's type for a
+ * derived attribute.
  *
  * <p>The exception can say where in the expression the fault is. A line and a column are counted from 1, and the
  * column counts characters of the line, as a person reads them.
  */
-public final class CheckCompilationException extends Exception {
+public final class ExpressionCompilationException extends Exception {
 
     private static final long serialVersionUID = 1L;
 
@@ -24,7 +26,7 @@ public final class CheckCompilationException extends Exception {
      *
      * @param message what is wrong with the expression
      */
-    public CheckCompilationException(String message) {
+    public ExpressionCompilationException(String message) {
         super(message);
         this.line = 0;
         this.column = 0;
@@ -38,7 +40,7 @@ public final class CheckCompilationException extends Exception {
      * @param column  the column in the line, from 1
      * @throws IllegalArgumentException if the line or the column is below 1
      */
-    public CheckCompilationException(String message, int line, int column) {
+    public ExpressionCompilationException(String message, int line, int column) {
         super(message);
         if (line < 1) {
             throw new IllegalArgumentException("line must be at least 1: " + line);

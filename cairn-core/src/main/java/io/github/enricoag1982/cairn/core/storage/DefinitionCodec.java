@@ -28,6 +28,12 @@ import java.util.Set;
  * the rest of a schema record as a section of their own, which is left out when no type declares a check, so that a
  * record without checks is the same as it was before checks existed, and one that has them is read only where bytes
  * remain.
+ *
+ * <p>The expressions of derived attributes (design D6 of {@code add-derived-attributes}) are not part of the attributes'
+ * fields either: they follow the checks as a section of their own, which is left out when no attribute is derived. A
+ * record that has derived attributes but no checks has an empty checks section before it, so that the sections are told
+ * apart by their position. Records without derived attributes are the same as they were before derived attributes
+ * existed, and a section is read only where bytes remain.
  */
 final class DefinitionCodec {
 
@@ -85,11 +91,20 @@ final class DefinitionCodec {
      * and checks. Writes nothing if no type declares a check.
      */
     static void writeChecks(Encoder out, SchemaDefinition definition) {
+        writeChecks(out, definition, false);
+    }
+
+    /**
+     * Writes the checks section: for the types that declare any, the entity types and then the relationship types, each
+     * with its name and checks. Writes nothing if no type declares a check, unless the section is {@code required}
+     * because a section that follows it needs to be told apart; it is then written empty.
+     */
+    static void writeChecks(Encoder out, SchemaDefinition definition, boolean required) {
         List<EntityTypeDefinition> entities = definition.entityTypes().stream()
                 .filter(type -> !type.checks().isEmpty()).toList();
         List<RelationshipTypeDefinition> relationships = definition.relationshipTypes().stream()
                 .filter(type -> !type.checks().isEmpty()).toList();
-        if (entities.isEmpty() && relationships.isEmpty()) {
+        if (entities.isEmpty() && relationships.isEmpty() && !required) {
             return;
         }
         out.writeAll(entities, (encoder, type) -> {
@@ -99,6 +114,47 @@ final class DefinitionCodec {
         out.writeAll(relationships, (encoder, type) -> {
             encoder.writeText(type.name());
             encoder.writeAll(type.checks(), DefinitionCodec::writeCheck);
+        });
+    }
+
+    /** One derived attribute with the element that declares it: a trait, an entity type or a relationship type. */
+    private record DerivedAttribute(String declarer, String attribute, String expression) {
+    }
+
+    /** Tells whether any attribute of the definition is derived. */
+    static boolean hasDerived(SchemaDefinition definition) {
+        return !derivedAttributes(definition).isEmpty();
+    }
+
+    private static List<DerivedAttribute> derivedAttributes(SchemaDefinition definition) {
+        List<DerivedAttribute> derived = new ArrayList<>();
+        definition.traits().forEach(trait -> derivedOf(trait.name(), trait.attributes(), derived));
+        definition.entityTypes().forEach(type -> derivedOf(type.name(), type.attributes(), derived));
+        definition.relationshipTypes().forEach(type -> derivedOf(type.name(), type.attributes(), derived));
+        return derived;
+    }
+
+    private static void derivedOf(String declarer, List<AttributeDefinition> attributes, List<DerivedAttribute> into) {
+        for (AttributeDefinition attribute : attributes) {
+            attribute.derived().ifPresent(expression ->
+                    into.add(new DerivedAttribute(declarer, attribute.name(), expression)));
+        }
+    }
+
+    /**
+     * Writes the expressions of the derived attributes: for each, the name of the trait, entity type or relationship type
+     * that declares the attribute, the attribute's name and the expression, traits first, then entity types, then
+     * relationship types, in the order of the definition. Writes nothing if no attribute is derived.
+     */
+    static void writeDerivations(Encoder out, SchemaDefinition definition) {
+        List<DerivedAttribute> derived = derivedAttributes(definition);
+        if (derived.isEmpty()) {
+            return;
+        }
+        out.writeAll(derived, (encoder, attribute) -> {
+            encoder.writeText(attribute.declarer());
+            encoder.writeText(attribute.attribute());
+            encoder.writeText(attribute.expression());
         });
     }
 
@@ -229,6 +285,73 @@ final class DefinitionCodec {
         entities.keySet().forEach(name -> requireType(known, "entity " + name));
         relationships.keySet().forEach(name -> requireType(known, "relationship " + name));
         return new SchemaDefinition(entityTypes, definition.traits(), relationshipTypes);
+    }
+
+    /**
+     * Reads what {@link #writeDerivations} wrote and makes the attributes it names derived. A record that has no bytes
+     * left has no derived attributes.
+     *
+     * @throws CorruptRecordException if a derived attribute is named twice, or names an attribute that the definition does
+     *                                not have
+     */
+    static SchemaDefinition readDerivations(Decoder in, SchemaDefinition definition) {
+        if (in.remaining() == 0) {
+            return definition;
+        }
+        Map<String, String> derived = new HashMap<>();
+        for (DerivedAttribute attribute : in.readAll(decoder ->
+                new DerivedAttribute(decoder.readText(), decoder.readText(), decoder.readText()))) {
+            if (derived.put(attribute.declarer() + "." + attribute.attribute(), attribute.expression()) != null) {
+                throw new CorruptRecordException("The derived attribute " + attribute.declarer() + "."
+                        + attribute.attribute() + " is recorded twice.");
+            }
+        }
+        Set<String> used = new HashSet<>();
+        List<TraitDefinition> traits = new ArrayList<>();
+        for (TraitDefinition trait : definition.traits()) {
+            traits.add(new TraitDefinition(trait.name(), derive(trait.name(), trait.attributes(), derived, used),
+                    trait.aliases(), trait.deprecated(), trait.description()));
+        }
+        List<EntityTypeDefinition> entityTypes = new ArrayList<>();
+        for (EntityTypeDefinition type : definition.entityTypes()) {
+            entityTypes.add(new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), type.traits(),
+                    derive(type.name(), type.attributes(), derived, used), type.aliases(), type.deprecated(),
+                    type.description(), type.rules(), type.checks()));
+        }
+        List<RelationshipTypeDefinition> relationshipTypes = new ArrayList<>();
+        for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
+            relationshipTypes.add(new RelationshipTypeDefinition(type.name(), type.source(), type.target(),
+                    type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(),
+                    type.kind(), type.symmetric(), type.supertype(), derive(type.name(), type.attributes(), derived, used),
+                    type.aliases(), type.deprecated(), type.description(), type.rules(), type.checks()));
+        }
+        for (String key : derived.keySet()) {
+            if (!used.contains(key)) {
+                throw new CorruptRecordException("The derived attribute " + key + " is not an attribute of the "
+                        + "definition.");
+            }
+        }
+        return new SchemaDefinition(entityTypes, traits, relationshipTypes);
+    }
+
+    /** The attributes of an element, with the expressions of those that are recorded as derived. */
+    private static List<AttributeDefinition> derive(String declarer, List<AttributeDefinition> attributes,
+            Map<String, String> derived, Set<String> used) {
+        List<AttributeDefinition> result = new ArrayList<>();
+        for (AttributeDefinition attribute : attributes) {
+            String key = declarer + "." + attribute.name();
+            String expression = derived.get(key);
+            if (expression == null) {
+                result.add(attribute);
+            } else {
+                used.add(key);
+                result.add(new AttributeDefinition(attribute.name(), attribute.valueType(), attribute.required(),
+                        attribute.unique(), attribute.range(), attribute.aliases(), attribute.deprecated(),
+                        attribute.description(), attribute.examples(), attribute.allowedValues(), attribute.pattern(),
+                        attribute.minLength(), attribute.maxLength(), Optional.of(expression)));
+            }
+        }
+        return result;
     }
 
     private static void requireType(Set<String> known, String type) {

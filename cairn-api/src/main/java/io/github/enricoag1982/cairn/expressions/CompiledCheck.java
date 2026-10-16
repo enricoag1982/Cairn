@@ -18,8 +18,8 @@ public interface CompiledCheck {
      * @param values the values of the version that has them, by attribute name; an attribute without a value is
      *               absent
      * @return {@code true} if the version satisfies the check
-     * @throws CheckEvaluationException if the evaluation gives no result, for example because the expression reads an
+     * @throws ExpressionEvaluationException if the evaluation gives no result, for example because the expression reads an
      *                                  attribute that has no value, or exceeds the cost limit of the language
      */
-    boolean evaluate(Map<String, Value> values) throws CheckEvaluationException;
+    boolean evaluate(Map<String, Value> values) throws ExpressionEvaluationException;
 }

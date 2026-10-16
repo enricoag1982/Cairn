@@ -85,13 +85,23 @@ Making a derived attribute plain is compatible. Removing a derived attribute is 
 - Builders of writes have no setter for a derived attribute, and creates never require it.
 - Snapshot records and typed attribute references include it, and its Javadoc says it is derived and gives the expression.
 
-### D8. The HR example and the reference domain
+### D8. Persistence
+
+Schema records keep derived attributes as checks are kept (ADR-0030):
+
+- an optional trailing section of format version 1, after the checks section, with the declarer's name, the attribute's name and the expression for each;
+- the section is written only when some attribute is derived, with empty check counts before it when no type declares checks;
+- records without derived attributes stay byte-identical.
+
+Derived values are ordinary values of segments, so recovery reads them as stored.
+
+### D9. The HR example and the reference domain
 
 - **HR.** `Person` gains `fullName: { type: string, required: true, derived: "self.givenName + ' ' + self.familyName" }`. Tests read Dev's full name as "Dev …", using the given and family names of the page. Queries and agent stories that compose names may use it. The HR page's model table shows the attribute; the page test decides the form.
 - **Reference domain.** Scenarios use test-only derived attributes, which the reference domain page lists:
   - `label` on Account: `self.number + ' ' + self.currency`.
   - `balanceInCents` (long) on Account: `int(self.balance * 100.0)`.
-  - `birthYear` (int, optional) on Person: `has(self.birthDate) ? self.birthDate.getFullYear() : null`. If CEL's checker refuses the conditional with `null`, report it, and the scenario changes.
+  - `birthYear` (int, optional) on Person: `has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null`. CEL for Java's checker has no overload of `_?_:_` for an integer and `null`, so the integer branch is wrapped in `dyn`; timestamp branches need no wrapping.
   - `balanceInBillions` (int) on Account: `int(self.balance) * 10000000`, which does not fit an `int` for a balance of 1,000.
 
 ## Risks / Trade-offs

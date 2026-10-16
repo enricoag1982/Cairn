@@ -343,7 +343,7 @@ class SchemaDocumentChecksTest {
         List<Problem> problems = document.locate(without.validate(document.origin(), document.definition()));
 
         assertThat(problems).singleElement().satisfies(problem -> {
-            assertThat(problem.code()).isEqualTo(ProblemCode.CHECKS_UNAVAILABLE);
+            assertThat(problem.code()).isEqualTo(ProblemCode.EXPRESSIONS_UNAVAILABLE);
             assertAt(problem, "/entityTypes/Account/checks/a-check", 6, 7);
         });
     }

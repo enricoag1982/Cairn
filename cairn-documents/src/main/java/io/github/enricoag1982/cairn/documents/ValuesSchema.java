@@ -25,6 +25,10 @@ import java.util.Optional;
  * because validators need not check formats. JSON Schema cannot order dates, so a range of dates or instants is said in
  * the description only. The description and the examples of the attribute are copied, and a deprecated attribute is
  * marked.
+ *
+ * <p>A derived attribute (capability {@code derived-attributes}) is marked {@code readOnly}: a state has its value, and
+ * a write cannot set it. The schema of the values that a write may set, which {@link TransactionSchema} uses, leaves
+ * derived attributes out, and does not require them.
  */
 final class ValuesSchema {
 
@@ -61,7 +65,8 @@ final class ValuesSchema {
     }
 
     /**
-     * The schema as a document of its own: with the dialect and a title, which {@link #definition} leaves out.
+     * The schema as a document of its own: with the dialect and a title, which {@link #definition} leaves out. It lists
+     * every attribute, derived ones as read-only.
      *
      * @param kind        {@code entity type} or {@code relationship type}
      * @param name        the name of the type
@@ -74,10 +79,13 @@ final class ValuesSchema {
         return root;
     }
 
-    /** The schema as a definition inside another schema. */
+    /**
+     * The schema of the values that a write of a create or a relate may give, as a definition inside another schema: the
+     * attributes that are not derived, because a write cannot set a derived attribute, and the required ones among them.
+     */
     static Mapping definition(String kind, String name, Optional<String> description, List<Attribute> attributes) {
         Mapping mapping = new Mapping();
-        fill(mapping, kind, name, description, attributes);
+        fill(mapping, kind, name, description, attributes.stream().filter(attribute -> attribute.derived().isEmpty()).toList());
         return mapping;
     }
 
@@ -132,6 +140,9 @@ final class ValuesSchema {
         if (attribute.deprecated()) {
             mapping.putTrue("deprecated");
         }
+        if (attribute.derived().isPresent()) {
+            mapping.putTrue("readOnly");
+        }
         if (!attribute.examples().isEmpty()) {
             mapping.put("examples", new Sequence(attribute.examples().stream().map(DocumentWriter::literal).toList()));
         }
@@ -141,6 +152,11 @@ final class ValuesSchema {
     /** The description of the attribute, with its range if JSON Schema cannot express it: for dates and instants. */
     private static String description(Attribute attribute) {
         String description = attribute.description().orElse("");
+        if (attribute.derived().isPresent()) {
+            String derived = "Derived: computed when a transaction commits, from the expression "
+                    + attribute.derived().get() + ".";
+            description = description.isEmpty() ? derived : description + " " + derived;
+        }
         if (isTimeLike(attribute) && attribute.range().isPresent()) {
             String range = rangeText(attribute.range().get());
             if (!range.isEmpty()) {

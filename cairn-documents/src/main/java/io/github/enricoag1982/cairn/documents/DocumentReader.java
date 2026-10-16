@@ -259,7 +259,8 @@ final class DocumentReader {
         String name = attribute.key();
         if (properties.isEmpty()) {
             return new AttributeDefinition(name, ValueType.STRING, false, false, Optional.empty(), List.of(), false,
-                    Optional.empty(), List.of(), List.of(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty());
+                    Optional.empty(), List.of(), List.of(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty(),
+                    Optional.empty());
         }
         Map<String, Entry> p = properties.get();
         ValueType valueType = valueType(p.get("type"), path);
@@ -276,7 +277,21 @@ final class DocumentReader {
                 nodes.strings(p.get("allowedValues"), path, "'allowedValues'"),
                 nodes.string(p.get("pattern"), path, "value of 'pattern'"),
                 nodes.integer(p.get("minLength"), path),
-                nodes.integer(p.get("maxLength"), path));
+                nodes.integer(p.get("maxLength"), path),
+                derived(p.get("derived"), path));
+    }
+
+    /**
+     * Reads the expression of a derived attribute, and remembers where it is, so that a problem about the expression is
+     * located at the key {@code derived}, and in the expression where the text allows it.
+     */
+    private Optional<String> derived(Entry entry, String path) {
+        Optional<String> expression = nodes.string(entry, path, "value of 'derived'");
+        if (entry != null && entry.value() instanceof ScalarNode scalar && Scalars.isString(scalar)) {
+            expressions.putIfAbsent(DocumentLocations.derivationKey(path),
+                    ExpressionPlace.of(codePoints(), entry, scalar));
+        }
+        return expression;
     }
 
     private ValueType valueType(Entry entry, String path) {
@@ -410,7 +425,7 @@ final class DocumentReader {
         Entry expression = p.get("expression");
         String text = nodes.string(expression, path, "value of 'expression'").orElse("");
         if (expression != null && expression.value() instanceof ScalarNode scalar && Scalars.isString(scalar)) {
-            expressions.putIfAbsent(DocumentLocations.key(path), ExpressionPlace.of(codePoints(), expression, scalar));
+            expressions.putIfAbsent(DocumentLocations.checkKey(path), ExpressionPlace.of(codePoints(), expression, scalar));
         }
         return new Check(check.key(), text, nodes.string(p.get("message"), path, "value of 'message'"));
     }

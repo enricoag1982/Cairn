@@ -2,7 +2,6 @@ package io.github.enricoag1982.cairn.documents;
 
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
 import io.github.enricoag1982.cairn.schema.Problem;
-import io.github.enricoag1982.cairn.schema.ProblemCode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,8 +17,10 @@ import java.util.TreeMap;
  * {@code traits}, {@code entityTypes} or {@code relationshipTypes}, an attribute at its key under {@code attributes},
  * an inverse name at the key {@code inverseName}, a rule at its entry in {@code rules}, a check at its key under
  * {@code checks} and the origin at the key {@code origin}. A problem about the expression of a check
- * ({@code INVALID_CHECK}) is located at the key {@code expression} of the check, and, where the text allows it and the
- * problem gives the position in the expression, at that position. Paths match without regard to case, as names do.
+ * ({@code INVALID_CHECK}) is located at the key {@code expression} of the check, and a problem about the expression of
+ * a derived attribute ({@code INVALID_DERIVATION}) at the key {@code derived} of the attribute, and, where the text
+ * allows it and the problem gives the position in the expression, at that position. Paths match without regard to
+ * case, as names do.
  *
  * <p>A problem about an element that the document does not have, such as an attribute that a new version of the
  * document removes, is located at the closest enclosing element that the document has: {@code Address.street} at
@@ -75,7 +76,7 @@ public final class DocumentLocations {
     /**
      * Locates a problem by its path. A problem about an element that the document does not have is located at the
      * closest enclosing element that it has, and at the root if no part of the path is in the document. A problem about
-     * the expression of a check is located in the expression. A problem that is located already is returned as it is.
+     * the expression of a check or of a derived attribute is located in the expression. A problem that is located already is returned as it is.
      *
      * @param problem the problem
      * @return the located problem
@@ -84,8 +85,11 @@ public final class DocumentLocations {
         if (problem.location().isPresent()) {
             return problem;
         }
-        ExpressionPlace expression = problem.code() == ProblemCode.INVALID_CHECK
-                ? expressions.get(key(problem.path())) : null;
+        ExpressionPlace expression = switch (problem.code()) {
+            case INVALID_CHECK -> expressions.get(checkKey(problem.path()));
+            case INVALID_DERIVATION -> expressions.get(derivationKey(problem.path()));
+            default -> null;
+        };
         return problem.at(expression != null ? expression.locate(problem.message()) : enclosing(problem.path()));
     }
 
@@ -122,6 +126,16 @@ public final class DocumentLocations {
 
     static String key(String path) {
         return path.toLowerCase(Locale.ROOT);
+    }
+
+    /** The key of the expression of a check, whose path is the type and the check's name. */
+    static String checkKey(String path) {
+        return "check:" + key(path);
+    }
+
+    /** The key of the expression of a derived attribute, whose path is the type and the attribute's name. */
+    static String derivationKey(String path) {
+        return "derived:" + key(path);
     }
 
     @Override
