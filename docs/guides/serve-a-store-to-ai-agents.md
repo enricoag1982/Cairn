@@ -10,7 +10,7 @@ The server creates an in-memory store, registers the schema documents you give i
 What the tools do is specified in the `agent-tools` spec; why agents are first-class users is in [ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md).
 
 > [!WARNING]
-> The server is for trusted, local use. It has no authentication, any agent connected to it can read everything the store holds, and the store is gone when the server stops.
+> The server is for trusted, local use. It has no authentication, any agent connected to it can read everything that the server's clearance covers, and the store is gone when the server stops. An agent may register schema changes unless `--policy schema=approve` or `deny` says otherwise; it cannot change classifications that its clearance does not cover, but other changes still deserve a person's look.
 
 ## Build the server
 
@@ -71,7 +71,7 @@ Other MCP clients that start servers on standard input and output take the same 
 
 | Tool | What it does |
 | --- | --- |
-| `cairn_describe` | The latest basis, every origin's stored definition as a schema document, the available rules and whether the server has their code, the problem codes, the principal and the approval policy. Start here. |
+| `cairn_describe` | The latest basis, every origin's stored definition as a schema document, the available rules and whether the server has their code, the problem codes, the principal, the approval policy and the clearance, with each attribute's classification in the documents. Start here. |
 | `cairn_json_schema` | The JSON Schema of schema documents (`document`), of transaction payloads (`payload`), of queries (`query`), or of the values of one type (`values` with `type`). |
 | `cairn_explain_problem` | The explanation of a problem code, or of a rule's code such as `lei-checksum/invalid-check-digits`. |
 | `cairn_plan_schema`, `cairn_register_schema` | Plan a schema document, then register it. The plan lists each change as compatible or breaking, with hints. |
@@ -84,7 +84,7 @@ Other MCP clients that start servers on standard input and output take the same 
 
 Documents, payloads and queries are passed as text, YAML or JSON, so that problems keep their lines and columns.
 
-Every tool reads and writes through the server's clearance ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)). A state lists in `withheld` the attributes whose values the clearance did not let through, so the agent tells a withheld value from no value. A query that names a withheld attribute, a unique key of one, or a write that sets or clears one is a problem `ACCESS_DENIED`; `cairn_describe` reports the clearance and each attribute's classification. A payload cannot widen the clearance. Give an agent only the classifications its task needs: the HR example's hiring agent runs with `--clearance pay`, its org-chart agent with none.
+Every tool reads and writes through the server's clearance ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)). A state lists in `withheld` the attributes whose values the clearance did not let through, so the agent tells a withheld value from no value; what else the clearance refuses, with the problem `ACCESS_DENIED`, is in the `attribute-access` spec. A payload cannot widen the clearance. The start message on standard error names it. Give an agent only the classifications its task needs: in the HR example, the hiring agent of HR-13 has the clearance `pay` and the org-chart agent of HR-18 none.
 Every tool returns JSON. A call that cannot be done returns problems instead of failing, each with a code, a path, and where it helps a hint: `{ problems }`, or `{ outcome: "rejected", problems }` for the tools that plan, register, dry-run and commit. A problem with an argument has the path `@arguments.<name>`.
 
 A typical agent session reads `cairn_describe`, asks `cairn_json_schema` for the payload schema, writes a payload, runs it with `cairn_dry_run` until it has no problems, and then commits it. To answer questions over many entities, it asks `cairn_json_schema` for the kind `query` and sends queries to `cairn_query`.
@@ -108,7 +108,7 @@ java -cp "cairn-agent-tools/build/install/cairn-agent-tools/lib/*:my-rules.jar" 
 
 ## Approval
 
-With `--policy schema=approve` or `data=approve`, a registration or commit that would apply waits as an *approval request*, and the tool returns the request instead.
+With `--policy schema=approve` or `data=approve`, a registration or commit that would apply waits as an *approval request*, and the tool returns the request instead. The request keeps the agent's clearance, and approving it commits with that clearance, never a wider one.
 A request that would be rejected now, or a registration that would change nothing, is answered at once. `cairn_approval_status` shows whether a person has decided.
 
 People approve and reject requests through the Java API (`ApprovalQueue.pending()`, `approve` and `reject`), which the standalone server does not expose.
@@ -118,7 +118,7 @@ To let people decide, embed the adapter in your application. Put `cairn-agent-to
 Store store = Stores.inMemory(StoreSettings.builder().discoverRules().build());
 ApprovalQueue queue = new ApprovalQueue(store);
 AgentPolicy policy = new AgentPolicy(AgentPolicy.Decision.REQUIRE_APPROVAL, AgentPolicy.Decision.REQUIRE_APPROVAL);
-AgentTools tools = new AgentTools(store, policy, queue, "agent:onboarding", Optional.empty());
+AgentTools tools = new AgentTools(store, policy, queue, "agent:onboarding", Optional.empty(), Clearance.none());
 McpSyncServer server = McpAdapter.serve(tools, transportProvider);
 // Later, a person:
 queue.approve(queue.pending().getFirst().id(), "alice");

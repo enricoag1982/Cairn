@@ -84,7 +84,7 @@ Scenarios of the `checks`, `schema-documents` and `schema-evolution` specs also 
 - `title-not-blank` on Employs: `!has(self.title) || size(self.title) > 0`.
 - `born-on-a-weekday` on Person: `!has(self.birthDate) || cairn.workingDays(self.birthDate, self.birthDate) == 1`, which calls a *function of Cairn's own*.
 
-Scenarios of the `derived-attributes`, `checks`, `schema-documents` and `schema-evolution` specs declare test-only *derived attributes* ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)):
+Scenarios of the `derived-attributes`, `checks`, `attribute-access`, `schema-documents` and `schema-evolution` specs declare test-only *derived attributes* ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)):
 
 - `label` (string) on Account: `self.number + ' ' + self.currency`.
 - `balanceInCents` (long) on Account: `int(self.balance * 100.0)`.
