@@ -154,7 +154,7 @@ public final class LeiChecksum extends LeiChecksumRuleV1 {
 The base class holds the rule's name, version and type, and turns each entity version into an `Organization`. The description and the codes stay in your class ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
 Give the rule to the store with `StoreSettings.builder().rules(new LeiChecksum())`, or list it for Java's service loader.
 
-A rule can compare the version with what the store held before the transaction: `context.before()` and `context.beforeAt(instant)` are views of the store as committed before it, and the base class's `previous(version, context)` reads the versions that the store held before the transaction during the checked version's period, as its generated type, or none when the transaction creates it. Compare with each of them, so that the verdict holds at every instant of the period. For example, a rule that keeps an LEI once given:
+A rule can compare the version with what the store held before the transaction: `context.before()` and `context.beforeAt(instant)` are views of the store as committed before it, and the base class's `previous(version, context)` reads the versions that the store held before the transaction during the checked version's period, as its generated type, or none when the transaction creates it. Compare with each of them, so that the verdict holds at every instant of the period. `previous` reads the entity's timeline, so every later change to that timeline runs the rule again ([ADR-0032](../decisions/0032-let-rules-read-the-store-as-committed-before-the-transaction.md)). For example, `lei-kept`, a subclass of its generated `LeiKeptRuleV1`, keeps an LEI once given:
 
 ```java
 @Override

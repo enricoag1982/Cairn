@@ -6,7 +6,7 @@ A rule sees the version it checks and reads the state the transaction would prod
 
 ## What Changes
 
-- `RuleContext` gains `before()` and `beforeAt(Instant)`: read-only views of the store as committed before the transaction, at the start of the checked version's period or at another effective time, with the coordinates of the latest committed basis. A rule reads its own entity's previous version with `context.before().entity(version.id())`.
+- `RuleContext` gains `before()` and `beforeAt(Instant)`: read-only views of the store as committed before the transaction, at the start of the checked version's period or at another effective time, with the coordinates of the latest committed basis. `context.before().entity(version.id())` gives the version at the start of the period only; to compare with every version in the period, a rule reads `before().timeline(version.id())` or uses the generated `previous`.
 - Reads through those views are recorded like other reads (ADR-0025). In a re-check, "before" is the state before the transaction that runs the check again.
 - Generated rule base classes gain `previous(version, context)`: the versions of the checked entity or relationship that the store held before the transaction during the version's period, as its generated type, so that a rule compares with each of them.
 - The HR example adds the rule `decided-requests-stay` and the story HR-16: a decided leave request keeps its dates and kind.
@@ -29,6 +29,6 @@ None.
 
 ## Impact
 
-- **Decisions:** none new. It extends what ADR-0018's rule context can read, and ADR-0025's reads cover it; ADR-0018 gets a More Information line.
+- **Decisions:** ADR-0032, accepted under the standing approval: rules read the store as committed before the transaction. It replaces one sentence of ADR-0018 for these views and adds to ADR-0021's base classes; it relies on ADR-0025 for recorded reads.
 - **Code:** `cairn-api` (`RuleContext`); `cairn-core` (the rule stage and its views, recorded reads); `cairn-codegen` (base classes); `cairn-example-hr` (the rule, the story and its test).
-- **Docs:** the codegen guide's rule section, the HR domain page (rule table, HR-16, gaps), the reference domain page (the test-only rule), and the architecture page.
+- **Docs:** the glossary, the codegen guide's rule section, the HR domain page (rule table, HR-16, gaps), the reference domain page (the test-only rule), and the architecture page.

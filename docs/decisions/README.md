@@ -46,5 +46,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0029](0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md) | Feed changes from an index of what each basis changed, read from a basis | accepted | 2026-10-15 |
 | [ADR-0030](0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md) | Write checks within one version in CEL, evaluated by an optional module | accepted | 2026-10-15 |
 | [ADR-0031](0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md) | Derive attributes from a version's own values in CEL, computed at commit and stored | accepted | 2026-10-15 |
+| [ADR-0032](0032-let-rules-read-the-store-as-committed-before-the-transaction.md) | Let rules read the store as committed before the transaction | accepted | 2026-10-16 |
 
 <!-- decision-log:end -->

@@ -80,3 +80,4 @@ Chosen option: "An interface per type, with a nested snapshot record and builder
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, with the proposal of `add-java-type-generation`.
 - The typed query model of ADR-0012 comes with `add-queries-and-aggregation`, where typed reads can return the nearest known supertype.
+- [ADR-0032](0032-let-rules-read-the-store-as-committed-before-the-transaction.md) adds `previous(version, context)` to the rule base classes: the versions held before the transaction during the checked version's period.

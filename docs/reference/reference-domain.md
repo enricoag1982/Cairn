@@ -74,7 +74,7 @@ Scenarios that validate or register the reference model assume a registry with t
 - `account-a1-queried` version 1, for Employs: the same check, with A-1 read by a query for Account that starts from A-1's ID (`underfunded`).
 - `lei-kept` version 1, for Organization: an organization that had an LEI before the transaction, at any time in the checked version's period, still has one (`lei-removed`). It reads the store as it was before the transaction.
 
-The last four read other entities and relationships, so writes to those run them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)).
+`employer-holds-account`, `controlling-owner-has-lei`, `account-a1-funded` and `account-a1-queried` read other entities and relationships, so writes to those run them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)); `lei-kept` reads its organization's timeline as it was before the transaction ([ADR-0032](../decisions/0032-let-rules-read-the-store-as-committed-before-the-transaction.md)), so later changes to that timeline run it again.
 
 Scenarios of the `checks`, `schema-documents` and `schema-evolution` specs also declare test-only *checks*, which the reference model does not declare ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)):
 

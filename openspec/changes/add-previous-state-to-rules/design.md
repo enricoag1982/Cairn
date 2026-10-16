@@ -2,6 +2,8 @@
 
 ## Context
 
+ADR-0032 decides this change: rules read the store as committed before the transaction, with recorded reads, and "before" in a re-check is the state before the re-checking transaction.
+
 Rules run in `RuleStage` against a provisional view of the state the transaction would produce, through `RuleContext.view()` (at the start of the version's period) and `viewAt(Instant)`. Every read goes through views that record what they read (ADR-0025). The committed store is at the latest basis the commit sequence published; the transaction is not yet applied to it.
 
 ## Goals / Non-Goals

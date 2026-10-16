@@ -69,6 +69,7 @@ Accepted, and built one change at a time:
 - Purges that remove entities from all of history, the one exception to immutability: [ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md)
 - Queries as data, a pipeline of steps over named bindings: [ADR-0023](../decisions/0023-express-queries-as-data-a-pipeline-of-steps-over-named-bindings-with-a-java-builder-and-a-json-form.md)
 - Entities named and found by unique keys, resolved at commit: [ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)
+- Rules that read the store as committed before the transaction: [ADR-0032](../decisions/0032-let-rules-read-the-store-as-committed-before-the-transaction.md)
 - Rules run again when the data they read changes: [ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)
 - A change feed from an index of what each basis changed, read from a basis: [ADR-0029](../decisions/0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md)
 - Durable stores through a commit log of effects and snapshot files: [ADR-0022](../decisions/0022-make-stores-durable-with-a-commit-log-of-effects-and-snapshots.md)
@@ -132,7 +133,7 @@ sequenceDiagram
     S->>S: compute the derived attributes of every written segment
     S->>S: validate values and check relationships at both ends, at every point in effective time
     S->>S: run the checks of their types on every changed segment
-    S->>S: run the rules of changed entities and relationships on a read-only view of that state, recording what they read
+    S->>S: run the rules of changed entities and relationships on read-only views of that state and of the store as committed before it, recording what they read
     S->>S: if no other problems, run rules again for versions whose reads the transaction changes (re-checks)
     alt problems
         S-->>C: Rejected(problems), nothing recorded
