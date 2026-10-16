@@ -121,7 +121,7 @@ public enum ProblemCode {
             + "type has, and whose result is a boolean. The message gives the error and, where it is known, the line "
             + "and column in the expression, counted from 1, as \"at line L, column C\"; the found details give the "
             + "expression. For a check in a schema document, the problem is also located in the document, at that "
-            + "position where the text allows it. Correct the expression."),
+            + "position where the text allows it. " + Texts.CAIRN_FUNCTIONS + " Correct the expression."),
     /** The expression of a derived attribute does not compile, reads an attribute it must not, or has the wrong type. */
     INVALID_DERIVATION("The expression of a derived attribute must be an expression of the Common Expression Language "
             + "(CEL) with at most 4,000 characters that compiles, reads the version's attributes only as "
@@ -131,8 +131,8 @@ public enum ProblemCode {
             + "The path is the type that declares the attribute and the attribute's name; the message gives the error "
             + "and, where it is known, the line and column in the expression, counted from 1, as \"at line L, column "
             + "C\"; the found details give the expression. For an attribute in a schema document, the problem is also "
-            + "located in the document, at the key derived and, where the text allows it, at that position. Correct "
-            + "the expression."),
+            + "located in the document, at the key derived and, where the text allows it, at that position. "
+            + Texts.CAIRN_FUNCTIONS + " Correct the expression."),
     /** A registry or a store has no expression language, so it cannot compile or run checks or derived attributes. */
     EXPRESSIONS_UNAVAILABLE("A definition declares checks or derived attributes, or a write concerns a type to which "
             + "checks apply or that has derived attributes, but there is no expression language to compile or run "
@@ -421,6 +421,20 @@ public enum ProblemCode {
             + "a sum or an average needs numbers, and a minimum or a maximum needs numbers, dates, instants or "
             + "strings. The expected and found details name the value types. Aggregate another attribute, or count "
             + "the rows.");
+
+    /** Text that explanations share; a nested class, because an enum constant cannot name a field declared after it. */
+    private static final class Texts {
+
+        /** What the explanations of an invalid check and an invalid derivation tell about Cairn's own functions. */
+        static final String CAIRN_FUNCTIONS = "Besides the standard functions of CEL, an expression can call the "
+                + "functions of Cairn's own: cairn.calendarDays(first, last) and cairn.workingDays(first, last) take "
+                + "two timestamps and give the number of days from the first date to the last, as dates in UTC, both "
+                + "included, and workingDays counts only Monday to Friday; a call with other arguments, or of another "
+                + "cairn.<name>, does not compile.";
+
+        private Texts() {
+        }
+    }
 
     private final String explanation;
 
