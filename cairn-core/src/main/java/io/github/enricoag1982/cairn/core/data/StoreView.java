@@ -123,6 +123,13 @@ final class StoreView extends NavigableView {
     }
 
     @Override
+    Optional<EntityState> lastVersion(EntityId id) {
+        Objects.requireNonNull(id, "id");
+        return ledger.entity(id, basis).flatMap(entity -> entity.timeline().lastEndingAtOrBefore(effectiveAt)
+                .flatMap(segment -> entityState(entity, segment)));
+    }
+
+    @Override
     SchemaIndex index() {
         return index;
     }

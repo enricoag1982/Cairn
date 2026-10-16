@@ -232,6 +232,16 @@ final class ProvisionalView extends NavigableView {
     }
 
     @Override
+    Optional<EntityState> lastVersion(EntityId id) {
+        Objects.requireNonNull(id, "id");
+        // Which version ends last by the effective time depends on the whole timeline, so a correction of any part of
+        // it can change the result (ADR-0025).
+        readAcrossTime(new ReadKey.Entity(id));
+        return source.find(id).flatMap(entity -> entity.timeline().lastEndingAtOrBefore(effectiveAt)
+                .flatMap(segment -> state(id, entity, Optional.of(segment))));
+    }
+
+    @Override
     void navigating(EntityId from, RelationshipType type, boolean inverse, boolean acrossTime) {
         if (reads == null) {
             return;

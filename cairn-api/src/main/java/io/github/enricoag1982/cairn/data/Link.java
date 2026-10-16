@@ -9,7 +9,9 @@ import java.util.Objects;
  *
  * @param relationship the state of the relationship that was navigated; its source and target tell which end the
  *                     navigation started from
- * @param entity       the state of the entity at the other end of the relationship from the one navigated from
+ * @param entity       the state of the entity at the other end of the relationship from the one navigated from; for a
+ *                     relationship whose type outlives its targets and whose target has ended, the target's last
+ *                     version, whose period ends at or before the view's effective time
  */
 public record Link(RelationshipState relationship, EntityState entity) {
 

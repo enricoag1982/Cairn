@@ -6,6 +6,7 @@ import static io.github.enricoag1982.cairn.documents.Documents.problem;
 import static io.github.enricoag1982.cairn.documents.Documents.problems;
 import static io.github.enricoag1982.cairn.documents.Documents.valid;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.core.SchemaRegistries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
@@ -17,6 +18,7 @@ import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Range;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
+import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.Value;
@@ -104,6 +106,30 @@ class SchemaDocumentScenariosTest {
                             assertThat(label.valueType()).isEqualTo(ValueType.STRING);
                             assertThat(label.required()).isTrue();
                         }));
+    }
+
+    @Test
+    @DisplayName("Scenario: Reading a relationship type that outlives its targets")
+    void readingARelationshipTypeThatOutlivesItsTargets() {
+        SchemaDocument document = valid(document(
+                "relationshipTypes:",
+                "  OpenedBy:",
+                "    source: Account",
+                "    target: Person",
+                "    targetsPerSource: \"0..1\"",
+                "    sourcesPerTarget: \"0..*\"",
+                "    inverseName: opened",
+                "    outlivesTarget: true",
+                "  HeldBy:",
+                "    source: Account",
+                "    target: Party",
+                "    targetsPerSource: \"1..1\"",
+                "    sourcesPerTarget: \"0..*\"",
+                "    inverseName: holds"));
+
+        assertThat(document.definition().relationshipTypes()).extracting(RelationshipTypeDefinition::name,
+                RelationshipTypeDefinition::outlivesTarget).containsExactly(tuple("OpenedBy", true),
+                tuple("HeldBy", false));
     }
 
     @Test

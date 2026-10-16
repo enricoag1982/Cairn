@@ -82,6 +82,7 @@ final class PropertyRules {
             Map.entry("relationship.inverseAliases", INVERSE_ALIASES),
             Map.entry("relationship.kind", ALWAYS_BREAKING),
             Map.entry("relationship.symmetric", ALWAYS_BREAKING),
+            Map.entry("relationship.outlivesTarget", PropertyRules::outlivesTarget),
             Map.entry("relationship.supertype", context -> sameSupertype(context, Kind.RELATIONSHIP_TYPE)),
             Map.entry("relationship.attributes", SKIP),
             Map.entry("relationship.deprecated", MAY_BECOME_TRUE),
@@ -188,6 +189,18 @@ final class PropertyRules {
         return List.of(stricter
                 ? Changes.breaking(context.path(), description, Changes.KEEP_UNCONSTRAINED)
                 : Changes.breaking(context.path(), description));
+    }
+
+    /**
+     * Declaring that relationships outlive their targets only relaxes integrity. Giving it up is breaking, because
+     * stored relationships may already continue after their targets ended (ADR-0034).
+     */
+    private static List<SchemaChange> outlivesTarget(Context context) {
+        if (Boolean.TRUE.equals(context.newValue())) {
+            return List.of(Changes.compatible(context.path(), "let the relationships outlive their targets"));
+        }
+        return List.of(Changes.breaking(context.path(), "no longer lets the relationships outlive their targets",
+                Changes.KEEP_OUTLIVING_TARGETS));
     }
 
     private static List<SchemaChange> sameSupertype(Context context, Kind kind) {

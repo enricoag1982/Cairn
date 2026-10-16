@@ -26,6 +26,10 @@ import java.util.Set;
  * is. The entities at its other ends become touched, as the ends of a relationship are, but only for their
  * multiplicities and lifetimes; nothing else is validated again.
  *
+ * <p>A relationship whose type outlives its targets, and whose target is the entity that the cascade ended, is left as it
+ * is (design D2 of {@code add-relationships-that-outlive-their-targets}), unless the entity is also its source, which
+ * ends with it as for every type. The entity at its other end is not touched.
+ *
  * <p>Only what exists before the instant and goes on past it is ended; a relationship or target that starts at or after
  * the instant is left as it is, for the integrity checks to report, because ending it would erase it, and so is a
  * relationship that the transaction already ends from the instant or earlier.
@@ -130,14 +134,16 @@ final class Cascades {
 
     /**
      * The relationships of types that the schema has, with an entity as their source or their target, that start before
-     * an instant and go on past it, whether the transaction touches them or not, in the order of their IDs. A
-     * relationship that the transaction does not touch is touched from here on, with its ends.
+     * an instant and go on past it, whether the transaction touches them or not, in the order of their IDs, except those
+     * that outlive the entity as their target. A relationship that the transaction does not touch is touched from here
+     * on, with its ends.
      */
     private List<Working> relationshipsPast(EntityId entity, Instant from) {
         List<Working> found = new ArrayList<>();
         for (Working subject : List.copyOf(workspace.working().values())) {
             if (subject.isRelationship() && !subject.failed()
                     && (entity.equals(subject.source) || entity.equals(subject.target))
+                    && !outlives(subject.relationshipType.outlivesTarget(), entity, subject.source, subject.target)
                     && goesPast(subject.timeline, from)) {
                 found.add(subject);
             }
@@ -150,12 +156,22 @@ final class Cascades {
                 continue;
             }
             Held held = workspace.ledger().relationship(id).orElse(null);
-            if (held != null && goesPast(held.timeline(), from)) {
+            if (held != null && goesPast(held.timeline(), from)
+                    && !outlives(workspace.index().relationshipType(end.type()).orElseThrow().outlivesTarget(), entity,
+                            held.source(), held.target())) {
                 found.add(workspace.loadRelationship(id, false));
             }
         }
         found.sort(Comparator.comparing(relationship -> (RelationshipId) relationship.id));
         return found;
+    }
+
+    /**
+     * Tells whether a relationship outlives an entity: its type lets relationships outlive their targets, and the
+     * entity is its target and not its source.
+     */
+    private static boolean outlives(boolean outlivesTarget, EntityId entity, EntityId source, EntityId target) {
+        return outlivesTarget && entity.equals(target) && !entity.equals(source);
     }
 
     /** Tells whether something starts before an instant and goes on past it, so that ending it there cuts it off. */

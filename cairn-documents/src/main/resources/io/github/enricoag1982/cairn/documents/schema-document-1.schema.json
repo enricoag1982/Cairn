@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:cairn:schema-document:1",
   "title": "Cairn schema document, format version 1",
-  "description": "A Cairn schema document defines the traits, entity types and relationship types of one origin. Write it as YAML 1.2 or as JSON. The same keys are used in both. A key that is left out takes its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, aliases, inverse aliases, constraints, examples, description, rules or checks. Anchors, aliases, explicit tags, merge keys, duplicate keys and several documents in one stream are not part of the format.",
+  "description": "A Cairn schema document defines the traits, entity types and relationship types of one origin. Write it as YAML 1.2 or as JSON. The same keys are used in both. A key that is left out takes its default: not required, not unique, not abstract, an association, not symmetric, not outliving its targets, not deprecated, and no supertype, traits, aliases, inverse aliases, constraints, examples, description, rules or checks. Anchors, aliases, explicit tags, merge keys, duplicate keys and several documents in one stream are not part of the format.",
   "type": "object",
   "additionalProperties": false,
   "required": ["cairn", "origin"],
@@ -163,6 +163,11 @@
         },
         "symmetric": {
           "description": "True if the two ends are interchangeable. Source and target must then be the same entity type, with the same multiplicity at both ends.",
+          "type": "boolean",
+          "default": false
+        },
+        "outlivesTarget": {
+          "description": "True if the relationships of the type may continue after their target ends, as records of a past fact: the target must exist at the start of each stretch of a relationship's effective period, and navigation then returns the target's last version. Only associations that are not symmetric can declare it, and subtypes do not inherit it.",
           "type": "boolean",
           "default": false
         },

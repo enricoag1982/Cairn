@@ -141,6 +141,7 @@ class DocumentReaderTest {
                     sourcesPerTarget: "1..*"
                     inverseName: closeTo
                     kind: composition
+                    outlivesTarget: true
                 """;
         SchemaDefinition definition = valid(text).definition();
 
@@ -180,8 +181,8 @@ class DocumentReaderTest {
                         List.of(new RuleReference("knows-rule", 1)),
                         List.of(new Check("since-set", "has(self.since)", Optional.of("Since when?")))),
                 new RelationshipTypeDefinition("CloseTo", "Person", "Person", Multiplicity.ZERO_OR_ONE,
-                        Multiplicity.ONE_OR_MORE, "closeTo", List.of(), RelationshipKind.COMPOSITION, false,
-                        Optional.of("Knows"), List.of(), List.of(), false, Optional.empty(), List.of()));
+                        Multiplicity.ONE_OR_MORE, "closeTo", List.of(), RelationshipKind.COMPOSITION, false, true,
+                        Optional.of("Knows"), List.of(), List.of(), false, Optional.empty(), List.of(), List.of()));
     }
 
     @Test

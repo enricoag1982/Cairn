@@ -685,6 +685,11 @@ final class SchemaValidator {
                             "The composition " + type.name() + " cannot be symmetric."));
                 }
             }
+            if (type.outlivesTarget() && (type.kind() == RelationshipKind.COMPOSITION || type.symmetric())) {
+                problems.add(new Problem(ProblemCode.OUTLIVES_TARGET_NOT_ALLOWED, type.name(), "The "
+                        + (type.kind() == RelationshipKind.COMPOSITION ? "composition " : "symmetric relationship type ")
+                        + type.name() + " cannot let its relationships outlive their targets."));
+            }
             String[] ends = relationshipEnds.get(key);
             if (type.symmetric() && ends != null
                     && (!ends[0].equals(ends[1]) || !type.targetsPerSource().equals(type.sourcesPerTarget()))) {

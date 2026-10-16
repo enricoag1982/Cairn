@@ -466,6 +466,30 @@ public final class Brightwater {
                 """.formatted(HR_ASSISTANT);
     }
 
+    // ------------------------------------------------------------------ HR-17: a manager leaves
+
+    /**
+     * HR-17. Recorded 1 November: Cleo leaves on 30 November, so her employment ends from 1 December, with its own
+     * relationships and the {@code ManagedBy} of Platform, which she managed. The transaction does not end the
+     * {@code DecidedBy} of Dev's vacation request (HR-5), which points to her employment: a {@code DecidedBy} records a
+     * past fact and outlives its target (ADR-0034), so her decision stays, and a view effective on 1 December or later
+     * navigates from the request to her employment as it last was, with a period that ends on 1 December.
+     *
+     * @param ids the IDs of HR-1, HR-2 and HR-5
+     * @return the recording
+     */
+    public static Recording hr17CleoLeaves(Ids ids) {
+        Instant december1 = on(12, 1);
+        return new Recording(on(11, 1), Transaction.by(HR_ADMIN).reason("Cleo leaves on 30 November")
+                .endDate(ids.entity("e003"), december1)
+                .endDate(ids.relationship("employmentOf003"), december1)
+                .endDate(ids.relationship("employedBy003"), december1)
+                .endDate(ids.relationship("worksAt003"), december1)
+                .endDate(ids.relationship("fills003"), december1)
+                .endDate(ids.relationship("managedByPLT"), december1)
+                .build());
+    }
+
     // ------------------------------------------------------------------ dates
 
     /**

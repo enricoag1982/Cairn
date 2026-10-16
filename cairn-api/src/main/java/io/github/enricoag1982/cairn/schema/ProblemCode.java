@@ -57,6 +57,11 @@ public enum ProblemCode {
     /** A symmetric relationship type has different ends or different multiplicities. */
     SYMMETRIC_ENDS("The two ends of a symmetric relationship type are interchangeable, so they need the same entity "
             + "type and the same multiplicity. Make the ends equal, or remove the symmetric flag."),
+    /** A composition or a symmetric relationship type declares that its relationships outlive their targets. */
+    OUTLIVES_TARGET_NOT_ALLOWED("Only an association that is not symmetric can let its relationships outlive their "
+            + "targets: the target of a composition ends with its source, and the ends of a symmetric type are "
+            + "interchangeable. Remove outlivesTarget, or make the relationship type an association that is not "
+            + "symmetric."),
     /** A relationship subtype's source or target is not within its supertype's. */
     RELATIONSHIP_SUBTYPE_ENDS("The source and target of a relationship subtype must be the same as, or subtypes of, "
             + "those of its supertype. Change the ends, or the supertype."),
@@ -354,14 +359,16 @@ public enum ProblemCode {
     /** A relationship exists at a time at which one of its ends does not. */
     END_NOT_EFFECTIVE("Both ends of a relationship must exist at every point of the relationship's effective period, "
             + "so a write never relates an entity outside its lifetime. The message names the end and the period in "
-            + "which it does not exist, and the found details give the relationship's lifetime. Shorten the "
-            + "relationship's period, or create the entity for the period first."),
+            + "which it does not exist, and the found details give the relationship's lifetime. The target of a "
+            + "relationship whose type outlives its targets needs to exist only at the start of each stretch of the "
+            + "period. Shorten the relationship's period, or create the entity for the period first."),
     /** An entity ends, or has been shortened, while a relationship to it continues. */
     RELATIONSHIP_OUTLIVES_END("A relationship cannot continue after one of its ends has ended. A transaction that "
             + "ends an entity must end every relationship that has the entity as an end, from the same instant or "
             + "from an earlier one; compositions, their targets and the targets' other relationships end by "
-            + "themselves. End the relationship in the same transaction, at or before the instant at which the "
-            + "entity ends, or end the entity later."),
+            + "themselves. A relationship whose type outlives its targets may continue after its target ends, but "
+            + "its target must exist where the relationship starts. End the relationship in the same transaction, at "
+            + "or before the instant at which the entity ends, or end the entity later."),
     /** An entity has fewer relationships of a type than the minimum, at some point in effective time. */
     TOO_FEW_RELATIONSHIPS("An entity must have at least the minimum number of relationships that a relationship type "
             + "declares for its end, counting the relationships of the type and of its subtypes, at every point in "

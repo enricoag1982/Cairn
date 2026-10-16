@@ -201,8 +201,8 @@ final class DocumentReader {
                 "relationship type " + path, Keys.RELATIONSHIP_TYPE, Keys.RELATIONSHIP_TYPE_REQUIRED);
         if (properties.isEmpty()) {
             return new RelationshipTypeDefinition(path, "", "", Multiplicity.ZERO_OR_MORE, Multiplicity.ZERO_OR_MORE,
-                    "", List.of(), RelationshipKind.ASSOCIATION, false, Optional.empty(), List.of(), List.of(), false,
-                    Optional.empty(), List.of(), List.of());
+                    "", List.of(), RelationshipKind.ASSOCIATION, false, false, Optional.empty(), List.of(), List.of(),
+                    false, Optional.empty(), List.of(), List.of());
         }
         Map<String, Entry> p = properties.get();
         // The order matters if a path names more than one element: the first one read keeps it.
@@ -224,6 +224,7 @@ final class DocumentReader {
                 nodes.strings(p.get("inverseAliases"), path, "'inverseAliases'"),
                 kind(p.get("kind"), path),
                 nodes.bool(p.get("symmetric"), path),
+                nodes.bool(p.get("outlivesTarget"), path),
                 nodes.string(p.get("supertype"), path, "value of 'supertype'"),
                 attributes,
                 nodes.strings(p.get("aliases"), path, "'aliases'"),

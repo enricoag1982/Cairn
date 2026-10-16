@@ -19,8 +19,12 @@ import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.documents.Instants;
 import io.github.enricoag1982.cairn.documents.JsonSchemas;
 import io.github.enricoag1982.cairn.documents.SchemaDocuments;
+import io.github.enricoag1982.cairn.fixtures.Definitions;
+import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.RegistrationResult;
+import io.github.enricoag1982.cairn.schema.Submission;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -96,6 +100,18 @@ class AgentToolsTest {
     }
 
     @Test
+    void theDescriptionsOfNavigationAndTraversalSayWhatTheyReturnForARelationshipThatOutlivesItsTarget() {
+        for (AgentTools.ToolDescription tool : AgentTools.toolDescriptions()) {
+            if (tool.name().equals("cairn_navigate")) {
+                assertThat(tool.description()).contains("outlivesTarget").contains("last version");
+            }
+            if (tool.name().equals("cairn_traverse")) {
+                assertThat(tool.description()).contains("outlivesTarget").contains("last version");
+            }
+        }
+    }
+
+    @Test
     void everyToolAnswersWithAJsonObjectWhateverTheArguments() {
         for (AgentTools.ToolDescription tool : AgentTools.toolDescriptions()) {
             for (String arguments : new String[] {null, "", "  ", "{}", "[]", "null", "42", "\"text\"", "{", "{\"a\":",
@@ -123,6 +139,23 @@ class AgentToolsTest {
     }
 
     // ------------------------------------------------------------------ describing
+
+    @Test
+    void theDocumentOfADescriptionSaysThatRelationshipsOutliveTheirTargets() {
+        assertThat(fixture.store.schema().register(ReferenceModel.origin("1.1.0"),
+                Definitions.plus(ReferenceModel.definition(), Definitions.openedBy(true)),
+                Submission.by("importer"))).isInstanceOf(RegistrationResult.Applied.class);
+
+        JsonNode description = fixture.call("cairn_describe");
+
+        assertThat(description.get("origins")).singleElement().satisfies(origin -> {
+            String document = origin.get("document").stringValue();
+            assertThat(document).contains("  OpenedBy:\n").contains("    outlivesTarget: true\n");
+            assertThat(document.indexOf("outlivesTarget")).as("only OpenedBy says it")
+                    .isEqualTo(document.lastIndexOf("outlivesTarget"));
+        });
+        assertThat(fixture.tools.jsonSchema("{\"kind\": \"document\"}")).contains("\"outlivesTarget\"");
+    }
 
     @Test
     void theDescriptionHoldsTheBasisThePolicyThePrincipalAndEveryProblemCode() {

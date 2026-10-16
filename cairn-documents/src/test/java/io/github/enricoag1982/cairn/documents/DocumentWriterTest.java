@@ -90,7 +90,7 @@ class DocumentWriterTest {
                                 new Check("b-check", "true", Optional.empty())))),
                 List.of(new TraitDefinition("Named", List.of(attribute), List.of("Old"), true, Optional.of("A trait."))),
                 List.of(new RelationshipTypeDefinition("Links", "Full", "Full", Multiplicity.ZERO_OR_ONE,
-                        Multiplicity.ONE_OR_MORE, "linkedBy", List.of("oldLinkedBy"), RelationshipKind.COMPOSITION, true,
+                        Multiplicity.ONE_OR_MORE, "linkedBy", List.of("oldLinkedBy"), RelationshipKind.COMPOSITION, true, true,
                         Optional.of("Super"), List.of(attribute), List.of("Old"), true, Optional.of("A relationship type."),
                         List.of(new RuleReference("a-rule", 2)),
                         List.of(new Check("link-check", "has(self.code)", Optional.of("A link has a code."))))));
@@ -187,6 +187,26 @@ class DocumentWriterTest {
         String yaml = SchemaDocuments.writeYaml(ReferenceModel.origin("1.0.0"), ReferenceModel.definition());
 
         assertThat(yaml).contains("    kind: composition\n").doesNotContain("association").doesNotContain("symmetric");
+    }
+
+    @Test
+    void outlivesTargetIsWrittenWhenTrueAndLeftOutWhenFalse() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .relationshipType("OpenedBy", r -> r.from("Account").to("Person").outlivesTarget().inverse("opened"))
+                .relationshipType("HeldBy", r -> r.from("Account").to("Party").inverse("holds"))
+                .build();
+
+        for (String text : List.of(SchemaDocuments.writeYaml(ORIGIN, definition),
+                SchemaDocuments.writeJson(ORIGIN, definition))) {
+            Object tree = DocumentTrees.load(text);
+
+            assertThat(DocumentTrees.keysAt(tree, "relationshipTypes", "OpenedBy")).as(text).contains("outlivesTarget");
+            assertThat(DocumentTrees.at(tree, "relationshipTypes", "OpenedBy", "outlivesTarget")).isEqualTo(true);
+            assertThat(DocumentTrees.keysAt(tree, "relationshipTypes", "HeldBy")).as(text)
+                    .doesNotContain("outlivesTarget");
+        }
+        assertThat(SchemaDocuments.writeYaml(ORIGIN, definition)).contains("    outlivesTarget: true\n");
+        assertRoundTrip(ORIGIN, definition);
     }
 
     // ------------------------------------------------------------------ the two formats

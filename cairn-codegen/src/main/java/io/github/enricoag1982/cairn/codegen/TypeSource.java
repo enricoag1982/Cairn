@@ -167,6 +167,11 @@ final class TypeSource {
         if (relationship) {
             paragraphs.add("<p>Relates " + a(element.source()) + " (the source) to " + a(element.target())
                     + " (the target).");
+            if (element.outlivesTarget()) {
+                paragraphs.add("<p>Its relationships may outlive their targets: they may continue after the target "
+                        + "has ended, as records of a past fact, and navigation from the source then returns the "
+                        + "target's last version, whose period ends at or before the effective time of the view.");
+            }
         }
         List<String> tags = new ArrayList<>();
         if (element.deprecated()) {

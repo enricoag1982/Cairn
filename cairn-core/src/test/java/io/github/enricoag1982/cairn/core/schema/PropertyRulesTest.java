@@ -342,6 +342,45 @@ class PropertyRulesTest {
         }
     }
 
+    @Nested
+    class OutlivingTargets {
+
+        @Test
+        void declaringItIsCompatibleAndGivingItUpIsBreakingWithAHint() {
+            RelationshipTypeDefinition without = relationship(false);
+            RelationshipTypeDefinition with = relationship(true);
+
+            assertThat(PropertyRules.compare("relationship", without, with, "OpenedBy", CompiledSchema.EMPTY,
+                    CompiledSchema.EMPTY)).singleElement().satisfies(change -> {
+                        assertThat(change.compatible()).isTrue();
+                        assertThat(change.path()).isEqualTo("OpenedBy");
+                    });
+            assertThat(PropertyRules.compare("relationship", with, without, "OpenedBy", CompiledSchema.EMPTY,
+                    CompiledSchema.EMPTY)).singleElement().satisfies(change -> {
+                        assertThat(change.compatible()).isFalse();
+                        assertThat(change.path()).isEqualTo("OpenedBy");
+                        assertThat(change.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("outlivesTarget"));
+                    });
+        }
+
+        @Test
+        void aRelationshipTypeThatStaysAsItIsHasNoChange() {
+            assertThat(PropertyRules.compare("relationship", relationship(true), relationship(true), "OpenedBy",
+                    CompiledSchema.EMPTY, CompiledSchema.EMPTY)).isEmpty();
+        }
+
+        @Test
+        void outlivingTargetsHasARuleOfItsOwn() {
+            assertThat(PropertyRules.hasRule("relationship", "outlivesTarget")).isTrue();
+        }
+
+        private RelationshipTypeDefinition relationship(boolean outlivesTarget) {
+            return new RelationshipTypeDefinition("OpenedBy", "Account", "Person", Multiplicity.ZERO_OR_ONE,
+                    Multiplicity.ZERO_OR_MORE, "opened", List.of(), RelationshipKind.ASSOCIATION, false, outlivesTarget,
+                    Optional.empty(), List.of(), List.of(), false, Optional.empty(), List.of(), List.of());
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static List<SchemaChange> checks(List<Check> before, List<Check> after) {

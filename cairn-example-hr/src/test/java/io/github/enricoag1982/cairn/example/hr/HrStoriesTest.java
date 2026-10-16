@@ -31,6 +31,7 @@ import io.github.enricoag1982.cairn.documents.Queries;
 import io.github.enricoag1982.cairn.documents.QueryReadResult;
 import io.github.enricoag1982.cairn.documents.SchemaDocument;
 import io.github.enricoag1982.cairn.example.hr.model.BelongsTo;
+import io.github.enricoag1982.cairn.example.hr.model.DecidedBy;
 import io.github.enricoag1982.cairn.example.hr.model.EmployedBy;
 import io.github.enricoag1982.cairn.example.hr.model.Employment;
 import io.github.enricoag1982.cairn.example.hr.model.EmploymentOf;
@@ -47,6 +48,7 @@ import io.github.enricoag1982.cairn.example.hr.model.Person;
 import io.github.enricoag1982.cairn.example.hr.model.Position;
 import io.github.enricoag1982.cairn.example.hr.model.WorksAt;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
+import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -77,7 +79,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The stories HR-1 to HR-16 of the HR domain ({@code docs/reference/hr-domain.md}), one test each: a replay of
+ * The stories HR-1 to HR-17 of the HR domain ({@code docs/reference/hr-domain.md}), one test each: a replay of
  * Brightwater's year on one store, with a clock that moves to the recording date of each story. The store is created
  * with its rules found through the service loader, as an application's would be. The main code of the example uses
  * Cairn's public API only; the tests use it too, and also the {@code cairn-api} test fixture {@code TestClock}, a
@@ -86,8 +88,8 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>The stories replay in the order of their recording dates, not of their numbers, as the stories of the reference
  * domain do, so that the transaction time of each is its recording date: HR-1 and HR-2 (2 January), HR-5 to HR-8
  * (1 to 5 March), HR-16 (9 March), HR-3 (10 March), HR-9 and HR-10 (queries effective 31 March, read at this point of
- * the replay), HR-4 (15 April), HR-11 (20 May and 20 June), HR-13 (1 August) and HR-12 (1 October). HR-9 must read
- * before the purge of HR-12, which takes Gus out of the headcount. A store's transaction times strictly increase, so
+ * the replay), HR-4 (15 April), HR-11 (20 May and 20 June), HR-13 (1 August), HR-12 (1 October) and HR-17
+ * (1 November). HR-9 must read before the purge of HR-12, which takes Gus out of the headcount. A store's transaction times strictly increase, so
  * the second transaction of a day gets the next microsecond after the first; HR-1 and HR-2 are asserted by their day.
  *
  * <p>HR-15 (1 March) tells HR-5's request again, on a store of its own with HR-1 and HR-2, because a notifier must
@@ -817,10 +819,77 @@ class HrStoriesTest {
         assertThat(linked(march31, p301.id(), Fills.INVERSE)).isEmpty();
     }
 
-    // ------------------------------------------------------------------ HR-14, a company of its own
+    // ------------------------------------------------------------------ HR-17, recorded 1 November
 
     @Test
     @Order(16)
+    @DisplayName("HR-17: Cleo leaves, and her decision of Dev's vacation stays")
+    void hr17CleoLeavesAndHerDecisionStays() {
+        EntityId request = ids.entity("devVacation");
+        EntityId cleo = ids.entity("e003");
+        EntityId platform = ids.entity("plt");
+
+        Receipt leaving = commit(Brightwater.hr17CleoLeaves(ids));
+
+        assertRecordedAt(leaving.transactionTime(), on(11, 1));
+        assertThat(leaving.ended()).as("the transaction names every relationship of her employment").isEmpty();
+
+        // Until 30 November she is employed, manages Platform, and the decision is as it was.
+        View november30 = view(on(11, 30));
+        assertThat(november30.entity(cleo).map(HrStoriesTest::label)).contains("E-003");
+        assertThat(linked(november30, request, "DecidedBy")).containsExactly("E-003");
+        assertThat(linked(november30, platform, ManagedBy.TYPE)).containsExactly("E-003");
+
+        // From 1 December her employment does not exist, so a view effective then does not find it, nor what hangs on it.
+        View december1 = view(on(12, 1));
+        assertThat(december1.entity(cleo)).as("Cleo's employment has ended").isEmpty();
+        assertThat(labels(december1.entities("Employment"))).doesNotContain("E-003");
+        assertThat(linked(december1, platform, ManagedBy.TYPE)).as("Platform has no manager").isEmpty();
+        assertThat(december1.navigate(cleo, "decisions")).as("an employment that has ended has no decisions to "
+                + "navigate").isEmpty();
+        assertThat(vacantPositions(on(12, 1))).containsExactly("P-210", "P-301");
+
+        // Her decision of Dev's vacation stays: navigating from the request returns her employment as it last was,
+        // whose period ends on 1 December, so the reader tells that it has ended.
+        assertThat(december1.navigate(request, "DecidedBy")).singleElement().satisfies(link -> {
+            assertThat(link.relationship().id()).isEqualTo(ids.relationship("devVacationDecision"));
+            assertThat(link.relationship().period()).as("the decision itself is as it was")
+                    .isEqualTo(EffectivePeriod.from(on(3, 2)));
+            assertThat(link.entity().id()).isEqualTo(cleo);
+            assertThat(Employment.from(link.entity()).employeeNumber()).isEqualTo("E-003");
+            assertThat(link.entity().period()).isEqualTo(EffectivePeriod.between(JANUARY_1, on(12, 1)));
+        });
+        assertThat(view(on(3, 1)).navigate(request, "DecidedBy")).as("before the decision").isEmpty();
+
+        // A query that follows the decision reads the same version.
+        Query decided = Query.from(LeaveRequest.TYPE, "request").follow("request", DecidedBy.TYPE, "decider").build();
+        assertThat(rows(december1.query(decided)).rows()).singleElement().satisfies(row -> {
+            assertThat(row.entity("request", LeaveRequest::from).orElseThrow().kind()).isEqualTo("vacation");
+            EntityState decider = row.entity("decider").orElseThrow();
+            assertThat(Employment.from(decider).employeeNumber()).isEqualTo("E-003");
+            assertThat(decider.period().until()).contains(on(12, 1));
+        });
+
+        // Dev's managers are now Ben and Ana, and nobody can be decided by Cleo from 1 December on.
+        assertThat(rows(december1.query(Reports.managersOf("E-004"))).rows())
+                .extracting(row -> row.entity("manager", Person::from).orElseThrow().givenName())
+                .containsExactly("Ben", "Ana");
+        Transaction afterwards = Transaction.by(Brightwater.HR_ADMIN)
+                .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 12, 14))
+                        .lastDay(LocalDate.of(2026, 12, 18)).days(new BigDecimal("5")).status("approved")
+                        .as("devDecember").effectiveFrom(on(12, 2)))
+                .write(HasLeaveRequest.relate(ids.entity("e004"), new TemporaryId("devDecember"))
+                        .effectiveFrom(on(12, 2)))
+                .write(DecidedBy.relate(new TemporaryId("devDecember"), cleo).effectiveFrom(on(12, 2)))
+                .build();
+        assertThat(problemCodes(afterwards)).as("Cleo does not exist on the day the decision would start")
+                .contains(ProblemCode.END_NOT_EFFECTIVE);
+    }
+
+    // ------------------------------------------------------------------ HR-14, a company of its own
+
+    @Test
+    @Order(17)
     @DisplayName("HR-14: a generated company reads the same from a reopened durable store as from memory")
     void hr14GeneratedCompany(@TempDir Path directory) {
         CompanyGenerator.Company company = CompanyGenerator.generate(CompanyGenerator.SEED);
@@ -895,6 +964,20 @@ class HrStoriesTest {
             assertThat(seen.stream().distinct().mapToInt(id -> memory.view(Coordinates.effectiveAt(on(12, 31)))
                     .navigateTimeline(id, "Fills").size()).max().orElse(0))
                     .as("some employee moved to another position").isGreaterThan(1);
+
+            // A manager left, and the decisions that the manager took stay, readable from their requests in every store:
+            // a decision is a relationship that outlives its target (ADR-0034).
+            List<Link> decisions = new ArrayList<>();
+            for (EntityState request : inMemory.entities("LeaveRequest")) {
+                List<Link> links = inMemory.navigate(request.id(), "DecidedBy");
+                assertThat(onDisk.navigate(request.id(), "DecidedBy")).as("the decision of %s", request.id())
+                        .isEqualTo(links);
+                decisions.addAll(links);
+            }
+            assertThat(decisions).as("decisions of a manager whose employment has ended").anySatisfy(link -> {
+                assertThat(link.entity().period().until()).as("the employment of the decider has ended").isPresent();
+                assertThat(inMemory.entity(link.entity().id())).as("and the view does not find it").isEmpty();
+            });
         }
     }
 

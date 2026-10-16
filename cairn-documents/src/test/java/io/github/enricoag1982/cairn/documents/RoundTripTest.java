@@ -169,6 +169,10 @@ class RoundTripTest {
                 .anyMatch(t -> t.kind() == RelationshipKind.ASSOCIATION));
         assertSome("a symmetric relationship type", g -> g.definition().relationshipTypes().stream()
                 .anyMatch(RelationshipTypeDefinition::symmetric));
+        assertSome("a relationship type that outlives its targets", g -> g.definition().relationshipTypes().stream()
+                .anyMatch(RelationshipTypeDefinition::outlivesTarget));
+        assertSome("a relationship type that does not outlive its targets", g -> g.definition().relationshipTypes()
+                .stream().anyMatch(type -> !type.outlivesTarget()));
         assertSome("a relationship type with inverse aliases, a supertype, aliases, deprecation, a description and rules",
                 g -> g.definition().relationshipTypes().stream().anyMatch(t -> !t.inverseAliases().isEmpty()
                         && t.supertype().isPresent() && !t.aliases().isEmpty() && t.deprecated()

@@ -9,6 +9,7 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.changeAttribute;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeEntityType;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeRelationshipType;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeTrait;
+import static io.github.enricoag1982.cairn.fixtures.Definitions.openedBy;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.plus;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
@@ -439,6 +440,28 @@ class SchemaEvolutionScenariosTest {
                 .isEqualTo(labelBefore.id());
     }
 
+    @Test
+    @DisplayName("Scenario: Letting relationships outlive their targets")
+    void lettingRelationshipsOutliveTheirTargets() {
+        applied(register("1.0.0", plus(ReferenceModel.definition(), openedBy(false))));
+
+        Schema after = applied(register("1.1.0", plus(ReferenceModel.definition(), openedBy(true)))).schema();
+
+        assertThat(after.relationshipType("OpenedBy").orElseThrow().outlivesTarget()).isTrue();
+        assertThat(registry.storedDefinition(ReferenceModel.origin("1.1.0").name()).orElseThrow().definition()
+                .relationshipTypes()).filteredOn(type -> type.name().equals("OpenedBy")).singleElement()
+                .satisfies(type -> assertThat(type.outlivesTarget()).isTrue());
+    }
+
+    @Test
+    void addingATypeThatOutlivesItsTargetsIsCompatible() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+
+        Schema after = applied(register("1.1.0", plus(ReferenceModel.definition(), openedBy(true)))).schema();
+
+        assertThat(after.relationshipType("OpenedBy").orElseThrow().outlivesTarget()).isTrue();
+    }
+
     // ------------------------------------------------------------------ breaking changes
 
     @Test
@@ -577,6 +600,20 @@ class SchemaEvolutionScenariosTest {
         assertThat(problems.getFirst().path()).isEqualTo("Account.label");
         assertThat(registry.current().entityType("Account").orElseThrow().attributes()).as("nothing changed")
                 .extracting(Attribute::name).doesNotContain("label");
+    }
+
+    @Test
+    @DisplayName("Scenario: Relationships that no longer outlive their targets")
+    void relationshipsThatNoLongerOutliveTheirTargets() {
+        applied(register("1.0.0", plus(ReferenceModel.definition(), openedBy(true))));
+
+        List<Problem> problems = rejected(register("1.1.0", plus(ReferenceModel.definition(), openedBy(false))));
+
+        assertSingleProblem(problems, ProblemCode.BREAKING_CHANGE, "OpenedBy");
+        assertThat(problems.getFirst().message()).contains("outlive their targets");
+        assertThat(problems.getFirst().hint()).hasValueSatisfying(hint -> assertThat(hint).contains("outlivesTarget"));
+        assertThat(registry.current().relationshipType("OpenedBy").orElseThrow().outlivesTarget())
+                .as("nothing changed").isTrue();
     }
 
     @Test

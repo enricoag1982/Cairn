@@ -21,6 +21,7 @@ public final class RelationshipTypeBuilder {
     private final List<String> inverseAliases = new ArrayList<>();
     private RelationshipKind kind = RelationshipKind.ASSOCIATION;
     private boolean symmetric;
+    private boolean outlivesTarget;
     private String supertype;
     private final List<AttributeDefinition> attributes = new ArrayList<>();
     private final List<String> aliases = new ArrayList<>();
@@ -116,6 +117,19 @@ public final class RelationshipTypeBuilder {
      */
     public RelationshipTypeBuilder symmetric() {
         this.symmetric = true;
+        return this;
+    }
+
+    /**
+     * Lets the relationships of the type outlive their targets: they may continue after their target ends, as records
+     * of a past fact, and navigation then returns the target's last version. The target must exist at the start of
+     * each stretch of a relationship's effective period. Only associations that are not symmetric may declare it; a
+     * subtype does not inherit it.
+     *
+     * @return this builder
+     */
+    public RelationshipTypeBuilder outlivesTarget() {
+        this.outlivesTarget = true;
         return this;
     }
 
@@ -232,7 +246,7 @@ public final class RelationshipTypeBuilder {
      */
     public RelationshipTypeDefinition build() {
         return new RelationshipTypeDefinition(name, source, target, targetsPerSource, sourcesPerTarget, inverseName,
-                inverseAliases, kind, symmetric, Optional.ofNullable(supertype), attributes, aliases, deprecated,
-                Optional.ofNullable(description), rules, checks);
+                inverseAliases, kind, symmetric, outlivesTarget, Optional.ofNullable(supertype), attributes, aliases,
+                deprecated, Optional.ofNullable(description), rules, checks);
     }
 }

@@ -479,6 +479,46 @@ class TimelineTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    // ------------------------------------------------------------------ stretches and last versions (outliving targets, D2 and D4)
+
+    @Test
+    void aStretchIsARunOfAdjacentSegmentsSoItStartsOnceHoweverOftenItsValuesChange() {
+        Timeline timeline = set(set(acme(), MAR, Segment.OPEN, BALANCE, Value.of(1500)), JUN, Segment.OPEN, BALANCE,
+                Value.of(1600));
+
+        assertThat(timeline.segments()).hasSize(3);
+        assertThat(timeline.stretchStarts()).containsExactly(JAN);
+    }
+
+    @Test
+    void aGapStartsAnotherStretch() {
+        Segment first = new Segment(JAN, MAR, values("ACME", 1000), RECORDED_1, new Basis(1));
+        Segment second = new Segment(MAR, JUN, values("ACME", 1001), RECORDED_1, new Basis(1));
+        Segment third = new Segment(SEP, Segment.OPEN, values("ACME", 1000), RECORDED_1, new Basis(1));
+
+        assertThat(Timeline.of(List.of(first, second, third)).stretchStarts()).containsExactly(JAN, SEP);
+        assertThat(Timeline.EMPTY.stretchStarts()).isEmpty();
+    }
+
+    @Test
+    void theLastVersionToEndByAnInstantIsTheOneWhoseEndIsLatestAtOrBeforeIt() {
+        Timeline timeline = set(acme().endAt(SEP), MAR, JUN, BALANCE, Value.of(1500));
+
+        assertThat(timeline.segments()).extracting(Segment::end).containsExactly(MAR, JUN, SEP);
+        assertThat(timeline.lastEndingAtOrBefore(SEP)).map(Segment::from).contains(JUN);
+        assertThat(timeline.lastEndingAtOrBefore(SEP.plusSeconds(1))).map(Segment::from).contains(JUN);
+        assertThat(timeline.lastEndingAtOrBefore(JUN)).as("a period ends where the instant starts: the entity "
+                + "no longer exists at it").map(Segment::from).contains(MAR);
+        assertThat(timeline.lastEndingAtOrBefore(SEP.minusSeconds(1))).map(Segment::from).contains(MAR);
+        assertThat(timeline.lastEndingAtOrBefore(MAR.minusSeconds(1))).isEmpty();
+    }
+
+    @Test
+    void aVersionWithoutAnEndIsNeverTheLastToEnd() {
+        assertThat(acme().lastEndingAtOrBefore(Instant.parse("2099-01-01T00:00:00Z"))).isEmpty();
+        assertThat(Timeline.EMPTY.lastEndingAtOrBefore(JAN)).isEmpty();
+    }
+
     // ------------------------------------------------------------------ changed segments (add-entity-rules, D3)
 
     @Test

@@ -4,7 +4,9 @@ package io.github.enricoag1982.cairn.core.storage;
  * Writes a {@link SchemaRecord} in format version 1: the basis, the transaction time, the submission, the origin, the
  * definition field by field, and the identifiers that the registration assigned. If any type declares checks, they
  * follow, and if any attribute is derived, so do the expressions of the derived attributes, after the checks (an empty
- * section of checks if no type declares one), as the last of the record.
+ * section of checks if no type declares one). If any relationship type lets its relationships outlive their targets,
+ * their names follow as the last of the record, after the sections before it, which are empty if there is nothing in
+ * them.
  */
 final class SchemaRecordWriter {
 
@@ -32,7 +34,10 @@ final class SchemaRecordWriter {
             encoder.writeLong(attribute.id().value());
         });
         out.writeLong(identifiers.nextId());
-        DefinitionCodec.writeChecks(out, record.definition(), DefinitionCodec.hasDerived(record.definition()));
-        DefinitionCodec.writeDerivations(out, record.definition());
+        boolean outliving = DefinitionCodec.hasOutliving(record.definition());
+        DefinitionCodec.writeChecks(out, record.definition(),
+                DefinitionCodec.hasDerived(record.definition()) || outliving);
+        DefinitionCodec.writeDerivations(out, record.definition(), outliving);
+        DefinitionCodec.writeOutliving(out, record.definition());
     }
 }

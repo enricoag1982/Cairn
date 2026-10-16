@@ -18,7 +18,7 @@ Today, `Integrity` checks at commit that both ends of every written relationship
 
 - **Definitions.** `RelationshipTypeDefinition` gains a boolean component `outlivesTarget`, after `symmetric`, default `false`; the existing constructors keep compiling, without it. `RelationshipTypeBuilder.outlivesTarget()` sets it.
 - **The resolved type.** `RelationshipType.outlivesTarget()` reports it.
-- **Validation.** A composition, or a symmetric type, that declares it is a problem at the type, with the code that other invalid combinations of relationship properties use.
+- **Validation.** A composition, or a symmetric type, that declares it is a problem at the type, with a new code, `OUTLIVES_TARGET_NOT_ALLOWED`: the codes of other invalid combinations explain their own fixes, which do not apply.
 - **Subtypes.** The flag belongs to each type and is not inherited. A subtype and its supertype may differ, because integrity is checked per concrete relationship type.
 - **Documents.** In a schema document, `outlivesTarget: true`, default `false`. The document writer, the published JSON Schema of documents, and the canonical form carry it.
 - **Stored definitions.** Schema records keep it in an optional trailing section of format version 1, as checks and derived attributes do, so older records read as `false`.
@@ -31,7 +31,8 @@ For a type that outlives its target:
 - **The source** must exist at every point of the relationship's period, as for every type.
 - **The target** must exist at the start of each stretch of the relationship's effective period; a stretch is a maximal run of adjacent segments. A relationship that starts before its target exists, or after it ended, is rejected with the problem that relationships outside their ends' lifetimes give today.
 - **Ending the target** does not require ending these relationships, and a target that a correction ends earlier is checked again only against the starts of the stretches.
-- **Cascades.** A composition cascade that ends an entity leaves the relationships that outlive it as their target; those where it is the source end as before.
+- **Cascades.** A composition cascade that ends an entity leaves the relationships that outlive it as their target; those where it is the source end as before, also when it is both source and target.
+- **Stretches.** No write leaves a gap in a relationship's timeline today, so a relationship has one stretch; the rule is stated per stretch so that it holds if gaps come later.
 
 ### D3. Multiplicities
 

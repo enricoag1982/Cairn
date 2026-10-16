@@ -6,7 +6,9 @@ import static io.github.enricoag1982.cairn.core.Results.rejected;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeAttribute;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeEntityType;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.changeRelationshipType;
+import static io.github.enricoag1982.cairn.fixtures.Definitions.openedBy;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.plus;
+import static io.github.enricoag1982.cairn.fixtures.Definitions.withOutlivesTarget;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
@@ -394,6 +396,64 @@ class TypeModelScenariosTest {
                 .build());
 
         assertSingleProblem(validate(definition), ProblemCode.RELATIONSHIP_SUBTYPE_ENDS, "OwnsAddress");
+    }
+
+    @Test
+    @DisplayName("Scenario: A relationship type that outlives its targets")
+    void aRelationshipTypeThatOutlivesItsTargets() {
+        SchemaDefinition definition = plus(ReferenceModel.definition(), openedBy(true));
+
+        assertThat(validate(definition)).isEmpty();
+        Schema schema = register(definition);
+        var openedBy = schema.relationshipType("OpenedBy").orElseThrow();
+        assertThat(openedBy.outlivesTarget()).isTrue();
+        assertThat(openedBy.source()).isEqualTo("Account");
+        assertThat(openedBy.target()).isEqualTo("Person");
+        assertThat(openedBy.targetsPerSource()).isEqualTo(Multiplicity.ZERO_OR_ONE);
+        assertThat(openedBy.sourcesPerTarget()).isEqualTo(Multiplicity.ZERO_OR_MORE);
+        assertThat(openedBy.inverseName()).isEqualTo("opened");
+        assertThat(schema.relationshipType("HeldBy").orElseThrow().outlivesTarget())
+                .as("a type that does not declare it does not outlive its targets").isFalse();
+    }
+
+    @Test
+    @DisplayName("Scenario: A composition that outlives its targets")
+    void aCompositionThatOutlivesItsTargets() {
+        SchemaDefinition definition = withOutlivesTarget(ReferenceModel.definition(), "HasAddress", true);
+
+        List<Problem> problems = validate(definition);
+
+        assertSingleProblem(problems, ProblemCode.OUTLIVES_TARGET_NOT_ALLOWED, "HasAddress");
+        assertThat(problems.getFirst().message()).contains("composition HasAddress");
+    }
+
+    @Test
+    void aSymmetricTypeCannotOutliveItsTargets() {
+        SchemaDefinition definition = plus(ReferenceModel.definition(), SchemaDefinition.builder()
+                .relationshipType("Knows", r -> r.from("Person").to("Person").symmetric().outlivesTarget()
+                        .inverse("knownBy"))
+                .build());
+
+        List<Problem> problems = validate(definition);
+
+        assertSingleProblem(problems, ProblemCode.OUTLIVES_TARGET_NOT_ALLOWED, "Knows");
+        assertThat(problems.getFirst().message()).contains("symmetric relationship type Knows");
+    }
+
+    @Test
+    void aSubtypeDoesNotInheritTheDeclaration() {
+        SchemaDefinition definition = plus(ReferenceModel.definition(), SchemaDefinition.builder()
+                .relationshipType("OpenedBy", r -> r.from("Account").to("Person").targetsPerSource(Multiplicity.ZERO_OR_ONE)
+                        .outlivesTarget().inverse("opened"))
+                .relationshipType("OpenedByAgent", r -> r.supertype("OpenedBy").from("Account").to("Person")
+                        .targetsPerSource(Multiplicity.ZERO_OR_ONE).inverse("openedAsAgent"))
+                .build());
+
+        Schema schema = register(definition);
+
+        assertThat(schema.relationshipType("OpenedBy").orElseThrow().outlivesTarget()).isTrue();
+        assertThat(schema.relationshipType("OpenedByAgent").orElseThrow().outlivesTarget())
+                .as("integrity is checked per concrete type, so a subtype says for itself").isFalse();
     }
 
     // ------------------------------------------------------------------ names
