@@ -17,4 +17,4 @@
 ## 4. Documentation
 
 - [x] 4.1 Update the write-checks and derive-attributes guides, the glossary, the reference domain page, the HR domain page (type table, gaps) and the architecture page; bump `last-reviewed`
-- [ ] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
