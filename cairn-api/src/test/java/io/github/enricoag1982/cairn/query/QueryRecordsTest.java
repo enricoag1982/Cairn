@@ -57,6 +57,56 @@ class QueryRecordsTest {
     }
 
     @Test
+    void theBuilderCanStartFromGivenEntities() {
+        EntityId first = new EntityId("1");
+        EntityId second = new EntityId("2");
+
+        Query varargs = Query.from("Account", "a").ids(first, second).build();
+        Query collection = Query.from("Account", "a").ids(List.of(first, second)).build();
+        Query replaced = Query.from("Account", "a").ids(second).ids(first, second).build();
+        Query exact = Query.from("Account", "a").exactType().ids(first).build();
+
+        assertThat(varargs.start()).isEqualTo(new Start("Account", "a", false, Optional.of(List.of(first, second))));
+        assertThat(collection).isEqualTo(varargs);
+        assertThat(replaced).as("the IDs replace those given before").isEqualTo(varargs);
+        assertThat(exact.start()).isEqualTo(new Start("Account", "a", true, Optional.of(List.of(first))));
+        assertThat(Query.from("Account", "a").build().start().ids()).as("no call of ids: the whole type").isEmpty();
+        assertThat(Query.from("Account", "a").ids().build().start().ids()).as("no IDs: no entities")
+                .contains(List.of());
+        assertThat(Query.from("Account", "a").ids(List.of()).build().start().ids()).contains(List.of());
+        assertThat(Query.from("Account", "a").ids(List.of()).build()).isNotEqualTo(Query.from("Account", "a").build());
+        assertThat(Query.from("Account", "a").ids(first).build().start().ids()).contains(List.of(first));
+    }
+
+    @Test
+    void theStartCopiesItsIdsAndRejectsNulls() {
+        EntityId first = new EntityId("1");
+        List<EntityId> given = new ArrayList<>(List.of(first));
+
+        Start start = new Start("Account", "a", false, Optional.of(given));
+        given.clear();
+
+        assertThat(start.ids()).contains(List.of(first));
+        assertThat(new Start("Account", "a", false).ids()).as("the constructor without IDs").isEmpty();
+        assertThat(new Start("Account", "a", true)).isEqualTo(new Start("Account", "a", true, Optional.empty()));
+        assertThat(new Start("Account", "a", true, Optional.of(List.of())).ids()).as("an empty list is a list")
+                .contains(List.of());
+        assertThat(new Start("Account", "a", true, Optional.of(List.of()))).isNotEqualTo(new Start("Account", "a",
+                true));
+        assertThatThrownBy(() -> start.ids().orElseThrow().add(first))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> new Start("Account", "a", false, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Start("Account", "a", false, Optional.of(Arrays.asList(first, null))))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Query.from("Account", "a").ids((EntityId[]) null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Query.from("Account", "a").ids((List<EntityId>) null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Query.from("Account", "a").ids(first, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void theBuilderBuildsEveryKindOfStepInOrder() {
         Condition condition = Condition.hasValue("a", "balance");
 

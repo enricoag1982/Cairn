@@ -191,6 +191,9 @@ final class TypeSource {
         if (element.kind() != Element.Kind.TRAIT) {
             writeType();
         }
+        if (relationship) {
+            writeInverse();
+        }
         for (Attribute attribute : element.ownAttributes()) {
             writeReference(attribute);
         }
@@ -218,6 +221,17 @@ final class TypeSource {
         member();
         out.javadoc(List.of("The name of this " + element.kind().label() + " in its schema."));
         out.line(ref(Library.STRING) + " TYPE = " + Docs.literal(element.name()) + ";");
+    }
+
+    /**
+     * The inverse name of a relationship type, as a constant next to {@code TYPE} (design D5 of
+     * {@code add-query-and-traversal-conveniences}).
+     */
+    private void writeInverse() {
+        member();
+        out.javadoc(List.of("The inverse name of this relationship type in its schema: the name that leads from a "
+                + "target to its sources."));
+        out.line(ref(Library.STRING) + " INVERSE = " + Docs.literal(element.inverse()) + ";");
     }
 
     /**

@@ -7,6 +7,7 @@ import static io.github.enricoag1982.cairn.documents.QueryFixtures.query;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.query.Aggregate;
 import io.github.enricoag1982.cairn.query.Column;
 import io.github.enricoag1982.cairn.query.Comparison;
@@ -73,6 +74,85 @@ class QueryReadingTest {
                 .isEqualTo(new Start("Party", "p", true));
         assertThat(query("{ \"from\": { \"type\": \"Party\", \"as\": \"p\", \"exact\": false } }").start())
                 .isEqualTo(new Start("Party", "p", false));
+    }
+
+    @Test
+    void theStartCanGiveTheIdsOfTheEntitiesToStartFrom() {
+        Query given = query("{ \"from\": { \"type\": \"Party\", \"as\": \"p\", \"ids\": [ \"id-1\", \"id-2\" ] } }");
+        Query repeated = query("{ \"from\": { \"type\": \"Party\", \"as\": \"p\", \"exact\": true, "
+                + "\"ids\": [ \"id-2\", \"id-2\" ] } }");
+        Query none = query("{ \"from\": { \"type\": \"Party\", \"as\": \"p\", \"ids\": [] } }");
+
+        assertThat(given.start()).isEqualTo(new Start("Party", "p", false,
+                Optional.of(List.of(new EntityId("id-1"), new EntityId("id-2")))));
+        assertThat(repeated.start()).as("what is written is kept: the view binds each entity once")
+                .isEqualTo(new Start("Party", "p", true,
+                        Optional.of(List.of(new EntityId("id-2"), new EntityId("id-2")))));
+        assertThat(none.start().ids()).as("an empty list is a list: no entities").contains(List.of());
+        assertThat(none).isEqualTo(Query.from("Party", "p").ids().build());
+        assertThat(none).isNotEqualTo(Query.from("Party", "p").build());
+        assertThat(query("{ \"from\": { \"type\": \"Party\", \"as\": \"p\" } }").start().ids())
+                .as("no ids: every entity of the type").isEmpty();
+        assertThat(given).isEqualTo(Query.from("Party", "p").ids(new EntityId("id-1"), new EntityId("id-2")).build());
+    }
+
+    @Test
+    void theIdsCanBeWrittenAsYaml() {
+        Query query = query("""
+                from:
+                  type: Party
+                  as: p
+                  ids: ["0001", 'two']
+                """);
+
+        assertThat(query.start().ids()).contains(List.of(new EntityId("0001"), new EntityId("two")));
+    }
+
+    @Test
+    void anIdThatIsNoStringOrIsBlankIsAProblemLocatedAtIt() {
+        String number = "{ \"from\": { \"type\": \"Party\", \"as\": \"p\", \"ids\": [ \"id-1\", 42 ] } }";
+        String blank = "{ \"from\": { \"type\": \"Party\", \"as\": \"p\", \"ids\": [ \"id-1\", \" \" ] } }";
+        String notAList = "{ \"from\": { \"type\": \"Party\", \"as\": \"p\", \"ids\": \"id-1\" } }";
+        String yaml = """
+                from:
+                  type: Party
+                  as: p
+                  ids: [0001]
+                """;
+
+        Problem notAString = problem(number);
+        Problem notBlank = problem(blank);
+        Problem notAnArray = problem(notAList);
+        Problem unquoted = problem(yaml);
+
+        assertThat(notAString.code()).isEqualTo(ProblemCode.INVALID_VALUE);
+        assertThat(notAString.path()).isEqualTo("@query.from");
+        assertThat(notAString.message()).contains("item 2 of 'ids'");
+        assertThat(notAString.location()).contains(locationOf(number, "42", "/from/ids/1"));
+        assertThat(notBlank.code()).isEqualTo(ProblemCode.INVALID_VALUE);
+        assertThat(notBlank.path()).isEqualTo("@query.from");
+        assertThat(notBlank.location()).contains(locationOf(blank, "\" \" ]", "/from/ids/1"));
+        assertThat(notAnArray.location()).contains(locationOf(notAList, "\"id-1\" }", "/from/ids"));
+        assertThat(unquoted.location()).contains(locationOf(yaml, "0001", "/from/ids/0"));
+        assertThat(unquoted.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("quotes"));
+    }
+
+    @Test
+    void aTraversalWithoutAMaximumDepthGoesToTheEnd() {
+        QueryStep toTheEnd = onlyStep(step("{ \"traverse\": { \"from\": \"a\", \"name\": \"ownedBy\", "
+                + "\"as\": \"party\", \"minDepth\": 1 } }"));
+        QueryStep withoutAMinimum = onlyStep(step("{ \"traverse\": { \"from\": \"a\", \"name\": \"ownedBy\", "
+                + "\"as\": \"party\" } }"));
+        QueryStep limited = onlyStep(step("{ \"traverse\": { \"from\": \"a\", \"name\": \"ownedBy\", "
+                + "\"as\": \"party\", \"maxDepth\": 0 } }"));
+
+        assertThat(toTheEnd).isEqualTo(new QueryStep.Traverse("a", "ownedBy", "party", Optional.empty(),
+                Optional.empty(), Optional.empty(), 1, OptionalInt.empty()));
+        assertThat(withoutAMinimum).as("the minimum depth is 0 if it is left out, as before").isEqualTo(
+                new QueryStep.Traverse("a", "ownedBy", "party", Optional.empty(), Optional.empty(), Optional.empty(), 0,
+                        OptionalInt.empty()));
+        assertThat(limited).isEqualTo(new QueryStep.Traverse("a", "ownedBy", "party", Optional.empty(),
+                Optional.empty(), Optional.empty(), 0, OptionalInt.of(0)));
     }
 
     @Test
@@ -492,8 +572,8 @@ class QueryReadingTest {
                 new String[] {"{ \"from\": { \"as\": \"a\" } }", "@query.from", "type"},
                 new String[] {"{ \"from\": { \"type\": \"A\" } }", "@query.from", "as"},
                 new String[] {step("{ \"follow\": { \"name\": \"n\", \"as\": \"h\" } }"), "@query.steps.0", "from"},
-                new String[] {step("{ \"traverse\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"h\" } }"),
-                        "@query.steps.0", "maxDepth"},
+                new String[] {step("{ \"traverse\": { \"from\": \"a\", \"name\": \"n\" } }"),
+                        "@query.steps.0", "as"},
                 new String[] {step("{ \"where\": { \"compare\": { \"left\": { \"id\": \"a\" }, "
                         + "\"right\": { \"id\": \"a\" } } } }"), "@query.steps.0", "op"},
                 new String[] {step("{ \"where\": { \"in\": { \"operand\": { \"id\": \"a\" } } } }"), "@query.steps.0",

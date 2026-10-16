@@ -13,18 +13,15 @@ import io.github.enricoag1982.cairn.query.Column;
 import io.github.enricoag1982.cairn.query.Condition;
 import io.github.enricoag1982.cairn.query.Order;
 import io.github.enricoag1982.cairn.query.Query;
-import java.util.Optional;
+import io.github.enricoag1982.cairn.query.Traversal;
 
 /**
  * The questions HR asks of the company, as queries ({@code docs/reference/hr-domain.md}): headcount by unit, the
  * managers above an employee, and vacant positions. They are built with the typed references of the generated types, so
  * that the compiler checks names and values; the headcount is also given as JSON, the form agents send to
- * {@code cairn_query}.
+ * {@code cairn_query}. The queries that follow the hierarchy of units traverse it to the end, whatever its depth.
  */
 public final class Reports {
-
-    /** How many units a hierarchy may have one above the other, for the queries that follow it. */
-    private static final int MAX_LEVELS = 20;
 
     /**
      * The same headcount query as {@link #headcount()}, in the JSON form that {@code Queries.read} reads.
@@ -33,7 +30,7 @@ public final class Reports {
             {
               "from": { "type": "OrgUnit", "as": "unit" },
               "steps": [
-                { "traverse": { "from": "unit", "name": "subunits", "minDepth": 0, "maxDepth": 20, "as": "below" } },
+                { "traverse": { "from": "unit", "name": "subunits", "minDepth": 0, "as": "below" } },
                 { "follow": { "from": "below", "name": "positions", "as": "position" } },
                 { "follow": { "from": "position", "name": "filledBy", "as": "employment" } }
               ],
@@ -56,9 +53,9 @@ public final class Reports {
      */
     public static Query headcount() {
         return Query.from(OrgUnit.TYPE, "unit")
-                .traverse("unit", "subunits", 0, MAX_LEVELS, "below")
-                .follow("below", "positions", "position")
-                .follow("position", "filledBy", "employment")
+                .traverse(Traversal.of("unit", PartOf.INVERSE, "below").minDepth(0))
+                .follow("below", BelongsTo.INVERSE, "position")
+                .follow("position", Fills.INVERSE, "employment")
                 .groupBy(OrgUnit.CODE.of("unit").groupKey("unit"))
                 .aggregate(Aggregate.count("headcount"))
                 .orderBy(Order.ascending(Column.key("unit")))
@@ -79,7 +76,7 @@ public final class Reports {
                 .where(Employment.EMPLOYEE_NUMBER.of("employee").eq(employeeNumber))
                 .follow("employee", Fills.TYPE, "position")
                 .follow("position", BelongsTo.TYPE, "unit")
-                .traverse("unit", PartOf.TYPE, 0, MAX_LEVELS, "managed", Optional.empty(), Optional.of("level"))
+                .traverse(Traversal.of("unit", PartOf.TYPE, "managed").minDepth(0).depth("level"))
                 .follow("managed", ManagedBy.TYPE, "managerEmployment")
                 .follow("managerEmployment", EmploymentOf.TYPE, "manager")
                 .select(Column.depth("level", "distance"), Column.binding("manager"))
@@ -95,7 +92,7 @@ public final class Reports {
      */
     public static Query vacantPositions() {
         return Query.from(Position.TYPE, "position")
-                .where(Condition.not(Condition.hasLink("position", "filledBy")))
+                .where(Condition.not(Condition.hasLink("position", Fills.INVERSE)))
                 .orderBy(Position.CODE.of("position").ascending())
                 .build();
     }

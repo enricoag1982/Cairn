@@ -11,10 +11,13 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
+import io.github.enricoag1982.cairn.data.TemporaryId;
+import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.documents.Instants;
 import io.github.enricoag1982.cairn.documents.JsonSchemas;
 import io.github.enricoag1982.cairn.documents.SchemaDocuments;
@@ -74,10 +77,24 @@ class AgentToolsTest {
         }
 
         assertThat(traverse).isNotNull();
-        assertThat(traverse.get("required")).as("the start is named by id or by key, so neither is required")
-                .map(JsonNode::stringValue).containsExactly("name", "maxDepth", "effectiveAt");
+        assertThat(traverse.get("required")).as("the start is named by id or by key, so neither is required, and "
+                + "without a maximum depth the traversal goes to the end")
+                .map(JsonNode::stringValue).containsExactly("name", "effectiveAt");
         assertThat(traverse.get("properties").propertyNames()).containsExactlyInAnyOrder("id", "key", "name",
                 "maxDepth", "effectiveAt", "knownAt");
+        assertThat(traverse.get("properties").get("maxDepth").get("description").stringValue()).contains("to the end");
+    }
+
+    @Test
+    void theDescriptionsOfTheTraversalAndOfTheQueryToolMentionWhatTheyDoWithoutADepthAndFromGivenIds() {
+        for (AgentTools.ToolDescription tool : AgentTools.toolDescriptions()) {
+            if (tool.name().equals("cairn_traverse")) {
+                assertThat(tool.description()).contains("to the end if you give none");
+            }
+            if (tool.name().equals("cairn_query")) {
+                assertThat(tool.description()).contains("ids").contains("an empty list gives no rows");
+            }
+        }
     }
 
     @Test
@@ -641,8 +658,33 @@ class AgentToolsTest {
             assertThat(problem(fixture.call("cairn_traverse", arguments), "INVALID_VALUE").get("path").stringValue())
                     .as(depth.toString()).isEqualTo("@arguments.maxDepth");
         }
-        assertThat(problem(fixture.call("cairn_traverse", args("id", "x", "name", "ownedBy", "effectiveAt", MARCH_1)),
-                "MISSING_KEY").get("path").stringValue()).isEqualTo("@arguments.maxDepth");
+    }
+
+    @Test
+    void aTraversalWithoutAMaximumDepthFollowsToTheEnd() {
+        Ownership data = recordOwnership();
+        TemporaryId gamma = new TemporaryId("gamma");
+        Receipt withGamma = fixture.replay(new ReferenceStories.Recording(ReferenceStories.on(5, 3),
+                Transaction.by("importer")
+                        .create(gamma, "Organization", ReferenceStories.from(1, 1),
+                                ReferenceStories.values("name", "Gamma"))
+                        .relate("Owns", gamma, data.acme, ReferenceStories.from(2, 1),
+                                ReferenceStories.values("share", 70)).build()));
+
+        JsonNode toTheEnd = fixture.call("cairn_traverse", args("id", data.beta.value(), "name", "ownedBy",
+                "effectiveAt", MARCH_1));
+        JsonNode explicitNull = fixture.call("cairn_traverse", args("id", data.beta.value(), "name", "ownedBy",
+                "effectiveAt", MARCH_1).putNull("maxDepth"));
+        JsonNode limited = fixture.call("cairn_traverse", args("id", data.beta.value(), "name", "ownedBy",
+                "effectiveAt", MARCH_1).put("maxDepth", 1));
+
+        assertThat(toTheEnd.has("problems")).isFalse();
+        assertThat(toTheEnd.get("result")).extracting(step -> step.get("entity").get("id").stringValue(),
+                step -> step.get("depth").intValue()).containsExactly(
+                        tuple(data.acme.value(), 1), tuple(entity(withGamma, gamma).value(), 2));
+        assertThat(explicitNull).as("a null depth is none").isEqualTo(toTheEnd);
+        assertThat(limited.get("result")).as("with a depth of 1 it stops at ACME").hasSize(1);
+        assertThat(toTheEnd.get("effectiveAt").stringValue()).isEqualTo(MARCH_1);
     }
 
     @Test

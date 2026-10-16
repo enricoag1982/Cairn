@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.TreeSet;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -203,13 +204,16 @@ final class Reads {
         return result(view, true, Json.parse(Payloads.linksToJson(links)));
     }
 
-    /** {@code cairn_traverse}: everything reachable by a name, breadth first, up to a depth. */
+    /**
+     * {@code cairn_traverse}: everything reachable by a name, breadth first, up to a depth, or to the end if the call
+     * gives none.
+     */
     ObjectNode traverse(String text) {
         Arguments in = Arguments.parse(text, "id", "key", "name", "maxDepth", "effectiveAt", "knownAt");
         Optional<String> id = in.optionalString("id");
         Optional<String> key = in.optionalObject("key", KEY_FORM);
         String name = in.string("name");
-        Integer maxDepth = in.count("maxDepth");
+        OptionalInt maxDepth = in.optionalCount("maxDepth");
         Instant effectiveAt = in.instant("effectiveAt");
         KnownAt knownAt = in.knownAt();
         in.exactlyOne("id", id.isPresent(), "key", key.isPresent());
@@ -240,7 +244,8 @@ final class Reads {
             }
             start = Optional.of(new EntityId(id.get()));
         }
-        List<Step> steps = view.traverse(start.get(), name, relationship -> true, maxDepth);
+        List<Step> steps = maxDepth.isPresent() ? view.traverse(start.get(), name, maxDepth.getAsInt())
+                : view.traverse(start.get(), name);
         return result(view, true, Json.parse(Payloads.stepsToJson(steps)));
     }
 

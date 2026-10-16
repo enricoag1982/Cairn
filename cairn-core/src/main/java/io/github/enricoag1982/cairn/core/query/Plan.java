@@ -1,9 +1,11 @@
 package io.github.enricoag1982.cairn.core.query;
 
+import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.query.Cell;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 
 /**
@@ -13,6 +15,8 @@ import java.util.OptionalInt;
  *
  * @param startType   the name of the entity type to start from, as the schema spells it
  * @param exactType   whether to take only the entities of exactly that type
+ * @param ids         the IDs of the entities to start from; empty to start from every entity of the type, a list, even
+ *                    an empty one, to start from those entities only
  * @param slots       the number of cells of a row before grouping; the start binds the first
  * @param stages      the steps after the start
  * @param groups      how to group the rows, or null for a query without grouping
@@ -26,6 +30,7 @@ import java.util.OptionalInt;
 record Plan(
         String startType,
         boolean exactType,
+        Optional<List<EntityId>> ids,
         int slots,
         List<Stage> stages,
         Groups groups,

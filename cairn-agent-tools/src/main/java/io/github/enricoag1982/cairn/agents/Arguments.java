@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -154,18 +155,20 @@ final class Arguments {
         }
     }
 
-    /** A required argument that is a whole number of at least 0; null, with a problem, if it is not. */
-    Integer count(String name) {
+    /**
+     * An optional argument that is a whole number of at least 0; empty if it is absent or null, and, with a problem, if
+     * it is not.
+     */
+    OptionalInt optionalCount(String name) {
         JsonNode node = values.get(name);
         if (node == null || node.isNull()) {
-            problems.add(missing(name, "a whole number of at least 0"));
-            return null;
+            return OptionalInt.empty();
         }
         if (!node.isIntegralNumber() || !node.canConvertToInt() || node.intValue() < 0) {
             problems.add(wrongKind(name, "a whole number of at least 0", node));
-            return null;
+            return OptionalInt.empty();
         }
-        return node.intValue();
+        return OptionalInt.of(node.intValue());
     }
 
     /**

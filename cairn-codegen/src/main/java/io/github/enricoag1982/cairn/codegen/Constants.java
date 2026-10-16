@@ -16,16 +16,20 @@ import java.util.Set;
  * {@code birthDate} becomes {@code BIRTH_DATE}.
  *
  * <p>A name gets the suffix {@code _}, repeated until it clashes with nothing, where it would clash: with the constant
- * {@code TYPE} that every entity type and relationship type declares, with the Java name of a type of the documents (which
- * generated code writes before a dot, and a field of that name would hide), or with a constant that a supertype or an
- * included trait declares, which the constants of this type would otherwise hide. The names of an element depend on the
- * element's own attributes and on its supertypes and traits only, so that registering a type elsewhere never renames a
- * constant.
+ * {@code TYPE} that every entity type and relationship type declares, with the constant {@code INVERSE} that every
+ * relationship type declares (both are reserved for every element, so that a name does not depend on the kind of
+ * element), with the Java name of a type of the documents (which generated code writes before a dot, and a field of that
+ * name would hide), or with a constant that a supertype or an included trait declares, which the constants of this type
+ * would otherwise hide. The names of an element depend on the element's own attributes and on its supertypes and traits
+ * only, so that registering a type elsewhere never renames a constant.
  */
 final class Constants {
 
     /** The constant that every entity type and relationship type declares for its name in the schema. */
     private static final String TYPE = "TYPE";
+
+    /** The constant that every relationship type declares for its inverse name in the schema. */
+    private static final String INVERSE = "INVERSE";
 
     private Constants() {
     }
@@ -70,6 +74,7 @@ final class Constants {
         }
         Set<String> taken = new HashSet<>(typeNames);
         taken.add(TYPE);
+        taken.add(INVERSE);
         for (String parent : inheritedFrom(element, byName)) {
             taken.addAll(resolve(byName.get(parent), byName, typeNames, result).values());
         }

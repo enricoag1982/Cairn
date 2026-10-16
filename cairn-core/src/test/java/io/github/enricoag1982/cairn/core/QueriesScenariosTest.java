@@ -8,15 +8,18 @@ import static io.github.enricoag1982.cairn.core.QueryRows.rows;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.entity;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.relationship;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A2;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME_OWNS_BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.money;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.Coordinates;
@@ -35,6 +38,8 @@ import io.github.enricoag1982.cairn.query.Operand;
 import io.github.enricoag1982.cairn.query.Order;
 import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
+import io.github.enricoag1982.cairn.query.Row;
+import io.github.enricoag1982.cairn.query.Traversal;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Value;
@@ -96,6 +101,43 @@ class QueriesScenariosTest {
 
         assertThat(result.rows()).as("Party is abstract").isEmpty();
         assertThat(result.columns()).containsExactly("p");
+    }
+
+    @Test
+    @DisplayName("Scenario: A query that starts from given entities")
+    void aQueryThatStartsFromGivenEntities() {
+        Receipt accounts = reference.createAccounts();
+        EntityId acme = entity(reference.parties, ACME);
+        EntityId alice = entity(reference.parties, ALICE);
+        EntityId a1 = entity(accounts, A1);
+        Query query = Query.from("Party", "p").ids(acme, alice, a1).build();
+
+        QueryResult.Rows result = rows(reference.view(on(3, 31)).query(query));
+
+        assertThat(names(result, "p")).as("A-1 is not a Party, and is left out without a problem")
+                .containsExactly("ACME", "Alice");
+        assertThat(result.rows()).extracting(row -> row.entity("p").orElseThrow().id()).containsExactly(acme, alice);
+    }
+
+    @Test
+    @DisplayName("Scenario: A rule that queries from one entity")
+    void aRuleThatQueriesFromOneEntity() {
+        AccountQueriedRule rule = AccountQueriedRule.fromOneAccount();
+        ReferenceStore store = rule.store();
+        Receipt accounts = store.createAccounts();
+        EntityId a1 = entity(accounts, A1);
+        rule.watch(a1);
+        store.replay(ReferenceStories.rd3Employment(entity(store.parties, BETA), entity(store.parties, ALICE)));
+        store.replay(ReferenceStories.rd5BalancePatch(a1));
+        store.replay(ReferenceStories.rd5BalanceCorrection(a1));
+        int checked = rule.checks();
+        assertThat(checked).as("checked when the employment was written, and when A-1 changed").isPositive();
+        store.recordedOn(on(5, 20));
+
+        store.commit(Transaction.by("importer")
+                .patch(entity(accounts, A2), from(3, 1), values("balance", money("2500"))).build());
+
+        assertThat(rule.checks()).as("A-2 is not A-1: the query read A-1 and not every account").isEqualTo(checked);
     }
 
     // ------------------------------------------------------------------ filters
@@ -237,6 +279,26 @@ class QueriesScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: A traversal to the end in a query")
+    void aTraversalToTheEndInAQuery() {
+        Receipt parties = reference.createParties();
+        reference.commit(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma"))
+                .relate("Owns", entity(parties, ACME), entity(parties, BETA), from(2, 1), values("share", 55))
+                .relate("Owns", GAMMA, entity(parties, ACME), from(2, 1), values("share", 70)).build());
+        Query query = Query.from("Organization", "o")
+                .where(nameIs("o", "Beta"))
+                .traverse(Traversal.of("o", "ownedBy", "owner").depth("depth"))
+                .orderBy(Order.ascending(Column.depth("depth")))
+                .build();
+
+        QueryResult.Rows result = rows(reference.view(on(3, 1)).query(query));
+
+        assertThat(result.rows()).extracting(row -> name(row, "owner"), row -> row.intValue("depth").orElseThrow())
+                .containsExactly(tuple("ACME", 1), tuple("Gamma", 2));
+    }
+
+    @Test
     @DisplayName("Scenario: A traversal that starts at depth 0 from a person")
     void aTraversalThatStartsAtDepth0FromAPerson() {
         reference.createAccounts();
@@ -323,6 +385,24 @@ class QueriesScenariosTest {
                 .satisfies(row -> assertThat(QueryRows.text(row.entity("a").orElseThrow(), "number")).isEqualTo("A-2"));
         assertThat(result.effectiveAt()).as("the coordinates").isEqualTo(on(3, 31));
         assertThat(result.basis()).isEqualTo(reference.store.latestBasis());
+    }
+
+    @Test
+    @DisplayName("Scenario: Reading a total without casts")
+    void readingATotalWithoutCasts() {
+        recordRd1Rd2Rd5();
+        Query query = Query.from("Account", "a")
+                .aggregate(Aggregate.count("count"), Aggregate.sum(Operand.attribute("a", "balance"), "total"))
+                .build();
+
+        QueryResult.Rows result = rows(reference.view(on(3, 31)).query(query));
+
+        Row row = result.rows().getFirst();
+        assertThat(result.rows()).hasSize(1);
+        assertThat(row.longValue("count")).contains(2L);
+        assertThat(row.decimal("total")).hasValueSatisfying(total -> assertThat(total).isEqualByComparingTo("3200"));
+        assertThatThrownBy(() -> row.string("count")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("'count'");
     }
 
     // ------------------------------------------------------------------ invalid queries

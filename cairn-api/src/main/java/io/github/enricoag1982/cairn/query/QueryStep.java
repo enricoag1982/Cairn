@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.query;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * One step of a {@link Query} after its start (ADR-0023, capability {@code queries}). Steps apply in order, each to the
@@ -52,8 +53,9 @@ public sealed interface QueryStep {
 
     /**
      * Binds, for each row, each entity reached from a bound entity by a relationship name or inverse name at depths
-     * from a minimum to a maximum. Depth 0 is the bound entity itself, reached by no relationship. Each reached entity
-     * is bound once per row, at the smallest depth at which it is reached.
+     * from a minimum to a maximum, or to the end if there is no maximum. Depth 0 is the bound entity itself, reached by
+     * no relationship. Each reached entity is bound once per row, at the smallest depth at which it is reached, so a
+     * cycle ends a traversal without a maximum.
      *
      * <p>A traversal can follow only some of the relationships: those for which a condition holds. The condition is
      * evaluated on each relationship before it is followed, so an entity that can be reached only through other
@@ -64,6 +66,8 @@ public sealed interface QueryStep {
      * relationship and, with a minimum depth of 0, the type of the binding the traversal starts from, since that entity
      * is bound too. If there is none, the binding has no entity type, and its attributes cannot be used.
      *
+     * <p>{@link Traversal} collects the options of a traversal with names, for the Java builder.
+     *
      * @param from         the name of the binding of the entity to start from
      * @param name         the name of a relationship type or the inverse name of one
      * @param binding      the name that the reached entity is bound to
@@ -73,10 +77,10 @@ public sealed interface QueryStep {
      * @param along        the condition that a relationship must satisfy to be followed, if there is one; it can refer
      *                     only to the binding named by {@code relationship}, and to literals
      * @param minDepth     the smallest depth to bind, at least 0
-     * @param maxDepth     the largest depth to bind, at least {@code minDepth}
+     * @param maxDepth     the largest depth to bind, at least {@code minDepth}; empty to traverse to the end
      */
     record Traverse(String from, String name, String binding, Optional<String> relationship, Optional<String> depth,
-            Optional<Condition> along, int minDepth, int maxDepth) implements QueryStep {
+            Optional<Condition> along, int minDepth, OptionalInt maxDepth) implements QueryStep {
 
         /**
          * Rejects null components, a minimum depth below 0 and a maximum depth below the minimum.
@@ -88,14 +92,33 @@ public sealed interface QueryStep {
             Objects.requireNonNull(relationship, "relationship");
             Objects.requireNonNull(depth, "depth");
             Objects.requireNonNull(along, "along");
+            Objects.requireNonNull(maxDepth, "maxDepth");
             if (minDepth < 0) {
                 throw new IllegalArgumentException("The minimum depth of a traversal is 0 or more, but it is "
                         + minDepth + ".");
             }
-            if (maxDepth < minDepth) {
+            if (maxDepth.isPresent() && maxDepth.getAsInt() < minDepth) {
                 throw new IllegalArgumentException("The maximum depth of a traversal is at least its minimum depth "
-                        + minDepth + ", but it is " + maxDepth + ".");
+                        + minDepth + ", but it is " + maxDepth.getAsInt() + ".");
             }
+        }
+
+        /**
+         * Creates a traversal with a maximum depth.
+         *
+         * @param from         the name of the binding of the entity to start from
+         * @param name         the name of a relationship type or the inverse name of one
+         * @param binding      the name that the reached entity is bound to
+         * @param relationship the name that the relationship it was reached through is bound to, if it is bound
+         * @param depth        the name that its depth is bound to, if it is bound
+         * @param along        the condition that a relationship must satisfy to be followed, if there is one
+         * @param minDepth     the smallest depth to bind, at least 0
+         * @param maxDepth     the largest depth to bind, at least {@code minDepth}
+         * @throws IllegalArgumentException if {@code minDepth} is negative or {@code maxDepth} is below it
+         */
+        public Traverse(String from, String name, String binding, Optional<String> relationship,
+                Optional<String> depth, Optional<Condition> along, int minDepth, int maxDepth) {
+            this(from, name, binding, relationship, depth, along, minDepth, OptionalInt.of(maxDepth));
         }
     }
 }

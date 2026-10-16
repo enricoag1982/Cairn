@@ -134,8 +134,9 @@ final class Checker {
         List<Comparator<Cell[]>> finalOrder = new ArrayList<>(orders);
         finalOrder.add(groups == null ? rowOrder : keyOrder(groups.keys().size()));
         OptionalInt limit = query.limit();
-        return new Checked(new Plan(startType.name(), query.start().exactType(), slots.size(), List.copyOf(stages),
-                groups, List.copyOf(columnNames), List.copyOf(columns), rowOrder, chain(finalOrder), limit), List.of());
+        return new Checked(new Plan(startType.name(), query.start().exactType(), query.start().ids(), slots.size(),
+                List.copyOf(stages), groups, List.copyOf(columnNames), List.copyOf(columns), rowOrder,
+                chain(finalOrder), limit), List.of());
     }
 
     // ------------------------------------------------------------------ bindings
@@ -299,7 +300,7 @@ final class Checker {
                         .orElse(null);
                 yield from == null || navigation == null || traverse.along().isPresent() && test == null ? null
                         : new Stage.Traverse(from.slot(), traverse.name(), entity.slot(), relationship.slot(),
-                                depth.slot(), test, traverse.minDepth(), traverse.maxDepth());
+                                depth.slot(), test, traverse.minDepth(), traverse.maxDepth().orElse(Integer.MAX_VALUE));
             }
         };
     }

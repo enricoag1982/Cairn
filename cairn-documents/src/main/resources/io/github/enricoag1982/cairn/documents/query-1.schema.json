@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:cairn:query:1",
   "title": "Cairn query, format version 1",
-  "description": "A Cairn query starts from an entity type and binds each of its entities to a name. Its steps then apply in order, each to the rows that the steps before it produced: a step filters the rows, follows relationships, or traverses them up to a depth, and binds more names. Then the query can group the rows and aggregate, name the columns to return, order the rows and limit them. A view runs it and returns rows, or problems that name the part of the query they concern, such as @query.steps.1. Write it as JSON or as YAML 1.2. Names of types, attributes and relationships are those of the schema (see cairn_describe); names of bindings are those that the query gives, and are compared exactly.",
+  "description": "A Cairn query starts from an entity type and binds each of its entities to a name. Its steps then apply in order, each to the rows that the steps before it produced: a step filters the rows, follows relationships, or traverses them up to a depth or to the end, and binds more names. Then the query can group the rows and aggregate, name the columns to return, order the rows and limit them. A view runs it and returns rows, or problems that name the part of the query they concern, such as @query.steps.1. Write it as JSON or as YAML 1.2. Names of types, attributes and relationships are those of the schema (see cairn_describe); names of bindings are those that the query gives, and are compared exactly.",
   "type": "object",
   "additionalProperties": false,
   "required": ["from"],
@@ -17,7 +17,7 @@
       "const": 1
     },
     "from": {
-      "description": "Where the query starts: the entities of an entity type that are effective at the effective time of the view.",
+      "description": "Where the query starts: the entities of an entity type that are effective at the effective time of the view, or only the given ones.",
       "$ref": "#/$defs/from"
     },
     "steps": {
@@ -53,7 +53,7 @@
   },
   "$defs": {
     "from": {
-      "description": "The start of a query: an entity type, and the name that each of its entities is bound to.",
+      "description": "The start of a query: an entity type, and the name that each of its entities is bound to; with ids, only the entities with those IDs.",
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "as"],
@@ -70,6 +70,15 @@
           "description": "True to take only the entities whose concrete type is the type, without those of its subtypes. An abstract type has none.",
           "type": "boolean",
           "default": false
+        },
+        "ids": {
+          "description": "The IDs of the entities to start from, instead of every entity of the type. The query binds the entities with these IDs that are of the type (or of its subtypes, unless exact is true) and effective at the effective time of the view, each once; other IDs are left out without a problem. Without ids the query starts from every entity of the type, but an empty list starts from none and gives no rows. A rule that runs the query reads these entities only, and not the type.",
+          "type": "array",
+          "items": {
+            "description": "The ID of an entity, as the store generated it or as it was supplied: a string that is not blank.",
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -93,7 +102,7 @@
           "$ref": "#/$defs/follow"
         },
         "traverse": {
-          "description": "For each row, binds each entity reached from a bound entity by a relationship name or an inverse name, at depths from a minimum to a maximum. Depth 0 is the entity itself, reached by no relationship. Each reached entity is bound once per row, at the smallest depth at which it is reached. With along, only the relationships that meet a condition are followed. With a minimum depth of 0 the bound entity can be the one the traversal starts from, so its type is the closest common supertype of that entity's type and the type at the other end of the relationship, and without such a type only its ID, type and links can be used.",
+          "description": "For each row, binds each entity reached from a bound entity by a relationship name or an inverse name, at depths from a minimum to a maximum, or to the end if there is no maximum. Depth 0 is the entity itself, reached by no relationship. Each reached entity is bound once per row, at the smallest depth at which it is reached. With along, only the relationships that meet a condition are followed. With a minimum depth of 0 the bound entity can be the one the traversal starts from, so its type is the closest common supertype of that entity's type and the type at the other end of the relationship, and without such a type only its ID, type and links can be used.",
           "$ref": "#/$defs/traverse"
         }
       }
@@ -126,7 +135,7 @@
       "description": "A traverse step: the binding to start from, the relationship name, the depths, and the names to bind.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["from", "name", "as", "maxDepth"],
+      "required": ["from", "name", "as"],
       "properties": {
         "from": {
           "description": "The name of the binding of the entity to start from, bound by the start or an earlier step.",
@@ -147,7 +156,7 @@
           "default": 0
         },
         "maxDepth": {
-          "description": "The largest depth to bind, at least minDepth. A chain longer than this is cut short.",
+          "description": "The largest depth to bind, at least minDepth. A chain longer than this is cut short. Without it, the traversal goes to the end: each entity is reached once, so a cycle ends it.",
           "type": "integer",
           "minimum": 0
         },

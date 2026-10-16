@@ -1,6 +1,8 @@
 package io.github.enricoag1982.cairn.query;
 
+import io.github.enricoag1982.cairn.data.EntityId;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -11,10 +13,12 @@ import java.util.OptionalInt;
  * traverse relationships, group and aggregate, and return rows (ADR-0023, capability {@code queries}).
  *
  * <p>A query starts from an entity type, binding each entity of the type (and of its subtypes, unless it asks for the
- * exact type) that is effective at the view's effective time to a name. Its steps then apply in order, each to the rows
- * that the steps before it produced: a filter keeps rows, a follow step binds the entities and relationships linked by a
- * relationship name or inverse name, and a traversal binds those reached up to a maximum depth. Then come the optional
- * grouping with aggregates, the columns to return, an order and a limit.
+ * exact type) that is effective at the view's effective time to a name; or, if it gives a list of IDs with
+ * {@link Builder#ids(EntityId...)}, only the entities with those IDs that are of the type and effective. Its steps then
+ * apply in order, each to the rows that the steps before it produced: a filter keeps rows, a follow step binds the
+ * entities and relationships linked by a relationship name or inverse name, and a traversal binds those reached up to a
+ * maximum depth, or to the end. Then come the optional grouping with aggregates, the columns to return, an order and a
+ * limit.
  *
  * <p>A query is an immutable value that can be logged, compared, sent, and run again at other coordinates. Build one
  * with {@link #from(String, String)}. For example, the total balance of accounts by ultimate parent, which follows
@@ -85,6 +89,7 @@ public record Query(
         private final String entityType;
         private final String binding;
         private boolean exactType;
+        private Optional<List<EntityId>> ids = Optional.empty();
         private final List<QueryStep> steps = new ArrayList<>();
         private boolean grouped;
         private final List<GroupKey> keys = new ArrayList<>();
@@ -105,6 +110,36 @@ public record Query(
          */
         public Builder exactType() {
             this.exactType = true;
+            return this;
+        }
+
+        /**
+         * Starts from the entities with these IDs, instead of from every entity of the type: the ones that are of the
+         * type (or of its subtypes, unless {@link #exactType()}) and effective at the view's effective time. The others
+         * are left out without a problem. Replaces any IDs given before. In a rule's view, the query then reads these
+         * entities and not the type.
+         *
+         * <p>No IDs at all means no entities: a query started from {@code ids()}, or from the IDs of an empty
+         * collection, returns no rows, so that IDs computed from data that finds none do not give every entity of the
+         * type. A query that never calls {@code ids} starts from every entity of the type.
+         *
+         * @param ids the IDs of the entities
+         * @return this builder
+         */
+        public Builder ids(EntityId... ids) {
+            return ids(List.of(Objects.requireNonNull(ids, "ids")));
+        }
+
+        /**
+         * Starts from the entities with these IDs, like {@link #ids(EntityId...)}.
+         *
+         * <p>An empty collection means no entities, not every entity of the type.
+         *
+         * @param ids the IDs of the entities
+         * @return this builder
+         */
+        public Builder ids(Collection<EntityId> ids) {
+            this.ids = Optional.of(List.copyOf(Objects.requireNonNull(ids, "ids")));
             return this;
         }
 
@@ -262,6 +297,20 @@ public record Query(
         }
 
         /**
+         * Adds a traversal step with named options, which can leave out the maximum depth to traverse to the end.
+         *
+         * @param traversal the traversal
+         * @return this builder
+         * @throws IllegalArgumentException if the minimum depth of the traversal is above its maximum depth
+         */
+        public Builder traverse(Traversal traversal) {
+            Objects.requireNonNull(traversal, "traversal");
+            return step(new QueryStep.Traverse(traversal.from(), traversal.name(), traversal.binding(),
+                    traversal.relationship(), traversal.depth(), traversal.along(), traversal.minDepth(),
+                    traversal.maxDepth()));
+        }
+
+        /**
          * Groups the rows by keys. May be called more than once; the keys add up.
          *
          * @param keys the keys
@@ -347,7 +396,7 @@ public record Query(
          * @return the query
          */
         public Query build() {
-            return new Query(new Start(entityType, binding, exactType), steps,
+            return new Query(new Start(entityType, binding, exactType, ids), steps,
                     grouped ? Optional.of(new Grouping(keys, aggregates)) : Optional.empty(), columns, order, limit);
         }
     }

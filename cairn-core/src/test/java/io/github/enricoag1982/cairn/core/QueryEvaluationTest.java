@@ -5,6 +5,8 @@ import static io.github.enricoag1982.cairn.core.ItemStore.FULL_WIDTH_A;
 import static io.github.enricoag1982.cairn.core.ItemStore.I1;
 import static io.github.enricoag1982.cairn.core.ItemStore.I2;
 import static io.github.enricoag1982.cairn.core.ItemStore.I3;
+import static io.github.enricoag1982.cairn.core.ItemStore.I4;
+import static io.github.enricoag1982.cairn.core.ItemStore.I5;
 import static io.github.enricoag1982.cairn.core.QueryRows.rows;
 import static io.github.enricoag1982.cairn.core.QueryRows.texts;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
@@ -17,6 +19,7 @@ import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.query.Aggregate;
 import io.github.enricoag1982.cairn.query.Cell;
 import io.github.enricoag1982.cairn.query.Column;
 import io.github.enricoag1982.cairn.query.Condition;
@@ -24,7 +27,9 @@ import io.github.enricoag1982.cairn.query.Operand;
 import io.github.enricoag1982.cairn.query.Order;
 import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
+import io.github.enricoag1982.cairn.query.QueryStep;
 import io.github.enricoag1982.cairn.query.Row;
+import io.github.enricoag1982.cairn.query.Traversal;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -86,6 +91,117 @@ class QueryEvaluationTest {
         assertThat(items.reference.view(on(2025, 12, 31))
                 .query(query)).isInstanceOfSatisfying(QueryResult.Rows.class, result ->
                 assertThat(result.rows()).isEmpty());
+    }
+
+    // ------------------------------------------------------------------ the start from given entities
+
+    @Test
+    void aStartFromGivenIdsBindsTheEntitiesWithThoseIdsOnceInTheOrderOfTheirIds() {
+        EntityId alpha = items.id(I1);
+        EntityId beta = items.id(I2);
+        EntityId delta = items.id(I4);
+
+        QueryResult.Rows result = run(Query.from("Item", "i").ids(delta, alpha, beta, alpha, delta).build());
+
+        assertThat(texts(result, "i", "label")).as("each once, ordered by ID whatever the order given")
+                .containsExactly("alpha", "Beta", "delta");
+        assertThat(result.columns()).containsExactly("i");
+        assertThat(run(Query.from("Item", "i").ids(List.of(beta, alpha)).build()).rows())
+                .isEqualTo(run(Query.from("Item", "i").ids(alpha, beta).build()).rows());
+    }
+
+    @Test
+    void aStartFromGivenIdsTakesTheSubtypesUnlessItAsksForTheExactType() {
+        EntityId alpha = items.id(I1);
+        EntityId gamma = items.id(I3);
+
+        assertThat(texts(run(Query.from("Item", "i").ids(alpha, gamma).build()), "i", "label"))
+                .containsExactly("alpha", "gamma");
+        assertThat(texts(run(Query.from("Item", "i").exactType().ids(alpha, gamma).build()), "i", "label"))
+                .containsExactly("alpha");
+        assertThat(texts(run(Query.from("Gadget", "g").ids(alpha, gamma).build()), "g", "label"))
+                .containsExactly("gamma");
+        assertThat(texts(run(Query.from("Thing", "t").ids(alpha, gamma).build()), "t", "label"))
+                .as("the supertype takes both").containsExactly("alpha", "gamma");
+        assertThat(run(Query.from("Thing", "t").exactType().ids(alpha, gamma).build()).rows()).as("abstract").isEmpty();
+        assertThat(run(Query.from("ARTICLE", "i").ids(alpha).build()).rows()).as("an alias of the type").hasSize(1);
+    }
+
+    @Test
+    void aStartFromGivenIdsLeavesOutWhatIsNotThereWithoutAProblem() {
+        EntityId alpha = items.id(I1);
+        EntityId relationshipId = new EntityId(ReferenceStore.relationshipId(7).value());
+        EntityId unknown = ReferenceStore.id(999);
+
+        QueryResult.Rows unknownAndRelationship = run(Query.from("Item", "i")
+                .ids(unknown, relationshipId, alpha).build());
+        QueryResult.Rows onlyUnknown = run(Query.from("Item", "i").ids(unknown).build());
+
+        assertThat(texts(unknownAndRelationship, "i", "label")).containsExactly("alpha");
+        assertThat(onlyUnknown.rows()).as("none of the IDs is an entity: no rows, and no problem").isEmpty();
+        assertThat(onlyUnknown.columns()).containsExactly("i");
+    }
+
+    @Test
+    void aStartFromGivenIdsTakesOnlyTheEntitiesEffectiveAtTheViewsTime() {
+        EntityId alpha = items.id(I1);
+        EntityId wide = items.id(I5);
+        items.reference.commit(Transaction.by("test").endDate(wide, on(2, 1)).build());
+        Query query = Query.from("Item", "i").ids(alpha, wide).build();
+
+        assertThat(texts(rows(items.reference.view(on(1, 15)).query(query)), "i", "label"))
+                .containsExactly("alpha", FULL_WIDTH_A);
+        assertThat(texts(rows(items.reference.view(on(3, 1)).query(query)), "i", "label"))
+                .as("the item ended on 1 February").containsExactly("alpha");
+        assertThat(rows(items.reference.view(on(2025, 12, 31)).query(query)).rows())
+                .as("nothing exists before 1 January").isEmpty();
+    }
+
+    @Test
+    void aStartWithoutIdsIsEveryEntityOfTheTypeButAnEmptyListOfIdsIsNone() {
+        QueryResult.Rows everything = run(Query.from("Item", "i").build());
+
+        assertThat(everything.rows()).hasSize(6);
+        assertThat(run(Query.from("Item", "i").ids(List.of()).build()).rows()).as("an empty collection").isEmpty();
+        assertThat(run(Query.from("Item", "i").ids().build()).rows()).as("no IDs given").isEmpty();
+        assertThat(run(Query.from("Item", "i").ids().build()).columns()).containsExactly("i");
+        assertThat(run(Query.from("Item", "i").ids(items.id(I1)).ids(List.of()).build()).rows())
+                .as("the IDs replace those given before").isEmpty();
+        assertThat(run(Query.from("Item", "i").ids(List.of()).ids(items.id(I1)).build()).rows()).hasSize(1);
+        assertThat(run(Query.from("Item", "i").ids(items.id(I1)).ids(items.id(I2)).build()).rows()).hasSize(1);
+    }
+
+    @Test
+    void idsComputedFromDataThatFindsNoneGiveNoRowsAndNotEveryEntity() {
+        List<EntityId> found = items.view().entities("Item").stream()
+                .filter(state -> state.values().get("quantity") instanceof Value.IntValue quantity
+                        && quantity.value() > 100)
+                .map(state -> state.id()).toList();
+
+        QueryResult.Rows result = run(Query.from("Item", "i").ids(found).build());
+
+        assertThat(found).isEmpty();
+        assertThat(result.rows()).isEmpty();
+    }
+
+    @Test
+    void theStepsAfterAStartFromGivenIdsWorkOnItsRows() {
+        EntityId alpha = items.id(I1);
+        EntityId gamma = items.id(I3);
+        Query query = Query.from("Item", "i").ids(alpha, gamma)
+                .follow("i", "Next", "n")
+                .where(Condition.gt(item("quantity"), Operand.literal(3)))
+                .build();
+        Query grouped = Query.from("Item", "i").ids(alpha, gamma)
+                .follow("i", "Next", "n")
+                .groupBy("i")
+                .aggregate(Aggregate.count("count"))
+                .build();
+
+        assertThat(texts(run(query), "n", "label")).as("alpha has a quantity above 3 and leads to Beta and gamma")
+                .containsExactly("Beta", "gamma");
+        assertThat(run(grouped).rows()).extracting(row -> QueryRows.text(row, "i", "label"),
+                row -> row.longValue("count").orElseThrow()).containsExactly(tuple("alpha", 2L), tuple("gamma", 1L));
     }
 
     // ------------------------------------------------------------------ comparisons
@@ -487,6 +603,52 @@ class QueryEvaluationTest {
         assertThat(result.rows()).extracting(row -> row.entity("t").orElseThrow().id(),
                 row -> row.relationship("via").orElseThrow().id()).containsExactlyInAnyOrderElementsOf(
                         traversed.stream().map(step -> tuple(step.entity().id(), step.via().id())).toList());
+    }
+
+    @Test
+    void aTraversalWithoutAMaximumDepthGoesToTheEndAndTheCycleEndsIt() {
+        Query query = Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
+                .traverse(Traversal.of("i", "Next", "t").relationship("via").depth("depth"))
+                .orderBy(Order.ascending(Column.depth("depth")), Order.ascending(Column.binding("t")))
+                .build();
+
+        QueryResult.Rows result = run(query);
+
+        assertThat(reached(result)).as("from depth 1: delta leads back to alpha, which is not reached again")
+                .containsExactly(tuple("Beta", 1), tuple("gamma", 1), tuple("delta", 2));
+        assertThat(result).isEqualTo(run(traversalFromAlpha(1, 1000, "Next")));
+        assertThat(reached(run(Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
+                .traverse(Traversal.of("i", "Next", "t").minDepth(0).depth("depth"))
+                .orderBy(Order.ascending(Column.depth("depth")), Order.ascending(Column.binding("t"))).build())))
+                .as("from depth 0 the entity itself is bound, once")
+                .containsExactly(tuple("alpha", 0), tuple("Beta", 1), tuple("gamma", 1), tuple("delta", 2));
+        assertThat(reached(run(Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
+                .traverse(Traversal.of("i", "Next", "t").minDepth(2).depth("depth")).build())))
+                .containsExactly(tuple("delta", 2));
+    }
+
+    @Test
+    void aTraversalWithoutAMaximumDepthCanFollowOnlyTheRelationshipsThatMeetACondition() {
+        Condition light = Condition.lt(Operand.attribute("via", "weight"), Operand.literal(4));
+        Query query = Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
+                .traverse(Traversal.of("i", "Next", "t").relationship("via").depth("depth").along(light))
+                .orderBy(Order.ascending(Column.depth("depth")), Order.ascending(Column.binding("t")))
+                .build();
+
+        assertThat(reached(run(query))).as("alpha to gamma weighs 4, so gamma is reached through Beta, at depth 2")
+                .containsExactly(tuple("Beta", 1), tuple("gamma", 2), tuple("delta", 3));
+    }
+
+    @Test
+    void aTraversalWithoutAMaximumDepthIsOneWhoseMaximumIsAbsentAndAnExplicitMaximumIsKept() {
+        QueryStep.Traverse toTheEnd = (QueryStep.Traverse) Query.from("Item", "i")
+                .traverse(Traversal.of("i", "Next", "t")).build().steps().getFirst();
+        QueryStep.Traverse limited = (QueryStep.Traverse) Query.from("Item", "i")
+                .traverse(Traversal.of("i", "Next", "t").maxDepth(2)).build().steps().getFirst();
+
+        assertThat(toTheEnd.maxDepth()).isEmpty();
+        assertThat(toTheEnd.minDepth()).isEqualTo(1);
+        assertThat(limited.maxDepth()).hasValue(2);
     }
 
     @Test

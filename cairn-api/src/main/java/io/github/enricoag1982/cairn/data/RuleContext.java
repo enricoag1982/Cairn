@@ -25,8 +25,9 @@ import java.time.Instant;
  * lists a type, or reads a timeline, is reached by every change to any of those entities, at any time, and is run
  * again for all of them; a rule that navigates from what it checks is reached only by changes to what it reaches. A
  * query starts by listing the entities of its start type, so a rule that runs a query is reached by any change to an
- * entity of that type at the instants it read, whatever the query goes on to select. So is a rule that finds an entity
- * by a unique key: it reads the entities of the key's type.
+ * entity of that type at the instants it read, whatever the query goes on to select. A query that starts from given
+ * entities ({@link io.github.enricoag1982.cairn.query.Query.Builder#ids(EntityId...) ids}) reads those entities and
+ * not the type, and a rule that finds an entity by a unique key reads the entities of the key's type.
  *
  * <p>A context belongs to one call of a rule and is not safe for use by several threads. Reporting after the call has
  * returned throws {@link IllegalStateException}, and reads through a view after the call has returned are not recorded.

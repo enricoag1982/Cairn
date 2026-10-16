@@ -466,6 +466,49 @@ class RuleRechecksTest {
     }
 
     @Test
+    void aTraversalWithoutAConditionOrADepthReadsWhatTheLongFormReads() {
+        owns(acme, beta, on(2, 1));
+        EntityId gamma = organization("Gamma");
+        EntityId delta = organization("Delta");
+        EntityId epsilon = organization("Epsilon");
+        reading = (version, context) -> context.viewAt(JUNE_1).traverse(acme, "Owns");
+        probe();
+
+        assertThat(rechecked(by().relate("Owns", beta, gamma, from(7, 1), values("share", 10)).build()))
+                .as("the second step, but from 1 July").isFalse();
+        assertThat(rechecked(by().relate("Owns", beta, delta, from(6, 1), values("share", 10)).build()))
+                .as("the second step").isTrue();
+        assertThat(rechecked(by().relate("Owns", delta, epsilon, from(6, 1), values("share", 10)).build()))
+                .as("the third step: no maximum depth stops the traversal before it").isTrue();
+    }
+
+    @Test
+    void aTraversalWithoutAConditionButWithADepthReadsWhatTheLongFormReads() {
+        owns(acme, beta, on(2, 1));
+        EntityId gamma = organization("Gamma");
+        EntityId delta = organization("Delta");
+        reading = (version, context) -> context.viewAt(JUNE_1).traverse(acme, "Owns", 2);
+        probe();
+
+        assertThat(rechecked(by().relate("Owns", beta, gamma, from(6, 1), values("share", 10)).build()))
+                .as("the second step").isTrue();
+        assertThat(rechecked(by().relate("Owns", gamma, delta, from(6, 1), values("share", 10)).build()))
+                .as("two steps do not navigate from Gamma").isFalse();
+    }
+
+    @Test
+    void aTraversalWithoutAConditionOrADepthNavigatesFromTheStartOnlyAsTheLongFormDoes() {
+        EntityId gamma = organization("Gamma");
+        reading = (version, context) -> context.viewAt(JUNE_1).traverse(gamma, "Owns");
+        probe();
+
+        assertThat(rechecked(by().relate("Owns", acme, gamma, from(6, 1), values("share", 10)).build()))
+                .as("Gamma's own relationships are what the traversal navigates, not those of ACME").isFalse();
+        assertThat(rechecked(by().relate("Owns", gamma, beta, from(6, 1), values("share", 10)).build()))
+                .as("a relationship that leads away from Gamma").isTrue();
+    }
+
+    @Test
     void aTraversalThatStopsBeforeAStepDoesNotReadIt() {
         owns(acme, beta, on(2, 1));
         EntityId gamma = organization("Gamma");
@@ -483,6 +526,45 @@ class RuleRechecksTest {
 
         assertThat(rechecked(by().create("Organization", from(7, 1), values("name", "July")).build())).isFalse();
         assertThat(rechecked(by().create("Organization", from(6, 1), values("name", "June")).build())).isTrue();
+    }
+
+    @Test
+    void theStartOfAQueryFromGivenIdsCountsAsThoseEntitiesAndNotAsTheEntitiesOfTheType() {
+        reading = (version, context) -> context.viewAt(JUNE_1)
+                .query(Query.from("Organization", "o").ids(beta).build());
+        probe();
+
+        assertThat(rechecked(by().create("Organization", from(6, 1), values("name", "June")).build()))
+                .as("another organization is created: the type was not read").isFalse();
+        assertThat(rechecked(rename(acme, from(6, 1), "Renamed"))).as("another organization changes").isFalse();
+        assertThat(rechecked(rename(beta, from(7, 1), "Beta of July"))).as("Beta changes from 1 July").isFalse();
+        assertThat(rechecked(rename(beta, from(6, 1), "Beta of June"))).as("Beta changes at the instant").isTrue();
+    }
+
+    @Test
+    void aStartFromGivenIdsReadsEachGivenEntityEvenIfItIsOfAnotherTypeOrNotThereYet() {
+        EntityId later = id(99);
+        reading = (version, context) -> context.viewAt(JUNE_1)
+                .query(Query.from("Organization", "o").ids(alice, later).build());
+        probe();
+
+        assertThat(rechecked(rename(alice, from(6, 1), "Alice B."))).as("a person is left out, but was read")
+                .isTrue();
+        assertThat(rechecked(by().create(later, "Organization", from(6, 1), values("name", "Later")).build()))
+                .as("an ID that names nothing yet, and then an organization").isTrue();
+        assertThat(rechecked(rename(acme, from(6, 1), "Renamed"))).as("an organization that was not given").isFalse();
+    }
+
+    @Test
+    void aStartFromAnEmptyListOfIdsReadsNothingOfTheType() {
+        reading = (version, context) -> context.viewAt(JUNE_1)
+                .query(Query.from("Organization", "o").ids(List.of()).build());
+        probe();
+
+        assertThat(rechecked(by().create("Organization", from(6, 1), values("name", "June")).build()))
+                .as("an organization is created: the type was not read").isFalse();
+        assertThat(rechecked(rename(acme, from(6, 1), "Renamed"))).as("an organization changes").isFalse();
+        assertThat(rechecked(rename(alice, from(6, 1), "Alice B."))).as("a person changes").isFalse();
     }
 
     @Test

@@ -62,6 +62,7 @@ class RelationshipsScenariosTest {
     private static final TemporaryId A3 = new TemporaryId("a3");
     private static final TemporaryId OFFICE = new TemporaryId("office");
     private static final TemporaryId MAILED_TO = new TemporaryId("mailedTo");
+    private static final TemporaryId GAMMA_OWNS_ACME = new TemporaryId("gammaOwnsAcme");
 
     /** The reference domain with the symmetric relationship type of the scenario "Related parties". */
     private static final SchemaDefinition WITH_RELATED_PARTY = Definitions.plus(ReferenceModel.definition(),
@@ -438,6 +439,25 @@ class RelationshipsScenariosTest {
             assertThat(step.entity().id()).isEqualTo(acme);
             assertThat(step.depth()).isEqualTo(1);
         });
+    }
+
+    @Test
+    @DisplayName("Scenario: A traversal to the end")
+    void aTraversalToTheEnd() {
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        Receipt withGamma = reference.commit(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma"))
+                .relate(ACME_OWNS_BETA, "Owns", acme, beta, from(2, 1), values("share", 55))
+                .relate(GAMMA_OWNS_ACME, "Owns", GAMMA, acme, from(2, 1), values("share", 70)).build());
+        EntityId gamma = entity(withGamma, GAMMA);
+
+        List<Step> steps = reference.view(on(3, 1)).traverse(beta, "ownedBy");
+
+        assertThat(steps).extracting(step -> step.entity().id(), Step::depth, step -> step.via().id())
+                .containsExactly(tuple(acme, 1, relationship(withGamma, ACME_OWNS_BETA)),
+                        tuple(gamma, 2, relationship(withGamma, GAMMA_OWNS_ACME)));
     }
 
     @Test
