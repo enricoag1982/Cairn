@@ -29,9 +29,10 @@ import java.util.Optional;
  *                 {@code @transaction.<key>}, such as {@code @transaction.principal}, for problems with one of its
  *                 top-level keys, and {@code @write.<n>}, with the position {@code n} counted from 0, for problems
  *                 with a write of one, or {@code @write.<n>.<attribute>} for problems with one of its attributes, and
- *                 {@code @purge.<n>} for problems with an entity that a purge names, with the position {@code n} counted
- *                 from 0; {@code @arguments} for problems with the arguments of an agent tool call as a whole, such as
- *                 arguments that are not a JSON object, and {@code @arguments.<name>} for problems with one
+ *                 {@code @purge.<n>} for problems with an entity that a purge names by ID, and {@code @purge.key.<n>} for
+ *                 problems with one that it names by unique key, with the position {@code n} counted from 0 in the
+ *                 purge's IDs or its keys; {@code @arguments} for problems with the arguments of an agent tool call as a
+ *                 whole, such as arguments that are not a JSON object, and {@code @arguments.<name>} for problems with one
  *                 argument of the call; {@code @query} for problems with a query as a whole, such as one that is not
  *                 YAML, {@code @query.from}, {@code @query.steps.<n>}, {@code @query.groupBy.<n>},
  *                 {@code @query.aggregates.<n>}, {@code @query.columns.<n>}, {@code @query.order.<n>} and

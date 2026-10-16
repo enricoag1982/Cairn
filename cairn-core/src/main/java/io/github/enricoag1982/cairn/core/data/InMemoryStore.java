@@ -569,7 +569,8 @@ public final class InMemoryStore implements Store {
      * the purge record to its journal, with the digests of the IDs it removes, before anything is removed, so that nothing
      * is removed if that fails. Then the relationships and entities are removed, relationships first, the digests of the
      * IDs and the idempotency keys are kept, the purge record is added, and the basis is published last. The IDs are
-     * returned to the caller in the result and kept nowhere.
+     * returned to the caller in the result and kept nowhere, and so are the entities that the purge's unique keys named,
+     * which {@link PurgeCheck} resolved before anything was written: a key and its value never reach the log.
      *
      * @param purge     the purge
      * @param published what to do after the purge was published, with the writer lock still held
@@ -596,7 +597,7 @@ public final class InMemoryStore implements Store {
             applyPurge(record, outcome.entities(), outcome.relationships(), digests);
             sequence.publish(commit);
             published.run();
-            return new PurgeResult.Purged(record, outcome.entities(), outcome.relationships());
+            return new PurgeResult.Purged(record, outcome.entities(), outcome.relationships(), outcome.keys());
         });
     }
 

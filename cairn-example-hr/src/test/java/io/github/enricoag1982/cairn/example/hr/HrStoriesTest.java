@@ -19,6 +19,7 @@ import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
+import io.github.enricoag1982.cairn.data.PurgeKey;
 import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipState;
@@ -787,6 +788,9 @@ class HrStoriesTest {
         PurgeResult.Purged purged = (PurgeResult.Purged) result;
         assertThat(purged.entities()).as("the person, the employment and, by the composition, the sick leave")
                 .containsExactlyInAnyOrder(gus, employment, sickLeave);
+        assertThat(purged.keys()).as("the employee number named his employment, which ended on 1 July")
+                .containsExactly(new PurgeResult.ResolvedKey(new PurgeKey(Employment.byEmployeeNumber("E-007"),
+                        Optional.empty()), employment));
         assertThat(purged.relationships()).as("EmploymentOf, EmployedBy, WorksAt, Fills, HasLeaveRequest, DecidedBy")
                 .hasSize(6).contains(ids.relationship("gusSickDecision"), ids.relationship("gusHasSick"),
                         ids.relationship("employmentOf007"), ids.relationship("fills007"));

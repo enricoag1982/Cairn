@@ -250,14 +250,22 @@ public enum ProblemCode {
             + "is invalid if the schema has no such entity type, the type has no such attribute, the attribute is not "
             + "unique, or the value does not fit. The expected details list the unique attributes of the type, where it "
             + "has some. Correct the key, or name the entity by its ID. An agent tool reports it too, at "
-            + "@arguments.key, for a key that its call gives."),
-    /** No entity has the value of a unique key at the start of the write's period. */
+            + "@arguments.key, for a key that its call gives. A purge reports it at @purge.key.<n>, for a key of its "
+            + "list."),
+    /** No entity has the value of a unique key at the start of the write's period, or, in a purge, ever or then. */
     UNIQUE_KEY_NOT_FOUND("A unique key names no entity: no entity of the key's type, or of one of its subtypes, has the "
             + "value at the start of the write's effective period, as the store held it before the transaction. A "
             + "value can move from one entity to another over time. A key resolves against the store before the "
             + "transaction, so it does not see what the same transaction creates or writes; temporary IDs name what it "
             + "creates. Correct the key or the period of the write, create the entity first, or name an entity that the "
-            + "transaction creates by its temporary ID."),
+            + "transaction creates by its temporary ID. A purge reports it at @purge.key.<n> when no entity holds the "
+            + "value at the key's effective time, or, for a key without one, at any effective time, at the latest "
+            + "basis."),
+    /** A key in a purge, without an effective time, names several entities that held the value at different times. */
+    UNIQUE_KEY_AMBIGUOUS("A unique key in a purge, without an effective time, names several entities, which held the "
+            + "value at different times: give the key an effective time, or name the entity by ID. The problem, at "
+            + "@purge.key.<n>, names each candidate by ID with the periods in which it held the value. A purge cannot "
+            + "be undone, so the store never chooses between them."),
     /** Two writes of a transaction create entities or relationships with the same temporary ID. */
     DUPLICATE_TEMPORARY_ID("A temporary ID names one entity or relationship in a transaction; entities and "
             + "relationships share the same temporary IDs. Give each created entity or relationship its own "
