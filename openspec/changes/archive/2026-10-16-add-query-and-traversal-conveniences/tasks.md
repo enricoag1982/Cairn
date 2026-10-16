@@ -21,4 +21,4 @@
 ## 4. Documentation
 
 - [x] 4.1 Update the query guide, the codegen guide, the HR domain page (gaps), the reference domain page (the test-only rule), the architecture page, and point ADR-0023 to this change's extension of the start; bump `last-reviewed`
-- [ ] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
