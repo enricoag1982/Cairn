@@ -97,6 +97,11 @@ Scenarios of the `relationships`, `type-model`, `schema-evolution` and `schema-d
 - `MailedTo` from Account to Address, with 0..1 targets per source and 0..* sources per target: where an account's statements are mailed. Scenarios of composition cascades vary its multiplicity, and whether it outlives its targets.
 - `OpenedBy` from Account to Person, with 0..1 targets per source and 0..* sources per target and the inverse name `opened`, whose relationships outlive their targets ([ADR-0034](../decisions/0034-let-relationships-of-a-type-outlive-their-targets-as-records-of-past-facts.md)): who opened an account, which stays recorded after that person has ended.
 
+Scenarios of the `attribute-access`, `schema-documents` and `schema-evolution` specs classify attributes of the reference model, which classifies none ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)); each scenario that needs one names it:
+
+- `balance` on Account, classified `finance`.
+- `lei` on Organization, classified `identity`.
+
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 
 ## Stories

@@ -37,6 +37,7 @@ cairn-agent-tools/build/install/cairn-agent-tools/bin/cairn-agent-tools \
 | `--schema <file>` | A schema document to register at start, as the principal, with a reason that names the file. Repeat it for several origins. |
 | `--on-behalf-of <name>` | The party the principal acts for, recorded on every schema registration and on every transaction whose payload names none. |
 | `--policy schema=<p>,data=<p>` | The *approval policy* for schema registrations and data commits, each `allow` (the default), `approve` or `deny`. |
+| `--clearance <c>[,<c>...]` | The *clearance* the agent reads and writes through: the *classifications* whose values it may see and change. Empty by default, so the agent sees no classified value. |
 
 The server answers on standard output and writes nothing else there; its messages for you go to standard error.
 It stops when its input closes. A client must keep the input open until it has its answers.
@@ -82,6 +83,8 @@ Other MCP clients that start servers on standard input and output take the same 
 | `cairn_approval_status` | The status of an approval request and, once decided, its outcome. |
 
 Documents, payloads and queries are passed as text, YAML or JSON, so that problems keep their lines and columns.
+
+Every tool reads and writes through the server's clearance ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)). A state lists in `withheld` the attributes whose values the clearance did not let through, so the agent tells a withheld value from no value. A query that names a withheld attribute, a unique key of one, or a write that sets or clears one is a problem `ACCESS_DENIED`; `cairn_describe` reports the clearance and each attribute's classification. A payload cannot widen the clearance. Give an agent only the classifications its task needs: the HR example's hiring agent runs with `--clearance pay`, its org-chart agent with none.
 Every tool returns JSON. A call that cannot be done returns problems instead of failing, each with a code, a path, and where it helps a hint: `{ problems }`, or `{ outcome: "rejected", problems }` for the tools that plan, register, dry-run and commit. A problem with an argument has the path `@arguments.<name>`.
 
 A typical agent session reads `cairn_describe`, asks `cairn_json_schema` for the payload schema, writes a payload, runs it with `cairn_dry_run` until it has no problems, and then commits it. To answer questions over many entities, it asks `cairn_json_schema` for the kind `query` and sends queries to `cairn_query`.
