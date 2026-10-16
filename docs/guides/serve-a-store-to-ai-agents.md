@@ -109,7 +109,7 @@ java -cp "cairn-agent-tools/build/install/cairn-agent-tools/lib/*:my-rules.jar" 
 ## Approval
 
 With `--policy schema=approve` or `data=approve`, a registration or commit that would apply waits as an *approval request*, and the tool returns the request instead. The request keeps the agent's clearance, and approving it commits with that clearance, never a wider one.
-A request that would be rejected now, or a registration that would change nothing, is answered at once. `cairn_approval_status` shows whether a person has decided.
+A request that would be rejected now, or a registration that would change nothing, is answered at once. `cairn_approval_status` shows whether a person has decided, for requests that an agent with the same principal and clearance made.
 
 People approve and reject requests through the Java API (`ApprovalQueue.pending()`, `approve` and `reject`), which the standalone server does not expose.
 To let people decide, embed the adapter in your application. Put `cairn-agent-tools` and its dependencies on the class path, not the module path: the MCP SDK's jars have no valid module names. The transport is any `McpServerTransportProvider` of the MCP Java SDK, such as `StdioServerTransportProvider`.

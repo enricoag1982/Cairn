@@ -68,7 +68,7 @@ List<Account> accounts = ((QueryResult.Rows) view.query(rich)).rows().stream()
 
 ### For a user
 
-A view or a transaction without a *clearance* reads and writes every value. Code that acts for a user passes the user's clearance ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)):
+A view or a transaction without a *clearance* reads and writes every value, so a replace written without one, after reading through a restricted view, clears the values that the view withheld. Code that acts for a user passes the user's clearance to both ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)):
 
 ```java
 View forAlice = store.view(coordinates).restrictedTo(Clearance.of("finance"));
