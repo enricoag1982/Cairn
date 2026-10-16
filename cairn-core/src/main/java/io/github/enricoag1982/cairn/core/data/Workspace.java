@@ -12,6 +12,7 @@ import io.github.enricoag1982.cairn.data.Ref;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.UniqueKey;
+import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.TypeId;
 import java.time.Instant;
@@ -90,6 +91,33 @@ final class Workspace {
     /** The entities and relationships the transaction touches, in the order of the first touch. */
     Map<Id, Working> working() {
         return working;
+    }
+
+    /**
+     * Tells whether the transaction has a clearance that does not cover an attribute. A problem about such an attribute
+     * carries no value of it (ADR-0036, design D4 of {@code add-attribute-access-control}).
+     */
+    boolean withheld(Attribute attribute) {
+        return clearance.isPresent() && !clearance.get().covers(attribute);
+    }
+
+    /**
+     * Tells whether the transaction has a clearance that does not cover one of the attributes of a type that an
+     * expression reads, so that the expression's failure is reported without the detail of the evaluation.
+     *
+     * @param type  the type of the thing the expression is evaluated for
+     * @param names the names of the attributes that the expression reads
+     */
+    boolean readsWithheld(SubjectType type, Set<String> names) {
+        if (clearance.isEmpty()) {
+            return false;
+        }
+        for (String name : names) {
+            if (type.attribute(name).filter(this::withheld).isPresent()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

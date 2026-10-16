@@ -9,6 +9,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.PRINCIPAL;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
@@ -17,8 +18,12 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.Clearance;
+import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.Coordinates;
+import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
@@ -26,6 +31,7 @@ import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
@@ -36,6 +42,7 @@ import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
@@ -140,6 +147,30 @@ class AttributeAccessScenariosTest {
         assertThat(state.values()).containsOnlyKeys("number", "currency");
         assertThat(state.values()).containsEntry("number", Value.of("A-1")).containsEntry("currency", Value.of("EUR"));
         assertThat(state.withheld()).containsExactly("balance");
+    }
+
+    @Test
+    @DisplayName("Scenario: A balance classified later")
+    void aBalanceClassifiedLater() {
+        ReferenceStore reference = new ReferenceStore();
+        Receipt accounts = reference.createAccounts();
+        EntityId a1 = entity(accounts, A1);
+        reference.replay(ReferenceStories.rd5BalancePatch(a1));
+        reference.replay(ReferenceStories.rd5BalanceCorrection(a1));
+        reference.recordedOn(on(5, 2));
+        assertThat(reference.store.schema().register(ReferenceModel.origin("1.1.0"), finance()))
+                .isInstanceOf(RegistrationResult.Applied.class);
+        View old = reference.store.view(Coordinates.effectiveAt(on(4, 1)).knownAt(accounts.basis()));
+
+        EntityState state = old.restrictedTo(Clearance.none()).entity(a1).orElseThrow();
+
+        assertThat(old.schema().entityType("Account").orElseThrow().attribute("balance").orElseThrow()
+                .classification()).as("the schema of the view is from before the classification").isEmpty();
+        assertThat(state.withheld()).containsExactly("balance");
+        assertThat(state.values()).containsOnlyKeys("number", "currency");
+        assertThat(old.entity(a1).orElseThrow().values()).as("a view that is not restricted").containsKey("balance");
+        assertThat(old.restrictedTo(Clearance.of("finance")).entity(a1).orElseThrow().values())
+                .as("a clearance that covers the classification").containsEntry("balance", Value.of(money("1000")));
     }
 
     @Test
@@ -298,6 +329,66 @@ class AttributeAccessScenariosTest {
                     assertThat(problem.found()).isEqualTo(forHeld.getFirst().found());
                 });
         assertThat(reference.view(on(5, 3)).entity(acme).orElseThrow().values()).containsEntry("name", Value.of("ACME"));
+    }
+
+    @Test
+    @DisplayName("Scenario: A refused unique value reveals nothing")
+    void aRefusedUniqueValueRevealsNothing() {
+        ReferenceStore reference = ReferenceStore.with(identity());
+        Receipt parties = reference.createParties();
+        reference.replay(ReferenceStories.rd9AcmeLei(entity(parties, ACME)));
+        reference.recordedOn(on(5, 2));
+        Transaction taken = Transaction.by(PRINCIPAL).clearance(Clearance.none())
+                .create(GAMMA, "Organization", from(5, 1), values("name", "Gamma", "lei", LEI)).build();
+        Transaction free = Transaction.by(PRINCIPAL).clearance(Clearance.none())
+                .create(GAMMA, "Organization", from(5, 1), values("name", "Gamma", "lei", "5493001KJTIIGC8Y1R13"))
+                .build();
+
+        DryRunResult forTaken = reference.store.dryRun(taken);
+        DryRunResult forFree = reference.store.dryRun(free);
+
+        assertThat(forTaken).isInstanceOf(DryRunResult.Rejected.class);
+        List<Problem> problems = ((DryRunResult.Rejected) forTaken).problems();
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.ACCESS_DENIED);
+            assertThat(problem.path()).endsWith(".lei");
+        });
+        assertThat(((DryRunResult.Rejected) forFree).problems()).as("the same for an LEI that no organization has")
+                .extracting(Problem::code, Problem::path, Problem::found, Problem::expected)
+                .containsExactlyElementsOf(problems.stream()
+                        .map(problem -> tuple(problem.code(), problem.path(), problem.found(), problem.expected()))
+                        .toList());
+        assertThat(problems.toString()).doesNotContain(LEI).doesNotContain("UNIQUE_VALUE_TAKEN");
+        assertThat(reference.store.commit(taken)).isInstanceOf(CommitResult.Rejected.class);
+    }
+
+    @Test
+    @DisplayName("Scenario: A check that fails over a withheld value")
+    void aCheckThatFailsOverAWithheldValue() {
+        SchemaDefinition checked = Definitions.withCheck(identity(), "Organization", "lei-numeric",
+                "self.name != 'Probe' || int(self.lei) > 0", null);
+        ReferenceStore reference = ReferenceStore.withExpressionLanguage(checked,
+                ExpressionLanguages.discovered().orElseThrow());
+        EntityId acme = entity(reference.createParties(), ACME);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        reference.recordedOn(on(5, 2));
+
+        List<Problem> problems = reference.reject(Transaction.by(PRINCIPAL).clearance(Clearance.none())
+                .patch(acme, from(5, 1), values("name", "Probe")).build());
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.CHECK_FAILED);
+            assertThat(problem.message()).contains("lei-numeric");
+            assertThat(problem.toString()).as("no part of the problem").doesNotContain(LEI)
+                    .doesNotContain(LEI.substring(0, 8));
+        });
+        List<Problem> withoutClearance = reference.reject(Transaction.by(PRINCIPAL)
+                .patch(acme, from(5, 1), values("name", "Probe")).build());
+        assertThat(withoutClearance).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.CHECK_FAILED);
+            assertThat(problem.found()).as("a transaction without a clearance gets the message of the evaluation")
+                    .isPresent();
+        });
     }
 
     @Test

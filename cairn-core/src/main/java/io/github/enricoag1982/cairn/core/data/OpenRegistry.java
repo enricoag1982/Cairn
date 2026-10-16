@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.core.data;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Origin;
 import io.github.enricoag1982.cairn.schema.Problem;
@@ -44,9 +45,22 @@ final class OpenRegistry implements SchemaRegistry {
     }
 
     @Override
+    public RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission,
+            Clearance clearance) {
+        requireOpen.run();
+        return delegate.register(origin, definition, submission, clearance);
+    }
+
+    @Override
     public SchemaPlan plan(Origin origin, SchemaDefinition definition) {
         requireOpen.run();
         return delegate.plan(origin, definition);
+    }
+
+    @Override
+    public SchemaPlan plan(Origin origin, SchemaDefinition definition, Clearance clearance) {
+        requireOpen.run();
+        return delegate.plan(origin, definition, clearance);
     }
 
     @Override

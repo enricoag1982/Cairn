@@ -17,7 +17,8 @@ rocksdbConformance {
         "$core.ChecksScenariosTest", "$core.DerivedAttributesScenariosTest",
         "$core.DerivedAttributesDurabilityTest", "$core.OutlivingTargetsTest",
         "$core.AttributeAccessScenariosTest", "$core.RestrictedViewsTest", "$core.RestrictedQueriesTest",
-        "$core.CommitClearancesTest", "$core.AttributeAccessDurabilityTest",
+        "$core.CommitClearancesTest", "$core.AttributeAccessDurabilityTest", "$core.LaterClassificationsTest",
+        "$core.RefusedTransactionsTest", "$core.RedactedProblemsTest", "$core.RegistrationClearanceTest",
     )
 }
 

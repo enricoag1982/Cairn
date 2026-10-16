@@ -94,8 +94,9 @@ final class WriteChecks {
      * deprecated. A name given twice, or an alias together with the name, keeps the later value. Values are converted
      * to the value type of their attribute; a value that does not fit is kept as it is, for validation to report. An
      * attribute that is derived is reported with {@code DERIVED_ATTRIBUTE_WRITTEN} and its value is dropped. An attribute
-     * that the transaction's clearance does not cover is reported with {@code ACCESS_DENIED}; the value is kept, so that
-     * no other problem follows from its absence, and the transaction is rejected whatever the other problems are.
+     * that the transaction's clearance does not cover is reported with {@code ACCESS_DENIED}, and the transaction ends,
+     * after its writes are applied, with only the problems of that code ({@link Preparation#run()}): nothing is
+     * validated for it.
      */
     Resolved resolveValues(String path, SubjectType type, Map<String, Value> values) {
         Map<AttributeId, Value> resolved = new LinkedHashMap<>();

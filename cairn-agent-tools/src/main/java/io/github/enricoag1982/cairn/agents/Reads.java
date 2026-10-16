@@ -13,6 +13,7 @@ import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.data.WithheldKeyException;
 import io.github.enricoag1982.cairn.documents.IdLookup;
 import io.github.enricoag1982.cairn.documents.Payloads;
 import io.github.enricoag1982.cairn.documents.Queries;
@@ -323,40 +324,31 @@ final class Reads {
             }
             case UniqueKeyReadResult.Read read -> key = read.key();
         }
-        Optional<Problem> withheld = withheldKey(view, key);
-        if (withheld.isPresent()) {
-            return new Found.Invalid(List.of(withheld.get()));
-        }
         try {
             return view.entity(key).<Found>map(Found.Entity::new).orElseGet(Found.Nothing::new);
+        } catch (WithheldKeyException withheld) {
+            return new Found.Invalid(List.of(withheldKey(view, withheld)));
         } catch (IllegalArgumentException invalid) {
             return new Found.Invalid(List.of(invalidKey(view.schema(), key, invalid.getMessage())));
         }
     }
 
     /**
-     * The problem of a key of a unique attribute that the clearance of the view does not cover (ADR-0036): finding an
-     * entity by it would tell its value, so the call is refused as a query that names the attribute is, before anything is
-     * read. Empty for any other key, which the view then finds or refuses as the schema says.
+     * The problem of a key of a unique attribute that the view withholds, because its clearance covers neither the
+     * classification that the view's schema gives the attribute nor the one in the store's latest schema (ADR-0036):
+     * finding an entity by it would tell its value, so the call is refused as a query that names the attribute is, before
+     * anything is read, whether or not an entity has the value.
      */
-    private static Optional<Problem> withheldKey(View view, UniqueKey key) {
-        Optional<Clearance> clearance = view.clearance();
-        Optional<EntityType> type = view.schema().entityType(key.entityType());
-        Optional<Attribute> attribute = type.flatMap(found -> found.attribute(key.attribute()));
-        if (clearance.isEmpty() || attribute.isEmpty() || !attribute.get().unique()
-                || clearance.get().covers(attribute.get())) {
-            return Optional.empty();
-        }
-        String classification = attribute.get().classification().orElseThrow();
-        Set<String> covered = clearance.get().classifications();
-        return Optional.of(new Problem(ProblemCode.ACCESS_DENIED, "@arguments.key", "The attribute "
-                + attribute.get().name() + " of " + type.get().name() + " is classified " + classification
+    private static Problem withheldKey(View view, WithheldKeyException withheld) {
+        Set<String> covered = view.clearance().map(Clearance::classifications).orElse(Set.of());
+        return new Problem(ProblemCode.ACCESS_DENIED, "@arguments.key", "The attribute " + withheld.attribute() + " of "
+                + withheld.entityType() + " is classified " + withheld.classification()
                 + ", which the clearance of this server does not cover, so an entity cannot be found by it.",
-                Optional.of("a clearance that covers " + classification + ", or the ID of the entity"),
+                Optional.of("a clearance that covers " + withheld.classification() + ", or the ID of the entity"),
                 Optional.of(covered.isEmpty() ? "a clearance that covers no classification"
                         : "a clearance that covers " + String.join(", ", covered)),
                 Optional.of("Name the entity by its ID, or by a unique key of an attribute without a classification "
-                        + "or with one that the clearance covers.")));
+                        + "or with one that the clearance covers."));
     }
 
     /** The problem of a key that the schema of the view does not accept, with the unique attributes of its type. */

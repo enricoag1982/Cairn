@@ -305,7 +305,8 @@ public final class InMemoryStore implements Store {
                     : requested.compareTo(Basis.NONE) < 0 ? Basis.NONE : requested;
             case KnownAt.AtTransactionTime(Instant time) -> basisAt(time, latest);
         };
-        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), ledger);
+        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), ledger,
+                registry::current);
     }
 
     @Override
@@ -478,8 +479,9 @@ public final class InMemoryStore implements Store {
     private static Problem reused(Transaction transaction) {
         String key = transaction.idempotencyKey().orElseThrow();
         return Problems.of(ProblemCode.IDEMPOTENCY_KEY_REUSED, Preparation.TRANSACTION_PATH, "The idempotency key '"
-                + key + "' was used by a committed transaction with other writes, principal, party or reason.",
-                "the same writes, principal, party and reason as the committed transaction, or a new key",
+                + key + "' was used by a committed transaction with other writes, principal, party, reason or "
+                + "clearance.",
+                "the same writes, principal, party, reason and clearance as the committed transaction, or a new key",
                 "another transaction with the same key", "Use a new idempotency key for a new transaction.");
     }
 

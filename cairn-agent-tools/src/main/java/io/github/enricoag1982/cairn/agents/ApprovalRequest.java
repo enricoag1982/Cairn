@@ -25,9 +25,10 @@ import java.util.Optional;
  *                    request is pending
  * @param decidedBy   who approved or rejected the request; empty while it is pending
  * @param decidedAt   when it was decided; empty while it is pending
- * @param clearance   the clearance of the agent that made a commit request, with which approving it commits the
- *                    transaction (ADR-0036): a person who approves applies the request as the agent could, not with a
- *                    wider clearance; empty for a schema registration, which has none
+ * @param clearance   the clearance of the agent that made the request, with which approving it commits the transaction
+ *                    or registers the schema document (ADR-0036): a person who approves applies the request as the
+ *                    agent could, not with a wider clearance; empty only for a request that was made without one, which
+ *                    is applied with a clearance that covers no classification
  */
 public record ApprovalRequest(
         String id,
@@ -44,7 +45,7 @@ public record ApprovalRequest(
         Optional<Clearance> clearance) {
 
     /**
-     * Creates a request without a clearance, such as the request to register a schema document.
+     * Creates a request without a clearance, which is applied with a clearance that covers no classification.
      *
      * @param id          the ID of the request
      * @param kind        what the request asks for

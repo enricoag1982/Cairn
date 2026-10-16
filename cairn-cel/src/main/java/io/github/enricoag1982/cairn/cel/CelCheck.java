@@ -7,21 +7,31 @@ import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * A check compiled to a CEL program for the attributes of one type (design D3 of {@code add-cel-expressions}).
  *
- * <p>Evaluation runs the program as {@link Evaluation} describes. The program is immutable, so one instance serves many
- * threads.
+ * <p>Evaluation runs the program as {@link Evaluation} describes. The attributes that the expression reads are found
+ * when it is compiled, from the checked tree, as {@link SelfReads} describes (ADR-0036). The program is immutable, so
+ * one instance serves many threads.
  */
 final class CelCheck implements CompiledCheck {
 
     private final CelRuntime.Program program;
     private final Map<String, ValueType> attributes;
+    private final Set<String> attributesRead;
 
-    CelCheck(CelRuntime.Program program, Map<String, ValueType> attributes) {
+    CelCheck(CelRuntime.Program program, Map<String, ValueType> attributes, Set<String> attributesRead) {
         this.program = program;
         this.attributes = attributes;
+        this.attributesRead = attributesRead;
+    }
+
+    @Override
+    public Optional<Set<String>> attributesRead() {
+        return Optional.of(attributesRead);
     }
 
     @Override

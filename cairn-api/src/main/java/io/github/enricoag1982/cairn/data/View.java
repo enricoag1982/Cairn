@@ -52,6 +52,10 @@ public interface View {
      * relationships and their timelines, navigation, traversals (whose conditions see the restricted states) and query
      * rows. Each state lists the attributes it withheld. An attribute without a classification is never withheld.
      *
+     * <p>A view withholds an attribute unless the clearance covers the attribute's classification both in this view's
+     * schema and in the store's latest schema, matched by the attribute's identifier, so that a view at an older basis
+     * withholds what has been classified since; an attribute that has no classification in either is never withheld.
+     *
      * <p>A query through the restricted view that names a withheld attribute is rejected with a problem
      * {@code ACCESS_DENIED}, and {@link #entity(UniqueKey)} fails for a key of a withheld attribute. Restricting a view
      * that is restricted already restricts it to the classifications that both clearances cover. This view is not
@@ -90,7 +94,8 @@ public interface View {
      *         effective time
      * @throws IllegalArgumentException if the view's schema has no entity type of that name, the type has no attribute of
      *                                  that name, the attribute is not unique, the value does not fit its value type, or
-     *                                  the view is restricted to a clearance that does not cover the attribute
+     *                                  the view is restricted to a clearance that does not cover the attribute, in which
+     *                                  case it is a {@link WithheldKeyException}
      */
     Optional<EntityState> entity(UniqueKey key);
 

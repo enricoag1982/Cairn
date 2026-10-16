@@ -78,13 +78,18 @@ final class ToolCatalog {
                         + "unchanged or rejected), every change from the stored definition of the origin with "
                         + "whether it is compatible and a hint to avoid it if it is not, and the problems, each "
                         + "located in the document by line and column. To change the schema, take the document "
-                        + "from cairn_describe, edit it, raise the version of the origin, and plan it.",
+                        + "from cairn_describe, edit it, raise the version of the origin, and plan it. A change that "
+                        + "the server's clearance does not allow is rejected with ACCESS_DENIED at the element: "
+                        + "adding, changing or removing the classification of an attribute whose classification "
+                        + "(before or after) the clearance does not cover, or adding or changing a check or a derived "
+                        + "attribute that reads such an attribute.",
                 object(List.of("document"), "document", string("The text of the schema document, as YAML or JSON."))));
         tools.add(tool(REGISTER_SCHEMA,
                 "Registers a schema document, subject to the approval policy. Returns outcome applied (with basis "
                         + "and transactionTime), unchanged, rejected (with located problems; breaking changes are "
                         + "rejected) or pending (with the approval request, which a person has to approve: poll "
-                        + "cairn_approval_status). Plan it first.",
+                        + "cairn_approval_status). Plan it first. The registration is subject to the server's "
+                        + "clearance as the plan is (ACCESS_DENIED), also when a person approves it.",
                 object(List.of("document"),
                         "document", string("The text of the schema document, as YAML or JSON."),
                         "reason", string("Why the schema changes; recorded with the schema transaction."))));
@@ -94,7 +99,8 @@ final class ToolCatalog {
                         + "what was found and a hint. Fix the problems and run it again. The transaction carries the "
                         + "server's clearance: a write that sets or clears an attribute with a classification that "
                         + "the clearance does not cover, or that names an entity by a unique key of such an "
-                        + "attribute, is rejected with ACCESS_DENIED.",
+                        + "attribute, is rejected with ACCESS_DENIED, and then those are the only problems "
+                        + "reported: nothing else is validated for the transaction.",
                 object(List.of("payload"), "payload", string("The text of the transaction payload, as JSON or YAML. "
                         + "Build it from cairn_json_schema with kind \"payload\"; its principal is the one "
                         + "cairn_describe reports."))));
@@ -199,7 +205,9 @@ final class ToolCatalog {
         tools.add(tool(APPROVAL_STATUS,
                 "Reports where an approval request stands: pending, approved or rejected. Once decided, it holds "
                         + "the outcome: for an approved request what registering or committing it did (a receipt, "
-                        + "or the problems if it was no longer valid), for a rejected one the reason of the person.",
+                        + "or the problems if it was no longer valid), for a rejected one the reason of the person. "
+                        + "It answers only for requests made through this server, as its principal and with its "
+                        + "clearance; any other ID is as unknown as one that no request has.",
                 object(List.of("requestId"),
                         "requestId", string("The ID of the request, from the result of cairn_register_schema or "
                                 + "cairn_commit."))));

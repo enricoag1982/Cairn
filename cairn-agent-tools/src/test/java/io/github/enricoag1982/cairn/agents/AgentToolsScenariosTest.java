@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.agents.AgentPolicy.Decision;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
@@ -25,12 +26,15 @@ import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.documents.DocumentReadResult;
 import io.github.enricoag1982.cairn.documents.SchemaDocuments;
+import io.github.enricoag1982.cairn.fixtures.Definitions;
+import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.SchemaTransaction;
 import io.github.enricoag1982.cairn.schema.StoredDefinition;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -335,6 +339,33 @@ class AgentToolsScenariosTest {
                 assertThat(created.get("entity").stringValue()).isEqualTo(organizations.getFirst().id().value()));
         assertThat(approving.store.transactions()).singleElement().satisfies(transaction ->
                 assertThat(transaction.principal()).isEqualTo(AgentFixture.PRINCIPAL));
+    }
+
+    @Test
+    @DisplayName("Scenario: An approval request keeps the agent's clearance")
+    void anApprovalRequestKeepsTheAgentsClearance() {
+        AgentFixture approving = new AgentFixture(Definitions.withClassification(ReferenceModel.definition(), "Account",
+                "balance", "finance"), Clearance.none());
+        Receipt parties = approving.createParties();
+        Receipt accounts = approving.replay(ReferenceStories.rd5Accounts(entity(parties, BETA), entity(parties, ACME)));
+        EntityId a1 = entity(accounts, ReferenceStories.A1);
+        AgentTools agent = new AgentTools(approving.store, new AgentPolicy(Decision.ALLOW, Decision.REQUIRE_APPROVAL),
+                approving.queue, AgentFixture.PRINCIPAL, Optional.empty(), Clearance.none());
+        String patch = payload("{\"patch\": {\"target\": \"" + a1.value() + "\", \"from\": "
+                + "\"2026-05-01T00:00:00Z\", \"set\": {\"currency\": \"CHF\"}}}");
+
+        JsonNode commit = Json.parse(agent.commit(Json.render(args("payload", patch))));
+
+        assertThat(commit.get("outcome").stringValue()).isEqualTo("pending");
+        JsonNode request = commit.get("request");
+        assertThat(request.get("clearance").isArray()).isTrue();
+        assertThat(request.get("clearance")).as("the agent's clearance covers no classification").isEmpty();
+        approving.queue.approve(request.get("id").stringValue(), "alice");
+        ApprovalRequest approved = approving.queue.find(request.get("id").stringValue()).orElseThrow();
+        assertThat(approved.clearance()).contains(Clearance.none());
+        assertThat(Json.parse(approved.outcome().orElseThrow()).get("outcome").stringValue()).isEqualTo("committed");
+        EntityState state = approving.store.view(Coordinates.effectiveAt(on(5, 1))).entity(a1).orElseThrow();
+        assertThat(state.values()).containsEntry("currency", Value.of("CHF"));
     }
 
     @Test

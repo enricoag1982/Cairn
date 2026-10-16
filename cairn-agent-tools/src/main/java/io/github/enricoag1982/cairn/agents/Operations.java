@@ -35,7 +35,9 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * <p>A transaction is submitted with the clearance of the agent that asks (ADR-0036, design D5 of
  * {@code add-attribute-access-control}), whatever the payload says: a payload has no way to give one, and a person who
- * approves a request applies it with the clearance it was made with, not a wider one.
+ * approves a request applies it with the clearance it was made with, not a wider one. So is a schema document: a plan
+ * or a registration is checked against the clearance of the agent, which may not change a classification that it does
+ * not cover, nor add a check or a derived attribute that reads one.
  */
 final class Operations {
 
@@ -51,13 +53,17 @@ final class Operations {
 
     // ------------------------------------------------------------------ schema documents
 
-    /** Plans the registration of a document: {@code {outcome, changes, problems}}. */
-    ObjectNode planSchema(String text) {
+    /**
+     * Plans the registration of a document for a clearance: {@code {outcome, changes, problems}}. A change that the
+     * clearance does not allow is a problem {@code ACCESS_DENIED} at the element concerned (ADR-0036, design D5 of
+     * {@code add-attribute-access-control}).
+     */
+    ObjectNode planSchema(String text, Clearance clearance) {
         return switch (SchemaDocuments.read(text)) {
             case DocumentReadResult.Invalid invalid -> plan("rejected", List.of(), invalid.problems());
             case DocumentReadResult.Read read -> {
                 SchemaDocument document = read.document();
-                SchemaPlan plan = store.schema().plan(document.origin(), document.definition());
+                SchemaPlan plan = store.schema().plan(document.origin(), document.definition(), clearance);
                 yield plan(switch (plan.outcome()) {
                     case APPLY -> "wouldApply";
                     case UNCHANGED -> "unchanged";
@@ -67,13 +73,17 @@ final class Operations {
         };
     }
 
-    /** Registers a document for a submission: {@code {outcome: applied | unchanged | rejected, ...}}. */
-    ObjectNode registerSchema(String text, Submission submission) {
+    /**
+     * Registers a document for a submission and a clearance: {@code {outcome: applied | unchanged | rejected, ...}}.
+     * The check of the clearance and the registration are one step of the registry, so nothing comes between them.
+     */
+    ObjectNode registerSchema(String text, Submission submission, Clearance clearance) {
         return switch (SchemaDocuments.read(text)) {
             case DocumentReadResult.Invalid invalid -> rejected(invalid.problems());
             case DocumentReadResult.Read read -> {
                 SchemaDocument document = read.document();
-                yield switch (store.schema().register(document.origin(), document.definition(), submission)) {
+                yield switch (store.schema().register(document.origin(), document.definition(), submission,
+                        clearance)) {
                     case RegistrationResult.Applied applied -> Json.object()
                             .put("outcome", "applied")
                             .put("basis", applied.basis().value())
@@ -90,8 +100,8 @@ final class Operations {
      * The outcome that ends the registration of a document before it is put to a person: rejected, if registering it
      * now would be, or unchanged, if there is nothing to approve. Empty if the registration would be applied.
      */
-    Optional<ObjectNode> schemaPreflight(String text) {
-        ObjectNode plan = planSchema(text);
+    Optional<ObjectNode> schemaPreflight(String text, Clearance clearance) {
+        ObjectNode plan = planSchema(text, clearance);
         return switch (plan.get("outcome").stringValue()) {
             case "wouldApply" -> Optional.empty();
             case "unchanged" -> Optional.of(Json.object().put("outcome", "unchanged"));

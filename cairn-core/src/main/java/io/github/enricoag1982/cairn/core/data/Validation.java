@@ -50,7 +50,7 @@ final class Validation {
             for (Segment segment : subject.timeline.segments()) {
                 Value value = segment.values().get(attribute.id());
                 if (value != null) {
-                    valueProblems.addAll(checks.check(path, attribute, value));
+                    valueProblems.addAll(checks.check(path, attribute, value, workspace.withheld(attribute)));
                 }
             }
             problems.addAll(valueProblems);
@@ -144,6 +144,16 @@ final class Validation {
                 Instant from = max(own.from(), theirs.from());
                 Instant end = min(own.end(), theirs.end());
                 if (from.isBefore(end) && Conversions.same(ownValue, theirValue) && reported.add(otherId)) {
+                    if (workspace.withheld(attribute)) {
+                        // The value, the ID of the other and when it has the value would tell what the writer may not
+                        // read (ADR-0036): the problem says that the attribute clashes, and nothing more.
+                        problems.add(Problems.of(ProblemCode.UNIQUE_VALUE_TAKEN,
+                                attributePath(subject.path, attribute), "The value of the unique attribute "
+                                + attribute.name() + " is also the value of another " + subject.kind() + " at the same "
+                                + "time.", "a value that no other " + subject.kind() + " has at the same time", null,
+                                "Use another value, or make the periods not overlap."));
+                        return;
+                    }
                     String shown = Values.describe(ownValue);
                     problems.add(Problems.of(ProblemCode.UNIQUE_VALUE_TAKEN, attributePath(subject.path, attribute),
                             "The value '" + shown + "' of the unique attribute " + attribute.name() + " is also the "

@@ -143,7 +143,7 @@ public final class CelLanguage implements ExpressionLanguage {
                 throw resultNotBoolean(ast);
             }
             CelRuntime.Program program = cel.createProgram(ast);
-            return new CelCheck(program, types);
+            return new CelCheck(program, types, SelfReads.of(ast.getExpr(), types.keySet()));
         } catch (CelValidationException | CelEvaluationException e) {
             throw new ExpressionCompilationException(e.getMessage());
         }

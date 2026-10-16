@@ -377,7 +377,7 @@ class AgentClearanceTest {
     }
 
     @Test
-    void aSchemaRegistrationRequestHasNoClearance() {
+    void aSchemaRegistrationRequestKeepsTheClearanceOfTheAgentToo() {
         AgentFixture approving = new AgentFixture(model(), Clearance.none());
         AgentTools tools = new AgentTools(approving.store, new AgentPolicy(Decision.REQUIRE_APPROVAL, Decision.ALLOW),
                 approving.queue, AgentFixture.PRINCIPAL, Optional.empty(), Clearance.of("finance"));
@@ -388,8 +388,8 @@ class AgentClearanceTest {
         JsonNode pending = Json.parse(tools.registerSchema(Json.render(args("document", document))));
 
         assertThat(pending.get("outcome").stringValue()).isEqualTo("pending");
-        assertThat(pending.get("request").has("clearance")).isFalse();
-        assertThat(approving.queue.pending().getFirst().clearance()).isEmpty();
+        assertThat(names(pending.get("request").get("clearance"))).containsExactly("finance");
+        assertThat(approving.queue.pending().getFirst().clearance()).contains(Clearance.of("finance"));
     }
 
     // ------------------------------------------------------------------ creating the tools

@@ -59,6 +59,14 @@ abstract class NavigableView implements View {
     abstract String schemaName();
 
     /**
+     * The store's latest schema, which a restricted view consults besides its own: it withholds what is classified there
+     * too (ADR-0036). The schema of the view itself unless the view knows the store.
+     */
+    Schema latestSchema() {
+        return schema();
+    }
+
+    /**
      * Every version, at any effective time, of the relationships of the given types that have an entity as their source,
      * their target or either, as known at this view's basis.
      *

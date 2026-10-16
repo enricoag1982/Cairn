@@ -1,9 +1,13 @@
 package io.github.enricoag1982.cairn.core.schema;
 
 import io.github.enricoag1982.cairn.expressions.CompiledCheck;
+import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.EffectiveCheck;
+import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A check that applies to an entity type or relationship type of a registered schema, as the schema keeps it for
@@ -34,5 +38,22 @@ public record AppliedCheck(EffectiveCheck check, Optional<CompiledCheck> compile
      */
     public boolean unavailable() {
         return compiled.isEmpty() && failure.isEmpty();
+    }
+
+    /**
+     * The names of the attributes that the check reads, which the engine compares with a clearance (ADR-0036): those
+     * that the compiled check says it reads, or every attribute of the type if the language cannot tell. A check that is
+     * not compiled reads none.
+     *
+     * @param attributes the attributes of the type the check applies to
+     * @return the names, as the attributes are named
+     */
+    public Set<String> reads(Collection<Attribute> attributes) {
+        Objects.requireNonNull(attributes, "attributes");
+        if (compiled.isEmpty()) {
+            return Set.of();
+        }
+        return compiled.get().attributesRead()
+                .orElseGet(() -> attributes.stream().map(Attribute::name).collect(Collectors.toUnmodifiableSet()));
     }
 }

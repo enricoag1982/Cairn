@@ -296,8 +296,8 @@ public enum ProblemCode {
             + "Name the principal, for example an agent or a user."),
     /** An idempotency key was used before by a transaction with other content. */
     IDEMPOTENCY_KEY_REUSED("An idempotency key identifies one transaction: a transaction with the same writes, "
-            + "principal, party and reason is a retry and gets the first receipt, any other is rejected. Use a new key "
-            + "for a new transaction."),
+            + "principal, party, reason and clearance is a retry and gets the first receipt, any other is rejected, also "
+            + "one that differs only in its clearance. Use a new key for a new transaction."),
     /** A transaction repeats the idempotency key of a transaction that wrote data which a purge removed. */
     IDEMPOTENCY_KEY_PURGED("The idempotency key was used by a transaction that wrote an entity or a relationship which a "
             + "purge removed later, so the store no longer has that transaction and cannot tell a retry from another "
@@ -429,20 +429,30 @@ public enum ProblemCode {
             + "a sum or an average needs numbers, and a minimum or a maximum needs numbers, dates, instants or "
             + "strings. The expected and found details name the value types. Aggregate another attribute, or count "
             + "the rows."),
-    /** A query or a write names an attribute that the clearance of the view or of the transaction does not cover. */
-    ACCESS_DENIED("The clearance of the view that runs a query, or of the transaction that carries a write, does not "
-            + "cover the classification of an attribute that the query or the write names. A query is rejected, and "
-            + "reads nothing, if it names such an attribute in a filter, an order, a group key, an aggregate, a "
-            + "column or the condition of a traversal or a link test, because even a filter would reveal the value; "
-            + "the path is the place in the query. A write is rejected, as is the transaction, if it sets or clears "
-            + "such an attribute, also in a create; the path is the attribute of the write, and a dry run reports it "
-            + "too. Values that a write does not touch carry forward. Finding an entity through a restricted view by a "
-            + "unique key of such an attribute fails as a key that the schema does not allow does. An agent tool "
-            + "reports it too, for a query or a key that its clearance refuses. Rules, checks and derivations always "
-            + "see every value. The expected details name the clearance that is needed, and the found details the "
-            + "classifications that the clearance covers; run the query through a view, or submit the transaction, "
-            + "with a clearance that covers the classification, if the caller may read or write the attribute, or "
-            + "leave the attribute out.");
+    /**
+     * A query, a write or a schema change names an attribute that the clearance of the view, of the transaction or of
+     * the agent does not cover.
+     */
+    ACCESS_DENIED("The clearance of the view that runs a query, of the transaction that carries a write, or of the "
+            + "agent that changes the schema, does not cover the classification of an attribute that the query, the "
+            + "write or the change names. A query is rejected, and reads nothing, if it names such an attribute in a "
+            + "filter, an order, a group key, an aggregate, a column or the condition of a traversal or a link test, "
+            + "because even a filter would reveal the value; the path is the place in the query. A write is rejected, "
+            + "as is the transaction, if it sets or clears such an attribute, also in a create, or names an entity by "
+            + "a unique key of one; the path is the attribute or the reference of the write, and a dry run reports it "
+            + "too. A transaction that is rejected so gets only these problems: nothing else is validated, derived, "
+            + "checked or run for it, because that could reveal a value through the outcome. Values that a write does "
+            + "not touch carry forward. Finding an entity through a restricted view by a unique key of such an "
+            + "attribute fails as a key that the schema does not allow does, and a view withholds an attribute also "
+            + "if the store's latest schema classifies it, however long ago the view's basis is. An agent tool "
+            + "reports it too, for a query or a key that its clearance refuses, and for a schema plan or "
+            + "registration that adds, changes or removes a classification that the clearance does not cover, or adds "
+            + "or changes a check or a derived attribute that reads an attribute of one; the path is the attribute, "
+            + "check or derived attribute concerned. Rules, checks and derivations always see every value. The "
+            + "expected details name the clearance that is needed, and the found details the classifications that "
+            + "the clearance covers; run the query through a view, or submit the transaction or the change, with a "
+            + "clearance that covers the classification, if the caller may read or write the attribute, or leave the "
+            + "attribute out.");
 
     /** Text that explanations share; a nested class, because an enum constant cannot name a field declared after it. */
     private static final class Texts {

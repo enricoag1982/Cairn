@@ -42,7 +42,9 @@ public final class McpAdapter {
             again; cairn_explain_problem explains a code.
             Your clearance lists the classifications of attributes you may read and write. The values of attributes \
             with another classification are withheld: a state leaves them out and lists their names in withheld, \
-            and a query, a key or a write that names one is a problem with the code ACCESS_DENIED.
+            and a query, a key or a write that names one is a problem with the code ACCESS_DENIED; so is a schema \
+            change that adds, changes or removes a classification your clearance does not cover, or adds a check or a \
+            derived attribute that reads such an attribute.
             A request that needs a person's approval comes back as pending with an approval request: poll \
             cairn_approval_status.
             Read data with cairn_read_entity, cairn_read_relationship, cairn_list_entities, cairn_timeline, \

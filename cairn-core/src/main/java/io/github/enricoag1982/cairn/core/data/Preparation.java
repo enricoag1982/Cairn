@@ -38,6 +38,10 @@ import java.util.Set;
  * those of the rules, and last those of the re-checks. The problems of a subject are those of its values, which follow
  * the order of the attributes in the schema, and then those of its relationships.
  *
+ * <p>A transaction with a clearance that has a problem {@code ACCESS_DENIED} after its writes are applied ends there,
+ * with those problems only: no cascade, derivation, validation, integrity check or rule runs for it (ADR-0036, design
+ * D4 of {@code add-attribute-access-control}).
+ *
  * <p>A Preparation is used once and by one thread: the one holding the store's writer lock.
  */
 final class Preparation {
@@ -141,6 +145,12 @@ final class Preparation {
                 case Write.Replace replace -> amendments.replace(replace, position);
                 case Write.EndDate endDate -> amendments.endDate(endDate, position);
             }
+        }
+        if (transaction.clearance().isPresent() && problems.hasAccessDenied()) {
+            // A transaction that touches what its clearance does not cover is refused as it stands (ADR-0036): nothing
+            // is derived, validated, checked or run over values it may not see, so no outcome can be used to probe them.
+            problems.keepOnlyAccessDenied();
+            return this;
         }
         ended = cascades.run(amendments.ended());
         checkSubjects();

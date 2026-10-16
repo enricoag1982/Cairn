@@ -26,8 +26,9 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * <p>Approving a request applies it then, as if the agent had submitted it at that moment: against the store as it is,
  * and with the principal, the party acted for and the reason that the request records. A request that is not valid
- * any more is approved all the same, and its outcome holds the problems. The queue records who approved it. A commit is
- * applied with the clearance of the agent that asked for it (ADR-0036), which the request records.
+ * any more is approved all the same, and its outcome holds the problems. The queue records who approved it. A commit or a
+ * schema registration is applied with the clearance of the agent that asked for it (ADR-0036), which the request records:
+ * a person who approves does not widen what the agent may write or change in the schema.
  *
  * <p>A queue belongs to one store, which it applies approved requests to; give the same queue and the same store to
  * the {@link AgentTools} that submit to it. A queue is safe for use by several threads.
@@ -104,7 +105,8 @@ public final class ApprovalQueue {
         ApprovalRequest request = pendingRequest(id, approver);
         ObjectNode outcome = switch (request.kind()) {
             case SCHEMA_REGISTRATION -> operations.registerSchema(request.content(),
-                    new Submission(request.principal(), request.onBehalfOf(), request.reason()));
+                    new Submission(request.principal(), request.onBehalfOf(), request.reason()),
+                    request.clearance().orElse(Clearance.none()));
             case DATA_COMMIT -> operations.commit(request.content(), request.principal(), request.onBehalfOf(),
                     request.clearance().orElse(Clearance.none()));
         };
@@ -132,14 +134,16 @@ public final class ApprovalQueue {
     // ------------------------------------------------------------------ submitting, for AgentTools
 
     /**
-     * Puts the registration of a schema document to a person, unless it would be rejected or change nothing now.
+     * Puts the registration of a schema document to a person, unless it would be rejected or change nothing now. The
+     * request records the clearance of the agent, with which approving it registers the document: a person who approves
+     * does not widen what the agent may change.
      *
      * @return {@code {outcome: pending, request}}, or the outcome that ends the registration at once
      */
-    synchronized ObjectNode requestSchemaRegistration(String document, Submission submission) {
-        return operations.schemaPreflight(document).orElseGet(() ->
+    synchronized ObjectNode requestSchemaRegistration(String document, Submission submission, Clearance clearance) {
+        return operations.schemaPreflight(document, clearance).orElseGet(() ->
                 pending(submit(Kind.SCHEMA_REGISTRATION, submission.principal(), submission.onBehalfOf(), document,
-                        submission.reason(), Optional.empty())));
+                        submission.reason(), Optional.of(clearance))));
     }
 
     /**

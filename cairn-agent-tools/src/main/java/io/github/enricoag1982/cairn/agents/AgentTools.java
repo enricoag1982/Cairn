@@ -328,7 +328,7 @@ public final class AgentTools {
         if (!in.valid()) {
             return Json.render(Operations.rejectedPlan(in.problems()));
         }
-        return Json.render(operations.planSchema(document));
+        return Json.render(operations.planSchema(document, clearance));
     }
 
     /**
@@ -347,8 +347,8 @@ public final class AgentTools {
         }
         Submission submission = new Submission(principal, onBehalfOf, reason);
         return Json.render(switch (policy.schemaRegistrations()) {
-            case ALLOW -> operations.registerSchema(document, submission);
-            case REQUIRE_APPROVAL -> queue.requestSchemaRegistration(document, submission);
+            case ALLOW -> operations.registerSchema(document, submission, clearance);
+            case REQUIRE_APPROVAL -> queue.requestSchemaRegistration(document, submission, clearance);
             case DENY -> operations.denySchema(document);
         });
     }
@@ -483,7 +483,9 @@ public final class AgentTools {
     // ------------------------------------------------------------------ approval
 
     /**
-     * {@code cairn_approval_status}: where an approval request stands and, once decided, its outcome.
+     * {@code cairn_approval_status}: where an approval request stands and, once decided, its outcome. Only for a request
+     * that these tools made, with their principal and clearance: adapters can share a queue, and one must not read the
+     * requests of another. Any other ID is answered as an ID that no request has.
      *
      * @param arguments the arguments: {@code {requestId}}
      * @return the request as JSON text, or the problems
@@ -494,7 +496,11 @@ public final class AgentTools {
         if (!in.valid()) {
             return Json.render(Operations.problemsOnly(in.problems()));
         }
+        // Adapters can share a queue: a request is answered only to the adapter that made it, with its principal and its
+        // clearance, and any other is as unknown as an ID that no request has (ADR-0036).
         return Json.render(queue.find(id)
+                .filter(request -> request.principal().equals(principal)
+                        && request.clearance().orElse(Clearance.none()).equals(clearance))
                 .<ObjectNode>map(ApprovalQueue::toJson)
                 .orElseGet(() -> Operations.problemsOnly(List.of(new Problem(ProblemCode.INVALID_VALUE,
                         "@arguments.requestId", "There is no approval request with the ID " + id + ".",

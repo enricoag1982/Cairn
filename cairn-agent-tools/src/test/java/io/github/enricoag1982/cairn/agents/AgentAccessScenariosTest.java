@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.documents.SchemaDocuments;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
@@ -105,6 +106,45 @@ class AgentAccessScenariosTest {
         assertThat(result.get("values").get("balance").decimalValue()).isEqualByComparingTo("1000");
         assertThat(result.get("values").get("number").stringValue()).isEqualTo("A-1");
         assertThat(result.has("withheld")).as("nothing withheld").isFalse();
+    }
+
+    @Test
+    @DisplayName("Scenario: An agent that would declassify the balance")
+    void anAgentThatWouldDeclassifyTheBalance() throws Exception {
+        Server server = serverStartedWith();
+        String document = SchemaDocuments.writeYaml(ReferenceModel.origin("1.1.0"), ReferenceModel.definition());
+
+        JsonNode result = server.call("cairn_register_schema", args("document", document));
+
+        assertThat(result.get("outcome").stringValue()).isEqualTo("rejected");
+        assertThat(result.get("problems")).singleElement().satisfies(problem -> {
+            assertThat(problem.get("code").stringValue()).isEqualTo("ACCESS_DENIED");
+            assertThat(problem.get("path").stringValue()).isEqualTo("Account.balance");
+            assertThat(problem.get("location").get("pointer").stringValue())
+                    .startsWith("/entityTypes/Account/attributes/balance");
+        });
+        assertThat(server.tools().store.schema().current().entityType("Account").orElseThrow().attribute("balance")
+                .orElseThrow().classification()).as("balance is still classified").hasValue("finance");
+        assertThat(server.tools().store.schema().history()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: An agent's check over a withheld balance")
+    void anAgentsCheckOverAWithheldBalance() throws Exception {
+        Server server = serverStartedWith();
+        String document = SchemaDocuments.writeYaml(ReferenceModel.origin("1.1.0"),
+                Definitions.withCheck(finance(), "Account", "balance-above-1000", "self.balance > 1000.0", null));
+
+        JsonNode result = server.call("cairn_register_schema", args("document", document));
+
+        assertThat(result.get("outcome").stringValue()).isEqualTo("rejected");
+        assertThat(result.get("problems")).anySatisfy(problem -> {
+            assertThat(problem.get("code").stringValue()).isEqualTo("ACCESS_DENIED");
+            assertThat(problem.get("path").stringValue()).isEqualTo("Account.balance-above-1000");
+        });
+        assertThat(server.tools().store.schema().current().entityType("Account").orElseThrow().effectiveChecks())
+                .isEmpty();
+        assertThat(server.tools().store.schema().history()).hasSize(1);
     }
 
     @Test

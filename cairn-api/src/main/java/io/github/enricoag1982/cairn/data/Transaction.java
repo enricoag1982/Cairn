@@ -19,8 +19,12 @@ import java.util.Set;
  *
  * <p>A transaction may carry a {@linkplain Clearance clearance} (ADR-0036, capability {@code attribute-access}): a write
  * in it that sets or clears an attribute whose classification the clearance does not cover is rejected with a problem
- * {@code ACCESS_DENIED}. Rules, checks and derivations still see every value. A transaction without a clearance writes
- * as before; a caller that acts for a user or an agent must give it one.
+ * {@code ACCESS_DENIED}, and so is a write that names an entity by a unique key of such an attribute. A transaction that
+ * is rejected so gets those problems only: nothing is validated, derived, checked or run for it, so that no outcome can
+ * be used to probe a value that it may not read. The problems that a transaction with a clearance gets about such
+ * attributes, or from a check or derivation that reads them, carry no value of them. Rules, checks and derivations still
+ * see every value. A transaction without a clearance writes as before; a caller that acts for a user or an agent must
+ * give it one.
  *
  * <p>The record only holds what the caller wrote. A store checks it when it commits or runs it dry, and reports every
  * problem found; a transaction without a principal is a problem ({@code MISSING_PRINCIPAL}), not an exception.
@@ -130,8 +134,8 @@ public record Transaction(
 
         /**
          * Gives the transaction a clearance: a write in it that sets or clears an attribute whose classification the
-         * clearance does not cover is rejected with {@code ACCESS_DENIED}, in a commit and in a dry run. Rules, checks
-         * and derivations see every value whatever the clearance is.
+         * clearance does not cover is rejected with {@code ACCESS_DENIED}, in a commit and in a dry run, with no other
+         * problem. Rules, checks and derivations see every value whatever the clearance is.
          *
          * @param clearance the classifications whose attributes the writes may set or clear
          * @return this builder

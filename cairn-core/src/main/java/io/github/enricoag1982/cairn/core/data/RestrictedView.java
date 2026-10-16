@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.query.QueryRunner;
+import io.github.enricoag1982.cairn.core.query.Withholding;
 import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
@@ -10,13 +11,16 @@ import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.data.WithheldKeyException;
 import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.Attribute;
+import io.github.enricoag1982.cairn.schema.AttributeId;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,6 +43,12 @@ import java.util.function.Predicate;
  * the names of the attributes it withheld, in the order of the attributes of its type in the schema, whether the version
  * had a value or not.
  *
+ * <p>A view withholds an attribute unless its clearance covers the attribute's classification both in the view's schema
+ * and in the store's latest schema, matched by the attribute's identifier, which a rename does not change (design D2 of
+ * {@code add-attribute-access-control}). A view at an old basis, from before an attribute was classified, so withholds
+ * what is classified now; a classification that has been removed since still applies to the views of the time that it
+ * held. Restricting, the query check and the check of a unique key all follow this rule.
+ *
  * <p>Restricting a restricted view restricts the view underneath to the intersection of the clearances, so the states
  * are restricted once. The views that rules read through are never restricted by the engine.
  */
@@ -46,6 +56,12 @@ final class RestrictedView implements View {
 
     private final NavigableView view;
     private final Clearance clearance;
+    /** The classifications of the latest schema by attribute, for the schema that was latest when they were last read. */
+    private volatile Latest latest = new Latest(null, Map.of());
+
+    /** The classified attributes of a schema, by identifier. */
+    private record Latest(Schema schema, Map<AttributeId, String> classifications) {
+    }
 
     /**
      * Restricts a view.
@@ -97,10 +113,12 @@ final class RestrictedView implements View {
     public Optional<EntityState> entity(UniqueKey key) {
         Objects.requireNonNull(key, "key");
         if (UniqueKeys.check(schema(), view.schemaName(), key) instanceof UniqueKeys.Valid valid
-                && !clearance.covers(valid.attribute())) {
-            throw new IllegalArgumentException("The attribute " + valid.attribute().name() + " of " + valid.type().name()
-                    + " is classified " + valid.attribute().classification().orElseThrow() + ", which the clearance of "
-                    + "this view does not cover, so the unique key " + key + " cannot be used to find an entity.");
+                && blockedBy(valid.attribute()).isPresent()) {
+            String classification = blockedBy(valid.attribute()).orElseThrow();
+            throw new WithheldKeyException("The attribute " + valid.attribute().name() + " of " + valid.type().name()
+                    + " is classified " + classification + ", which the clearance of "
+                    + "this view does not cover, so the unique key " + key + " cannot be used to find an entity.",
+                    valid.type().name(), valid.attribute().name(), classification);
         }
         return view.entity(key).map(this::restrict);
     }
@@ -145,7 +163,17 @@ final class RestrictedView implements View {
 
     @Override
     public QueryResult query(Query query) {
-        return QueryRunner.run(this, query);
+        return QueryRunner.run(this, query, Optional.of(new Withholding() {
+            @Override
+            public Optional<String> blockedBy(Attribute attribute) {
+                return RestrictedView.this.blockedBy(attribute);
+            }
+
+            @Override
+            public Set<String> covered() {
+                return clearance.classifications();
+            }
+        }));
     }
 
     // ------------------------------------------------------------------ withholding
@@ -174,15 +202,54 @@ final class RestrictedView implements View {
                 without(state.values(), withheld), state.period(), state.recordedAt(), state.recordedBasis(), withheld);
     }
 
-    /** The names of the attributes that the clearance does not cover, in the order of the schema. */
+    /** The names of the attributes that this view withholds, in the order of the schema. */
     private Set<String> withheld(List<Attribute> attributes) {
         Set<String> withheld = new LinkedHashSet<>();
         for (Attribute attribute : attributes) {
-            if (!clearance.covers(attribute)) {
+            if (blockedBy(attribute).isPresent()) {
                 withheld.add(attribute.name());
             }
         }
         return withheld;
+    }
+
+    /**
+     * The classification that makes this view withhold an attribute of its schema: the attribute's classification in the
+     * view's schema, or in the store's latest schema, if the clearance does not cover it. Empty if the view reads the
+     * attribute.
+     */
+    private Optional<String> blockedBy(Attribute attribute) {
+        Optional<String> own = attribute.classification().filter(classification -> !covers(classification));
+        if (own.isPresent()) {
+            return own;
+        }
+        return Optional.ofNullable(latestClassifications().get(attribute.id()))
+                .filter(classification -> !covers(classification));
+    }
+
+    private boolean covers(String classification) {
+        return clearance.classifications().contains(classification);
+    }
+
+    /** The classified attributes of the store's latest schema by identifier. */
+    private Map<AttributeId, String> latestClassifications() {
+        Schema latestSchema = view.latestSchema();
+        Latest known = latest;
+        if (known.schema() == latestSchema) {
+            return known.classifications();
+        }
+        Map<AttributeId, String> classifications = new HashMap<>();
+        latestSchema.entityTypes().forEach(type -> classified(type.attributes(), classifications));
+        latestSchema.traits().forEach(trait -> classified(trait.attributes(), classifications));
+        latestSchema.relationshipTypes().forEach(type -> classified(type.attributes(), classifications));
+        latest = new Latest(latestSchema, Map.copyOf(classifications));
+        return latest.classifications();
+    }
+
+    private static void classified(List<Attribute> attributes, Map<AttributeId, String> into) {
+        for (Attribute attribute : attributes) {
+            attribute.classification().ifPresent(classification -> into.putIfAbsent(attribute.id(), classification));
+        }
     }
 
     private static Map<String, Value> without(Map<String, Value> values, Set<String> withheld) {

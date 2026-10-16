@@ -18,6 +18,7 @@ import io.github.enricoag1982.cairn.data.RelationshipState;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Value;
@@ -25,6 +26,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -128,6 +131,37 @@ class WithheldAttributesGenerationTest {
         values.put("bonus", Value.of(new BigDecimal("500")));
         values.put("nickname", Value.of("A"));
         return values;
+    }
+
+    @Test
+    @DisplayName("Scenario: Reading a withheld balance")
+    void readingAWithheldBalance() throws Exception {
+        String classified = Files.readString(ReferenceDomain.DOCUMENT).replace(
+                "balance: { type: decimal, required: true }",
+                "balance: { type: decimal, required: true, classification: finance }");
+        assertThat(classified).contains("classification: finance");
+        Path file = document(directory, "reference.cairn.yaml", classified);
+        Generation.Generated generated = generate(file);
+        ReferenceDomain domain = new ReferenceDomain(file, ReferenceModel.executableRules());
+        Receipt parties = domain.replay(ReferenceStories.rd1Parties());
+        Receipt accounts = domain.replay(ReferenceStories.rd5Accounts(parties.temporaryIds().get(ReferenceStories.BETA),
+                parties.temporaryIds().get(ReferenceStories.ACME)));
+        EntityId a1 = ReferenceDomain.entityId(accounts, ReferenceStories.A1);
+
+        try (URLClassLoader loader = compile(generated, directory).loader()) {
+            Class<?> account = loader.loadClass(PACKAGE + ".Account");
+            EntityState state = domain.view(ReferenceStories.on(4, 1)).restrictedTo(Clearance.none()).entity(a1)
+                    .orElseThrow();
+
+            Object read = call(account, "from", state);
+
+            assertThat(state.withheld()).containsExactly("balance");
+            assertThat(get(read, "number")).isEqualTo("A-1");
+            assertThat(failure(read, "balance")).isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("balance").hasMessageContaining("withheld");
+            EntityState everything = domain.view(ReferenceStories.on(4, 1)).entity(a1).orElseThrow();
+            assertThat(get(call(account, "from", everything), "balance")).isEqualTo(new BigDecimal("1000"));
+        }
     }
 
     @Test
