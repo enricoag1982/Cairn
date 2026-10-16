@@ -22,13 +22,13 @@ class TraversalTest {
     }
 
     @Test
-    void aTraversalStartsFromDepth1ToTheEndWithoutBindingAnythingElse() {
+    void aTraversalStartsFromDepth0ToTheEndWithoutBindingAnythingElse() {
         Traversal traversal = Traversal.of("holder", "ownedBy", "party");
 
         assertThat(traversal.from()).isEqualTo("holder");
         assertThat(traversal.name()).isEqualTo("ownedBy");
         assertThat(traversal.binding()).isEqualTo("party");
-        assertThat(traversal.minDepth()).isEqualTo(1);
+        assertThat(traversal.minDepth()).as("as in JSON").isEqualTo(0);
         assertThat(traversal.maxDepth()).isEmpty();
         assertThat(traversal.relationship()).isEmpty();
         assertThat(traversal.depth()).isEmpty();
@@ -39,27 +39,27 @@ class TraversalTest {
     void theWithersReturnAChangedCopyAndKeepTheOtherOptions() {
         Traversal start = Traversal.of("holder", "ownedBy", "party");
 
-        Traversal all = start.minDepth(0).maxDepth(5).depth("level").relationship("ownership").along(LARGE);
+        Traversal all = start.minDepth(1).maxDepth(5).depth("level").relationship("ownership").along(LARGE);
 
-        assertThat(all).isEqualTo(new Traversal("holder", "ownedBy", "party", 0, OptionalInt.of(5),
+        assertThat(all).isEqualTo(new Traversal("holder", "ownedBy", "party", 1, OptionalInt.of(5),
                 Optional.of("ownership"), Optional.of("level"), Optional.of(LARGE)));
         assertThat(start).as("the traversal it started from is unchanged").isEqualTo(Traversal.of("holder", "ownedBy",
                 "party"));
         assertThat(all.minDepth(2)).isEqualTo(new Traversal("holder", "ownedBy", "party", 2, OptionalInt.of(5),
                 Optional.of("ownership"), Optional.of("level"), Optional.of(LARGE)));
-        assertThat(start.along(LARGE).relationship("ownership").depth("level").maxDepth(5).minDepth(0))
+        assertThat(start.along(LARGE).relationship("ownership").depth("level").maxDepth(5).minDepth(1))
                 .as("in any order").isEqualTo(all);
     }
 
     @Test
     void theBuilderAddsAStepWithTheOptionsOfATraversal() {
         Query query = Query.from("Account", "a")
-                .traverse(Traversal.of("a", "ownedBy", "party").minDepth(0).maxDepth(5).depth("level")
+                .traverse(Traversal.of("a", "ownedBy", "party").minDepth(1).maxDepth(5).depth("level")
                         .relationship("ownership").along(LARGE))
                 .build();
 
         assertThat(onlyStep(query)).isEqualTo(new QueryStep.Traverse("a", "ownedBy", "party", Optional.of("ownership"),
-                Optional.of("level"), Optional.of(LARGE), 0, OptionalInt.of(5)));
+                Optional.of("level"), Optional.of(LARGE), 1, OptionalInt.of(5)));
     }
 
     @Test
@@ -69,9 +69,11 @@ class TraversalTest {
         QueryStep.Traverse step = onlyStep(query);
 
         assertThat(step.maxDepth()).isEmpty();
-        assertThat(step.minDepth()).isEqualTo(1);
+        assertThat(step.minDepth()).isEqualTo(0);
         assertThat(step).isEqualTo(new QueryStep.Traverse("a", "ownedBy", "party", Optional.empty(), Optional.empty(),
-                Optional.empty(), 1, OptionalInt.empty()));
+                Optional.empty(), 0, OptionalInt.empty()));
+        assertThat(onlyStep(Query.from("Account", "a").traverse(Traversal.of("a", "ownedBy", "party").minDepth(1))
+                .build()).minDepth()).isEqualTo(1);
     }
 
     @Test

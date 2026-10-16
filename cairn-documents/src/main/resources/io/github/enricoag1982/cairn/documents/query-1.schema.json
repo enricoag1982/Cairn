@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:cairn:query:1",
   "title": "Cairn query, format version 1",
-  "description": "A Cairn query starts from an entity type and binds each of its entities to a name. Its steps then apply in order, each to the rows that the steps before it produced: a step filters the rows, follows relationships, or traverses them up to a depth or to the end, and binds more names. Then the query can group the rows and aggregate, name the columns to return, order the rows and limit them. A view runs it and returns rows, or problems that name the part of the query they concern, such as @query.steps.1. Write it as JSON or as YAML 1.2. Names of types, attributes and relationships are those of the schema (see cairn_describe); names of bindings are those that the query gives, and are compared exactly.",
+  "description": "A Cairn query starts from an entity type and binds each of its entities (or, with ids, only the given ones) to a name. Its steps then apply in order, each to the rows that the steps before it produced: a step filters the rows, follows relationships, or traverses them up to a depth or to the end, and binds more names. Then the query can group the rows and aggregate, name the columns to return, order the rows and limit them. A view runs it and returns rows, or problems that name the part of the query they concern, such as @query.steps.1. Write it as JSON or as YAML 1.2. Names of types, attributes and relationships are those of the schema (see cairn_describe); names of bindings are those that the query gives, and are compared exactly.",
   "type": "object",
   "additionalProperties": false,
   "required": ["from"],

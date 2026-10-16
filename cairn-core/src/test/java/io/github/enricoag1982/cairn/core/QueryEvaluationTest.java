@@ -608,7 +608,7 @@ class QueryEvaluationTest {
     @Test
     void aTraversalWithoutAMaximumDepthGoesToTheEndAndTheCycleEndsIt() {
         Query query = Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
-                .traverse(Traversal.of("i", "Next", "t").relationship("via").depth("depth"))
+                .traverse(Traversal.of("i", "Next", "t").minDepth(1).relationship("via").depth("depth"))
                 .orderBy(Order.ascending(Column.depth("depth")), Order.ascending(Column.binding("t")))
                 .build();
 
@@ -618,9 +618,9 @@ class QueryEvaluationTest {
                 .containsExactly(tuple("Beta", 1), tuple("gamma", 1), tuple("delta", 2));
         assertThat(result).isEqualTo(run(traversalFromAlpha(1, 1000, "Next")));
         assertThat(reached(run(Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
-                .traverse(Traversal.of("i", "Next", "t").minDepth(0).depth("depth"))
+                .traverse(Traversal.of("i", "Next", "t").depth("depth"))
                 .orderBy(Order.ascending(Column.depth("depth")), Order.ascending(Column.binding("t"))).build())))
-                .as("from depth 0 the entity itself is bound, once")
+                .as("from depth 0, the default: the entity itself is bound, once")
                 .containsExactly(tuple("alpha", 0), tuple("Beta", 1), tuple("gamma", 1), tuple("delta", 2));
         assertThat(reached(run(Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
                 .traverse(Traversal.of("i", "Next", "t").minDepth(2).depth("depth")).build())))
@@ -631,7 +631,8 @@ class QueryEvaluationTest {
     void aTraversalWithoutAMaximumDepthCanFollowOnlyTheRelationshipsThatMeetACondition() {
         Condition light = Condition.lt(Operand.attribute("via", "weight"), Operand.literal(4));
         Query query = Query.from("Item", "i").where(Condition.eq(item("label"), Operand.literal("alpha")))
-                .traverse(Traversal.of("i", "Next", "t").relationship("via").depth("depth").along(light))
+                .traverse(Traversal.of("i", "Next", "t").minDepth(1).relationship("via").depth("depth")
+                        .along(light))
                 .orderBy(Order.ascending(Column.depth("depth")), Order.ascending(Column.binding("t")))
                 .build();
 
@@ -647,7 +648,8 @@ class QueryEvaluationTest {
                 .traverse(Traversal.of("i", "Next", "t").maxDepth(2)).build().steps().getFirst();
 
         assertThat(toTheEnd.maxDepth()).isEmpty();
-        assertThat(toTheEnd.minDepth()).isEqualTo(1);
+        assertThat(toTheEnd.minDepth()).as("as in JSON, the entity itself is bound unless the minimum says otherwise")
+                .isEqualTo(0);
         assertThat(limited.maxDepth()).hasValue(2);
     }
 

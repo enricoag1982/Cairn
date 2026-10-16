@@ -18,7 +18,6 @@ import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.RuleCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
-import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -111,8 +110,7 @@ public final class VacationWithinEntitlement extends VacationWithinEntitlementRu
     private static BigDecimal total(QueryResult result) {
         return switch (result) {
             case QueryResult.Rows rows -> rows.rows().stream()
-                    .map(row -> row.value("total").orElseThrow())
-                    .map(value -> ((Value.DecimalValue) value).value())
+                    .map(row -> row.decimal("total").orElseThrow())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             case QueryResult.Invalid invalid -> throw new IllegalStateException(
                     "The query for the approved vacation days is wrong: " + invalid.problems());

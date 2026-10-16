@@ -288,7 +288,7 @@ class QueriesScenariosTest {
                 .relate("Owns", GAMMA, entity(parties, ACME), from(2, 1), values("share", 70)).build());
         Query query = Query.from("Organization", "o")
                 .where(nameIs("o", "Beta"))
-                .traverse(Traversal.of("o", "ownedBy", "owner").depth("depth"))
+                .traverse(Traversal.of("o", "ownedBy", "owner").minDepth(1).depth("depth"))
                 .orderBy(Order.ascending(Column.depth("depth")))
                 .build();
 

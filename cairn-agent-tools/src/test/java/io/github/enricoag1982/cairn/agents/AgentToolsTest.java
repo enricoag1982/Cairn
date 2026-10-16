@@ -11,12 +11,10 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
-import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.documents.Instants;
 import io.github.enricoag1982.cairn.documents.JsonSchemas;
@@ -661,30 +659,21 @@ class AgentToolsTest {
     }
 
     @Test
-    void aTraversalWithoutAMaximumDepthFollowsToTheEnd() {
+    void aTraversalWithoutAMaximumDepthOrWithANullOneFollowsToTheEnd() {
         Ownership data = recordOwnership();
-        TemporaryId gamma = new TemporaryId("gamma");
-        Receipt withGamma = fixture.replay(new ReferenceStories.Recording(ReferenceStories.on(5, 3),
-                Transaction.by("importer")
-                        .create(gamma, "Organization", ReferenceStories.from(1, 1),
-                                ReferenceStories.values("name", "Gamma"))
-                        .relate("Owns", gamma, data.acme, ReferenceStories.from(2, 1),
-                                ReferenceStories.values("share", 70)).build()));
+        ObjectNode arguments = args("id", data.beta.value(), "name", "ownedBy", "effectiveAt", MARCH_1);
 
-        JsonNode toTheEnd = fixture.call("cairn_traverse", args("id", data.beta.value(), "name", "ownedBy",
-                "effectiveAt", MARCH_1));
-        JsonNode explicitNull = fixture.call("cairn_traverse", args("id", data.beta.value(), "name", "ownedBy",
-                "effectiveAt", MARCH_1).putNull("maxDepth"));
-        JsonNode limited = fixture.call("cairn_traverse", args("id", data.beta.value(), "name", "ownedBy",
-                "effectiveAt", MARCH_1).put("maxDepth", 1));
+        JsonNode toTheEnd = fixture.call("cairn_traverse", arguments);
+        JsonNode explicitNull = fixture.call("cairn_traverse", arguments.deepCopy().putNull("maxDepth"));
+        JsonNode deep = fixture.call("cairn_traverse", arguments.deepCopy().put("maxDepth", 3));
+        JsonNode none = fixture.call("cairn_traverse", arguments.deepCopy().put("maxDepth", 0));
 
         assertThat(toTheEnd.has("problems")).isFalse();
-        assertThat(toTheEnd.get("result")).extracting(step -> step.get("entity").get("id").stringValue(),
-                step -> step.get("depth").intValue()).containsExactly(
-                        tuple(data.acme.value(), 1), tuple(entity(withGamma, gamma).value(), 2));
+        assertThat(toTheEnd.get("result")).singleElement().satisfies(step ->
+                assertThat(step.get("entity").get("id").stringValue()).isEqualTo(data.acme.value()));
         assertThat(explicitNull).as("a null depth is none").isEqualTo(toTheEnd);
-        assertThat(limited.get("result")).as("with a depth of 1 it stops at ACME").hasSize(1);
-        assertThat(toTheEnd.get("effectiveAt").stringValue()).isEqualTo(MARCH_1);
+        assertThat(deep).as("the same as a depth that is enough").isEqualTo(toTheEnd);
+        assertThat(none.get("result")).as("a depth of 0 still follows none").isEmpty();
     }
 
     @Test

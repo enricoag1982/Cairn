@@ -7,18 +7,18 @@ import java.util.OptionalInt;
 /**
  * The options of a traversal step of a {@link Query}, with names, for the Java builder (ADR-0023, capability
  * {@code queries}): {@link Query.Builder#traverse(Traversal)} adds the step. Start one with
- * {@link #of(String, String, String)}, which binds each entity reached from a minimum depth of 1 to the end, and set the
- * options you need with the withers, which return a changed copy:
+ * {@link #of(String, String, String)}, which binds the entity itself (depth 0) and each entity reached from it to the
+ * end, as the JSON form of queries does, and set the options you need with the withers, which return a changed copy:
  *
  * <pre>{@code
  * Query.from("Organization", "o")
- *         .traverse(Traversal.of("o", "ownedBy", "owner").depth("level").maxDepth(5))
+ *         .traverse(Traversal.of("o", "ownedBy", "owner").minDepth(1).depth("level").maxDepth(5))
  *         .build();
  * }</pre>
  *
  * <p>The record holds what the caller wrote, and the withers may be called in any order, so it can hold a minimum depth
- * above the maximum depth; that is a problem of the query, and {@link Query.Builder#traverse(Traversal)} rejects it. A
- * depth below 0 is never valid and is rejected at once.
+ * above the maximum depth; that is an invalid traversal, and {@link Query.Builder#traverse(Traversal)} throws an
+ * {@link IllegalArgumentException} for it. A depth below 0 is never valid and is rejected at once.
  *
  * @param from         the name of the binding of the entity to start from
  * @param name         the name of a relationship type or the inverse name of one
@@ -62,16 +62,17 @@ public record Traversal(
     }
 
     /**
-     * Starts a traversal that binds every entity reached from a bound entity, from depth 1 to the end, without binding
-     * the relationship or the depth and without a condition.
+     * Starts a traversal that binds the bound entity itself (depth 0) and every entity reached from it, to the end,
+     * without binding the relationship or the depth and without a condition. Use {@link #minDepth(int)} with 1 to leave
+     * the entity itself out.
      *
      * @param from    the name of the binding of the entity to start from
      * @param name    the name of a relationship type or the inverse name of one
      * @param binding the name that each reached entity is bound to
-     * @return the traversal, with a minimum depth of 1 and no maximum depth
+     * @return the traversal, with a minimum depth of 0 and no maximum depth
      */
     public static Traversal of(String from, String name, String binding) {
-        return new Traversal(from, name, binding, 1, OptionalInt.empty(), Optional.empty(), Optional.empty(),
+        return new Traversal(from, name, binding, 0, OptionalInt.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty());
     }
 
