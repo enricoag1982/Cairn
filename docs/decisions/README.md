@@ -48,5 +48,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0031](0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md) | Derive attributes from a version's own values in CEL, computed at commit and stored | accepted | 2026-10-15 |
 | [ADR-0032](0032-let-rules-read-the-store-as-committed-before-the-transaction.md) | Let rules read the store as committed before the transaction | accepted | 2026-10-16 |
 | [ADR-0033](0033-name-entities-to-purge-by-unique-keys-that-resolve-over-all-of-effective-time.md) | Name entities to purge by unique keys that resolve over all of effective time | accepted | 2026-10-16 |
+| [ADR-0034](0034-let-relationships-of-a-type-outlive-their-targets-as-records-of-past-facts.md) | Let relationships of a type outlive their targets, as records of past facts | accepted | 2026-10-16 |
 
 <!-- decision-log:end -->
