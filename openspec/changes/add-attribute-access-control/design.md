@@ -29,6 +29,7 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 - A restricted view withholds the values of attributes that its clearance does not cover from every `EntityState` and `RelationshipState` it returns: entities, entities by type, timelines, relationships and their timelines, navigation, navigation timelines, traversals (whose condition sees the restricted state) and query rows.
 - `EntityState` and `RelationshipState` gain `Set<String> withheld`, last: the names of the attributes whose values were withheld, in the schema's order, whether the version had a value or not. Existing constructors keep compiling, with none withheld.
 - Rules' views (`RuleContext.view()`, `before()` and the rest) are never restricted.
+- **Classifications added later.** A restricted view withholds an attribute unless its clearance covers the attribute's classification in the view's schema and in the store's latest schema, matched by the attribute's stable identifier. A view at an older basis, from before the attribute was classified or while it had another classification, so withholds what is classified now; a classification that was removed since still applies to views of the time it held. The query checker and key checks use the same rule.
 
 ### D3. Queries and keys
 
@@ -42,6 +43,8 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 - A write in a transaction with a clearance that sets or clears an attribute that the clearance does not cover is rejected with `ACCESS_DENIED` at that attribute of the write, also in a create. Values that the write does not touch carry forward, whatever their classification; a replace carries forward the withheld values that it does not name, and is rejected only for one that it names, so that it cannot clear a withheld value by leaving it out.
 - A write that names an entity by a unique key of an attribute that the clearance does not cover is rejected with `ACCESS_DENIED` at the reference, before the key is resolved, so that whether an entity has the value is not revealed.
 - The clearance is part of the transaction as submitted: durable stores keep it in a trailing section of data records and keyed transactions, and an idempotency key compares it with the rest, so a retry with another clearance is a key used with different content.
+- **Refusal stops the transaction.** When a transaction with a clearance has a problem `ACCESS_DENIED`, the store returns those problems and does nothing else with it: no validation, derivation, check or rule runs over values it may not see, so neither unique constraints nor expressions can be probed through a refused value.
+- **Problems carry no withheld values.** For a transaction with a clearance, a problem about an attribute that the clearance does not cover, or from a check or a derivation that reads one, keeps its code, path and, for a check, its name and its author's message, but no value of a withheld attribute, no found value, no evaluation message, and no ID of another entity: unique, range, pattern and required problems of classified attributes, `DERIVATION_FAILED` and `CHECK_FAILED` are reduced so. A violated check still says that it is violated, as ADR-0036 accepts.
 - Dry runs apply the same. Rules, checks and derivations run as for every commit, with every value. A receipt names IDs only, so it withholds nothing.
 
 ### D5. Agents
@@ -49,6 +52,7 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 - The server takes `--clearance <classification>[,<classification>...]`, empty by default. `AgentTools` takes the clearance; every tool reads through views restricted to it and submits every commit and dry run with it. A payload has no way to give a clearance.
 - JSON results of states list `withheld` when it is not empty. `cairn_describe` reports the clearance and, in the schema, each attribute's classification.
 - Tool errors for a withheld key or attribute are problems `ACCESS_DENIED`, never protocol errors.
+- `cairn_approval_status` answers only for requests that an adapter with the same principal and clearance made, so that adapters sharing a queue cannot read each other's requests.
 - An approval request keeps the clearance of the adapter that asked, and approving it commits with that clearance, so an approver cannot widen it.
 - An agent's schema plan or registration that adds, changes or removes a classification that the clearance does not cover, before or after, or adds or changes a check or a derived attribute that reads an attribute of such a classification, is rejected with `ACCESS_DENIED` at the element. Otherwise an agent could declassify pay and then read it, or probe it with a check and dry runs.
 
@@ -65,4 +69,6 @@ A generated type read from a state that withheld an attribute does not fail when
 
 - **A caller that passes no clearance reads everything.** This keeps existing code working; the guides say that code acting for a user must pass one.
 - **Problems can reveal facts.** A rule or check that fails over a withheld value tells the writer that something does not hold; schema authors keep values out of messages.
+- **When, not what.** Restricted timelines keep the boundaries of versions that differ only in withheld values, conflict checks report a change of a withheld value as a conflict, and the change feed lists such changes: a restricted reader learns when a withheld value changed, never to what.
+- **Writes that do not name withheld attributes still change them.** A restricted end-date ends the whole version, and a restricted write to an unclassified input changes a classified derived value. Java code that reads through a restricted view and writes a replace without a clearance clears the values it did not see; such code passes the same clearance to the transaction.
 - **Every returned state is filtered.** The cost is a pass over each state's values in restricted views only.

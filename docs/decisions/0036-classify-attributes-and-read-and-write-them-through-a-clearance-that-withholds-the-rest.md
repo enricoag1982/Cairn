@@ -37,7 +37,7 @@ Chosen option: "Attributes declare a classification; views, queries and commits 
 - **Queries and keys.** A query through a restricted view that names a withheld attribute, in a filter, an order, a group, an aggregate or a projection, is rejected with a problem `ACCESS_DENIED`, before anything is read, because even a filter would reveal the value. Finding an entity by a unique key of a withheld attribute is refused the same way.
 - **Writes.** A transaction MAY carry a clearance. A write in it that sets or clears a withheld attribute is rejected with `ACCESS_DENIED`; values it does not touch carry forward as today. Rules, checks and derivations run with every value, whoever commits, and their problems are written by schema authors, who must not put withheld values in messages.
 - **Agents.** The agent server takes a clearance from its operator, empty by default, and every tool reads and commits through it; tools say which attributes they withheld, and a payload cannot widen the clearance. An agent's schema change may not add, change or remove a classification that its clearance does not cover, nor add a check or derived attribute over one, and an approved request commits with the clearance of the agent that asked.
-- **Evolution.** Adding, changing or removing a classification is compatible: stored values do not change, only who reads them.
+- **Evolution.** Adding, changing or removing a classification is compatible: stored values do not change, only who reads them. A restricted view applies an attribute's classification as the store's latest schema has it too, so that reading at an older basis does not reveal what has been classified since.
 
 ### Consequences
 
@@ -45,7 +45,7 @@ Chosen option: "Attributes declare a classification; views, queries and commits 
 - Good, because the store refuses a query that would reveal a withheld value, instead of answering it in a way that leaks.
 - Good, because integrity is checked over all the data, whoever commits.
 - Bad, because the application must pass the right clearance: a view or a transaction that carries none reads and writes everything.
-- Bad, because the problems of rules and checks, and the change feed's entity IDs, can still tell a restricted reader or writer that something holds, exists or changed; only values are withheld.
+- Bad, because the problems of rules and checks, and the change feed's entity IDs, can still tell a restricted reader or writer that something holds, exists or changed, and timelines and conflict checks tell when a withheld value changed; values are withheld, and problems carry none.
 - Bad, because whole types and whole entities are not hidden; per-type and per-row access can follow, on the same clearance.
 
 ### Confirmation
@@ -70,3 +70,4 @@ Chosen option: "Attributes declare a classification; views, queries and commits 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, and their go-ahead of 2026-10-16 to take the gaps that remained open.
 - It adds to [ADR-0013](0013-read-through-immutable-views-and-take-feature-flags-resolved-by-the-caller.md) that a view may be restricted to a clearance, and to ADR-0017 that agents read through one; both stay in force.
 - Revised on 2026-10-16, before `add-attribute-access-control` was archived, after its drift review: agents may not change classifications or expressions over attributes that their clearance does not cover, which would otherwise let them declassify a value and read it; approval requests keep the clearance of the agent that asked.
+- Revised on 2026-10-16 again, after a review that probed for leaks: a restricted view applies classifications of the latest schema as well as its own; a transaction refused with `ACCESS_DENIED` runs no validation, derivation, check or rule; problems of restricted transactions carry no withheld value, found value, evaluation message or other entity's ID; and the consequences say that the timing of changes shows.

@@ -21,7 +21,7 @@ An attribute of an entity type, relationship type or trait MAY declare one class
 
 ### Requirement: Views restricted to a clearance
 
-A clearance SHALL be a set of classifications. A view MAY be restricted to a clearance; a view that is not restricted SHALL read every value. A restricted view SHALL withhold the value of every attribute whose classification its clearance does not cover from every entity and relationship state it returns, including timelines, navigation, traversals, the states that a traversal's condition sees, and query rows, and each state SHALL list the attributes it withheld. An attribute without a classification SHALL never be withheld. A view restricted from a restricted view SHALL be restricted to the classifications that both clearances cover. The views of rules SHALL never be restricted.
+A clearance SHALL be a set of classifications. A view MAY be restricted to a clearance; a view that is not restricted SHALL read every value. A restricted view SHALL withhold the value of every attribute whose classification its clearance does not cover from every entity and relationship state it returns, including timelines, navigation, traversals, the states that a traversal's condition sees, and query rows, and each state SHALL list the attributes it withheld. A restricted view SHALL withhold the value of an attribute unless its clearance covers the attribute's classification both in the view's schema and in the store's latest schema, so that a view at an older basis withholds what has been classified since; an attribute that has a classification in neither SHALL never be withheld. A view restricted from a restricted view SHALL be restricted to the classifications that both clearances cover. The views of rules SHALL never be restricted.
 
 #### Scenario: A balance withheld
 
@@ -32,6 +32,11 @@ A clearance SHALL be a set of classifications. A view MAY be restricted to a cle
 
 - **WHEN** A-1 is read as in the previous scenario through a view restricted to the classification `finance`
 - **THEN** A-1's state has its balance, and withholds nothing
+
+#### Scenario: A balance classified later
+
+- **WHEN** the transactions of RD-1 and RD-5 are recorded while `balance` has no classification, a later version of the reference model classifies Account's `balance` as `finance`, and A-1 is read through a view at the basis of RD-5's first transaction, restricted to no classification
+- **THEN** A-1's state lists `balance` as withheld
 
 #### Scenario: Restricting a restricted view
 
@@ -64,7 +69,7 @@ WHEN a query run through a restricted view names an attribute that the view with
 
 ### Requirement: Commits with a clearance
 
-A transaction MAY carry a clearance. WHEN a write of a transaction with a clearance sets or clears an attribute that the clearance does not cover, THE SYSTEM SHALL reject the transaction with a problem of the code `ACCESS_DENIED` at that attribute of the write, in commits and dry runs alike. A write of such a transaction that names an entity by a unique key of an attribute that the clearance does not cover SHALL be rejected with `ACCESS_DENIED` at the reference, without resolving the key, so that the outcome reveals nothing about the value. Values that a write does not touch SHALL carry forward whatever their classification. Rules, checks and derivations SHALL see every value, whatever the transaction's clearance. A transaction without a clearance SHALL write as before.
+A transaction MAY carry a clearance. WHEN a write of a transaction with a clearance sets or clears an attribute that the clearance does not cover, THE SYSTEM SHALL reject the transaction with a problem of the code `ACCESS_DENIED` at that attribute of the write, in commits and dry runs alike. A write of such a transaction that names an entity by a unique key of an attribute that the clearance does not cover SHALL be rejected with `ACCESS_DENIED` at the reference, without resolving the key, so that the outcome reveals nothing about the value. Values that a write does not touch SHALL carry forward whatever their classification. Rules, checks and derivations SHALL see every value, whatever the transaction's clearance. WHEN a transaction with a clearance is rejected with `ACCESS_DENIED`, its result SHALL hold only those problems: THE SYSTEM SHALL NOT validate, derive, check or run rules for it. A problem that a transaction with a clearance gets about an attribute that the clearance does not cover, or from a check or a derivation that reads such an attribute, SHALL name its code and place but SHALL carry no value of a withheld attribute, no found value, no message of the evaluation and no ID of another entity. A transaction without a clearance SHALL write as before.
 
 #### Scenario: Writing a withheld balance
 
@@ -81,6 +86,16 @@ A transaction MAY carry a clearance. WHEN a write of a transaction with a cleara
 - **WHEN** Organization's `lei` is classified `identity`, the transactions of RD-1 and RD-9 are recorded, and a transaction with no classification in its clearance patches the Organization with the key `Organization(lei: 5493001KJTIIGC8Y1R12)`
 - **THEN** the transaction is rejected with a problem of the code `ACCESS_DENIED` at the write's reference, and so is the same write with a key whose value no entity has
 
+#### Scenario: A refused unique value reveals nothing
+
+- **WHEN** Organization's `lei` is classified `identity`, the transactions of RD-1 and RD-9 are recorded, and a dry run of a transaction with no classification in its clearance creates Gamma, an organization, with the LEI `5493001KJTIIGC8Y1R12`
+- **THEN** the result holds only the problem `ACCESS_DENIED` at Gamma's `lei`, as it does for an LEI that no organization has
+
+#### Scenario: A check that fails over a withheld value
+
+- **WHEN** Organization's `lei` is classified `identity`, Organization declares the test-only check `lei-numeric` with the expression `self.name != 'Probe' || int(self.lei) > 0`, the transactions of RD-1 and RD-9 are recorded, and a transaction with no classification in its clearance renames ACME to `Probe`
+- **THEN** the transaction is rejected with a problem of the code `CHECK_FAILED` that names `lei-numeric`, and no part of the problem contains the LEI
+
 #### Scenario: A rule over a withheld value
 
 - **WHEN** Account's `balance` is classified `finance`, A-1's balance is below 1,000, and a transaction with no classification in its clearance relates ACME to Alice with Employs, which the rule `account-a1-funded` checks
@@ -88,7 +103,7 @@ A transaction MAY carry a clearance. WHEN a write of a transaction with a cleara
 
 ### Requirement: Agents read and write through a clearance
 
-The agent server SHALL take a clearance from the person who starts it, with no classification by default. Every agent tool SHALL read through views restricted to that clearance and SHALL submit every commit and dry run with it, and a payload SHALL NOT widen it. JSON results of states SHALL list the attributes that they withheld. The tool that describes the store SHALL report the clearance and the classification of each attribute. A query or a key that a restricted view refuses SHALL be a problem of the code `ACCESS_DENIED` in the tool's result. A schema plan or registration by an agent SHALL be rejected with a problem of the code `ACCESS_DENIED` at the element concerned when it adds, changes or removes the classification of an attribute, where the classification before or after is one that the clearance does not cover, or when it adds a check or a derived attribute, or changes the expression of one, that reads an attribute whose classification the clearance does not cover; nothing SHALL change.
+The agent server SHALL take a clearance from the person who starts it, with no classification by default. Every agent tool SHALL read through views restricted to that clearance and SHALL submit every commit and dry run with it, and a payload SHALL NOT widen it. JSON results of states SHALL list the attributes that they withheld. The tool that describes the store SHALL report the clearance and the classification of each attribute. A query or a key that a restricted view refuses SHALL be a problem of the code `ACCESS_DENIED` in the tool's result. The status of an approval request SHALL be given only to an adapter with the principal and the clearance that made it. A schema plan or registration by an agent SHALL be rejected with a problem of the code `ACCESS_DENIED` at the element concerned when it adds, changes or removes the classification of an attribute, where the classification before or after is one that the clearance does not cover, or when it adds a check or a derived attribute, or changes the expression of one, that reads an attribute whose classification the clearance does not cover; nothing SHALL change.
 
 #### Scenario: An agent without a clearance
 
