@@ -67,3 +67,4 @@ Chosen option: "A unique key as a kind of reference, resolved by the store at co
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, with the proposal of `add-unique-key-references`.
 - Keys over several attributes, keys of relationships, and purges by key can follow the same rules later.
+- Purges take keys that resolve over all of effective time, as [ADR-0033](0033-name-entities-to-purge-by-unique-keys-that-resolve-over-all-of-effective-time.md) decides.
