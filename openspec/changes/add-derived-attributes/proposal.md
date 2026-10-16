@@ -31,6 +31,9 @@ Some attributes follow from others of the same version, and every caller compose
 - `checks`: the shared problem code for a missing expression language.
 - `schema-documents`: `derived` on attributes.
 - `schema-evolution`: adding, changing and removing derivations.
+- `java-types`: builders have no setters for derived attributes.
+- `json-payloads`: derived attributes in generated JSON Schemas.
+- `entity-versions`: a replace computes derived attributes.
 
 ## Impact
 

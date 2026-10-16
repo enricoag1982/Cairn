@@ -56,8 +56,8 @@ The registry compiles each derived attribute for each concrete type that has it,
 
 After the writes of a transaction are applied to the working timelines and composition cascades have run, and before value constraints, checks and rules, the store computes each derived attribute of the type for every segment that the transaction wrote. These are the segments whose values or recording differ from before, as checks select them. It replaces the derived values in those segments with the results, or with nothing.
 
-- A patch or replace that names a derived attribute is rejected with `DERIVED_ATTRIBUTE_WRITTEN` at the write, and the derivation does not run for it.
-- A create gives no derived values; they are computed.
+- A create, relate, patch, replace or clear that names a derived attribute is rejected with `DERIVED_ATTRIBUTE_WRITTEN` at the write, and the derivation does not run for it.
+- Creates and relates give no derived values; they are computed.
 - Segments that a cascade only cuts keep their stored derived values.
 - A dry run computes and reports the same.
 - A store opened without a language rejects every write to a type with derived attributes, with `EXPRESSIONS_UNAVAILABLE`.

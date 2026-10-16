@@ -13,7 +13,7 @@
 - [x] 2.1 `derived` in schema documents, the published JSON Schema and located problems (D6)
 - [x] 2.2 Read-only derived attributes in generated values schemas, kept out of the payload schema; located `DERIVED_ATTRIBUTE_WRITTEN` (D6)
 - [x] 2.3 Builders without setters for derived attributes; snapshot records read them (D7)
-- [x] 2.4 The HR example's `fullName` (D8)
+- [x] 2.4 The HR example's `fullName` (D9), and derived attributes kept in schema records (D8)
 
 ## 3. Tests
 

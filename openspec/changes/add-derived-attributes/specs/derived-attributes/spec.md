@@ -56,7 +56,7 @@ WHEN a transaction writes a segment of the timeline of an entity or relationship
 
 ### Requirement: Derived attributes are not written
 
-A write SHALL NOT set a derived attribute: a create, patch, replace or clear that names one SHALL be rejected with a problem of the code `DERIVED_ATTRIBUTE_WRITTEN` at the write, located in the payload when the transaction was read from one. A create SHALL NOT need to give a derived attribute, even a required one. The generated JSON Schema of a type's values SHALL mark derived attributes as read-only, and the generated JSON Schema of transaction payloads SHALL NOT accept them in the values of writes. Generated Java builders of writes SHALL have no setter for a derived attribute, and generated snapshot records SHALL read it.
+A write SHALL NOT set a derived attribute: a create, relate, patch, replace or clear that names one SHALL be rejected with a problem of the code `DERIVED_ATTRIBUTE_WRITTEN` at the write, located in the payload when the transaction was read from one. A create SHALL NOT need to give a derived attribute, even a required one. The generated JSON Schema of a type's values SHALL mark derived attributes as read-only, and the generated JSON Schema of transaction payloads SHALL NOT accept them in the values of writes. Generated Java builders of writes SHALL have no setter for a derived attribute, and generated snapshot records SHALL read it.
 
 #### Scenario: Setting a derived attribute
 

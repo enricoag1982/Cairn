@@ -30,10 +30,10 @@ Whether a derived value is stored or computed on read, what it may read, and how
 
 Chosen option: "CEL expressions over the version's own values, computed at commit and stored", because it is the only option that keeps history reproducible and derived values queryable without writes to entities that a transaction does not name.
 
-- **What a derived attribute is.** An attribute of an entity type or relationship type MAY be derived: it states a CEL expression instead of taking values from writes. The expression sees `self` as checks do, with the attributes that are not derived; it does not see other derived attributes, versions, entities or relationships.
+- **What a derived attribute is.** An attribute of an entity type, relationship type or trait MAY be derived: it states a CEL expression instead of taking values from writes. The expression sees `self` as checks do, with the attributes that are not derived; it does not see other derived attributes, versions, entities or relationships.
 - **When it is computed.** At commit, for every segment of a timeline that the transaction writes, before constraints, checks and rules, which see the derived value. The value is stored with the version, so views, queries, uniqueness, the change feed and every kind of store treat it as any other value.
 - **Its value.** The result must fit the attribute's value type: a CEL string, boolean, integer (in range for `int`), double for `decimal` (taken at its shortest decimal form), or timestamp for `instant` and, at the start of a day in UTC, for `date`. An optional derived attribute has no value when the expression gives `null`. A result that does not fit, or an evaluation error, rejects the transaction with a problem of its own.
-- **Writes.** A write that sets a derived attribute is rejected. Payload schemas mark it read-only, and generated builders have no setter for it.
+- **Writes.** A write that sets a derived attribute is rejected. Generated values schemas mark it read-only, payload schemas leave it out of writes, and generated builders have no setter for it.
 - **Schema evolution.** Adding a derived attribute to an existing type, making an attribute derived or changing a derived attribute's expression is a breaking change, because versions already stored would not hold what the expression gives; making a derived attribute plain is compatible, and its stored values stay.
 - **The expression language.** Derived attributes need the module `cairn-cel`, as checks do; without it a registry rejects them and a store rejects writes to their types, with one problem code for both.
 
@@ -66,5 +66,6 @@ Chosen option: "CEL expressions over the version's own values, computed at commi
 ## More Information
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again; derived attributes were in the roadmap the user agreed to on 2026-10-15, with the proposal of `add-derived-attributes`.
-- It replaces, for derived attributes, the expectation in ADR-0018's More Information that they would be named Java functions; values that need other data can follow as such, with recomputation through the reads of ADR-0025.
+- It replaces, for derived attributes, the sentence of ADR-0018 that they follow as named Java functions; values that need other data can follow as such, with recomputation through the reads of ADR-0025.
 - Derived attributes that see other derived attributes, and migrations that derive values for versions already stored, can follow.
+- Revised on 2026-10-16, before `add-derived-attributes` was archived, after its drift review: traits may declare derived attributes, it is the values schemas that mark them read-only while payload schemas leave them out, and the sentence of ADR-0018 that this decision replaces is in its Decision Outcome. Schema records keep derived attributes in an optional trailing section of format version 1, as they keep checks (ADR-0030).
