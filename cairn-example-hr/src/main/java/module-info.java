@@ -15,6 +15,7 @@ module io.github.enricoag1982.cairn.example.hr {
     // The same rules are listed in META-INF/services for the class path, where the tests run.
     provides io.github.enricoag1982.cairn.data.Rule with
             io.github.enricoag1982.cairn.example.hr.rules.DecidedByManager,
+            io.github.enricoag1982.cairn.example.hr.rules.DecidedRequestsStay,
             io.github.enricoag1982.cairn.example.hr.rules.NoUnitCycles,
             io.github.enricoag1982.cairn.example.hr.rules.VacationWithinEntitlement;
 }

@@ -8,16 +8,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
+import io.github.enricoag1982.cairn.data.Rule;
 import io.github.enricoag1982.cairn.data.RuleContext;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.LeiChecksumRule;
+import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TotalOwnershipRule;
 import io.github.enricoag1982.cairn.query.Query;
@@ -40,10 +43,16 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
+import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The scenarios of the {@code java-types} spec that use the generated types of the reference domain, which the build
@@ -73,6 +82,44 @@ class GeneratedTypesScenariosTest {
                             "The check digits of the LEI " + lei + " are wrong (ISO 7064 MOD 97-10)."));
         }
     }
+
+    /**
+     * The test-only rule {@code lei-kept}, written against the base class that is generated for it: it reads the
+     * organization's previous versions with {@code previous}, as {@code Organization}s, and compares with each. It is
+     * source text, because the reference model does not name this rule, so the build generates no base class for it;
+     * the scenario generates one from the reference model in which {@code Organization} names the rule, and compiles
+     * this source with it.
+     */
+    private static final String TYPED_LEI_KEPT = """
+            package %s;
+
+            import io.github.enricoag1982.cairn.data.RuleContext;
+            import io.github.enricoag1982.cairn.schema.RuleCode;
+            import io.github.enricoag1982.cairn.schema.RuleDescriptor;
+
+            /** The test-only rule lei-kept, written against its generated base class. */
+            public final class TypedLeiKept extends LeiKeptRuleV1 {
+
+                /** Creates the rule. */
+                public TypedLeiKept() {
+                }
+
+                @Override
+                public RuleDescriptor descriptor() {
+                    return describe("An organization that had an LEI before the transaction, at any time in the "
+                            + "checked version's period, still has one.",
+                            new RuleCode("lei-removed", "The organization had an LEI before the transaction. Keep it."));
+                }
+
+                @Override
+                protected void check(Organization value, RuleContext context) {
+                    if (value.lei().isEmpty() && previous(value, context).stream()
+                            .anyMatch(before -> before.lei().isPresent())) {
+                        context.problem("lei-removed", "The LEI of " + value.name() + " would be removed.");
+                    }
+                }
+            }
+            """.formatted(GeneratedSource.PACKAGE);
 
     // ------------------------------------------------------------------ typed queries
 
@@ -305,5 +352,41 @@ class GeneratedTypesScenariosTest {
         });
         assertThat(domain.store.schema().availableRules()).contains(TypedLeiChecksum.DESCRIPTOR);
         assertThat(TypedLeiChecksum.DESCRIPTOR.appliesTo()).isEqualTo("Organization");
+    }
+
+    @Test
+    @DisplayName("Scenario: The previous version in a generated rule")
+    void thePreviousVersionInAGeneratedRule(@TempDir Path directory) throws Exception {
+        String reference = Files.readString(ReferenceDomain.DOCUMENT);
+        String named = reference.replace("      - { name: lei-checksum, version: 1 }\n",
+                "      - { name: lei-checksum, version: 1 }\n      - { name: lei-kept, version: 1 }\n");
+        assertThat(named).as("the reference model in which Organization also names lei-kept")
+                .isNotEqualTo(reference);
+        Path document = GeneratedSource.document(directory, "reference-lei-kept.cairn.yaml", named);
+        List<GeneratedFile> files = new ArrayList<>(GeneratedSource.generate(document).files());
+        files.add(new GeneratedFile(GeneratedSource.PACKAGE.replace('.', '/') + "/TypedLeiKept.java", TYPED_LEI_KEPT));
+
+        try (URLClassLoader loader = GeneratedSource.compile(new Generation.Generated(files), directory).loader()) {
+            Rule leiKept = (Rule) loader.loadClass(GeneratedSource.PACKAGE + ".TypedLeiKept")
+                    .getDeclaredConstructor().newInstance();
+            List<Rule> rules = new ArrayList<>(ReferenceModel.executableRules());
+            rules.add(leiKept);
+            ReferenceDomain domain = new ReferenceDomain(document, rules);
+            EntityId acme = ReferenceDomain.entityId(domain.replay(ReferenceStories.rd1Parties()), ACME);
+            domain.replay(ReferenceStories.rd9AcmeLei(acme));
+
+            CommitResult result = domain.attempt(on(2, 1), Transaction.by(PRINCIPAL)
+                    .patch(acme, ReferenceStories.from(3, 1), ReferenceStories.values(), Set.of("lei"),
+                            ConflictCheck.none()).build());
+
+            assertThat(result).isInstanceOf(CommitResult.Rejected.class);
+            assertThat(((CommitResult.Rejected) result).problems()).singleElement().satisfies(problem -> {
+                assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+                assertThat(problem.ruleCode()).contains("lei-kept/lei-removed");
+                assertThat(problem.path()).isEqualTo(acme.value());
+            });
+            assertThat(Organization.from(domain.entity(on(4, 1), acme)).lei()).as("the LEI was not removed")
+                    .contains(ReferenceStories.LEI);
+        }
     }
 }

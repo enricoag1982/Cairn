@@ -30,6 +30,8 @@ import java.util.TreeMap;
  *       rules, then the order of their versions. Their problems come after all others.
  *   <li>A check whose rule the entity's or relationship's type no longer names, after a schema registration, is dropped.
  *   <li>The runs record what they read like any other, and never cause more re-checks: rules do not write.
+ *   <li>A rule that reads the store as it was before the transaction reads, in a re-check, the state before the
+ *       transaction that runs it again (design D2 of {@code add-previous-state-to-rules}).
  * </ul>
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.

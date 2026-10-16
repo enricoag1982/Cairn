@@ -17,6 +17,7 @@ import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.fixtures.ControllingOwnerHasLeiRule;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.EmployerHoldsAccountRule;
+import io.github.enricoag1982.cairn.fixtures.LeiKeptRule;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
@@ -131,6 +132,15 @@ final class ReferenceStore {
         return withRules(Definitions.withRule(ReferenceModel.definition(), "Owns",
                 ControllingOwnerHasLeiRule.DESCRIPTOR), rulesWith(new ControllingOwnerHasLeiRule()),
                 ReferenceModel.declaredRules());
+    }
+
+    /**
+     * A store of the reference domain in which {@code Organization} names the test-only rule {@code lei-kept}, which
+     * reads the organization as it was committed before the transaction, and which the store has the code of.
+     */
+    static ReferenceStore withLeiKept() {
+        return withRules(TestEntityRule.namedIn(ReferenceModel.definition(), "Organization",
+                LeiKeptRule.DESCRIPTOR), rulesWith(new LeiKeptRule()), ReferenceModel.declaredRules());
     }
 
     /** The rules of the reference domain, which have code, and the given rules besides. */

@@ -217,6 +217,41 @@ class EntityRulesScenariosTest {
         assertThat(reference.store.latestBasis()).as("a dry run records nothing").isEqualTo(before);
     }
 
+    // ------------------------------------------------------------------ rules that read what was there before
+
+    @Test
+    @DisplayName("Scenario: A rule that reads what was there before")
+    void aRuleThatReadsWhatWasThereBefore() {
+        ReferenceStore reference = ReferenceStore.withLeiKept();
+        EntityId acme = entity(reference.createParties(), ACME);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        reference.recordedOn(on(2, 1));
+
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(acme, from(3, 1), values(), Set.of("lei"), ConflictCheck.none()).build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("lei-kept/lei-removed");
+        assertThat(problem.path()).as("ACME, which the transaction names").isEqualTo(acme.value());
+        assertThat(reference.view(on(4, 1)).entity(acme).orElseThrow().values()).as("nothing was removed")
+                .containsEntry("lei", Value.of(LEI));
+    }
+
+    @Test
+    @DisplayName("Scenario: Nothing before a creation")
+    void nothingBeforeACreation() {
+        ReferenceStore reference = ReferenceStore.withLeiKept();
+        reference.createParties();
+
+        Receipt created = reference.commit(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma")).build());
+
+        assertThat(reference.view(on(2, 1)).entity(entity(created, GAMMA))).hasValueSatisfying(gamma ->
+                assertThat(gamma.values()).containsEntry("name", Value.of("Gamma")).doesNotContainKey("lei"));
+        assertThat(reference.view(on(2, 1)).entities("Organization")).hasSize(3);
+    }
+
     // ------------------------------------------------------------------ rule problems
 
     @Test
@@ -398,5 +433,26 @@ class EntityRulesScenariosTest {
                 .isEqualTo(employs.value());
         assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("changes what the rule read"));
         assertThat(rule.checks()).as("run again for the transaction").isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Scenario: A re-check reads the state before the re-checking transaction")
+    void aRecheckReadsTheStateBeforeTheRecheckingTransaction() {
+        ReferenceStore reference = ReferenceStore.withLeiKept();
+        EntityId acme = entity(reference.createParties(), ACME);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        reference.recordedOn(on(2, 1));
+
+        reference.commit(Transaction.by("importer").patch(acme, from(3, 1), values("name", "ACME Holdings")).build());
+        reference.recordedOn(on(5, 1));
+        List<Problem> problems = reference.reject(Transaction.by("importer")
+                .patch(acme, from(6, 1), values(), Set.of("lei"), ConflictCheck.none()).build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("lei-kept/lei-removed");
+        assertThat(problem.path()).as("ACME, which the transaction names").isEqualTo(acme.value());
+        assertThat(reference.view(on(7, 1)).entity(acme).orElseThrow().values()).as("nothing was removed")
+                .containsEntry("name", Value.of("ACME Holdings")).containsEntry("lei", Value.of(LEI));
     }
 }

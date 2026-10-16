@@ -35,7 +35,8 @@ final class RuleSource {
         String name = rule.rule().name();
         String version = Integer.toString(rule.rule().version());
         String appliesTo = rule.appliesTo().name();
-        String article = relationship ? "a relationship" : "an entity";
+        String thing = relationship ? "relationship" : "entity";
+        String article = (relationship ? "a " : "an ") + thing;
         String subject = rule.appliesTo().java();
         String state = ref(relationship ? Library.RELATIONSHIP_STATE : Library.ENTITY_STATE);
         String context = ref(Library.RULE_CONTEXT);
@@ -46,7 +47,8 @@ final class RuleSource {
                 "",
                 "<p>A subclass gives the rule's description and problem codes with {@link #describe}, returns the "
                         + "descriptor, and writes the typed check. This class reads each version of " + article
-                        + " as " + a(appliesTo) + " and passes it to that check."));
+                        + " as " + a(appliesTo) + " and passes it to that check, and reads the " + thing
+                        + " as the store held it before the transaction with {@link #previous}."));
         if (model.deprecations()) {
             out.line("@" + ref(Library.SUPPRESS_WARNINGS) + "(\"deprecation\")");
         }
@@ -86,6 +88,34 @@ final class RuleSource {
         out.line("@" + ref(Library.OVERRIDE));
         out.open("public final void check(" + state + " version, " + context + " context) {");
         out.line("check(" + subject + ".from(version), context);");
+        out.close("}");
+        out.blank();
+
+        String list = ref(Library.LIST);
+        String period = ref(Library.EFFECTIVE_PERIOD);
+        String stateOfVersion = relationship ? "relationshipState" : "entityState";
+        String timeline = relationship ? "relationshipTimeline" : "timeline";
+        out.javadoc(List.of(
+                "Reads the versions of the " + thing + " that a version belongs to as the store held them before the "
+                        + "transaction, during the period of the version that is checked, as " + a(appliesTo)
+                        + " each, in the order of the timeline. A rule compares with each of them, so that its verdict "
+                        + "holds at every instant of the period and does not depend on where the period starts. It "
+                        + "reads the timeline through the {@link " + context + "#before() before} view of the "
+                        + "context, so that the store records it as a read of the " + thing + " across effective time.",
+                "",
+                "@param version the version that is checked, which names the " + thing + " to read",
+                "@param context what the rule reads and reports through",
+                "@return the versions that the store held with the version's ID whose periods overlap the period of "
+                        + "the version, in order; empty if it held none there, for example because the transaction "
+                        + "creates it"));
+        out.open("protected " + list + "<" + subject + "> previous(" + subject + " version, " + context
+                + " context) {");
+        out.line(period + " period = version." + stateOfVersion + "().period();");
+        out.line("return context.before()." + timeline + "(version.id()).stream()");
+        out.line("        .filter(held -> period.until().map(end -> held.period().from().isBefore(end)).orElse(true)");
+        out.line("                && held.period().until().map(end -> period.from().isBefore(end)).orElse(true))");
+        out.line("        .map(" + subject + "::from)");
+        out.line("        .toList();");
         out.close("}");
         out.blank();
 

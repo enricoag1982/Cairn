@@ -43,7 +43,10 @@ import java.util.stream.Collectors;
  * names is reported as failed. The problems come in that order, subject by subject.
  *
  * <p>Every run of a rule records what the rule read, through the views of its context, and stages it for the
- * {@link ReadIndex} (design D1 and D3 of {@code add-rule-rechecks}). The runner also runs rules again for versions that a
+ * {@link ReadIndex} (design D1 and D3 of {@code add-rule-rechecks}). Those are the views of the state the transaction
+ * would produce, and the views of the store as it was committed before the transaction, which every run reads through
+ * {@code before()} and {@code beforeAt} and which are recorded in the same way (design D2 of
+ * {@code add-previous-state-to-rules}). The runner also runs rules again for versions that a
  * transaction does not write, because it changes what they read: a {@linkplain #recheck re-check} reports its problems
  * about the version it checks, with a hint that says so (D4). And it can run rules only to learn what they read, without
  * judging the verdicts, as a durable store does when it opens (D5).
@@ -95,6 +98,8 @@ final class RuleRunner {
 
     private final Rules rules;
     private final ProvisionalView.Source source;
+    /** The store as committed before the transaction, which the rules read through {@code before()}. */
+    private final ProvisionalView.Source committed;
     private final CommitSequence sequence;
     private final ReadIndex.Stage stage;
     private final Set<Ran> ran = new HashSet<>();
@@ -106,13 +111,15 @@ final class RuleRunner {
      * Creates a runner for one transaction.
      *
      * @param rules    the rules the store has code for
-     * @param source   the state the rules read
+     * @param source   the state the rules read; the store as committed before the transaction is the same schema and
+     *                 ledger with nothing laid over it, at the latest basis that the sequence has published
      * @param sequence the sequence of the store, which refuses writes while the rules run
      * @param stage    where the reads of every run are staged
      */
     RuleRunner(Rules rules, ProvisionalView.Source source, CommitSequence sequence, ReadIndex.Stage stage) {
         this.rules = rules;
         this.source = source;
+        this.committed = source.committed(sequence.latestBasis());
         this.sequence = sequence;
         this.stage = stage;
     }
@@ -254,7 +261,7 @@ final class RuleRunner {
             String hint, Set<Problem> problems) {
         Consumer<RuleContext> call = call(subject, registered.rule(), segment);
         Reads reads = new Reads();
-        Context context = new Context(source, segment.from(), reads);
+        Context context = new Context(source, committed, segment.from(), reads);
         ran.add(new Ran(subject.id(), rule, segment.from()));
         long refusedBefore = sequence.refusedWrites();
         try {
@@ -392,18 +399,22 @@ final class RuleRunner {
 
     /**
      * The context of one call of a rule: it collects the reports, and is closed when the rule returns. Its views record
-     * what the rule reads into the reads of the call (design D1 of {@code add-rule-rechecks}).
+     * what the rule reads into the reads of the call (design D1 of {@code add-rule-rechecks}), those of the state the
+     * transaction would produce and those of the committed state before it (design D2 of
+     * {@code add-previous-state-to-rules}) alike.
      */
     private static final class Context implements RuleContext {
 
         private final ProvisionalView.Source source;
+        private final ProvisionalView.Source committed;
         private final Instant start;
         private final Reads reads;
         private final List<Reported> reported = new ArrayList<>();
         private boolean closed;
 
-        Context(ProvisionalView.Source source, Instant start, Reads reads) {
+        Context(ProvisionalView.Source source, ProvisionalView.Source committed, Instant start, Reads reads) {
             this.source = source;
+            this.committed = committed;
             this.start = start;
             this.reads = reads;
         }
@@ -416,6 +427,16 @@ final class RuleRunner {
         @Override
         public View viewAt(Instant effectiveAt) {
             return source.at(effectiveAt, reads);
+        }
+
+        @Override
+        public View before() {
+            return committed.at(start, reads);
+        }
+
+        @Override
+        public View beforeAt(Instant effectiveAt) {
+            return committed.at(effectiveAt, reads);
         }
 
         @Override

@@ -16,7 +16,9 @@ import java.util.Map;
  * the end of a relationship does not. A rule with code runs for the segments of the subject's new timeline that differ
  * from its previous timeline, of which there may be none; for a relationship that is related, that is its whole
  * timeline. A rule without code is reported whatever the write changed. The rules read a provisional view of the state
- * the transaction would produce, which is built once and only if some subject takes part or a re-check needs it.
+ * the transaction would produce, which is built once and only if some subject takes part or a re-check needs it, and the
+ * store as committed before the transaction, which the runner reads from the same ledger with none of the transaction's
+ * timelines laid over it (design D2 of {@code add-previous-state-to-rules}).
  *
  * <p>The stage also keeps what {@link Rechecks} needs to know about it: the runner, which knows the versions that it ran
  * rules for and the rules that reported a problem, and the view's source. What each run read is staged for the

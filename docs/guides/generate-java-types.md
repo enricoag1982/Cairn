@@ -153,6 +153,19 @@ public final class LeiChecksum extends LeiChecksumRuleV1 {
 
 The base class holds the rule's name, version and type, and turns each entity version into an `Organization`. The description and the codes stay in your class ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
 Give the rule to the store with `StoreSettings.builder().rules(new LeiChecksum())`, or list it for Java's service loader.
+
+A rule can compare the version with what the store held before the transaction: `context.before()` and `context.beforeAt(instant)` are views of the store as committed before it, and the base class's `previous(version, context)` reads the versions that the store held before the transaction during the checked version's period, as its generated type, or none when the transaction creates it. Compare with each of them, so that the verdict holds at every instant of the period. `previous` reads the entity's timeline, so every later change to that timeline runs the rule again ([ADR-0032](../decisions/0032-let-rules-read-the-store-as-committed-before-the-transaction.md)). For example, `lei-kept`, a subclass of its generated `LeiKeptRuleV1`, keeps an LEI once given:
+
+```java
+@Override
+protected void check(Organization organization, RuleContext context) {
+    boolean hadOne = previous(organization, context).stream().anyMatch(before -> before.lei().isPresent());
+    if (hadOne && organization.lei().isEmpty()) {
+        context.problem("lei-removed", "lei", "An LEI cannot be removed once given.");
+    }
+}
+```
+
 A rule that several types name is generated for their closest common supertype.
 
 Name a rule only on the type it checks, and read everything else through its `RuleContext`: the store records what the rule reads there, and runs it again when a transaction changes that, such as a relationship that the rule navigated and that ends ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)). What a rule reads anywhere else, the store cannot see.
