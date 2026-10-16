@@ -364,6 +364,11 @@ class HrStoriesTest {
         assertThat(asked.status()).isEqualTo("requested");
         assertThat(linked(view(on(3, 1)), request, HasLeaveRequest.INVERSE)).containsExactly("E-004");
         assertThat(view(on(2, 28)).entity(request)).as("not filed yet on 28 February").isEmpty();
+        // The days of a request are derived (ADR-0035): the store counts the working days of its dates, and no write
+        // sets them.
+        assertThat(problemCodes(Transaction.by(Brightwater.HR_ADMIN)
+                .patch(request, EffectivePeriod.from(on(3, 1)), Map.of("days", Value.of(new BigDecimal("6")))).build()))
+                .as("a write cannot set the days").containsExactly(ProblemCode.DERIVED_ATTRIBUTE_WRITTEN);
 
         assertRecordedAt(commit(Brightwater.hr5CleoApproves(ids)).transactionTime(), on(3, 2));
 
@@ -378,7 +383,7 @@ class HrStoriesTest {
         // day is refused.
         Transaction backwards = Transaction.by(Brightwater.HR_ADMIN)
                 .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 3, 23))
-                        .lastDay(LocalDate.of(2026, 3, 20)).days(new BigDecimal("1")).status("requested")
+                        .lastDay(LocalDate.of(2026, 3, 20)).status("requested")
                         .as("backwards").effectiveFrom(on(3, 2)))
                 .write(HasLeaveRequest.relate(ids.entity("e004"), new TemporaryId("backwards"))
                         .effectiveFrom(on(3, 2)))
@@ -486,8 +491,8 @@ class HrStoriesTest {
         assertThat(problem.message()).contains("E-004").contains("26");
         assertThat(view(on(8, 3)).entities("LeaveRequest")).as("only the 5 days of HR-5").hasSize(1);
 
-        // 5 and 20 days make exactly 25, the most the rule allows.
-        assertThat(store.dryRun(Brightwater.devAugustVacation(ids, 20).transaction()))
+        // 5 and 20 days make exactly 25, the most the rule allows: 20 working days are 3 to 28 August.
+        assertThat(store.dryRun(Brightwater.devAugustVacation(ids, LocalDate.of(2026, 8, 28)).transaction()))
                 .isInstanceOf(DryRunResult.WouldCommit.class);
     }
 
@@ -532,10 +537,11 @@ class HrStoriesTest {
                 .status("requested").effectiveFrom(recorded)).build()));
         assertThat(reopened.ruleCode()).as("requested again").contains("decided-requests-stay/decided");
         assertThat(reopened.message()).contains("the transaction changes status.");
+        // The days of a request are derived from its dates, so they change with them: one more working day.
         Problem longer = only(dryRunProblems(Transaction.by(Brightwater.HR_ADMIN).write(LeaveRequest.patch(request)
-                .days(new BigDecimal("6")).effectiveFrom(recorded)).build()));
+                .lastDay(LocalDate.of(2026, 3, 23)).effectiveFrom(recorded)).build()));
         assertThat(longer.ruleCode()).as("one more day").contains("decided-requests-stay/decided");
-        assertThat(longer.message()).contains("the transaction changes days.");
+        assertThat(longer.message()).contains("the transaction changes lastDay, days.");
     }
 
     // ------------------------------------------------------------------ HR-3, recorded 10 March
@@ -876,7 +882,7 @@ class HrStoriesTest {
                 .containsExactly("Ben", "Ana");
         Transaction afterwards = Transaction.by(Brightwater.HR_ADMIN)
                 .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 12, 14))
-                        .lastDay(LocalDate.of(2026, 12, 18)).days(new BigDecimal("5")).status("approved")
+                        .lastDay(LocalDate.of(2026, 12, 18)).status("approved")
                         .as("devDecember").effectiveFrom(on(12, 2)))
                 .write(HasLeaveRequest.relate(ids.entity("e004"), new TemporaryId("devDecember"))
                         .effectiveFrom(on(12, 2)))
@@ -904,7 +910,16 @@ class HrStoriesTest {
 
         TestClock memoryClock = new TestClock();
         Store memory = Stores.inMemory(settings(memoryClock));
-        play(memory, memoryClock, company);
+        Ids memoryIds = play(memory, memoryClock, company);
+
+        // The days of a leave are derived from its dates (ADR-0035): every generated leave has at least one working day.
+        View endOfYear = memory.view(Coordinates.effectiveAt(on(12, 31)));
+        int leaves = company.events().get("leaves");
+        for (int leave = 1; leave <= leaves; leave++) {
+            assertThat(endOfYear.timeline(memoryIds.entity("leave" + leave))).as("the versions of leave%d", leave)
+                    .isNotEmpty().allSatisfy(state -> assertThat(LeaveRequest.from(state).days())
+                            .isGreaterThanOrEqualTo(BigDecimal.ONE));
+        }
 
         TestClock durableClock = new TestClock();
         try (DurableStore durable = Stores.durable(directory, settings(durableClock))) {
@@ -981,8 +996,8 @@ class HrStoriesTest {
         }
     }
 
-    /** Registers the HR model in a store and commits the steps of a company, each at its recording date. */
-    private static void play(Store store, TestClock clock, CompanyGenerator.Company company) {
+    /** Registers the HR model in a store, commits the steps of a company, each at its recording date, and returns the IDs. */
+    private static Ids play(Store store, TestClock clock, CompanyGenerator.Company company) {
         clock.moveTo(on(1, 2));
         SchemaDocument document = Brightwater.schemaDocument();
         assertThat(store.schema().register(document.origin(), document.definition(),
@@ -996,5 +1011,6 @@ class HrStoriesTest {
                     .isInstanceOf(CommitResult.Committed.class);
             ids.record(((CommitResult.Committed) result).receipt());
         }
+        return ids;
     }
 }

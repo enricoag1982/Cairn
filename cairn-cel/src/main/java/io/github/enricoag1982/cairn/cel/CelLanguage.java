@@ -56,7 +56,12 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>The result of a check must be {@code bool} or {@code dyn}. CEL does not mix integers and doubles in an operator that
  * the checker types, so a decimal is compared with {@code 0.0}, not with {@code 0}. The standard functions and macros are
- * available, and no extension.
+ * available, and no extension, besides the functions of Cairn's own below.
+ *
+ * <p>The functions of Cairn's own (ADR-0035, design D1 of {@code add-expression-functions}), {@code cairn.calendarDays}
+ * and {@code cairn.workingDays}, are declared in every environment, so checks and derivations call them alike; what
+ * they count, and how, is described by {@code CairnFunctions}. A call with arguments of other types, or of a
+ * {@code cairn.<name>} that is not offered, does not compile.
  *
  * <p>The expression of a derived attribute sees the attributes that the engine gives it, which are those of the type that
  * are not derived, and the checker is given the CEL type that its result must have, so that a result of another type is
@@ -183,6 +188,8 @@ public final class CelLanguage implements ExpressionLanguage {
                 .setOptions(OPTIONS)
                 .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
                 .setTypeProvider(provider)
+                .addFunctionDeclarations(CairnFunctions.declarations())
+                .addFunctionBindings(CairnFunctions.bindings())
                 .addVar(Evaluation.SELF, self);
         environment.result().ifPresent(builder::setResultType);
         return builder.build();

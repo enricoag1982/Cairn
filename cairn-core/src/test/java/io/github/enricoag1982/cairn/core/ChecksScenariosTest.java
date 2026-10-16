@@ -30,6 +30,7 @@ import io.github.enricoag1982.cairn.schema.Schema;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +49,8 @@ class ChecksScenariosTest {
     private static final String NON_NEGATIVE = "self.balance >= 0.0";
     private static final String BORN_BEFORE_2026 = "self.birthDate < timestamp('2026-01-01T00:00:00Z')";
     private static final String BORN_BEFORE_2026_IF_KNOWN = "!has(self.birthDate) || " + BORN_BEFORE_2026;
+    private static final String BORN_ON_A_WEEKDAY = "!has(self.birthDate) || cairn.workingDays(self.birthDate, "
+            + "self.birthDate) == 1";
 
     @TempDir
     Path directory;
@@ -181,6 +184,20 @@ class ChecksScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: A function of Cairn's with the wrong arguments")
+    void aFunctionOfCairnsWithTheWrongArguments() {
+        SchemaDefinition definition = withCheck(ReferenceModel.definition(), "Person", "born-on-a-working-day",
+                "cairn.workingDays(self.name, self.birthDate) > 0", null);
+
+        List<Problem> problems = registryWithLanguage().validate(ReferenceModel.origin("1.0.0"), definition);
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_CHECK);
+        assertThat(problem.path()).isEqualTo("Person.born-on-a-working-day");
+        assertThat(problem.message()).contains("cairn.workingDays").contains("string");
+    }
+
+    @Test
     @DisplayName("Scenario: No expression language")
     void noExpressionLanguage() {
         SchemaRegistry registry = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules(), Optional.empty());
@@ -240,6 +257,26 @@ class ChecksScenariosTest {
                 BORN_BEFORE_2026_IF_KNOWN, null));
 
         assertThat(guarded.store.commit(alice)).isInstanceOf(CommitResult.Committed.class);
+    }
+
+    @Test
+    @DisplayName("Scenario: A check that counts days")
+    void aCheckThatCountsDays() {
+        ReferenceStore reference = storeWith(withCheck(ReferenceModel.definition(), "Person", "born-on-a-weekday",
+                BORN_ON_A_WEEKDAY, null));
+
+        List<Problem> problems = reference.reject(Transaction.by(PRINCIPAL)
+                .create(ALICE, "Person", from(1, 1), values("name", "Alice", "birthDate", LocalDate.of(2025, 12, 27)))
+                .build());
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.CHECK_VIOLATED);
+        assertThat(problem.message()).contains("born-on-a-weekday");
+
+        Receipt friday = reference.commit(Transaction.by(PRINCIPAL)
+                .create(ALICE, "Person", from(1, 1), values("name", "Alice", "birthDate", LocalDate.of(2025, 12, 26)))
+                .build());
+        assertThat(friday.basis().value()).as("born on a Friday, so the check holds").isGreaterThan(1);
     }
 
     @Test

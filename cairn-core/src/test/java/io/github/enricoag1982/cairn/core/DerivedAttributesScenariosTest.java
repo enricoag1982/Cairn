@@ -36,6 +36,7 @@ import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.SchemaRegistry;
 import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -54,6 +55,10 @@ class DerivedAttributesScenariosTest {
     private static final String CENTS = "int(self.balance * 100.0)";
     private static final String BIRTH_YEAR = "has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null";
     private static final String BILLIONS = "int(self.balance) * 10000000";
+    private static final String WORKING_DAYS_TO_2026 =
+            "has(self.birthDate) ? dyn(cairn.workingDays(self.birthDate, timestamp('2025-12-31T00:00:00Z'))) : null";
+    private static final String CALENDAR_DAYS_TO_2026 =
+            "has(self.birthDate) ? dyn(cairn.calendarDays(self.birthDate, timestamp('2025-12-31T00:00:00Z'))) : null";
     private static final TemporaryId BOB = new TemporaryId("bob");
 
     /** The reference model, in which Account declares the test-only derived attribute {@code label}. */
@@ -77,6 +82,18 @@ class DerivedAttributesScenariosTest {
 
     private static ReferenceStore storeWith(SchemaDefinition definition) {
         return ReferenceStore.with(definition);
+    }
+
+    /**
+     * A store of the reference model in which Person declares a test-only derived attribute, and in which a person born
+     * on a date is created.
+     */
+    private static EntityState personBornOn(String attribute, String expression, LocalDate birthDate) {
+        ReferenceStore reference = storeWith(withDerivedAttribute(ReferenceModel.definition(), "Person", attribute,
+                ValueType.INT, false, expression));
+        Receipt receipt = reference.commit(Transaction.by(PRINCIPAL)
+                .create(BOB, "Person", from(1, 1), values("name", "Bob", "birthDate", birthDate)).build());
+        return reference.view(on(3, 31)).entity(entity(receipt, BOB)).orElseThrow();
     }
 
     // ------------------------------------------------------------------ compiled at registration
@@ -212,5 +229,34 @@ class DerivedAttributesScenariosTest {
 
         assertThat(result.rows()).singleElement().satisfies(row ->
                 assertThat(QueryRows.text(row.entity("a").orElseThrow(), "number")).isEqualTo("A-2"));
+    }
+
+    // ------------------------------------------------------------------ functions of Cairn's own
+
+    @Test
+    @DisplayName("Scenario: Working days across a weekend")
+    void workingDaysAcrossAWeekend() {
+        LocalDate friday = LocalDate.of(2025, 12, 26);
+
+        EntityState bob = personBornOn("workingDaysTo2026", WORKING_DAYS_TO_2026, friday);
+
+        assertThat(friday.getDayOfWeek()).isEqualTo(DayOfWeek.FRIDAY);
+        assertThat(valueOf(bob, "workingDaysTo2026")).as("26, 29, 30 and 31 December").isEqualTo(Value.of(4));
+    }
+
+    @Test
+    @DisplayName("Scenario: Calendar days, both included")
+    void calendarDaysBothIncluded() {
+        EntityState bob = personBornOn("calendarDaysTo2026", CALENDAR_DAYS_TO_2026, LocalDate.of(2025, 12, 26));
+
+        assertThat(valueOf(bob, "calendarDaysTo2026")).isEqualTo(Value.of(6));
+    }
+
+    @Test
+    @DisplayName("Scenario: A last day before the first")
+    void aLastDayBeforeTheFirst() {
+        EntityState bob = personBornOn("workingDaysTo2026", WORKING_DAYS_TO_2026, LocalDate.of(2026, 1, 2));
+
+        assertThat(valueOf(bob, "workingDaysTo2026")).isEqualTo(Value.of(0));
     }
 }

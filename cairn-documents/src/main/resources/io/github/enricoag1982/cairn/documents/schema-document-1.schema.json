@@ -219,7 +219,7 @@
           "default": false
         },
         "derived": {
-          "description": "A CEL expression that computes the attribute's value from the other values of the same version when a transaction commits, at most 4,000 characters. Read an attribute that is not derived as self.name, and test an optional one with has(self.name) before reading it; a derived attribute cannot read another derived attribute. The result must fit the value type: a string for string, a bool for boolean, an int for int and long, a double for decimal, a timestamp for instant, and a timestamp at the start of a day in UTC for date; an optional attribute has no value if the expression gives null. A write cannot set a derived attribute. For example: self.givenName + ' ' + self.familyName.",
+          "description": "A CEL expression that computes the attribute's value from the other values of the same version when a transaction commits, at most 4,000 characters. Read an attribute that is not derived as self.name, and test an optional one with has(self.name) before reading it; a derived attribute cannot read another derived attribute. Functions of Cairn's own count days between two dates: cairn.calendarDays(first, last) and cairn.workingDays(first, last) give the number of days from the first date to the last, as dates in UTC, both included, and workingDays counts only Monday to Friday. The result must fit the value type: a string for string, a bool for boolean, an int for int and long, a double for decimal, a timestamp for instant, and a timestamp at the start of a day in UTC for date; an optional attribute has no value if the expression gives null. A write cannot set a derived attribute. For example: self.givenName + ' ' + self.familyName.",
           "type": "string",
           "minLength": 1,
           "maxLength": 4000
@@ -330,7 +330,7 @@
       "required": ["expression"],
       "properties": {
         "expression": {
-          "description": "The CEL expression, at most 4,000 characters, whose result is a boolean. Read an attribute as self.name, and test an optional attribute with has(self.name) before reading it. For example: self.lastDay >= self.firstDay.",
+          "description": "The CEL expression, at most 4,000 characters, whose result is a boolean. Read an attribute as self.name, and test an optional attribute with has(self.name) before reading it. Functions of Cairn's own count days between two dates: cairn.calendarDays(first, last) and cairn.workingDays(first, last) give the number of days from the first date to the last, as dates in UTC, both included, and workingDays counts only Monday to Friday. For example: self.lastDay >= self.firstDay.",
           "type": "string",
           "minLength": 1,
           "maxLength": 4000

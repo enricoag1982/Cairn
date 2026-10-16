@@ -49,7 +49,9 @@ entityTypes:
       kind: { type: string, required: true, allowedValues: [vacation, sick, unpaid] }
       firstDay: { type: date, required: true }
       lastDay: { type: date, required: true }
-      days: { type: decimal, required: true }
+      # The working days, Monday to Friday, from the first day to the last, both included (ADR-0035). Computed when a
+      # transaction commits (ADR-0031): no write sets it.
+      days: { type: decimal, required: true, derived: "double(cairn.workingDays(self.firstDay, self.lastDay))" }
       status: { type: string, required: true, allowedValues: [requested, approved, rejected, cancelled] }
     rules:
       - { name: vacation-within-entitlement, version: 1 }

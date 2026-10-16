@@ -43,6 +43,10 @@ import java.util.Locale;
  * <p>Stories are in 2026. Every effective date is midnight UTC. A leave request is effective from the day it is
  * filed, or from its first day if that is earlier, as for sick leave that is recorded afterwards; a decision is
  * effective from the day it is recorded, or from the request's first day if that is earlier.
+ *
+ * <p>A leave request does not state its days: the store derives them from its dates, as the working days from Monday to
+ * Friday between its first day and its last, both included ({@code cairn.workingDays}, ADR-0035). The days that the
+ * stories tell are those counts.
  */
 public final class Brightwater {
 
@@ -217,7 +221,7 @@ public final class Brightwater {
         Instant filed = on(3, 1);
         return new Recording(filed, Transaction.by(HR_ADMIN)
                 .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 3, 16))
-                        .lastDay(LocalDate.of(2026, 3, 20)).days(new BigDecimal("5")).status("requested")
+                        .lastDay(LocalDate.of(2026, 3, 20)).status("requested")
                         .as("devVacation").effectiveFrom(filed))
                 .write(HasLeaveRequest.relate(ids.entity("e004"), new TemporaryId("devVacation"))
                         .as("devHasVacation").effectiveFrom(filed))
@@ -252,7 +256,7 @@ public final class Brightwater {
         Instant filed = on(3, 3);
         return new Recording(filed, Transaction.by(HR_ADMIN)
                 .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 4, 20))
-                        .lastDay(LocalDate.of(2026, 4, 24)).days(new BigDecimal("5")).status("approved")
+                        .lastDay(LocalDate.of(2026, 4, 24)).status("approved")
                         .as("eliVacation").effectiveFrom(filed))
                 .write(HasLeaveRequest.relate(ids.entity("e005"), new TemporaryId("eliVacation"))
                         .as("eliHasVacation").effectiveFrom(filed))
@@ -270,22 +274,24 @@ public final class Brightwater {
      * @return the recording
      */
     public static Recording hr7DevSecondVacation(Ids ids) {
-        return devAugustVacation(ids, 21);
+        return devAugustVacation(ids, LocalDate.of(2026, 8, 31));
     }
 
     /**
-     * Dev's approved vacation in August, recorded on 4 March like HR-7, for a number of days: the same transaction with
-     * another length. With 20 days Dev's year adds up to exactly 25, the most the rule allows.
+     * Dev's approved vacation in August, recorded on 4 March like HR-7, from Monday 3 August to a last day: the same
+     * transaction with another length. The request's days are the working days from the first day to the last, which the
+     * store derives. Until Friday 28 August they are 20, with which Dev's year adds up to exactly 25, the most the rule
+     * allows.
      *
-     * @param ids  the IDs of HR-1 and HR-2
-     * @param days the days of the vacation, which the request states; its dates are 3 to 31 August whatever the days
+     * @param ids     the IDs of HR-1 and HR-2
+     * @param lastDay the last day of the vacation
      * @return the recording
      */
-    public static Recording devAugustVacation(Ids ids, int days) {
+    public static Recording devAugustVacation(Ids ids, LocalDate lastDay) {
         Instant filed = on(3, 4);
         return new Recording(filed, Transaction.by(HR_ADMIN)
                 .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 8, 3))
-                        .lastDay(LocalDate.of(2026, 8, 31)).days(new BigDecimal(days)).status("approved")
+                        .lastDay(lastDay).status("approved")
                         .as("devAugust").effectiveFrom(filed))
                 .write(HasLeaveRequest.relate(ids.entity("e004"), new TemporaryId("devAugust"))
                         .as("devHasAugust").effectiveFrom(filed))
@@ -307,7 +313,7 @@ public final class Brightwater {
         Instant filed = on(3, 3);
         return new Recording(filed, Transaction.by(HR_ADMIN)
                 .write(LeaveRequest.create().kind("vacation").firstDay(LocalDate.of(2026, 5, 4))
-                        .lastDay(LocalDate.of(2026, 5, 8)).days(new BigDecimal("5")).status("approved")
+                        .lastDay(LocalDate.of(2026, 5, 8)).status("approved")
                         .as("cleoVacation").effectiveFrom(filed))
                 .write(HasLeaveRequest.relate(ids.entity("e003"), new TemporaryId("cleoVacation"))
                         .as("cleoHasVacation").effectiveFrom(filed))
@@ -362,7 +368,7 @@ public final class Brightwater {
         Instant firstDay = on(5, 11);
         return new Recording(on(5, 20), Transaction.by(HR_ADMIN)
                 .write(LeaveRequest.create().kind("sick").firstDay(LocalDate.of(2026, 5, 11))
-                        .lastDay(LocalDate.of(2026, 5, 12)).days(new BigDecimal("2")).status("approved")
+                        .lastDay(LocalDate.of(2026, 5, 12)).status("approved")
                         .as("gusSick").effectiveFrom(firstDay))
                 .write(HasLeaveRequest.relate(ids.entity("e007"), new TemporaryId("gusSick")).as("gusHasSick")
                         .effectiveFrom(firstDay))

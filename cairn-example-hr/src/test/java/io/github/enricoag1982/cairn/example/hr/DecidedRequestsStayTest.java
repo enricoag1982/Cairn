@@ -19,7 +19,6 @@ import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
 import io.github.enricoag1982.cairn.schema.Submission;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -168,11 +167,26 @@ class DecidedRequestsStayTest {
     void aDecidedRequestStaysInTheDaysItHad() {
         startWithDevsApprovedVacation();
 
+        // The days are derived from the dates (ADR-0035), so a day more means a last day that is a working day later.
         Problem problem = rejected(Transaction.by(Brightwater.HR_ADMIN).write(LeaveRequest.patch(request())
-                .days(new BigDecimal("6")).effectiveFrom(on(3, 1))).build());
+                .lastDay(LocalDate.of(2026, 3, 23)).effectiveFrom(on(3, 1))).build());
 
         assertThat(problem.ruleCode()).contains("decided-requests-stay/decided");
-        assertThat(problem.message()).contains("the transaction changes days.");
+        assertThat(problem.message()).contains("the transaction changes lastDay, days.");
         assertTheRequestIsAsHr5LeftIt();
+    }
+
+    @Test
+    void theDaysOfARequestFollowItsDates() {
+        startWithDevsRequest();
+        assertThat(versionsOfTheRequest()).extracting(request -> request.days().doubleValue()).containsExactly(5.0);
+
+        clock.moveTo(on(3, 2));
+        assertThat(store.commit(Transaction.by(Brightwater.HR_ADMIN).write(LeaveRequest.patch(request())
+                .lastDay(LocalDate.of(2026, 3, 23)).effectiveFrom(on(3, 2))).build()))
+                .as("the request is only requested, so it may change").isInstanceOf(CommitResult.Committed.class);
+
+        assertThat(versionsOfTheRequest()).extracting(request -> request.days().doubleValue())
+                .as("16 to 20 March are 5 working days, and 16 to 23 March are 6").containsExactly(5.0, 6.0);
     }
 }
