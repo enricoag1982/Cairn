@@ -32,7 +32,8 @@ The write-checks guide lists Cairn's functions, and the derive-attributes guide 
 ### D4. The reference domain and the HR example
 
 - **Test-only derived attributes** on Person, for the scenarios: `workingDaysTo2026` (int, optional): `has(self.birthDate) ? dyn(cairn.workingDays(self.birthDate, timestamp('2025-12-31T00:00:00Z'))) : null`, and `calendarDaysTo2026` with `cairn.calendarDays` in its place.
-- **HR.** `LeaveRequest.days` becomes derived: `double(cairn.workingDays(self.firstDay, self.lastDay))`. It stays required and decimal. Writers stop giving it: the stories, the agent tasks if any, and the generated company. The days of every story stay the same, because their periods start on Mondays and their counts are already working days; a story whose count differs is corrected and said so.
+- **HR.** `LeaveRequest.days` becomes derived: `double(cairn.workingDays(self.firstDay, self.lastDay))`. It stays required and decimal. Writers stop giving it: the stories, the agent tasks if any, and the generated company. The days of every story stay the same, because their periods start on Mondays and their counts are already working days; a story whose count differs is corrected and said so. The variant of HR-7 that reaches exactly 25 days ends on Friday 28 August, 20 working days, instead of stating 20 days for 3 to 31 August.
+- **The generated company** moves a leave whose drawn first day is a Saturday or Sunday to the following Monday, keeping its length in calendar days, so that every leave has at least one working day.
 
 ## Risks / Trade-offs
 

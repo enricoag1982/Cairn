@@ -25,7 +25,8 @@ None.
 
 ### Modified Capabilities
 
-- `checks`: functions of Cairn's own in expressions, which derivations share.
+- `checks`: functions of Cairn's own in expressions.
+- `derived-attributes`: derivations call the same functions.
 
 ## Impact
 

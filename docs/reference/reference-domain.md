@@ -82,14 +82,15 @@ Scenarios of the `checks`, `schema-documents` and `schema-evolution` specs also 
 - `name-not-empty` on Party: `size(self.name) > 0`.
 - `born-before-2026` on Person: `self.birthDate < timestamp('2026-01-01T00:00:00Z')`, and with `!has(self.birthDate) ||` in front.
 - `title-not-blank` on Employs: `!has(self.title) || size(self.title) > 0`.
+- `born-on-a-weekday` on Person: `!has(self.birthDate) || cairn.workingDays(self.birthDate, self.birthDate) == 1`, which calls a *function of Cairn's own*.
 
-Scenarios of the `derived-attributes`, `schema-documents` and `schema-evolution` specs declare test-only *derived attributes* ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)):
+Scenarios of the `derived-attributes`, `checks`, `schema-documents` and `schema-evolution` specs declare test-only *derived attributes* ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)):
 
 - `label` (string) on Account: `self.number + ' ' + self.currency`.
 - `balanceInCents` (long) on Account: `int(self.balance * 100.0)`.
 - `balanceInBillions` (int) on Account: `int(self.balance) * 10000000`, which does not fit an `int` for a balance of 1,000.
 - `birthYear` (int, optional) on Person: `has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null`.
-- `workingDaysTo2026` (int, optional) on Person: `has(self.birthDate) ? dyn(cairn.workingDays(self.birthDate, timestamp('2025-12-31T00:00:00Z'))) : null`, and `calendarDaysTo2026` with `cairn.calendarDays` in its place, which call functions of Cairn's ([ADR-0035](../decisions/0035-give-expressions-functions-of-cairn-s-own-over-a-version-s-values-starting-with-counts-of-days.md)).
+- `workingDaysTo2026` (int, optional) on Person: `has(self.birthDate) ? dyn(cairn.workingDays(self.birthDate, timestamp('2025-12-31T00:00:00Z'))) : null`, and `calendarDaysTo2026` with `cairn.calendarDays` in its place, which call *functions of Cairn's own* ([ADR-0035](../decisions/0035-give-expressions-functions-of-cairn-s-own-over-a-version-s-values-starting-with-counts-of-days.md)).
 
 Scenarios of the `relationships`, `type-model`, `schema-evolution` and `schema-documents` specs declare test-only relationship types, which the reference model does not have; each scenario that needs one names it:
 

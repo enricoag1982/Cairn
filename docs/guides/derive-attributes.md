@@ -26,7 +26,7 @@ entityTypes:
 - Any attribute of an entity type, relationship type or trait can be derived. It keeps its other properties: required, unique, ranges, patterns and the rest apply to the computed value.
 - The expression sees `self` with the attributes that are not derived. It cannot read another derived attribute, another version, or another entity.
 - In Java, `AttributeBuilder.derived(expression)` declares the same.
-- Expressions can call [functions of Cairn's](write-checks.md#functions-of-cairns), such as `cairn.workingDays`: a leave's days can be `double(cairn.workingDays(self.firstDay, self.lastDay))`.
+- Expressions can call [functions of Cairn's own](write-checks.md#functions-of-cairns-own), such as `cairn.workingDays`: a leave's days can be `double(cairn.workingDays(self.firstDay, self.lastDay))`.
 
 ## What a derivation must give
 

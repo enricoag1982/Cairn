@@ -19,6 +19,11 @@ Expressions in checks and in derived attributes (see the `derived-attributes` ca
 - **WHEN** Person declares the test-only derived attribute `workingDaysTo2026`, and a person born on 2 January 2026 is created
 - **THEN** the person's `workingDaysTo2026` is 0
 
+#### Scenario: A check that counts days
+
+- **WHEN** Person declares the test-only check `born-on-a-weekday` with the expression `!has(self.birthDate) || cairn.workingDays(self.birthDate, self.birthDate) == 1`, and a person born on Saturday 27 December 2025 is created
+- **THEN** the transaction is rejected with a problem of the code `CHECK_VIOLATED` that names `born-on-a-weekday`
+
 #### Scenario: A function of Cairn's with the wrong arguments
 
 - **WHEN** Person declares the check `born-on-a-working-day` with the expression `cairn.workingDays(self.name, self.birthDate) > 0`

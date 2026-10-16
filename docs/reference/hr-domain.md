@@ -103,5 +103,5 @@ The first gap it found is closed: a rule ran only when a type that names it was 
 | Gap | Where it shows | What Cairn would need |
 | --- | --- | --- |
 | "At every point in effective time" is the rule author's work | `vacation-within-entitlement` and `no-unit-cycles` collect the instants at which what they read changes, and query or traverse at each | A rule context that lists those instants, or queries over a period |
-| Public holidays | A leave's `days` counts Monday to Friday, because public holidays need a calendar that a version's own values do not hold | Calendars as data, or derived values that read other data ([ADR-0035](../decisions/0035-give-expressions-functions-of-cairn-s-own-over-a-version-s-values-starting-with-counts-of-days.md)) |
+| Public holidays | A leave's `days` counts Monday to Friday, because public holidays need a calendar that a version's own values do not hold | A calendar of holidays as data, with its own decision ([ADR-0035](../decisions/0035-give-expressions-functions-of-cairn-s-own-over-a-version-s-values-starting-with-counts-of-days.md)) |
 | Access | Every reader, agents included, reads pay | Field-level access control, which no roadmap names yet |
