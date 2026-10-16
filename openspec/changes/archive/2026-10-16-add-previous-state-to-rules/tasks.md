@@ -19,4 +19,4 @@
 ## 4. Documentation
 
 - [x] 4.1 Update the codegen guide's rule section, the HR domain page (rule table, HR-16, gaps), the reference domain page, the architecture page and ADR-0018's More Information; bump `last-reviewed`
-- [ ] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
