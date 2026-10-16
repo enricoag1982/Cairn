@@ -35,7 +35,7 @@ A purge is checked by `PurgeCheck` under the writer lock, against the latest sta
 
 ### D3. What is kept
 
-Nothing new is stored: the purge record keeps numbers, and durable stores log the record and digests. The key and its value are in the request and the result only. A test proves that no file of a durable store kept in a directory, or of a RocksDB store, holds the value after a purge by key.
+Nothing new is stored: the purge record keeps numbers, and durable stores log the record and digests. The key and its value are in the request and the result only; the value stays in the store only as data of entities that the purge does not remove. A test proves that no file of a durable store kept in a directory, or of a RocksDB store, holds the value after a purge by key.
 
 ### D4. The new problem code
 
@@ -47,5 +47,5 @@ The erasure names Gus's employment by its employee number, `Employment.byEmploye
 
 ## Risks / Trade-offs
 
-- **The in-memory store scans the holders of a value,** as it does for writes. Purges are rare, so this is acceptable until storage has indexes.
+- **A key without an effective time loads the current timeline of every entity that the index of unique values lists for the value** (ADR-0027), to find the periods in which each held it. Purges are rare, and few entities share a value, so this is acceptable.
 - **Two ways of resolving a key.** Writes resolve at the start of the write's period, purges over all of effective time. The Javadoc of `PurgeKey` and of `Purge.Builder.entity(UniqueKey)` says so.

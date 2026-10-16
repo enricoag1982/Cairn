@@ -16,7 +16,7 @@ public sealed interface PurgeResult {
      * <p>The IDs of what was removed are returned here, once, so that the caller can erase copies of the data outside the
      * store, and so is the entity that each key of the purge named, so that the caller learns which entity a key such as
      * an employee number was. The store keeps none of it: its {@linkplain PurgeRecord purge record} holds numbers, and it
-     * holds digests of the IDs to refuse them, and it never keeps a key or its value (ADR-0033). Keep them no longer than
+     * holds digests of the IDs to refuse them, and the purge writes no key or value (ADR-0033). Keep them no longer than
      * the erasure needs.
      *
      * @param record        the record of the purge, as {@link Store#purges()} lists it

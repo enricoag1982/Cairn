@@ -105,8 +105,8 @@ public interface Store {
      * effective time, to the one entity of the key's type, or of a subtype, that holds the value at some effective time,
      * even if it has ended; with one, to the entity that holds the value then. An entity that a key names is purged as if
      * the purge named its ID, with its relationships and the targets of its compositions, and the minimums are checked
-     * over what remains. The store keeps neither the key nor its value, not in the purge record, the change feed or any
-     * file.
+     * over what remains. The purge writes neither the key nor its value, not in the purge record, the change feed or any
+     * file; the value stays only as data of entities that the purge does not remove.
      *
      * <p>The IDs of what was removed are never given to a new entity or relationship, and a write that supplies one is
      * rejected; the store keeps digests of them for that, and {@link #wasPurged(Id)} answers from them. The idempotency

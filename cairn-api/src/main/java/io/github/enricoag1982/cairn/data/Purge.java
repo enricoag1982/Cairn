@@ -27,7 +27,8 @@ import java.util.Optional;
  * <p>The principal, the party acted for and the reason stay in the store's {@linkplain PurgeRecord purge record} for as
  * long as the store lives. Do not put the identity of the data subject in them, nor anything that identifies the person
  * whose data is erased: refer to the request by a ticket or case reference instead, such as {@code DSR-2026-0042}. The
- * keys and their values, which may be personal data, are not in the record: the store keeps them nowhere.
+ * keys and their values, which may be personal data, are not in the record: the purge writes them nowhere, and a value
+ * stays in the store only as data of entities that the purge does not remove.
  *
  * <p>Build one with {@link #by(String)}. Unlike a transaction, a purge without a principal, a reason or an entity is a
  * programming error: a component that is null throws a {@code NullPointerException}, and one that is blank, or a purge

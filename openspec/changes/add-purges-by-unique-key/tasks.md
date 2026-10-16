@@ -17,4 +17,4 @@
 ## 4. Documentation
 
 - [x] 4.1 Update the glossary (Purge), the purge sections of the durable store and RocksDB guides, the HR domain page (HR-12, gaps) and the architecture page; bump `last-reviewed`
-- [ ] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

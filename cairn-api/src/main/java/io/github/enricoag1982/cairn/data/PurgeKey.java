@@ -21,8 +21,9 @@ import java.util.Optional;
  *
  * <p>The record only holds what the caller wrote. Whether the key is valid is checked against the store's schema, and
  * what it names against its entities, when the store checks the purge. The key and its value are in the request and in
- * the {@linkplain PurgeResult.Purged result} only: the store keeps them nowhere, not in its purge record, its change feed
- * or its files.
+ * the {@linkplain PurgeResult.Purged result} only: the purge writes them nowhere, not in its purge record, the change
+ * feed or the store's files. The value stays in the store only as data of entities that the purge does not remove, such
+ * as another entity that held it at another time.
  *
  * @param key         the unique key; as in a write, it names an entity type, an attribute of it that is unique, and a value
  * @param effectiveAt the effective time at which the key names the entity, or empty to name the entity that held the
