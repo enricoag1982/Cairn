@@ -144,13 +144,49 @@ public interface View {
      * @param name     the name of a relationship type or the inverse name of one, as for {@link #navigate}
      * @param follow   the condition a relationship must satisfy to be followed; it sees the relationship as this view
      *                 reads it
-     * @param maxDepth the largest number of relationships to follow from the start; 0 follows none
+     * @param maxDepth the largest number of relationships to follow from the start; 0 follows none, and
+     *                 {@link Integer#MAX_VALUE} follows to the end
      * @return the entities reached, each with its depth and the relationship it was reached through, in the order of
      *         the traversal
      * @throws IllegalArgumentException if the view's schema has no relationship type or inverse name of that name, or
      *                                  {@code maxDepth} is negative
      */
     List<Step> traverse(EntityId from, String name, Predicate<RelationshipState> follow, int maxDepth);
+
+    /**
+     * Traverses relationships like {@link #traverse(EntityId, String, Predicate, int)}, following every relationship
+     * that {@linkplain #navigate navigation} finds by the name, to the end: until no entity that has not been visited is
+     * left to reach. Each entity is visited at most once, so a cycle ends the traversal, and the entity the traversal
+     * starts from is not part of the result. What a rule reads through it is what it reads through the traversal with a
+     * condition that holds for every relationship and the largest maximum depth.
+     *
+     * @param from the entity to start from
+     * @param name the name of a relationship type or the inverse name of one, as for {@link #navigate}
+     * @return the entities reached, each with its depth and the relationship it was reached through, in the order of
+     *         the traversal
+     * @throws IllegalArgumentException if the view's schema has no relationship type or inverse name of that name
+     */
+    default List<Step> traverse(EntityId from, String name) {
+        return traverse(from, name, relationship -> true, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Traverses relationships like {@link #traverse(EntityId, String, Predicate, int)}, following every relationship
+     * that {@linkplain #navigate navigation} finds by the name, up to a depth. What a rule reads through it is what it
+     * reads through the traversal with a condition that holds for every relationship.
+     *
+     * @param from     the entity to start from
+     * @param name     the name of a relationship type or the inverse name of one, as for {@link #navigate}
+     * @param maxDepth the largest number of relationships to follow from the start; 0 follows none, and
+     *                 {@link Integer#MAX_VALUE} follows to the end
+     * @return the entities reached, each with its depth and the relationship it was reached through, in the order of
+     *         the traversal
+     * @throws IllegalArgumentException if the view's schema has no relationship type or inverse name of that name, or
+     *                                  {@code maxDepth} is negative
+     */
+    default List<Step> traverse(EntityId from, String name, int maxDepth) {
+        return traverse(from, name, relationship -> true, maxDepth);
+    }
 
     /**
      * Runs a query against this view (ADR-0023, capability {@code queries}). The rows reflect exactly this view's

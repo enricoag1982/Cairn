@@ -14,12 +14,10 @@ import io.github.enricoag1982.cairn.example.hr.model.VacationWithinEntitlementRu
 import io.github.enricoag1982.cairn.query.Aggregate;
 import io.github.enricoag1982.cairn.query.Condition;
 import io.github.enricoag1982.cairn.query.GroupKey;
-import io.github.enricoag1982.cairn.query.Operand;
 import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.RuleCode;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
-import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,10 +31,9 @@ import java.util.TreeSet;
  *
  * <p>The rule is named by {@code LeaveRequest}, the type it checks, and checks an approved vacation only: any other
  * request adds no days. It reads the employment's leave requests, so a write to one of them checks it again
- * (ADR-0025). But its query starts from {@code Employment}, so at each instant it reads it lists every employment, not
- * only the requester's, and any change to an employment at those instants checks the rule again, for every approved
- * vacation that read it. The rule stays as the example of a rule that queries; a rule that navigates from what it
- * checks, as {@link DecidedByManager} does, is reached by far fewer changes.
+ * (ADR-0025). Its query starts from the requester's employment, by its ID, so at each instant it reads that employment
+ * and its leave requests, not every employment: a change to another employment does not check the rule again. The rule
+ * stays as the example of a rule that queries.
  *
  * <p>The sum is a {@link Query} that a view at one instant runs: the employment's leave requests that are vacations,
  * approved, with a first day in the year of the checked one, summing their days. The other requests of the employment
@@ -51,9 +48,6 @@ public final class VacationWithinEntitlement extends VacationWithinEntitlementRu
 
     /** The yearly entitlement, in days. */
     public static final BigDecimal ENTITLEMENT_DAYS = new BigDecimal("25");
-
-    /** The inverse name of {@code HasLeaveRequest}: from a leave request to the employment that requests it. */
-    private static final String REQUESTER = "requester";
 
     private static final RuleDescriptor DESCRIPTOR = describe(
             "An employment's approved vacation days, of requests whose first days are in one calendar year, add up to "
@@ -76,7 +70,7 @@ public final class VacationWithinEntitlement extends VacationWithinEntitlementRu
         if (!request.kind().equals("vacation") || !request.status().equals("approved")) {
             return;
         }
-        List<Link> requesters = context.view().navigate(request.id(), REQUESTER);
+        List<Link> requesters = context.view().navigate(request.id(), HasLeaveRequest.INVERSE);
         if (requesters.isEmpty()) {
             return;
         }
@@ -95,12 +89,12 @@ public final class VacationWithinEntitlement extends VacationWithinEntitlementRu
     }
 
     /**
-     * The query for the sum: from the employment, to its leave requests that are approved vacations with a first day
-     * in the year, grouped by the employment, summing the days.
+     * The query for the sum: from the employment, which the query starts from by its ID, to its leave requests that are
+     * approved vacations with a first day in the year, grouped by the employment, summing the days.
      */
     private static Query approvedVacationDays(EntityId employment, int year) {
         return Query.from(Employment.TYPE, "e")
-                .where(Condition.eq(Operand.id("e"), Operand.literal(employment.value())))
+                .ids(employment)
                 .follow("e", HasLeaveRequest.TYPE, "l")
                 .where(Condition.and(
                         LeaveRequest.KIND.of("l").eq("vacation"),
@@ -116,8 +110,7 @@ public final class VacationWithinEntitlement extends VacationWithinEntitlementRu
     private static BigDecimal total(QueryResult result) {
         return switch (result) {
             case QueryResult.Rows rows -> rows.rows().stream()
-                    .map(row -> row.value("total").orElseThrow())
-                    .map(value -> ((Value.DecimalValue) value).value())
+                    .map(row -> row.decimal("total").orElseThrow())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             case QueryResult.Invalid invalid -> throw new IllegalStateException(
                     "The query for the approved vacation days is wrong: " + invalid.problems());

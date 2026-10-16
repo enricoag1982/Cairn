@@ -8,6 +8,7 @@ import io.github.enricoag1982.cairn.data.Link;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.TransactionChange;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.example.hr.model.HasLeaveRequest;
 import io.github.enricoag1982.cairn.example.hr.model.LeaveRequest;
 import io.github.enricoag1982.cairn.example.hr.model.Person;
 import io.github.enricoag1982.cairn.schema.Basis;
@@ -78,7 +79,7 @@ final class LeaveNotifier implements Flow.Subscriber<Change> {
         LeaveRequest leave = LeaveRequest.from(filed.entity(request).orElseThrow());
         View onTheFirstDay = store.view(Coordinates.effectiveAt(leave.firstDay().atStartOfDay(ZoneOffset.UTC)
                 .toInstant()).knownAt(basis));
-        for (Link requester : onTheFirstDay.navigate(request, "requester")) {
+        for (Link requester : onTheFirstDay.navigate(request, HasLeaveRequest.INVERSE)) {
             EntityId employment = requester.entity().id();
             for (Link position : onTheFirstDay.navigate(employment, "Fills")) {
                 for (Link unit : onTheFirstDay.navigate(position.entity().id(), "BelongsTo")) {

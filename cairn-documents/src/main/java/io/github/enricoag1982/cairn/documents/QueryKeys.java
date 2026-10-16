@@ -25,8 +25,11 @@ final class QueryKeys {
     /** The keys the query must have. */
     static final List<String> QUERY_REQUIRED = List.of("from");
 
-    /** The keys of {@code from}: the entity type, the name each entity is bound to, and whether it is the exact type. */
-    static final List<String> FROM = List.of("type", "as", "exact");
+    /**
+     * The keys of {@code from}: the entity type, the name each entity is bound to, whether it is the exact type, and the
+     * IDs of the entities to start from, if it starts from some.
+     */
+    static final List<String> FROM = List.of("type", "as", "exact", "ids");
     /** The keys {@code from} must have. */
     static final List<String> FROM_REQUIRED = List.of("type", "as");
 
@@ -41,8 +44,8 @@ final class QueryKeys {
     /** The keys of a {@code traverse}. */
     static final List<String> TRAVERSE = List.of("from", "name", "as", "minDepth", "maxDepth", "relationship", "depth",
             "along");
-    /** The keys a {@code traverse} must have. */
-    static final List<String> TRAVERSE_REQUIRED = List.of("from", "name", "as", "maxDepth");
+    /** The keys a {@code traverse} must have: without {@code maxDepth}, it traverses to the end. */
+    static final List<String> TRAVERSE_REQUIRED = List.of("from", "name", "as");
 
     /** The keys that name the kind of a condition: a condition has exactly one of them. */
     static final List<String> CONDITION_KINDS = List.of("compare", "in", "hasValue", "hasLink", "isA", "and", "or", "not");

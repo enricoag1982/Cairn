@@ -6,18 +6,26 @@ import static io.github.enricoag1982.cairn.documents.QueryFixtures.query;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME_OWNS_BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
+import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.documents.PayloadFixtures.ReferenceDomainStore;
 import io.github.enricoag1982.cairn.fixtures.ReferenceQueries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
+import io.github.enricoag1982.cairn.query.Query;
 import io.github.enricoag1982.cairn.query.QueryResult;
+import io.github.enricoag1982.cairn.query.Traversal;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.Value;
@@ -59,6 +67,46 @@ class QueryScenariosTest {
                         total -> assertThat(total.value()).isEqualByComparingTo(new BigDecimal("3200")));
             });
         });
+    }
+
+    @Test
+    @DisplayName("Scenario: Starting from given entities as JSON")
+    void startingFromGivenEntitiesAsJson() {
+        Receipt parties = reference.replay(ReferenceStories.rd1Parties());
+        EntityId acme = (EntityId) parties.temporaryIds().get(ACME);
+        EntityId beta = (EntityId) parties.temporaryIds().get(BETA);
+        EntityId alice = (EntityId) parties.temporaryIds().get(ALICE);
+        reference.replay(ReferenceStories.rd2Ownership(acme, beta));
+        reference.commit(Transaction.by("importer")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma"))
+                .relate("Owns", GAMMA, acme, from(2, 1), values("share", 70)).build());
+        String json = """
+                {
+                  "from": { "type": "Party", "as": "p", "ids": ["%s", "%s"] },
+                  "steps": [
+                    { "traverse": { "from": "p", "name": "ownedBy", "minDepth": 0, "as": "owner", "depth": "level" } }
+                  ]
+                }
+                """.formatted(acme.value(), alice.value());
+        Query inJava = Query.from("Party", "p").ids(acme, alice)
+                .traverse(Traversal.of("p", "ownedBy", "owner").minDepth(0).depth("level"))
+                .build();
+
+        LocatedQuery read = QueryFixtures.read(json);
+        QueryResult fromJson = reference.store.view(Coordinates.effectiveAt(on(3, 1))).query(read.query());
+        QueryResult fromJava = reference.store.view(Coordinates.effectiveAt(on(3, 1))).query(inJava);
+
+        assertThat(read.query()).isEqualTo(inJava);
+        assertThat(fromJson).isEqualTo(fromJava);
+        assertThat(fromJson).isInstanceOfSatisfying(QueryResult.Rows.class, rows ->
+                assertThat(rows.rows()).extracting(
+                        row -> row.entity("p", state -> state.values().get("name")).orElseThrow(),
+                        row -> row.entity("owner", state -> state.values().get("name")).orElseThrow(),
+                        row -> row.intValue("level").orElseThrow())
+                        .as("ACME and Alice only, not Beta; ACME is owned by Gamma, with no maximum depth")
+                        .containsExactlyInAnyOrder(tuple(Value.of("ACME"), Value.of("ACME"), 0),
+                                tuple(Value.of("ACME"), Value.of("Gamma"), 1),
+                                tuple(Value.of("Alice"), Value.of("Alice"), 0)));
     }
 
     @Test

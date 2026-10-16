@@ -557,6 +557,63 @@ class RelationshipViewsTest {
     }
 
     @Test
+    void aTraversalWithoutAConditionOrADepthFollowsEveryRelationshipToTheEnd() {
+        Pyramid p = new Pyramid();
+        View view = reference.view(on(3, 1));
+
+        List<Step> toTheEnd = view.traverse(p.e, "ownedBy");
+
+        assertThat(toTheEnd).isEqualTo(view.traverse(p.e, "ownedBy", any(), Integer.MAX_VALUE));
+        assertThat(toTheEnd).extracting(step -> step.entity().id(), Step::depth, step -> step.via().id())
+                .containsExactly(tuple(p.d, 1, p.de), tuple(p.b, 2, p.bd), tuple(p.c, 2, p.cd), tuple(p.a, 3, p.ab));
+        assertThat(view.traverse(p.a, "Owns")).as("by the name, from the other end").extracting(
+                step -> step.entity().id(), Step::depth).containsExactly(tuple(p.b, 1), tuple(p.c, 1), tuple(p.d, 2),
+                tuple(p.e, 3));
+        assertThat(view.traverse(p.a, "owns")).as("a name is compared without regard to case").hasSize(4);
+        assertThat(view.traverse(p.e, "Owns")).as("nothing leads away from the last of the chain").isEmpty();
+    }
+
+    @Test
+    void aTraversalWithoutAConditionFollowsEveryRelationshipUpToTheDepth() {
+        Pyramid p = new Pyramid();
+        View view = reference.view(on(3, 1));
+
+        assertThat(view.traverse(p.e, "ownedBy", 0)).isEmpty();
+        assertThat(view.traverse(p.e, "ownedBy", 1)).isEqualTo(view.traverse(p.e, "ownedBy", any(), 1))
+                .extracting(step -> step.entity().id()).containsExactly(p.d);
+        assertThat(view.traverse(p.e, "ownedBy", 2)).isEqualTo(view.traverse(p.e, "ownedBy", any(), 2))
+                .extracting(step -> step.entity().id()).containsExactly(p.d, p.b, p.c);
+        assertThat(view.traverse(p.e, "ownedBy", Integer.MAX_VALUE)).isEqualTo(view.traverse(p.e, "ownedBy"))
+                .hasSize(4);
+        assertThatThrownBy(() -> view.traverse(p.e, "ownedBy", -1)).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("-1");
+    }
+
+    @Test
+    void aTraversalWithoutAConditionFailsForANameThatIsNoRelationshipTypeOrInverseName() {
+        View view = reference.view(on(3, 1));
+
+        assertThatThrownBy(() -> view.traverse(acme, "Organization")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Organization");
+        assertThatThrownBy(() -> view.traverse(acme, "Organization", 3)).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Organization");
+    }
+
+    @Test
+    void cyclesEndATraversalToTheEndToo() {
+        EntityId c = organization("C");
+        owns(acme, beta, 60);
+        owns(beta, c, 60);
+        owns(c, acme, 60);
+        owns(c, c, 10);
+
+        List<Step> steps = reference.view(on(3, 1)).traverse(acme, "Owns");
+
+        assertThat(steps).extracting(step -> step.entity().id(), Step::depth).containsExactly(tuple(beta, 1),
+                tuple(c, 2));
+    }
+
+    @Test
     void cyclesEndTheTraversalAndTheStartIsNeverReported() {
         EntityId c = organization("C");
         owns(acme, beta, 60);

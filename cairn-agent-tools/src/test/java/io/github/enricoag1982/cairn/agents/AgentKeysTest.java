@@ -140,6 +140,20 @@ class AgentKeysTest {
     }
 
     @Test
+    void traversingFromAKeyWithoutAMaximumDepthGoesToTheEnd() {
+        JsonNode byKey = fixture.call("cairn_traverse", withKey(ACME_LEI, "name", "Owns", "effectiveAt", MARCH_31));
+        JsonNode byId = fixture.call("cairn_traverse", args("id", acme.value(), "name", "Owns",
+                "effectiveAt", MARCH_31));
+
+        assertThat(byKey.has("problems")).isFalse();
+        assertThat(byKey).isEqualTo(byId);
+        assertThat(byKey).isEqualTo(fixture.call("cairn_traverse", withKey(ACME_LEI, "name", "Owns",
+                "effectiveAt", MARCH_31).put("maxDepth", 3)));
+        assertThat(byKey.get("result")).singleElement().satisfies(step ->
+                assertThat(step.get("entity").get("id").stringValue()).isEqualTo(beta.value()));
+    }
+
+    @Test
     void aKeyThatNamesNothingLeadsNowhereWithTheCoordinatesOfTheRead() {
         ObjectNode nobody = withKey("{ \"entityType\": \"Organization\", \"key\": { \"lei\": \"none\" } }",
                 "name", "Owns", "effectiveAt", MARCH_31);

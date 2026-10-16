@@ -29,6 +29,7 @@ import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.documents.Queries;
 import io.github.enricoag1982.cairn.documents.QueryReadResult;
 import io.github.enricoag1982.cairn.documents.SchemaDocument;
+import io.github.enricoag1982.cairn.example.hr.model.BelongsTo;
 import io.github.enricoag1982.cairn.example.hr.model.EmployedBy;
 import io.github.enricoag1982.cairn.example.hr.model.Employment;
 import io.github.enricoag1982.cairn.example.hr.model.EmploymentOf;
@@ -38,7 +39,9 @@ import io.github.enricoag1982.cairn.example.hr.model.Job;
 import io.github.enricoag1982.cairn.example.hr.model.LeaveRequest;
 import io.github.enricoag1982.cairn.example.hr.model.LegalEntity;
 import io.github.enricoag1982.cairn.example.hr.model.Location;
+import io.github.enricoag1982.cairn.example.hr.model.ManagedBy;
 import io.github.enricoag1982.cairn.example.hr.model.OrgUnit;
+import io.github.enricoag1982.cairn.example.hr.model.PartOf;
 import io.github.enricoag1982.cairn.example.hr.model.Person;
 import io.github.enricoag1982.cairn.example.hr.model.Position;
 import io.github.enricoag1982.cairn.example.hr.model.WorksAt;
@@ -179,8 +182,7 @@ class HrStoriesTest {
     private static Map<String, Long> headcounts(QueryResult result) {
         Map<String, Long> headcounts = new LinkedHashMap<>();
         for (var row : rows(result).rows()) {
-            headcounts.put(((Value.StringValue) row.value("unit").orElseThrow()).value(),
-                    ((Value.LongValue) row.value("headcount").orElseThrow()).value());
+            headcounts.put(row.string("unit").orElseThrow(), row.longValue("headcount").orElseThrow());
         }
         return headcounts;
     }
@@ -225,12 +227,12 @@ class HrStoriesTest {
                 "P-300", "P-301");
         assertThat(january.entities("Employment")).as("nobody is employed yet").isEmpty();
 
-        assertThat(linked(january, ids.entity("bw"), "subunits")).containsExactly("ENG", "SAL");
-        assertThat(linked(january, ids.entity("eng"), "subunits")).containsExactly("PLT");
+        assertThat(linked(january, ids.entity("bw"), PartOf.INVERSE)).containsExactly("ENG", "SAL");
+        assertThat(linked(january, ids.entity("eng"), PartOf.INVERSE)).containsExactly("PLT");
         assertThat(linked(january, ids.entity("plt"), "PartOf")).containsExactly("ENG");
         assertThat(linked(january, ids.entity("bw"), "PartOf")).as("Brightwater is the root").isEmpty();
-        assertThat(linked(january, ids.entity("plt"), "positions")).containsExactly("P-210", "P-211", "P-212");
-        assertThat(linked(january, ids.entity("sal"), "positions")).containsExactly("P-300", "P-301");
+        assertThat(linked(january, ids.entity("plt"), BelongsTo.INVERSE)).containsExactly("P-210", "P-211", "P-212");
+        assertThat(linked(january, ids.entity("sal"), BelongsTo.INVERSE)).containsExactly("P-300", "P-301");
         assertThat(linked(january, ids.entity("p210"), "OfJob")).containsExactly("MGR");
         assertThat(linked(january, ids.entity("p301"), "OfJob")).containsExactly("AE");
 
@@ -254,7 +256,7 @@ class HrStoriesTest {
         List<Row> rows = new ArrayList<>();
         for (EntityState employment : january.entities("Employment")) {
             EntityId id = employment.id();
-            List<String> units = linked(january, id, "manages");
+            List<String> units = linked(january, id, ManagedBy.INVERSE);
             rows.add(new Row(label(employment), linked(january, id, "EmploymentOf").getFirst(),
                     linked(january, id, "Fills").getFirst(),
                     linked(january, january.navigate(id, "Fills").getFirst().entity().id(), "BelongsTo").getFirst(),
@@ -357,7 +359,7 @@ class HrStoriesTest {
         assertThat(asked.lastDay()).isEqualTo("2026-03-20");
         assertThat(asked.days()).isEqualByComparingTo("5");
         assertThat(asked.status()).isEqualTo("requested");
-        assertThat(linked(view(on(3, 1)), request, "requester")).containsExactly("E-004");
+        assertThat(linked(view(on(3, 1)), request, HasLeaveRequest.INVERSE)).containsExactly("E-004");
         assertThat(view(on(2, 28)).entity(request)).as("not filed yet on 28 February").isEmpty();
 
         assertRecordedAt(commit(Brightwater.hr5CleoApproves(ids)).transactionTime(), on(3, 2));
@@ -513,7 +515,7 @@ class HrStoriesTest {
         assertThat(linked(june30, eli, "EmployedBy")).containsExactly("Brightwater GmbH");
         assertThat(linked(july1, eli, "WorksAt")).containsExactly("Milan");
         assertThat(linked(july1, eli, "EmployedBy")).containsExactly("Brightwater S.r.l.");
-        assertThat(linked(july1, ids.entity("milan"), "staff")).as("Milan staff on 1 July")
+        assertThat(linked(july1, ids.entity("milan"), WorksAt.INVERSE)).as("Milan staff on 1 July")
                 .containsExactly("E-003", "E-004", "E-005", "E-007");
     }
 
@@ -544,10 +546,10 @@ class HrStoriesTest {
     void hr10ManagersOfDev() {
         QueryResult.Rows managers = rows(view(MARCH_31).query(Reports.managersOf("E-004")));
 
-        assertThat(managers.rows()).extracting(row -> Person.from(row.entity("manager").orElseThrow()).givenName())
+        assertThat(managers.rows()).extracting(row -> row.entity("manager", Person::from).orElseThrow().givenName())
                 .containsExactly("Cleo", "Ben", "Ana");
-        assertThat(managers.rows()).extracting(row -> row.value("distance").orElseThrow())
-                .containsExactly(Value.of(0), Value.of(1), Value.of(2));
+        assertThat(managers.rows()).extracting(row -> row.intValue("distance").orElseThrow())
+                .containsExactly(0, 1, 2);
     }
 
     // ------------------------------------------------------------------ HR-4, recorded 15 April
@@ -583,7 +585,7 @@ class HrStoriesTest {
         assertThat(leave.lastDay()).isEqualTo("2026-05-12");
         assertThat(leave.days()).isEqualByComparingTo("2");
         assertThat(leave.status()).isEqualTo("approved");
-        assertThat(linked(view(on(5, 12)), sick, "requester")).containsExactly("E-007");
+        assertThat(linked(view(on(5, 12)), sick, HasLeaveRequest.INVERSE)).containsExactly("E-007");
         assertThat(linked(view(on(5, 12)), sick, "DecidedBy")).as("Fay approves").containsExactly("E-006");
 
         Receipt leaving = commit(Brightwater.hr11GusLeaves(ids));
@@ -662,7 +664,7 @@ class HrStoriesTest {
         View august1 = view(on(8, 1));
         EntityState person = august1.entities("Person").stream().filter(state -> Person.from(state).givenName()
                 .equals("Hana")).findFirst().orElseThrow();
-        EntityId employment = august1.navigate(person.id(), "employment").getFirst().entity().id();
+        EntityId employment = august1.navigate(person.id(), EmploymentOf.INVERSE).getFirst().entity().id();
         Employment hired = Employment.from(august1.entity(employment).orElseThrow());
         assertThat(hired.employeeNumber()).isEqualTo("E-008");
         assertThat(hired.kind()).isEqualTo("permanent");
@@ -773,7 +775,7 @@ class HrStoriesTest {
                 entry("PLT", 3L), entry("SAL", 1L));
         EntityState p301 = march31.entity(ids.entity("p301")).orElseThrow();
         assertThat(Position.from(p301).code()).as("P-301 still exists").isEqualTo("P-301");
-        assertThat(linked(march31, p301.id(), "filledBy")).isEmpty();
+        assertThat(linked(march31, p301.id(), Fills.INVERSE)).isEmpty();
     }
 
     // ------------------------------------------------------------------ HR-14, a company of its own

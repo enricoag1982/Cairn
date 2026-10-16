@@ -130,20 +130,23 @@ final class ToolCatalog {
                         "key", key(),
                         "name", string("The name or inverse name of a relationship type."))));
         tools.add(tool(TRAVERSE,
-                "Follows every relationship of a name, recursively and breadth first, up to a maximum depth. "
-                        + "Returns each entity reached, its depth and the relationship it was reached through; "
-                        + "each entity once. Name the entity to start from by its ID (id) or by a unique key (key), "
+                "Follows every relationship of a name, recursively and breadth first, up to a maximum depth, or "
+                        + "to the end if you give none. Returns each entity reached, its depth and the relationship it "
+                        + "was reached through; each entity once, so a cycle ends the traversal. Name the entity to start from by its ID (id) or by a unique key (key), "
                         + "exactly one of the two; a key that no entity has at that time leads nowhere."
                         + READ_COORDINATES,
-                coordinates(List.of("name", "maxDepth", "effectiveAt"),
+                coordinates(List.of("name", "effectiveAt"),
                         "id", string(ID_TO_START_FROM),
                         "key", key(),
                         "name", string("The name or inverse name of a relationship type."),
-                        "maxDepth", integer("The largest number of relationships to follow; 0 follows none."))));
+                        "maxDepth", integer("The largest number of relationships to follow; 0 follows none. Leave it "
+                                + "out to follow to the end."))));
         tools.add(tool(QUERY,
                 "Runs a query: filters entities, follows and traverses relationships, groups and aggregates, and "
-                        + "returns rows. The query starts from an entity type, binds each entity to a name, and applies "
-                        + "steps (where, follow, optionalFollow, traverse) to the rows so far; then groupBy and "
+                        + "returns rows. The query starts from an entity type, binds each entity to a name (or, with ids, only "
+                        + "the entities with the IDs you give; an empty list gives no rows), and applies "
+                        + "steps (where, follow, optionalFollow, traverse, which goes to the end without maxDepth) to "
+                        + "the rows so far; then groupBy and "
                         + "aggregates, columns, order and limit. Build it from cairn_json_schema with kind \"query\"; "
                         + "the names of types, attributes and relationships are those of the schema from "
                         + "cairn_describe. The result is {columns, rows}, each row a list of cells in the order of the "

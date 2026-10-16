@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.documents;
 
+import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.documents.NodeReader.Entry;
 import io.github.enricoag1982.cairn.query.Aggregate;
 import io.github.enricoag1982.cairn.query.Column;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import org.snakeyaml.engine.v2.nodes.Node;
+import org.snakeyaml.engine.v2.nodes.ScalarNode;
 import org.snakeyaml.engine.v2.nodes.SequenceNode;
 
 /**
@@ -144,7 +146,40 @@ final class QueryReader {
         Map<String, Entry> p = properties.get();
         String type = nodes.string(p.get("type"), path, "value of 'type'").orElse("");
         String binding = nodes.string(p.get("as"), path, "value of 'as'").orElse("");
-        return Optional.of(new Start(type, binding, nodes.bool(p.get("exact"), path)));
+        return Optional.of(new Start(type, binding, nodes.bool(p.get("exact"), path), ids(p.get("ids"), path)));
+    }
+
+    /**
+     * Reads the IDs that the query starts from: a list of strings that are not blank. Without {@code ids} the result is
+     * empty, and the query starts from every entity of the type; an empty list is a list, and starts from no entity. A
+     * value that is no string, such as a number, and a blank string, are problems located at the item; whether an ID
+     * names an entity is for the view.
+     */
+    private Optional<List<EntityId>> ids(Entry entry, String path) {
+        if (entry == null) {
+            return Optional.empty();
+        }
+        if (!(entry.value() instanceof SequenceNode sequence)) {
+            nodes.invalidKind(entry.value(), entry.pointer(), path, "value of 'ids'", "a list of IDs, each a string");
+            return Optional.empty();
+        }
+        List<EntityId> ids = new ArrayList<>();
+        for (int i = 0; i < sequence.getValue().size(); i++) {
+            Node item = sequence.getValue().get(i);
+            String pointer = Pointers.child(entry.pointer(), i);
+            String what = "item " + (i + 1) + " of 'ids'";
+            if (!(item instanceof ScalarNode scalar && Scalars.isString(scalar))) {
+                nodes.invalidKind(item, pointer, path, what, "a string");
+            } else if (scalar.getValue().isBlank()) {
+                String found = NodeReader.describe(item);
+                nodes.add(ProblemCode.INVALID_VALUE, path, "The " + what + " is not an ID: an ID is not blank.",
+                        "an ID, a string that is not blank", found, "Write the ID of an entity.",
+                        NodeReader.location(pointer, item));
+            } else {
+                ids.add(new EntityId(scalar.getValue()));
+            }
+        }
+        return Optional.of(ids);
     }
 
     private OptionalInt limit(Entry entry) {
@@ -259,7 +294,7 @@ final class QueryReader {
                 nodes.string(p.get("name"), path, "value of 'name'").orElse(""),
                 nodes.string(p.get("as"), path, "value of 'as'").orElse(""),
                 nodes.string(p.get("relationship"), path, "value of 'relationship'"),
-                nodes.string(p.get("depth"), path, "value of 'depth'"), along, minimum, max.orElse(minimum)));
+                nodes.string(p.get("depth"), path, "value of 'depth'"), along, minimum, max));
     }
 
     // ------------------------------------------------------------------ conditions

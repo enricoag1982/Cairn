@@ -8,7 +8,8 @@ import java.util.Objects;
 /**
  * Runs queries for the views of the engine (design D3 of {@code add-queries-and-aggregation}). Every view implements
  * {@link View#query} by calling it, so that all of them share one evaluator, which works through the view's own reads:
- * {@code schema}, {@code entities}, {@code navigate} and {@code traverse}.
+ * {@code schema}, {@code entities} (or {@code entity}, for a start from given entities), {@code navigate} and
+ * {@code traverse}.
  *
  * <p>A query is checked against the view's schema first, with every problem reported and nothing read; then its steps
  * apply in order to lists of rows. Nothing is cached between queries.

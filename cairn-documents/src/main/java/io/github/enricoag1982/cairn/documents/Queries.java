@@ -15,14 +15,16 @@ import java.util.Objects;
  * {@link io.github.enricoag1982.cairn.query.Query} one to one, with the keys
  *
  * <ul>
- * <li>{@code from}: {@code {type, as, exact?}}, the entity type, the name each entity is bound to, and whether only the
- *     exact type is taken;
+ * <li>{@code from}: {@code {type, as, exact?, ids?}}, the entity type, the name each entity is bound to, whether only
+ *     the exact type is taken, and the IDs of the entities to start from, each a string, if the query starts from some
+ *     and not from every entity of the type (an empty list starts from none);
  * <li>{@code steps}: a list of steps, each a mapping with one key: {@code where} (a condition), {@code follow} or
  *     {@code optionalFollow} ({@code {from, name, as, relationship?}}, the binding to lead away from, the relationship
  *     name or inverse name, the name for the entity at the other end, and the name for the relationship), or
- *     {@code traverse} ({@code {from, name, as, minDepth?, maxDepth, relationship?, depth?, along?}}, the minimum
- *     depth being 0 if it is left out, and {@code along} a condition on the relationship, which must then be named
- *     with {@code relationship}, that decides which relationships the traversal follows);
+ *     {@code traverse} ({@code {from, name, as, minDepth?, maxDepth?, relationship?, depth?, along?}}, the minimum
+ *     depth being 0 if it is left out, a traversal without {@code maxDepth} going to the end, and {@code along} a
+ *     condition on the relationship, which must then be named with {@code relationship}, that decides which
+ *     relationships the traversal follows);
  * <li>{@code groupBy}: group keys, {@code {of, attribute?, as?}}, a binding or an attribute of it, and the name of the
  *     column;
  * <li>{@code aggregates}: {@code {function, attribute?, of?, as}}, with {@code function} one of {@code count},
@@ -58,10 +60,11 @@ public final class Queries {
      * <p>Reading is strict, like reading a schema document or a transaction payload. It reports every problem it finds,
      * each with its location in the text, and returns no query if there is one: an unknown key (located at the key, with
      * the closest known key as a hint), a missing key that is required, a value of the wrong kind or form (a number
-     * written in a form that only YAML knows, a negative limit, a maximum depth below the minimum, a step with no key or
-     * with two), and YAML features outside the supported subset (anchors, aliases, explicit tags, merge keys, duplicate
-     * keys and more than one document). A YAML syntax error stops reading and is the only problem reported. A format
-     * version other than 1 also ends reading with that problem alone. Reading does not throw.
+     * written in a form that only YAML knows, a negative limit, a maximum depth below the minimum, an ID in {@code ids}
+     * that is no string or is blank, a step with no key or with two), and YAML features outside the supported subset
+     * (anchors, aliases, explicit tags, merge keys, duplicate keys and more than one document). A YAML syntax error
+     * stops reading and is the only problem reported. A format version other than 1 also ends reading with that problem
+     * alone. Reading does not throw.
      *
      * <p>The paths of the problems of reading are those of the problems of running a query: {@code @query} for the query
      * as a whole, {@code @query.from}, {@code @query.steps.<n>}, {@code @query.groupBy.<n>},

@@ -58,7 +58,8 @@ sealed interface Stage {
     /**
      * Binds each entity reached from a bound entity at depths from a minimum to a maximum, with the relationship it was
      * reached through and its depth. Depth 0 is the bound entity itself. It follows only the relationships for which
-     * {@code along} holds, if there is a test; the test reads the relationship in the cell {@code relationship}.
+     * {@code along} holds, if there is a test; the test reads the relationship in the cell {@code relationship}. A
+     * traversal without a maximum depth has {@link Integer#MAX_VALUE}, which the view reads as no limit.
      */
     record Traverse(int from, String name, int entity, int relationship, int depth, Plan.Test along, int minDepth,
             int maxDepth) implements Stage {

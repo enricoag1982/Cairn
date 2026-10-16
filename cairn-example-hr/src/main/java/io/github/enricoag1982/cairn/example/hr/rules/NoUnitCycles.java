@@ -52,8 +52,7 @@ public final class NoUnitCycles extends NoUnitCyclesRuleV1 {
         for (Instant at : instants(partOf.relationshipState(), context)) {
             View view = context.viewAt(at);
             boolean cycle = unit.equals(parent)
-                    || view.traverse(parent, PartOf.TYPE, relationship -> true, Integer.MAX_VALUE).stream()
-                            .anyMatch(step -> step.entity().id().equals(unit));
+                    || view.traverse(parent, PartOf.TYPE).stream().anyMatch(step -> step.entity().id().equals(unit));
             if (cycle) {
                 context.problem(CYCLE, code(view, unit) + " would be part of " + code(view, parent) + ", which is "
                         + "part of " + code(view, unit) + " at " + at + ".");

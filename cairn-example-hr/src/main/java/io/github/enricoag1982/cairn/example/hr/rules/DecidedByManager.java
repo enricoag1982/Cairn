@@ -11,6 +11,7 @@ import io.github.enricoag1982.cairn.example.hr.model.DecidedBy;
 import io.github.enricoag1982.cairn.example.hr.model.DecidedByManagerRuleV1;
 import io.github.enricoag1982.cairn.example.hr.model.Employment;
 import io.github.enricoag1982.cairn.example.hr.model.Fills;
+import io.github.enricoag1982.cairn.example.hr.model.HasLeaveRequest;
 import io.github.enricoag1982.cairn.example.hr.model.LeaveRequest;
 import io.github.enricoag1982.cairn.example.hr.model.ManagedBy;
 import io.github.enricoag1982.cairn.example.hr.model.OrgUnit;
@@ -44,9 +45,6 @@ public final class DecidedByManager extends DecidedByManagerRuleV1 {
     /** The code the rule reports when the deciding employment is the requester: nobody decides their own request. */
     public static final String OWN_REQUEST = "own-request";
 
-    /** The inverse name of {@code HasLeaveRequest}: from a leave request to the employment that requests it. */
-    private static final String REQUESTER = "requester";
-
     private static final RuleDescriptor DESCRIPTOR = describe(
             "The deciding employment is not the requester, and manages the requester's unit, or a unit above it, on "
                     + "the request's first day.",
@@ -69,7 +67,7 @@ public final class DecidedByManager extends DecidedByManagerRuleV1 {
     protected void check(DecidedBy decision, RuleContext context) {
         View atDecision = context.view();
         Optional<EntityState> request = atDecision.entity(decision.source());
-        List<Link> requesters = atDecision.navigate(decision.source(), REQUESTER);
+        List<Link> requesters = atDecision.navigate(decision.source(), HasLeaveRequest.INVERSE);
         if (request.isEmpty() || requesters.isEmpty()) {
             context.problem(NOT_A_MANAGER, "The leave request " + decision.source() + " has no requester.");
             return;
@@ -106,8 +104,7 @@ public final class DecidedByManager extends DecidedByManagerRuleV1 {
             for (Link belongsTo : view.navigate(fills.entity().id(), BelongsTo.TYPE)) {
                 EntityId unit = belongsTo.entity().id();
                 units.add(unit);
-                view.traverse(unit, PartOf.TYPE, relationship -> true, Integer.MAX_VALUE).stream()
-                        .map(Step::entity).map(EntityState::id).forEach(units::add);
+                view.traverse(unit, PartOf.TYPE).stream().map(Step::entity).map(EntityState::id).forEach(units::add);
             }
         }
         return units;

@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-15
+last-reviewed: 2026-10-16
 owner: ""
 ---
 
@@ -17,7 +17,7 @@ A query is data that a *view* runs. It starts from an entity type and gives each
 | `where` | Keeps the row if a condition holds |
 | `follow` | Gives one row per relationship that leads from a binding by a relationship name or inverse name, binding the entity at the other end, and if asked the relationship |
 | `optionalFollow` | The same, but keeps a row without such relationships, with empty bindings |
-| `traverse` | Gives one row per entity reached by a name at depths from a minimum to a maximum, optionally only along relationships that meet a condition (`along`); depth 0 is the binding itself |
+| `traverse` | Gives one row per entity reached by a name at depths from a minimum to a maximum, or to the end without a maximum, optionally only along relationships that meet a condition (`along`); depth 0 is the binding itself |
 
 After the steps, a query can group rows and compute aggregates (count, sum, minimum, maximum, average), name the columns to return, order the rows and limit them.
 Everything is read at the view's coordinates: one effective time, as known at one basis or transaction time.
@@ -41,12 +41,17 @@ Query query = Query.from("Account", "a")
 QueryResult result = store.view(Coordinates.effectiveAt(march31)).query(query);
 switch (result) {
     case QueryResult.Rows rows -> rows.rows().forEach(row ->
-            System.out.println(row.entity("party").orElseThrow().values().get("name") + ": " + row.value("total").orElseThrow()));
+            System.out.println(row.entity("party").orElseThrow().values().get("name") + ": " + row.decimal("total").orElseThrow()));
     case QueryResult.Invalid invalid -> invalid.problems().forEach(System.out::println);
 }
 ```
 
 A query for a type includes its subtypes; `exactType()` after `from` leaves them out.
+
+- **From given entities.** `Query.from("Account", "a").ids(a1, a2)` starts from those entities only, when they are of the type and effective; others are left out, and an empty list gives no rows. A rule that queries this way reads only those entities, so a change to another account does not run it again.
+- **Traversals.** `Traversal.of("unit", "subunits", "below").depth("level")` names the options of a traversal step, with a minimum depth of 0 unless `minDepth` says otherwise, as in JSON, for `.traverse(traversal)`; without `maxDepth` it goes to the end, visiting each entity once, so cycles end it. In views, `view.traverse(from, name)` follows every relationship to the end.
+- **Typed rows.** `row.string`, `bool`, `intValue`, `longValue`, `decimal`, `date` and `instant` read a value as its Java type, `row.number` any numeric value as a `BigDecimal`, and `row.entity("party", Party::from)` a binding as a [generated type](generate-java-types.md); a cell of another kind throws an exception that names the column.
+
 To read one entity by a unique attribute, such as an account by its number, use `view.entity(UniqueKey)` rather than a query ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)).
 Without `select`, a query returns its bindings, or its group keys and aggregates when it groups. `orderBy` and `limit` come last.
 
@@ -85,15 +90,17 @@ Conditions compare operands, such as `{ "compare": { "left": { "attribute": "bal
 The JSON Schema of the form is published with `cairn-documents` (`Queries.jsonSchema()`), and `cairn_json_schema` returns it for the kind `query`.
 `Queries.toJson` writes a result as `{ effectiveAt, basis, columns, rows }`, each row a list of cells in the JSON result forms of the `json-payloads` spec (entity and relationship states, values), or `null` for an empty cell; `cairn_query` returns `{ effectiveAt, basis, result: { columns, rows } }`, like the other reads.
 
+In JSON, `from` also takes `ids`, an array of ID strings, and a traversal without `maxDepth` goes to the end.
+
 ## What to expect
 
 - **Missing values never match a comparison.** `balance > 0` is false for an account without a balance; test for a value with `hasValue` and `not`.
 - **Numbers compare by value** whatever their value types; strings by code point; dates and instants in time. A string compared with a date or instant attribute is read as one if it spells one, in the forms of payloads; otherwise the query has a problem.
 - **Rows multiply along relationships.** A traversal without a condition reaches every owner, so a party with two owners that nobody owns counts in both of their groups. A condition on the relationships followed, such as RD-6's share above 50, keeps one chain where the data has one.
-- **A traversal stops at its maximum depth.** A chain longer than that is cut, so the last party reached may still have an owner; choose the depth with the data in mind.
+- **A traversal with a maximum depth stops there.** A chain longer than that is cut, so the last party reached may still have an owner; leave `maxDepth` out to go to the end, where each entity is visited once.
 - **The order is stable.** Rows come in the order you ask for, then by the IDs of their bindings, so the same query on the same data gives the same rows in the same order, whatever stores them.
 - **Mistakes come back as problems**, before anything is read: an unknown type, binding, attribute or relationship name, with the closest valid name as a hint, or values that cannot be compared or summed.
 
 ## Limits
 
-Queries read every entity of their start type at the view's coordinates and filter them in memory; there are no indexes of attribute values yet. Each query reads one view: a value's history over time is read with timelines, not queries. There is no text query language yet.
+Queries read every entity of their start type at the view's coordinates, unless they start from given entities, and filter them in memory; there are no indexes of attribute values yet. Each query reads one view: a value's history over time is read with timelines, not queries. There is no text query language yet.

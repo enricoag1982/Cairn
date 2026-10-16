@@ -5,6 +5,7 @@ import static io.github.enricoag1982.cairn.codegen.GeneratedSource.compile;
 import static io.github.enricoag1982.cairn.codegen.GeneratedSource.generate;
 import static io.github.enricoag1982.cairn.codegen.GeneratedSource.text;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.enricoag1982.cairn.query.AttributeRef;
 import io.github.enricoag1982.cairn.query.NumericAttributeRef;
@@ -204,6 +205,99 @@ class AttributeReferencesTest {
                     Map.entry("TYPE_", "type:STRING"), Map.entry("WEIGHT", "weight:INT"));
             assertThat(loader.loadClass(PACKAGE + ".Thing").getField("TYPE").get(null)).isEqualTo("Thing");
             assertThat(loader.loadClass(PACKAGE + ".Link").getField("TYPE").get(null)).isEqualTo("Link");
+        }
+    }
+
+    @Test
+    void aNameThatWouldClashWithTheInverseNameGetsTheSuffixToo() throws Exception {
+        Generation.Generated generated = generate(directory, """
+                cairn: 1
+                origin: { name: inverse, version: "1.0.0" }
+                entityTypes:
+                  Thing:
+                    attributes:
+                      inverse: { type: string }
+                  Other: {}
+                relationshipTypes:
+                  Link:
+                    source: Thing
+                    target: Other
+                    targetsPerSource: "0..*"
+                    sourcesPerTarget: "0..*"
+                    inverseName: linkedFrom
+                    attributes:
+                      inverse: { type: string }
+                      Inverse_: { type: int }
+                      weight: { type: int }
+                  SubLink:
+                    supertype: Link
+                    source: Thing
+                    target: Other
+                    targetsPerSource: "0..*"
+                    sourcesPerTarget: "0..*"
+                    inverseName: subLinkedFrom
+                    attributes:
+                      inverseOf: { type: boolean }
+                  Plain:
+                    source: Thing
+                    target: Other
+                    targetsPerSource: "0..*"
+                    sourcesPerTarget: "0..*"
+                    inverseName: plainFrom
+                    attributes:
+                      INVERSE: { type: boolean }
+                """);
+
+        try (URLClassLoader loader = compile(generated, directory).loader()) {
+            assertThat(references(loader.loadClass(PACKAGE + ".Thing"))).as("an entity type reserves the name too")
+                    .containsOnly(Map.entry("INVERSE_", "inverse:STRING"));
+            assertThat(references(loader.loadClass(PACKAGE + ".Link"))).containsOnly(
+                    Map.entry("INVERSE_", "inverse:STRING"), Map.entry("INVERSE__", "Inverse_:INT"),
+                    Map.entry("WEIGHT", "weight:INT"));
+            assertThat(references(loader.loadClass(PACKAGE + ".SubLink"))).containsOnly(
+                    Map.entry("INVERSE_OF", "inverseOf:BOOLEAN"));
+            assertThat(references(loader.loadClass(PACKAGE + ".Plain"))).containsOnly(
+                    Map.entry("INVERSE_", "INVERSE:BOOLEAN"));
+            assertThat(loader.loadClass(PACKAGE + ".Link").getField("INVERSE").get(null)).isEqualTo("linkedFrom");
+            assertThat(loader.loadClass(PACKAGE + ".SubLink").getField("INVERSE").get(null))
+                    .isEqualTo("subLinkedFrom");
+        }
+    }
+
+    @Test
+    void typesNamedLikeTheConstantsOfATypeStillCompile() throws Exception {
+        Generation.Generated generated = generate(directory, """
+                cairn: 1
+                origin: { name: constants, version: "1.0.0" }
+                entityTypes:
+                  INVERSE: {}
+                  TYPE: {}
+                relationshipTypes:
+                  Link:
+                    source: INVERSE
+                    target: TYPE
+                    targetsPerSource: "0..*"
+                    sourcesPerTarget: "0..*"
+                    inverseName: linkedFrom
+                """);
+
+        try (URLClassLoader loader = compile(generated, directory).loader()) {
+            assertThat(loader.loadClass(PACKAGE + ".Link").getField("INVERSE").get(null)).isEqualTo("linkedFrom");
+            assertThat(loader.loadClass(PACKAGE + ".Link").getField("TYPE").get(null)).isEqualTo("Link");
+        }
+    }
+
+    @Test
+    void onlyRelationshipTypesDeclareTheInverseNameAndItIsDocumented() throws Exception {
+        Generation.Generated generated = generate(ReferenceDomain.DOCUMENT);
+
+        assertThat(text(generated, "Owns")).contains("String INVERSE = \"ownedBy\";")
+                .contains("The inverse name of this relationship type in its schema");
+        assertThat(text(generated, "Account")).doesNotContain("INVERSE");
+        assertThat(text(generated, "Named")).doesNotContain("INVERSE");
+        try (URLClassLoader loader = compile(generated, directory).loader()) {
+            assertThatThrownBy(() -> loader.loadClass(PACKAGE + ".Account").getField("INVERSE"))
+                    .isInstanceOf(NoSuchFieldException.class);
         }
     }
 

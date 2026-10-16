@@ -31,7 +31,11 @@ sealed interface ReadKey {
     record Navigation(EntityId from, TypeId type, boolean forward) implements ReadKey {
     }
 
-    /** The entities of an entity type and its subtypes: read by {@code entities} and by the start of a query. */
+    /**
+     * The entities of an entity type and its subtypes: read by {@code entities} and by the start of a query that gives
+     * no list of IDs. A query that starts from given entities reads them one by one, as {@link Entity} keys, and an
+     * empty list reads nothing.
+     */
     record OfType(TypeId type) implements ReadKey {
     }
 

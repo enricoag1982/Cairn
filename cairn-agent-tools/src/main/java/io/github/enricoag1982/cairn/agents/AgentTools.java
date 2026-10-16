@@ -414,11 +414,11 @@ public final class AgentTools {
     }
 
     /**
-     * {@code cairn_traverse}: follows every relationship of a name up to a maximum depth, without a condition. The entity
-     * to start from is named by {@code id} or by {@code key}, as for {@link #readEntity}; a key that no entity has at that
-     * time leads nowhere.
+     * {@code cairn_traverse}: follows every relationship of a name up to a maximum depth, or to the end if the call gives
+     * none, without a condition. The entity to start from is named by {@code id} or by {@code key}, as for
+     * {@link #readEntity}; a key that no entity has at that time leads nowhere.
      *
-     * @param arguments the arguments: {@code {id | key, name, maxDepth, effectiveAt, knownAt?}}
+     * @param arguments the arguments: {@code {id | key, name, maxDepth?, effectiveAt, knownAt?}}
      * @return {@code {effectiveAt, basis, result}} as JSON text, or the problems
      */
     public String traverse(String arguments) {

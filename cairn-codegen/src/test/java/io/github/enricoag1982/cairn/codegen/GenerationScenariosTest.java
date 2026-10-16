@@ -143,6 +143,18 @@ class GenerationScenariosTest {
         }
     }
 
+    @Test
+    @DisplayName("Scenario: The inverse name as a constant")
+    void theInverseNameAsAConstant() throws Exception {
+        Generation.Generated generated = generate(ReferenceDomain.DOCUMENT);
+
+        try (URLClassLoader loader = compile(generated, directory).loader()) {
+            assertThat(load(loader, "Owns").getField("INVERSE").get(null)).isEqualTo("ownedBy");
+            assertThat(load(loader, "HeldBy").getField("INVERSE").get(null)).isEqualTo("holds");
+            assertThat(load(loader, "Owns").getField("TYPE").get(null)).isEqualTo("Owns");
+        }
+    }
+
     // ------------------------------------------------------------------ checking documents
 
     @Test

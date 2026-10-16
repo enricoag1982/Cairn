@@ -197,6 +197,10 @@ class QuerySchemaDriftTest {
                     + "\"maxDepth\": 0, \"relationship\": \"v\", \"depth\": \"d\", \"along\": { \"not\": "
                     + "{ \"compare\": { \"left\": { \"attribute\": \"x\", \"of\": \"v\" }, \"op\": \"le\", "
                     + "\"right\": { \"value\": 50 } } } } } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"ids\": [ \"1\", \"x-2\" ] }, \"steps\": [ "
+                    + "{ \"traverse\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"b\", \"minDepth\": 1 } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"exact\": false, \"ids\": [] }, \"steps\": [ "
+                    + "{ \"traverse\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"b\" } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"where\": { \"and\": [ "
                     + "{ \"or\": [] }, { \"not\": { \"isA\": { \"of\": \"a\", \"type\": \"T\" } } }, "
                     + "{ \"hasLink\": { \"of\": \"a\", \"name\": \"n\" } }, "
@@ -225,13 +229,17 @@ class QuerySchemaDriftTest {
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"limit\": -1 }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"limit\": 1.5 }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"exact\": \"yes\" } }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"ids\": \"1\" } }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"ids\": [ 1 ] } }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"ids\": [ \"\" ] } }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"ids\": [ null ] } }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"ids\": { \"1\": 2 } } }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ {} ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"folow\": { } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"follow\": { \"from\": \"a\", \"name\": \"n\", "
                     + "\"as\": \"b\" }, \"optionalFollow\": { \"from\": \"a\", \"name\": \"n\", \"as\": \"b\" } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"follow\": { \"from\": \"a\", \"name\": \"n\" } } ] }",
-            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\", "
-                    + "\"as\": \"b\" } } ] }",
+            "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\" } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\", "
                     + "\"as\": \"b\", \"minDepth\": -1, \"maxDepth\": 1 } } ] }",
             "{ \"from\": { \"type\": \"A\", \"as\": \"a\" }, \"steps\": [ { \"traverse\": { \"from\": \"a\", \"name\": \"n\", "
@@ -321,5 +329,26 @@ class QuerySchemaDriftTest {
 
         assertThat(Queries.read(text)).isInstanceOf(QueryReadResult.Invalid.class);
         assertThat(QuerySchemaCheck.errors(text)).as("JSON Schema cannot compare two values").isEmpty();
+    }
+
+    @Test
+    @DisplayName("The schema does not state that an ID is not blank, which only the reader checks")
+    void theSchemaDoesNotStateThatAnIdIsNotBlank() {
+        String text = "{ \"from\": { \"type\": \"A\", \"as\": \"a\", \"ids\": [ \" \" ] } }";
+
+        assertThat(Queries.read(text)).isInstanceOf(QueryReadResult.Invalid.class);
+        assertThat(QuerySchemaCheck.errors(text)).as("the schema only states a length of at least 1").isEmpty();
+    }
+
+    @Test
+    @DisplayName("The JSON Schema does not require a maximum depth, and describes traversing to the end and the IDs")
+    void theJsonSchemaDoesNotRequireAMaximumDepthAndDescribesTheEndAndTheIds() {
+        Object traverse = schemaAt(SCHEMA, "properties", "steps", "items", "properties", "traverse");
+
+        assertThat(required(traverse)).doesNotContain("maxDepth").containsExactlyInAnyOrder("from", "name", "as");
+        assertThat(DocumentTrees.at(DocumentTrees.at(traverse, "properties", "maxDepth"), "description").toString())
+                .contains("to the end");
+        assertThat(DocumentTrees.at(DocumentTrees.at(schemaAt(SCHEMA, "properties", "from"), "properties", "ids"),
+                "description").toString()).contains("not the type");
     }
 }

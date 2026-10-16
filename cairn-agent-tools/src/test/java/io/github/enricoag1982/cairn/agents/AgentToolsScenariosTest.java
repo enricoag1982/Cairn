@@ -9,14 +9,19 @@ import static io.github.enricoag1982.cairn.agents.AgentFixture.relationship;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME_OWNS_BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.agents.AgentPolicy.Decision;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Receipt;
+import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.documents.DocumentReadResult;
 import io.github.enricoag1982.cairn.documents.SchemaDocuments;
@@ -36,6 +41,7 @@ class AgentToolsScenariosTest {
 
     private static final String MARCH_1 = "2026-03-01T00:00:00Z";
     private static final String MARCH_31 = "2026-03-31T00:00:00Z";
+    private static final String JUNE_1 = "2026-06-01T00:00:00Z";
 
     /** The query of RD-6, the total balance by ultimate parent, in the form of the published JSON Schema of queries. */
     private static final String TOTAL_BALANCE_BY_ULTIMATE_PARENT = """
@@ -217,6 +223,32 @@ class AgentToolsScenariosTest {
             assertThat(link.get("relationship").get("relationshipType").stringValue()).isEqualTo("Owns");
             assertThat(link.get("relationship").get("values").get("share").decimalValue()).isEqualByComparingTo("55");
         });
+    }
+
+    @Test
+    @DisplayName("Scenario: Traversing to the end, as an agent")
+    void traversingToTheEndAsAnAgent() {
+        Receipt parties = fixture.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        Receipt ownership = fixture.replay(ReferenceStories.rd2Ownership(acme, beta));
+        fixture.replay(ReferenceStories.rd2ShareCorrection(relationship(ownership, ACME_OWNS_BETA)));
+        Receipt withGamma = fixture.replay(new ReferenceStories.Recording(on(5, 3), Transaction.by("importer")
+                .create(GAMMA, "Organization", from(1, 1), values("name", "Gamma"))
+                .relate("Owns", GAMMA, acme, from(2, 1), values("share", 70)).build()));
+
+        JsonNode owners = fixture.call("cairn_traverse",
+                args("id", beta.value(), "name", "ownedBy", "effectiveAt", JUNE_1));
+
+        assertThat(owners.has("problems")).isFalse();
+        assertThat(owners.get("effectiveAt").stringValue()).isEqualTo(JUNE_1);
+        assertThat(owners.get("basis").longValue()).isEqualTo(fixture.store.latestBasis().value());
+        assertThat(owners.get("result")).extracting(step -> step.get("entity").get("id").stringValue(),
+                step -> step.get("entity").get("values").get("name").stringValue(),
+                step -> step.get("depth").intValue(),
+                step -> step.get("via").get("values").get("share").decimalValue().intValue())
+                .containsExactly(tuple(acme.value(), "ACME", 1, 55),
+                        tuple(entity(withGamma, GAMMA).value(), "Gamma", 2, 70));
     }
 
     @Test

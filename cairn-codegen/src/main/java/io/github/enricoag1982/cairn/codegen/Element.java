@@ -22,6 +22,7 @@ import java.util.Optional;
  * @param attributes  all its attributes, inherited ones first, each with its declaring element
  * @param source      the name of the source entity type of a relationship type, else empty
  * @param target      the name of the target entity type of a relationship type, else empty
+ * @param inverse     the inverse name of a relationship type, else empty
  */
 record Element(
         Kind kind,
@@ -35,7 +36,8 @@ record Element(
         List<String> traits,
         List<Attribute> attributes,
         String source,
-        String target) {
+        String target,
+        String inverse) {
 
     /** What an element is. */
     enum Kind {
@@ -55,17 +57,18 @@ record Element(
 
     static Element of(Trait trait, String java) {
         return new Element(Kind.TRAIT, trait.name(), java, false, trait.deprecated(), trait.description(), List.of(),
-                List.of(), List.of(), trait.attributes(), "", "");
+                List.of(), List.of(), trait.attributes(), "", "", "");
     }
 
     static Element of(EntityType type, String java) {
         return new Element(Kind.ENTITY, type.name(), java, type.isAbstract(), type.deprecated(), type.description(),
-                type.supertypes(), type.subtypes(), type.traits(), type.attributes(), "", "");
+                type.supertypes(), type.subtypes(), type.traits(), type.attributes(), "", "", "");
     }
 
     static Element of(RelationshipType type, String java) {
         return new Element(Kind.RELATIONSHIP, type.name(), java, false, type.deprecated(), type.description(),
-                type.supertypes(), type.subtypes(), List.of(), type.attributes(), type.source(), type.target());
+                type.supertypes(), type.subtypes(), List.of(), type.attributes(), type.source(), type.target(),
+                type.inverseName());
     }
 
     /** The name of the type this one extends, if any. */

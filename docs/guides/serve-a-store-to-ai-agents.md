@@ -76,7 +76,7 @@ Other MCP clients that start servers on standard input and output take the same 
 | `cairn_plan_schema`, `cairn_register_schema` | Plan a schema document, then register it. The plan lists each change as compatible or breaking, with hints. |
 | `cairn_dry_run`, `cairn_commit` | Run a transaction payload dry, then commit it. Problems are located in the payload, with hints. |
 | `cairn_read_entity`, `cairn_read_relationship`, `cairn_list_entities` | Read at an effective time, and optionally as known at a basis or a transaction time (`knownAt`). `cairn_read_entity` takes an entity's ID (`id`) or a *unique key* (`key`). |
-| `cairn_timeline`, `cairn_navigate`, `cairn_traverse` | Read an entity's or relationship's history, follow one relationship name, or follow it to a maximum depth. `cairn_navigate` and `cairn_traverse` start from an ID or a unique key. |
+| `cairn_timeline`, `cairn_navigate`, `cairn_traverse` | Read an entity's or relationship's history, follow one relationship name, or follow it to a maximum depth, or to the end without one. `cairn_navigate` and `cairn_traverse` start from an ID or a unique key. |
 | `cairn_query` | Run a *query* written as JSON or YAML: filters, follow steps, traversals, grouping and aggregates. See [Query a store](query-a-store.md). |
 | `cairn_list_changes` | Read the *change feed* after a basis, at most `limit` changes (100 by default, up to 1,000), with `next`, the basis to continue from. See [Follow the changes of a store](follow-the-changes-of-a-store.md). |
 | `cairn_approval_status` | The status of an approval request and, once decided, its outcome. |
