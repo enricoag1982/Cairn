@@ -130,22 +130,7 @@ final class Preparation {
 
     /** Applies and validates the transaction; returns this. */
     Preparation run() {
-        if (transaction.principal().isBlank()) {
-            problems.add(Problems.of(ProblemCode.MISSING_PRINCIPAL, TRANSACTION_PATH,
-                    "The transaction names no principal.", "the principal that submits the transaction, such as "
-                    + "agent:onboarding", transaction.principal().isEmpty() ? "no principal" : "a blank principal",
-                    null));
-        }
-        List<Write> writes = transaction.writes();
-        for (int position = 0; position < writes.size(); position++) {
-            switch (writes.get(position)) {
-                case Write.Create create -> creations.create(create, position);
-                case Write.Relate relate -> creations.relate(relate, position);
-                case Write.Patch patch -> amendments.patch(patch, position);
-                case Write.Replace replace -> amendments.replace(replace, position);
-                case Write.EndDate endDate -> amendments.endDate(endDate, position);
-            }
-        }
+        applyWrites();
         if (transaction.clearance().isPresent() && problems.hasAccessDenied()) {
             // A transaction that touches what its clearance does not cover is refused as it stands (ADR-0036): nothing
             // is derived, validated, checked or run over values it may not see, so no outcome can be used to probe them.
@@ -164,6 +149,44 @@ final class Preparation {
             }
         }
         return this;
+    }
+
+    /**
+     * The problems {@code ACCESS_DENIED} that the writes of the transaction have, judged by the schema the transaction
+     * would be validated against, and nothing else: the writes are applied to the working copies, as they are for
+     * {@link #run()}, but nothing is derived, validated, checked or run. A store asks it of a transaction with a
+     * clearance before it compares the transaction's idempotency key, so that a retry cannot confirm a value that has been
+     * classified since it was first written (ADR-0036, design D4 of {@code add-attribute-access-control}).
+     *
+     * @return the problems, none if the transaction has no clearance or its writes are allowed by it
+     */
+    List<Problem> refusals() {
+        if (transaction.clearance().isEmpty()) {
+            return List.of();
+        }
+        applyWrites();
+        problems.keepOnlyAccessDenied();
+        return problems.all();
+    }
+
+    /** Checks the principal and applies the writes in order to the working copies. */
+    private void applyWrites() {
+        if (transaction.principal().isBlank()) {
+            problems.add(Problems.of(ProblemCode.MISSING_PRINCIPAL, TRANSACTION_PATH,
+                    "The transaction names no principal.", "the principal that submits the transaction, such as "
+                    + "agent:onboarding", transaction.principal().isEmpty() ? "no principal" : "a blank principal",
+                    null));
+        }
+        List<Write> writes = transaction.writes();
+        for (int position = 0; position < writes.size(); position++) {
+            switch (writes.get(position)) {
+                case Write.Create create -> creations.create(create, position);
+                case Write.Relate relate -> creations.relate(relate, position);
+                case Write.Patch patch -> amendments.patch(patch, position);
+                case Write.Replace replace -> amendments.replace(replace, position);
+                case Write.EndDate endDate -> amendments.endDate(endDate, position);
+            }
+        }
     }
 
     /**

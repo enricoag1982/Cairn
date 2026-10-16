@@ -1,21 +1,21 @@
 package io.github.enricoag1982.cairn.core.schema;
 
 import io.github.enricoag1982.cairn.data.Clearance;
+import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
 import io.github.enricoag1982.cairn.schema.Attribute;
-import io.github.enricoag1982.cairn.schema.AttributeId;
+import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
-import io.github.enricoag1982.cairn.schema.TypeId;
+import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -51,13 +51,15 @@ final class AccessGuard {
      * @param before    the schema before the registration
      * @param after     the schema the registration would produce
      * @param clearance the clearance of the caller
+     * @param compiler  the compiler of the registry, which tells what the checks and derivations of every type read
      * @return the problems, in the order of their paths; none if the clearance allows the registration
      */
-    static List<Problem> problems(CompiledSchema before, CompiledSchema after, Clearance clearance) {
+    static List<Problem> problems(CompiledSchema before, CompiledSchema after, Clearance clearance,
+            ExpressionCompiler compiler) {
         Map<String, Problem> problems = new TreeMap<>();
         classifications(before, after, clearance, problems);
-        checks(before, after, clearance, problems);
-        derivations(before, after, clearance, problems);
+        checks(before, after, clearance, compiler, problems);
+        derivations(before, after, clearance, compiler, problems);
         return new ArrayList<>(problems.values());
     }
 
@@ -92,26 +94,32 @@ final class AccessGuard {
 
     // ------------------------------------------------------------------ checks
 
+    /**
+     * Guards the checks that the types declare, every type's own, whether it is abstract or not: the schema keeps compiled
+     * checks for concrete types only, but a check that an abstract type declares applies to every concrete type that
+     * is added below it later. What a check reads is found by compiling it for the attributes of the type that declares
+     * it, as validation does.
+     */
     private static void checks(CompiledSchema before, CompiledSchema after, Clearance clearance,
-            Map<String, Problem> problems) {
+            ExpressionCompiler compiler, Map<String, Problem> problems) {
         Map<String, String> known = new HashMap<>();
-        forEachType(before, (type, attributes) -> before.checks(type).forEach(applied -> known.put(
-                identity(applied), applied.check().check().expression())));
-        forEachType(after, (type, attributes) -> {
-            for (AppliedCheck applied : after.checks(type)) {
-                String expression = applied.check().check().expression();
-                if (expression.equals(known.get(identity(applied)))) {
+        forEachType(before, (name, attributes, checks) -> checks
+                .forEach(check -> known.put(Names.path(name, check.name()), check.expression())));
+        forEachType(after, (name, attributes, checks) -> {
+            for (Check check : checks) {
+                String path = Names.path(name, check.name());
+                if (check.expression().equals(known.get(path))) {
                     continue;
                 }
-                Optional<Attribute> read = uncoveredRead(applied.reads(attributes), attributes, clearance);
+                Optional<Attribute> read = uncoveredRead(checkReads(compiler, check.expression(), attributes),
+                        attributes, clearance);
                 if (read.isPresent()) {
-                    String path = Names.path(applied.check().declaredBy(), applied.check().check().name());
-                    problems.putIfAbsent(path, denied(path, "The registration " + (known.containsKey(identity(applied))
-                            ? "changes" : "adds") + " the check " + applied.check().check().name() + " of "
-                            + applied.check().declaredBy() + ", which reads the attribute " + read.get().name()
-                            + ", classified " + read.get().classification().orElseThrow() + ", but the clearance of the "
-                            + "caller does not cover " + read.get().classification().orElseThrow() + ", so the check "
-                            + "would let the caller probe a value that it may not read.",
+                    problems.putIfAbsent(path, denied(path, "The registration " + (known.containsKey(path)
+                            ? "changes" : "adds") + " the check " + check.name() + " of " + name
+                            + ", which reads the attribute " + read.get().name() + ", classified "
+                            + read.get().classification().orElseThrow() + ", but the clearance of the caller does not "
+                            + "cover " + read.get().classification().orElseThrow() + ", so the check would let the "
+                            + "caller probe a value that it may not read.",
                             read.get().classification().orElseThrow(), clearance,
                             "Ask a person whose clearance covers " + read.get().classification().orElseThrow()
                             + " to add the check."));
@@ -120,24 +128,42 @@ final class AccessGuard {
         });
     }
 
-    private static String identity(AppliedCheck applied) {
-        return applied.check().declaredBy() + "|" + applied.check().check().name();
+    /** The attributes that a check reads when it is compiled for a type; all of the type's if that cannot be told. */
+    private static Set<String> checkReads(ExpressionCompiler compiler, String expression, List<Attribute> attributes) {
+        Set<String> all = attributes.stream().map(Attribute::name).collect(Collectors.toSet());
+        if (!compiler.available()) {
+            return all;
+        }
+        Map<String, ValueType> types = new LinkedHashMap<>();
+        attributes.forEach(attribute -> types.put(attribute.name(), attribute.valueType()));
+        try {
+            return compiler.compile(expression, types).attributesRead().orElse(all);
+        } catch (ExpressionCompilationException | RuntimeException e) {
+            return all;
+        }
     }
 
     // ------------------------------------------------------------------ derived attributes
 
+    /**
+     * Guards the derived attributes that the types have, abstract types included, for the same reason as the checks: the
+     * schema compiles derivations for concrete types only. What a derivation reads is found by compiling it for the
+     * attributes of the type that are not derived, as validation does for a concrete type.
+     */
     private static void derivations(CompiledSchema before, CompiledSchema after, Clearance clearance,
-            Map<String, Problem> problems) {
-        Set<AttributeId> reported = new HashSet<>();
-        forEachType(after, (type, attributes) -> {
-            for (AppliedDerivation applied : after.derivations(type)) {
-                Attribute derived = applied.attribute();
-                CompiledSchema.Declaration earlier = before.declarations().get(derived.id());
-                Optional<String> was = earlier == null ? Optional.empty() : earlier.attribute().derived();
-                if (derived.derived().equals(was) || !reported.add(derived.id())) {
+            ExpressionCompiler compiler, Map<String, Problem> problems) {
+        forEachType(after, (name, attributes, checks) -> {
+            for (Attribute derived : attributes) {
+                if (derived.derived().isEmpty()) {
                     continue;
                 }
-                Optional<Attribute> read = uncoveredRead(applied.reads(), attributes, clearance);
+                CompiledSchema.Declaration earlier = before.declarations().get(derived.id());
+                Optional<String> was = earlier == null ? Optional.empty() : earlier.attribute().derived();
+                if (derived.derived().equals(was)) {
+                    continue;
+                }
+                Optional<Attribute> read = uncoveredRead(derivationReads(compiler, derived, attributes), attributes,
+                        clearance);
                 if (read.isPresent()) {
                     String path = Names.path(derived.declaredBy(), derived.name());
                     problems.putIfAbsent(path, denied(path, "The registration " + (was.isPresent() ? "changes the "
@@ -153,13 +179,35 @@ final class AccessGuard {
         });
     }
 
+    /** The attributes that a derivation reads when it is compiled for a type; all of the type's if that cannot be told. */
+    private static Set<String> derivationReads(ExpressionCompiler compiler, Attribute derived,
+            List<Attribute> attributes) {
+        Set<String> all = attributes.stream().map(Attribute::name).collect(Collectors.toSet());
+        if (!compiler.available()) {
+            return all;
+        }
+        Map<String, ValueType> readable = new LinkedHashMap<>();
+        attributes.stream().filter(attribute -> attribute.derived().isEmpty())
+                .forEach(attribute -> readable.put(attribute.name(), attribute.valueType()));
+        try {
+            return compiler.compileDerivation(derived.derived().orElseThrow(), readable, derived.valueType())
+                    .attributesRead();
+        } catch (ExpressionCompilationException | RuntimeException e) {
+            return all;
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
-    /** Calls an action for every entity type and relationship type of a schema with its attributes. */
-    private static void forEachType(CompiledSchema schema,
-            BiConsumer<TypeId, List<Attribute>> action) {
-        schema.entityTypes().forEach(type -> action.accept(type.id(), type.attributes()));
-        schema.relationshipTypes().forEach(type -> action.accept(type.id(), type.attributes()));
+    /** What an action is given for a type: its name, all of its attributes and the checks that it declares. */
+    private interface TypeAction {
+        void accept(String name, List<Attribute> attributes, List<Check> checks);
+    }
+
+    /** Calls an action for every entity type, abstract or not, and every relationship type of a schema. */
+    private static void forEachType(CompiledSchema schema, TypeAction action) {
+        schema.entityTypes().forEach(type -> action.accept(type.name(), type.attributes(), type.checks()));
+        schema.relationshipTypes().forEach(type -> action.accept(type.name(), type.attributes(), type.checks()));
     }
 
     /** The first attribute among those read whose classification the clearance does not cover. */

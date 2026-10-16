@@ -93,6 +93,11 @@ final class Workspace {
         return working;
     }
 
+    /** The clearance of the transaction, if it has one. */
+    Optional<Clearance> clearance() {
+        return clearance;
+    }
+
     /**
      * Tells whether the transaction has a clearance that does not cover an attribute. A problem about such an attribute
      * carries no value of it (ADR-0036, design D4 of {@code add-attribute-access-control}).

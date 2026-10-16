@@ -51,7 +51,7 @@ final class RuleStage {
      */
     RuleRunner runner() {
         if (runner == null) {
-            runner = new RuleRunner(rules, source(), sequence, stage);
+            runner = new RuleRunner(rules, source(), sequence, stage, workspace.clearance());
         }
         return runner;
     }

@@ -148,6 +148,27 @@ class AgentAccessScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: An agent's check on a new abstract type")
+    void anAgentsCheckOnANewAbstractType() throws Exception {
+        Server server = serverStartedWith();
+        SchemaDefinition withProbe = Definitions.plus(finance(), SchemaDefinition.builder()
+                .entityType("Probe", probe -> probe.abstractType().supertype("Account")
+                        .check("probe", "self.balance > 1000.0"))
+                .build());
+        String document = SchemaDocuments.writeYaml(ReferenceModel.origin("1.1.0"), withProbe);
+
+        JsonNode result = server.call("cairn_register_schema", args("document", document));
+
+        assertThat(result.get("outcome").stringValue()).isEqualTo("rejected");
+        assertThat(result.get("problems")).singleElement().satisfies(problem -> {
+            assertThat(problem.get("code").stringValue()).isEqualTo("ACCESS_DENIED");
+            assertThat(problem.get("path").stringValue()).isEqualTo("Probe.probe");
+        });
+        assertThat(server.tools().store.schema().current().entityType("Probe")).isEmpty();
+        assertThat(server.tools().store.schema().history()).hasSize(1);
+    }
+
+    @Test
     void theAgentWithAClearanceCanRunTheQueryTheAgentWithoutOneCannot() throws Exception {
         Server server = serverStartedWith("--clearance", "finance");
 

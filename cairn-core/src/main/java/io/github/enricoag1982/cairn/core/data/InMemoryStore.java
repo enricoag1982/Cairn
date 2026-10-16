@@ -258,6 +258,10 @@ public final class InMemoryStore implements Store {
         Objects.requireNonNull(transaction, "transaction");
         return sequence.underWriterLock(() -> {
             requireWritable();
+            List<Problem> refused = refusedBeforeItsKey(transaction);
+            if (!refused.isEmpty()) {
+                return new CommitResult.Rejected(refused);
+            }
             if (isPurged(transaction)) {
                 return new CommitResult.Rejected(List.of(purged(transaction)));
             }
@@ -279,6 +283,10 @@ public final class InMemoryStore implements Store {
     public DryRunResult dryRun(Transaction transaction) {
         Objects.requireNonNull(transaction, "transaction");
         return sequence.underWriterLock(() -> {
+            List<Problem> refused = refusedBeforeItsKey(transaction);
+            if (!refused.isEmpty()) {
+                return new DryRunResult.Rejected(refused);
+            }
             if (isPurged(transaction)) {
                 return new DryRunResult.Rejected(List.of(purged(transaction)));
             }
@@ -469,6 +477,22 @@ public final class InMemoryStore implements Store {
                 + "the store cannot tell whether this transaction is a retry, and recording it could bring the purged "
                 + "data back.", "an idempotency key that no committed transaction used, or none", key,
                 "Use a new idempotency key for a new transaction.");
+    }
+
+    /**
+     * The problems {@code ACCESS_DENIED} of a transaction with a clearance and an idempotency key that the key would
+     * otherwise answer: a purged key rejects the transaction and a known key returns the receipt of the committed
+     * transaction or rejects it for other content, whatever the transaction would be allowed now (ADR-0036, design D4 of
+     * {@code add-attribute-access-control}). The writes that the clearance does not allow are refused first, judged by the
+     * latest schema, so that a retry cannot confirm a value that has been classified since it was written. None for any
+     * other transaction, which {@link #prepare} refuses in the same way when it comes to it. Called with the lock held.
+     */
+    private List<Problem> refusedBeforeItsKey(Transaction transaction) {
+        if (transaction.clearance().isEmpty() || (!isPurged(transaction) && known(transaction) == null)) {
+            return List.of();
+        }
+        return new Preparation(transaction, new SchemaIndex(registry.current()), ledger, purgedDigests,
+                generator.copy(), sequence.next(), checks, rules, sequence, reads).refusals();
     }
 
     /** The committed transaction that used the transaction's idempotency key, if any. Called with the lock held. */

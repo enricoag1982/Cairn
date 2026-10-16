@@ -244,6 +244,100 @@ class RegistrationClearanceTest {
         assertThat(problem.message()).contains("changes the check");
     }
 
+    // ------------------------------------------------------------------ abstract types
+
+    /** A new abstract subtype of Account: the schema keeps no compiled checks and derivations for it. */
+    private static SchemaDefinition withAbstractProbe(UnaryOperator<EntityTypeBuilder> probe) {
+        return Definitions.plus(finance(), SchemaDefinition.builder()
+                .entityType("Probe", type -> probe.apply(type.abstractType().supertype("Account"))).build());
+    }
+
+    @Test
+    void aCheckOfANewAbstractTypeThatReadsAnUncoveredAttributeIsRefusedAtTheCheck() {
+        ReferenceStore reference = store(finance());
+        SchemaDefinition probed = withAbstractProbe(probe -> probe.check("probe", "self.balance > 1000.0"));
+
+        Problem problem = refused(register(reference, probed, NONE));
+
+        assertThat(problem.path()).isEqualTo("Probe.probe");
+        assertThat(((RegistrationResult.Rejected) register(reference, probed, NONE)).problems()).hasSize(1);
+        assertThat(reference.store.schema().current().entityType("Probe")).isEmpty();
+        assertThat(register(reference, probed, FINANCE)).isInstanceOf(RegistrationResult.Applied.class);
+    }
+
+    @Test
+    void aCheckOfAnAbstractTypeThatReadsWhatTheClearanceCoversIsAllowed() {
+        ReferenceStore reference = store(finance());
+        SchemaDefinition probed = withAbstractProbe(probe -> probe.check("has-number", "has(self.number)"));
+
+        assertThat(register(reference, probed, NONE)).isInstanceOf(RegistrationResult.Applied.class);
+    }
+
+    @Test
+    void aCheckOfAnAbstractTypeThatTheStoreHasIsNotAddedAgainByAClearance() {
+        SchemaDefinition probed = withAbstractProbe(probe -> probe.check("probe", "self.balance > 1000.0"));
+        ReferenceStore reference = store(probed);
+        SchemaDefinition withEmail = changeEntityType(probed, "Person", person -> Definitions.withAttributes(person,
+                append(person.attributes(), AttributeDefinition.builder("email", ValueType.STRING).build())));
+
+        assertThat(register(reference, withEmail, NONE)).isInstanceOf(RegistrationResult.Applied.class);
+    }
+
+    @Test
+    void changingTheExpressionOfACheckOfAnAbstractTypeIsRefused() {
+        ReferenceStore reference = store(withAbstractProbe(probe -> probe.check("probe", "self.balance > 1000.0")));
+
+        Problem problem = refused(register(reference,
+                withAbstractProbe(probe -> probe.check("probe", "self.balance > 5.0")), NONE));
+
+        assertThat(problem.path()).isEqualTo("Probe.probe");
+        assertThat(problem.message()).contains("changes the check");
+    }
+
+    @Test
+    void aDerivedAttributeOfANewAbstractTypeThatReadsAnUncoveredAttributeIsRefusedAtTheAttribute() {
+        ReferenceStore reference = store(finance());
+        SchemaDefinition probed = withAbstractProbe(probe -> probe.attribute("probeCents", ValueType.LONG,
+                attribute -> attribute.derived(CENTS)));
+
+        Problem problem = refused(register(reference, probed, NONE));
+
+        assertThat(problem.path()).isEqualTo("Probe.probeCents");
+        assertThat(problem.message()).contains("adds the derived attribute probeCents");
+        assertThat(reference.store.schema().current().entityType("Probe")).isEmpty();
+    }
+
+    @Test
+    void aDerivedAttributeOfAnAbstractTypeThatReadsWhatTheClearanceCoversIsAllowed() {
+        ReferenceStore reference = store(finance());
+        SchemaDefinition probed = withAbstractProbe(probe -> probe.attribute("probeLength", ValueType.LONG,
+                attribute -> attribute.derived("self.number.size()")));
+
+        assertThat(register(reference, probed, NONE)).isInstanceOf(RegistrationResult.Applied.class);
+    }
+
+    @Test
+    void aCheckOfANewRelationshipTypeIsGuardedLikeThoseOfEntityTypes() {
+        ReferenceStore reference = store(finance());
+        SchemaDefinition covered = Definitions.plus(finance(), SchemaDefinition.builder()
+                .relationshipType("Pledges", pledge -> pledge.from("Account").to("Organization")
+                        .inverse("pledgedBy").attribute("amount", ValueType.DECIMAL)
+                        .check("amount-set", "has(self.amount)"))
+                .build());
+        SchemaDefinition uncovered = Definitions.plus(finance(), SchemaDefinition.builder()
+                .relationshipType("Pledges", pledge -> pledge.from("Account").to("Organization")
+                        .inverse("pledgedBy").attribute("amount", ValueType.DECIMAL,
+                                attribute -> attribute.classification("finance"))
+                        .check("amount-set", "has(self.amount)"))
+                .build());
+
+        List<Problem> problems = ((RegistrationResult.Rejected) register(reference, uncovered, NONE)).problems();
+
+        assertThat(register(reference, covered, NONE)).as("a check that reads an attribute without a classification")
+                .isInstanceOf(RegistrationResult.Applied.class);
+        assertThat(problems).extracting(Problem::path).contains("Pledges.amount-set");
+    }
+
     // ------------------------------------------------------------------ derived attributes
 
     private static SchemaDefinition derived(String expression) {

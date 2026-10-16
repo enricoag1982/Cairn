@@ -19,6 +19,7 @@ rocksdbConformance {
         "$core.AttributeAccessScenariosTest", "$core.RestrictedViewsTest", "$core.RestrictedQueriesTest",
         "$core.CommitClearancesTest", "$core.AttributeAccessDurabilityTest", "$core.LaterClassificationsTest",
         "$core.RefusedTransactionsTest", "$core.RedactedProblemsTest", "$core.RegistrationClearanceTest",
+        "$core.RedactedRuleProblemsTest", "$core.RetriesWithAClearanceTest",
     )
 }
 

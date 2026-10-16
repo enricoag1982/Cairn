@@ -10,7 +10,7 @@ The server creates an in-memory store, registers the schema documents you give i
 What the tools do is specified in the `agent-tools` spec; why agents are first-class users is in [ADR-0017](../decisions/0017-design-cairn-so-that-ai-agents-are-first-class-users.md).
 
 > [!WARNING]
-> The server is for trusted, local use. It has no authentication, any agent connected to it can read everything that the server's clearance covers, and the store is gone when the server stops. An agent may register schema changes unless `--policy schema=approve` or `deny` says otherwise; it cannot change classifications that its clearance does not cover, but other changes still deserve a person's look.
+> The server is for trusted, local use. It has no authentication, any agent connected to it can read everything that the server's clearance covers, and the store is gone when the server stops. An agent may register schema changes unless `--policy schema=approve` or `deny` says otherwise; it cannot change classifications that its clearance does not cover, nor add a check or derived attribute over them on any type, abstract or not, but other changes still deserve a person's look.
 
 ## Build the server
 

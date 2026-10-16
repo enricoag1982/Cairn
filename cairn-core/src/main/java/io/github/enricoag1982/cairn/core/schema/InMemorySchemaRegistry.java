@@ -389,7 +389,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         }
         List<Problem> refused = new ArrayList<>();
         clearance.ifPresent(cleared -> refused.addAll(AccessGuard.problems(current.schema(), compiled.schema(),
-                cleared)));
+                cleared, expressionCompiler)));
         refused.addAll(breaking(changes, true));
         if (!refused.isEmpty()) {
             return Planned.of(new SchemaPlan(SchemaPlan.Outcome.REJECT, changes, refused));
