@@ -181,6 +181,20 @@ class ChecksScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: A function of Cairn's with the wrong arguments")
+    void aFunctionOfCairnsWithTheWrongArguments() {
+        SchemaDefinition definition = withCheck(ReferenceModel.definition(), "Person", "born-on-a-working-day",
+                "cairn.workingDays(self.name, self.birthDate) > 0", null);
+
+        List<Problem> problems = registryWithLanguage().validate(ReferenceModel.origin("1.0.0"), definition);
+
+        Problem problem = only(problems);
+        assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_CHECK);
+        assertThat(problem.path()).isEqualTo("Person.born-on-a-working-day");
+        assertThat(problem.message()).contains("cairn.workingDays").contains("string");
+    }
+
+    @Test
     @DisplayName("Scenario: No expression language")
     void noExpressionLanguage() {
         SchemaRegistry registry = SchemaRegistries.inMemory(new TestClock(), ReferenceModel.rules(), Optional.empty());

@@ -22,11 +22,13 @@ import io.github.enricoag1982.cairn.example.hr.model.Position;
 import io.github.enricoag1982.cairn.example.hr.model.WorksAt;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -527,8 +529,10 @@ public final class CompanyGenerator {
 
         /**
          * An employee files a leave that a manager of the employee's unit, or of a unit above it, approves in the same
-         * transaction. The first day is two to nine days after the day it is filed. A vacation that would take the
-         * year above its entitlement becomes sick leave.
+         * transaction. The first day is two to nine days after the day it is filed, or the Monday after it if that is a
+         * Saturday or a Sunday, so that every leave has at least one working day; the leave keeps its length in calendar
+         * days. The request does not state its days: the store derives them, as the working days of its dates, and so
+         * does the entitlement count here. A vacation that would take the year above its entitlement becomes sick leave.
          */
         private void leave(LocalDate day) {
             List<Employee> people = staff(day);
@@ -539,18 +543,23 @@ public final class CompanyGenerator {
             int roll = random.nextInt(10);
             String kind = roll < 6 ? "vacation" : roll < 9 ? "sick" : "unpaid";
             int length = 1 + random.nextInt(kind.equals("vacation") ? 5 : 3);
-            if (kind.equals("vacation")) {
-                if (employee.vacationDays + length > VACATION_ENTITLEMENT) {
-                    kind = "sick";
-                } else {
-                    employee.vacationDays += length;
-                }
-            }
             LocalDate firstDay = day.plusDays(2 + random.nextInt(8));
             if (firstDay.getYear() != YEAR) {
                 firstDay = LocalDate.of(YEAR, 12, 31);
             }
+            if (firstDay.getDayOfWeek().compareTo(DayOfWeek.FRIDAY) > 0) {
+                // The weekend of 26 and 27 December 2026 is the latest: it moves to Monday 28 December, in the year.
+                firstDay = firstDay.with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+            }
             LocalDate lastDay = firstDay.plusDays(length - 1);
+            if (kind.equals("vacation")) {
+                int vacationDays = workingDays(firstDay, lastDay);
+                if (employee.vacationDays + vacationDays > VACATION_ENTITLEMENT) {
+                    kind = "sick";
+                } else {
+                    employee.vacationDays += vacationDays;
+                }
+            }
             List<Employee> deciders = managersAbove(employee.slot.unit);
             Employee decider = deciders.get(random.nextInt(deciders.size()));
             if (firstDay.isAfter(decider.decidedUntil)) {
@@ -569,12 +578,26 @@ public final class CompanyGenerator {
             events.merge("leaves", 1, Integer::sum);
             steps.add(new Step(filed, ids -> Transaction.by(PRINCIPAL).reason("Leave of " + code)
                     .write(LeaveRequest.create().kind(requestKind).firstDay(first).lastDay(lastDay)
-                            .days(BigDecimal.valueOf(length)).status("approved").as(request).effectiveFrom(filed))
+                            .status("approved").as(request).effectiveFrom(filed))
                     .write(HasLeaveRequest.relate(ids.entity(requester), new TemporaryId(request))
                             .as("hasLeave" + leave).effectiveFrom(filed))
                     .write(DecidedBy.relate(new TemporaryId(request), ids.entity(deciding)).as(decision)
                             .effectiveFrom(filed))
                     .build()));
+        }
+
+        /**
+         * The working days, Monday to Friday, from a first day to a last, both included: the days that the store derives
+         * for a leave request with these dates ({@code cairn.workingDays} in the schema document).
+         */
+        private static int workingDays(LocalDate first, LocalDate last) {
+            int days = 0;
+            for (LocalDate day = first; !day.isAfter(last); day = day.plusDays(1)) {
+                if (day.getDayOfWeek().compareTo(DayOfWeek.FRIDAY) <= 0) {
+                    days++;
+                }
+            }
+            return days;
         }
 
         /** The managers of a unit and of the units above it, nearest first; a unit whose manager left has none. */

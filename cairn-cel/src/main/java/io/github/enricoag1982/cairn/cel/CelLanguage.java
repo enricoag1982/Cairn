@@ -56,7 +56,14 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>The result of a check must be {@code bool} or {@code dyn}. CEL does not mix integers and doubles in an operator that
  * the checker types, so a decimal is compared with {@code 0.0}, not with {@code 0}. The standard functions and macros are
- * available, and no extension.
+ * available, and no extension, besides Cairn's own functions below.
+ *
+ * <p>Cairn's own functions (ADR-0035, design D1 of {@code add-expression-functions}) are named {@code cairn.<name>}
+ * and are pure functions of their arguments. {@code cairn.calendarDays(first, last)} and
+ * {@code cairn.workingDays(first, last)} take two timestamps and give, as an integer, the number of days, or of days
+ * from Monday to Friday, from the date of the first to the date of the last, as dates in UTC, both included, and 0 when
+ * the last date is before the first. A call with arguments of other types, or of a name that is not offered, does not
+ * compile. {@code CairnFunctions} declares and runs them.
  *
  * <p>The expression of a derived attribute sees the attributes that the engine gives it, which are those of the type that
  * are not derived, and the checker is given the CEL type that its result must have, so that a result of another type is
@@ -183,6 +190,8 @@ public final class CelLanguage implements ExpressionLanguage {
                 .setOptions(OPTIONS)
                 .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
                 .setTypeProvider(provider)
+                .addFunctionDeclarations(CairnFunctions.declarations())
+                .addFunctionBindings(CairnFunctions.bindings())
                 .addVar(Evaluation.SELF, self);
         environment.result().ifPresent(builder::setResultType);
         return builder.build();
