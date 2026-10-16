@@ -66,12 +66,15 @@ public interface RuleContext {
 
     /**
      * A view of the store as it was committed before the transaction, effective at the start of the checked version's
-     * effective period: what the store held then, without the transaction's writes. A rule reads the checked entity's
-     * previous version with {@code context.before().entity(version.id())}, which is empty if the store held no such
-     * entity, for example because the transaction creates it. The view is read-only, and its
-     * {@linkplain View#basis() basis} is the latest committed basis. What the rule reads through it is recorded as for
-     * {@link #view()}. Other data may change inside the period: a rule whose verdict depends on it reads the committed
-     * state at the other instants with {@link #beforeAt(Instant)}.
+     * effective period: what the store held then, without the transaction's writes.
+     * {@code context.before().entity(id)} gives only the version of the entity at the start of that period, and is
+     * empty if the store held no such entity, for example because the transaction creates it. A rule whose verdict has
+     * to hold at each instant of the period compares the version with every version the store held in it, and so reads
+     * {@code context.before().timeline(version.id())}, or uses the generated {@code previous} method of the base class
+     * generated for the rule (ADR-0032). The view is read-only, and its {@linkplain View#basis() basis} is the latest
+     * committed basis. What the rule reads through it is recorded as for {@link #view()}. Other data may change inside
+     * the period: a rule whose verdict depends on it reads the committed state at the other instants with
+     * {@link #beforeAt(Instant)}.
      *
      * @return the view of the committed state, read-only
      */

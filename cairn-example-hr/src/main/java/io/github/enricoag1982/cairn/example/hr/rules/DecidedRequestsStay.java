@@ -25,8 +25,8 @@ import java.util.Set;
  * write that only ends a request, as ending an employment does through its composition, changes no values and runs no
  * rules.
  *
- * <p>The rule reports one problem per request, about the first previous version that the version does not keep, and
- * names what differs from that version. It reads the request's timeline through the state before the transaction, so
+ * <p>The rule reports at most one problem per checked version, about the first previous version that the version does
+ * not keep, and names what differs from that version. It reads the request's timeline through the state before the transaction, so
  * the store records that read like any other (ADR-0025).
  */
 public final class DecidedRequestsStay extends DecidedRequestsStayRuleV1 {
@@ -41,8 +41,9 @@ public final class DecidedRequestsStay extends DecidedRequestsStayRuleV1 {
     private static final String CANCELLED = "cancelled";
 
     private static final RuleDescriptor DESCRIPTOR = describe(
-            "A leave request that was approved or rejected before the transaction keeps its kind, its first and last "
-                    + "days and its days; its status may change only to cancelled.",
+            "A leave request that was approved or rejected before the transaction, at any time in the checked "
+                    + "version's period, keeps its kind, its first and last days and its days; its status may change "
+                    + "only to cancelled.",
             new RuleCode(DECIDED, "The leave request was approved or rejected before the transaction, and the "
                     + "transaction changes its kind, its first or last day, its days, or its status to one but "
                     + "cancelled. Leave the decided request as it is, cancel it, or file a new request."));
