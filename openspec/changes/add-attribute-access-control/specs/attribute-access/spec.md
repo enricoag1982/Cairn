@@ -64,7 +64,7 @@ WHEN a query run through a restricted view names an attribute that the view with
 
 ### Requirement: Commits with a clearance
 
-A transaction MAY carry a clearance. WHEN a write of a transaction with a clearance sets or clears an attribute that the clearance does not cover, THE SYSTEM SHALL reject the transaction with a problem of the code `ACCESS_DENIED` at that attribute of the write, in commits and dry runs alike. Values that a write does not touch SHALL carry forward whatever their classification. Rules, checks and derivations SHALL see every value, whatever the transaction's clearance. A transaction without a clearance SHALL write as before.
+A transaction MAY carry a clearance. WHEN a write of a transaction with a clearance sets or clears an attribute that the clearance does not cover, THE SYSTEM SHALL reject the transaction with a problem of the code `ACCESS_DENIED` at that attribute of the write, in commits and dry runs alike. A write of such a transaction that names an entity by a unique key of an attribute that the clearance does not cover SHALL be rejected with `ACCESS_DENIED` at the reference, without resolving the key, so that the outcome reveals nothing about the value. Values that a write does not touch SHALL carry forward whatever their classification. Rules, checks and derivations SHALL see every value, whatever the transaction's clearance. A transaction without a clearance SHALL write as before.
 
 #### Scenario: Writing a withheld balance
 
@@ -75,6 +75,11 @@ A transaction MAY carry a clearance. WHEN a write of a transaction with a cleara
 
 - **WHEN** a transaction with no classification in its clearance patches A-1's currency to `CHF` from 1 May
 - **THEN** the transaction is committed, and A-1's balance on 1 May is still 1,200 as read through a view that is not restricted
+
+#### Scenario: Naming an entity by a withheld key
+
+- **WHEN** Organization's `lei` is classified `identity`, the transactions of RD-1 and RD-9 are recorded, and a transaction with no classification in its clearance patches the Organization with the key `Organization(lei: 5493001KJTIIGC8Y1R12)`
+- **THEN** the transaction is rejected with a problem of the code `ACCESS_DENIED` at the write's reference, and so is the same write with a key whose value no entity has
 
 #### Scenario: A rule over a withheld value
 

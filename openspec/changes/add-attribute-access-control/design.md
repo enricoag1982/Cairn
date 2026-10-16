@@ -40,6 +40,7 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 
 - `Transaction` gains `Optional<Clearance> clearance()`, and its builder `clearance(Clearance)`. A transaction without one writes as today.
 - A write in a transaction with a clearance that sets or clears an attribute that the clearance does not cover is rejected with `ACCESS_DENIED` at that attribute of the write, also in a create. Values that the write does not touch carry forward, whatever their classification.
+- A write that names an entity by a unique key of an attribute that the clearance does not cover is rejected with `ACCESS_DENIED` at the reference, before the key is resolved, so that whether an entity has the value is not revealed.
 - Dry runs apply the same. Rules, checks and derivations run as for every commit, with every value. A receipt names IDs only, so it withholds nothing.
 
 ### D5. Agents
