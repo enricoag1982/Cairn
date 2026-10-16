@@ -36,7 +36,7 @@ Entity types and relationship types MAY declare checks, each with a name, an exp
 
 ### Requirement: Checks are compiled at registration
 
-THE SYSTEM SHALL compile every check of a definition when it is validated, planned or registered. An expression SHALL see one variable, `self`, which maps the names of the attributes of a version that have a value to those values: strings and allowed values as CEL strings, booleans as booleans, int and long values as integers, decimals as doubles, and dates and instants as timestamps, a date at the start of its day in UTC. An expression that does not compile, that names through `self` an attribute that the type does not have, or whose result cannot be a boolean, SHALL be a problem with the code `INVALID_CHECK` located at the check, which gives the line and column in the expression where they are known. A registry without an expression language SHALL reject a definition that declares checks with a problem of the code `CHECKS_UNAVAILABLE` at each check, whose hint names the module `cairn-cel`.
+THE SYSTEM SHALL compile every check of a definition when it is validated, planned or registered. An expression SHALL see one variable, `self`, which maps the names of the attributes of a version that have a value to those values: strings and allowed values as CEL strings, booleans as booleans, int and long values as integers, decimals as doubles, and dates and instants as timestamps, a date at the start of its day in UTC. An expression that does not compile, that names through `self` an attribute that the type does not have, or whose result cannot be a boolean, SHALL be a problem with the code `INVALID_CHECK` located at the check, which gives the line and column in the expression where they are known. A registry without an expression language SHALL reject a definition that declares checks with a problem of the code `EXPRESSIONS_UNAVAILABLE` at each check, whose hint names the module `cairn-cel`.
 
 #### Scenario: An expression that does not compile
 
@@ -51,11 +51,11 @@ THE SYSTEM SHALL compile every check of a definition when it is validated, plann
 #### Scenario: No expression language
 
 - **WHEN** a schema registry without an expression language registers a definition in which Account declares the check `balance-not-negative`
-- **THEN** the registration is rejected with a problem of the code `CHECKS_UNAVAILABLE` located at `Account.balance-not-negative`, whose hint names `cairn-cel`
+- **THEN** the registration is rejected with a problem of the code `EXPRESSIONS_UNAVAILABLE` located at `Account.balance-not-negative`, whose hint names `cairn-cel`
 
 ### Requirement: Checks run at commit
 
-WHEN a transaction writes or a composition cascade changes a version of an entity or relationship, THE SYSTEM SHALL run the checks that apply to its type on every segment of its timeline that the transaction writes, with that segment's values, together with the declarative constraints and before Java rules. A check whose expression is false SHALL be a problem with the code `CHECK_VIOLATED`, the check's name and its message; a check whose evaluation fails, for example by reading an attribute without a value without testing it with `has`, or by taking more than 10,000 evaluation steps, SHALL be a problem with the code `CHECK_FAILED`, the check's name and the error. Either SHALL reject the transaction. Checks SHALL NOT read anything but the version they check, and SHALL NOT cause re-checks. A store whose schema declares checks, opened without an expression language, SHALL reject a write to a type that a check applies to with a problem of the code `CHECKS_UNAVAILABLE`, and SHALL accept other writes. A recorded check that the store's expression language cannot compile when the store is opened SHALL make every write to the types it applies to fail with `CHECK_FAILED`.
+WHEN a transaction writes or a composition cascade changes a version of an entity or relationship, THE SYSTEM SHALL run the checks that apply to its type on every segment of its timeline that the transaction writes, with that segment's values, together with the declarative constraints and before Java rules. A check whose expression is false SHALL be a problem with the code `CHECK_VIOLATED`, the check's name and its message; a check whose evaluation fails, for example by reading an attribute without a value without testing it with `has`, or by taking more than 10,000 evaluation steps, SHALL be a problem with the code `CHECK_FAILED`, the check's name and the error. Either SHALL reject the transaction. Checks SHALL NOT read anything but the version they check, and SHALL NOT cause re-checks. A store whose schema declares checks, opened without an expression language, SHALL reject a write to a type that a check applies to with a problem of the code `EXPRESSIONS_UNAVAILABLE`, and SHALL accept other writes. A recorded check that the store's expression language cannot compile when the store is opened SHALL make every write to the types it applies to fail with `CHECK_FAILED`.
 
 #### Scenario: A violated check
 
@@ -80,4 +80,4 @@ WHEN a transaction writes or a composition cascade changes a version of an entit
 #### Scenario: A store opened without an expression language
 
 - **WHEN** a durable store whose schema declares `balance-not-negative` on Account holds the transactions of RD-5, and is opened again without an expression language
-- **THEN** a transaction that sets A-1's balance is rejected with a problem of the code `CHECKS_UNAVAILABLE`, and a transaction that renames Alice commits
+- **THEN** a transaction that sets A-1's balance is rejected with a problem of the code `EXPRESSIONS_UNAVAILABLE`, and a transaction that renames Alice commits

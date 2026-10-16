@@ -25,4 +25,4 @@
 
 - [x] 4.1 A guide to derived attributes, or a section of the guide to writing checks, and the glossary (Derived attribute)
 - [x] 4.2 Update the architecture page, the HR and reference domain pages, AGENTS.md, README.md and `openspec/config.yaml` (ADR-0031), and bump `last-reviewed`; point ADR-0018 and ADR-0030 to ADR-0031
-- [ ] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 4.3 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

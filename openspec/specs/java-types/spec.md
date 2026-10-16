@@ -40,7 +40,7 @@ Every entity and relationship type SHALL have a snapshot record: an immutable re
 
 ### Requirement: Building writes
 
-Every entity type that is not abstract SHALL have a builder for creating an entity, and every entity type builders for patching and replacing one; every relationship type SHALL have builders for relating two entities, patching and replacing. A builder SHALL have a setter for each attribute of the type, a patch builder SHALL also clear optional attributes, and every builder SHALL produce the write of the generic API for an effective period. A builder for relating SHALL also take the generated types of the relationship type's source and target. Builders SHALL NOT check values: the transaction checks them at commit.
+Every entity type that is not abstract SHALL have a builder for creating an entity, and every entity type builders for patching and replacing one; every relationship type SHALL have builders for relating two entities, patching and replacing. A builder SHALL have a setter for each attribute of the type that is not derived, a patch builder SHALL also clear optional attributes that are not derived, and every builder SHALL produce the write of the generic API for an effective period. A builder for relating SHALL also take the generated types of the relationship type's source and target. Builders SHALL NOT check values: the transaction checks them at commit.
 
 #### Scenario: Creating Alice with a builder
 

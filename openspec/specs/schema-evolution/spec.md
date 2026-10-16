@@ -120,7 +120,8 @@ The system SHALL apply a registration whose differences from the stored definiti
 - adding, changing or removing a description or examples
 - removing a rule from a type
 - removing a check from a type, or adding, changing or removing a check's message
-- moving an optional attribute without a unique constraint to a supertype, keeping its definition
+- making a derived attribute plain, keeping its stored values
+- moving an optional attribute without a unique constraint to a supertype, keeping its definition, unless that extends a derived attribute to more existing types
 - marking an attribute or type as deprecated
 - making an abstract entity type concrete
 - changing a relationship type's source or target to one of its supertypes, unless that end requires a relationship (a minimum of 1) and the change extends it to concrete entity types that already exist
@@ -161,6 +162,11 @@ The system SHALL apply a registration whose differences from the stored definiti
 - **WHEN** the stored model declares the check `balance-not-negative` on Account, and a later version of the origin no longer declares it
 - **THEN** the registration is applied
 
+#### Scenario: Making a derived attribute plain
+
+- **WHEN** the stored model declares the derived attribute `label` on Account, and a later version of the origin declares `label` without `derived`
+- **THEN** the registration is applied
+
 ### Requirement: Breaking changes are rejected
 
 The system SHALL reject a registration whose differences from the stored definition of its origin include any breaking change. The rejection SHALL list every breaking change with its path and reason, and a hint for fixing it where one applies, and MUST NOT change the stored schema. In these rules, an existing type is a concrete entity type or a relationship type that the stored schema already has: abstract types have no entities of their own. These changes are breaking:
@@ -173,7 +179,8 @@ The system SHALL reject a registration whose differences from the stored definit
 - tightening a string constraint: giving allowed values, a pattern or a length to an existing attribute that had none, removing an allowed value, changing a pattern, raising a minimum length, or lowering a maximum length
 - adding a rule to an entity type or relationship type that the stored schema already has, abstract or not, or changing the version of a rule it names
 - adding a check to an entity type or relationship type that the stored schema already has, abstract or not, or changing the expression of a check it declares
-- extending an existing required or unique attribute to more existing types, for example by moving it to a supertype or by including its trait in another type
+- adding a derived attribute to a type that the stored schema already has, making an attribute derived, or changing the expression of a derived attribute
+- extending an existing required, unique or derived attribute to more existing types, for example by moving it to a supertype or by including its trait in another type
 - widening a relationship source or target that requires a relationship (a minimum of 1) to concrete entity types that already exist
 - adding, removing or changing an entity type's or relationship type's supertype
 - making a concrete entity type abstract
@@ -226,6 +233,11 @@ The system SHALL reject a registration whose differences from the stored definit
 
 - **WHEN** the stored model has Account without checks, and a later version of the origin declares the check `balance-not-negative` on Account
 - **THEN** the registration is rejected with a breaking change at `Account.balance-not-negative`
+
+#### Scenario: Adding a derived attribute to an existing type
+
+- **WHEN** the stored model has Account without `label`, and a later version of the origin declares the derived attribute `label` on Account
+- **THEN** the registration is rejected with a breaking change at `Account.label`
 
 ### Requirement: Aliases resolve to renamed elements
 
