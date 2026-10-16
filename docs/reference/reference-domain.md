@@ -90,6 +90,11 @@ Scenarios of the `derived-attributes`, `schema-documents` and `schema-evolution`
 - `balanceInBillions` (int) on Account: `int(self.balance) * 10000000`, which does not fit an `int` for a balance of 1,000.
 - `birthYear` (int, optional) on Person: `has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null`.
 
+Scenarios of the `relationships`, `type-model`, `schema-evolution` and `schema-documents` specs declare test-only relationship types, which the reference model does not have; each scenario that needs one names it:
+
+- `MailedTo` from Account to Address, with 0..1 targets per source and 0..* sources per target: where an account's statements are mailed. Scenarios of composition cascades vary its multiplicity, and whether it outlives its targets.
+- `OpenedBy` from Account to Person, with 0..1 targets per source and 0..* sources per target and the inverse name `opened`, whose relationships outlive their targets ([ADR-0034](../decisions/0034-let-relationships-of-a-type-outlive-their-targets-as-records-of-past-facts.md)): who opened an account, which stays recorded after that person has ended.
+
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 
 ## Stories
