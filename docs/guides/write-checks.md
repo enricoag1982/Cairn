@@ -65,7 +65,7 @@ Besides CEL's standard functions, expressions can call functions of Cairn's own,
 | `cairn.workingDays(first, last)` | The same, counting only Mondays to Fridays |
 
 Both take timestamps, such as dates, and count by their dates in UTC, so the result is the same on every machine. `cairn.workingDays(self.firstDay, self.lastDay)` is 5 for a leave from Monday to Friday. Public holidays are not counted out: they need calendar data, which a version's values do not hold.
-A call with arguments of other types is a problem `INVALID_CHECK`, or `INVALID_DERIVATION` in a derivation.
+A call with arguments of other types is a problem `INVALID_CHECK`, or `INVALID_DERIVATION` in a derivation, located at the call. A name that Cairn does not offer, such as a misspelled `cairn.workDays`, is reported by CEL as an undeclared reference to `cairn`.
 
 ## When checks run
 
