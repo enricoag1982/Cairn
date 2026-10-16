@@ -33,7 +33,8 @@ import java.util.TreeSet;
  *
  * <p>A write cannot set a derived attribute (capability {@code derived-attributes}), so derived attributes are left out of
  * the values of a {@code create} or {@code relate}, which then do not require them, and out of the names that a
- * {@code patch} or {@code replace} may set, unless another type has an attribute of that name that is not derived.
+ * {@code patch} or {@code replace} may set or clear, unless another type has an attribute of that name that is not
+ * derived.
  */
 final class TransactionSchema {
 

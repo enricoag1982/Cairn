@@ -179,6 +179,27 @@ class DerivedEvolutionTest {
     }
 
     @Test
+    void movingAnOptionalDerivedAttributeToASupertypeIsBreakingWhereAnotherExistingTypeGainsIt() {
+        AttributeDefinition tag = AttributeDefinition.builder("tag", ValueType.STRING).derived("self.name").build();
+        applied(register("1.0.0", changeEntityType(ReferenceModel.definition(), "Person",
+                type -> withAttributes(type, appended(type.attributes(), tag)))));
+        SchemaDefinition moved = changeEntityType(ReferenceModel.definition(), "Party",
+                type -> withAttributes(type, List.of(tag)));
+
+        Problem problem = only(rejected(register("1.1.0", moved)));
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.BREAKING_CHANGE);
+        assertThat(problem.path()).isEqualTo("Party.tag");
+        assertThat(problem.message()).contains("derived attribute tag").contains("Organization");
+    }
+
+    private static List<AttributeDefinition> appended(List<AttributeDefinition> attributes, AttributeDefinition added) {
+        List<AttributeDefinition> result = new ArrayList<>(attributes);
+        result.add(added);
+        return result;
+    }
+
+    @Test
     void aDerivedAttributeThatBecomesDerivedInATraitIsBreakingForTheTypesThatIncludeIt() {
         SchemaDefinition plainTrait = SchemaDefinition.builder()
                 .trait("Labelled", t -> t.attribute("label", ValueType.STRING)).build();

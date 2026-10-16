@@ -162,8 +162,8 @@ public final class CairnAgentServer {
     }
 
     /**
-     * Creates the store with the rules and the expression language (checks) that the class path provides, and declares
-     * without code the rules that the documents name and the class path does not provide.
+     * Creates the store with the rules and the expression language (checks and derived attributes) that the class path
+     * provides, and declares without code the rules that the documents name and the class path does not provide.
      */
     private static Store createStore(List<SchemaDocument> documents, List<Path> files) throws StartFailure {
         try {

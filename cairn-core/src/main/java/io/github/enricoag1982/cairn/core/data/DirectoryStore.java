@@ -119,9 +119,10 @@ public final class DirectoryStore implements DurableStore {
 
     /**
      * Opens the store in a directory, as {@link #open(Path, InstantSource, IdGenerator, Collection, Collection)} does,
-     * with an expression language that compiles and runs the checks of the store's schema. The checks are compiled again
-     * when the schema is recovered. A store without an expression language keeps its data readable, but rejects writes to
-     * the types that checks apply to.
+     * with an expression language that compiles and runs the checks and the derived attributes of the store's schema.
+     * They are compiled again when the schema is recovered, and the derived values are recovered as they were stored, not
+     * computed again. A store without an expression language keeps its data readable, but rejects writes to the types
+     * that checks apply to or that have derived attributes.
      *
      * @param directory     the directory
      * @param clock         the source of transaction times

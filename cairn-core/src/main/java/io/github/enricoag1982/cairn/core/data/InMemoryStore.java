@@ -182,15 +182,16 @@ public final class InMemoryStore implements Store {
     }
 
     /**
-     * Creates an empty store that compiles and runs checks.
+     * Creates an empty store that compiles and runs checks and derived attributes.
      *
      * @param clock         the source of transaction times
      * @param generator     the ID generator of the store, which the store owns from now on
      * @param rules         the rules with code, which the store runs at commit; their descriptions are available rules
      * @param declaredRules the descriptions of rules that the store does not have the code of; types of the schema may
      *                      name them, but a write that would need to run one is rejected
-     * @param language      the expression language that compiles and runs the checks of the schema; without one, the
-     *                      store rejects definitions that declare checks, and writes to types that checks apply to
+     * @param language      the expression language that compiles and runs the checks and the derived attributes of the
+     *                      schema; without one, the store rejects definitions that declare checks or derived
+     *                      attributes, and writes to types that checks apply to or that have derived attributes
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two
      *                                  rules, with code or declared, have the same name and version
      * @throws NullPointerException     if a rule has no descriptor
@@ -216,14 +217,15 @@ public final class InMemoryStore implements Store {
 
     /**
      * Creates an empty store that keeps its entities and relationships on a key-value store, and compiles and runs
-     * checks.
+     * checks and derived attributes.
      *
      * @param keys          the key-value store, which holds nothing yet and which no one else writes to
      * @param clock         the source of transaction times
      * @param generator     the ID generator of the store, which the store owns from now on
      * @param rules         the rules with code, which the store runs at commit
      * @param declaredRules the descriptions of rules that the store does not have the code of
-     * @param language      the expression language that compiles and runs the checks of the schema
+     * @param language      the expression language that compiles and runs the checks and the derived attributes of the
+     *                      schema
      */
     InMemoryStore(KeyValueStore keys, InstantSource clock, IdGenerator generator,
             Collection<? extends Rule> rules, Collection<RuleDescriptor> declaredRules,

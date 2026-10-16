@@ -88,8 +88,8 @@ class DerivedAttributeDefinitionsTest {
     void theCodesOfDerivedAttributesAreExplained() {
         assertThat(ProblemCode.INVALID_DERIVATION.explanation()).contains("self").contains("4,000")
                 .contains("not derived").contains("null");
-        assertThat(ProblemCode.DERIVED_ATTRIBUTE_WRITTEN.explanation()).contains("create").contains("patch")
-                .contains("replace").contains("Leave");
+        assertThat(ProblemCode.DERIVED_ATTRIBUTE_WRITTEN.explanation()).contains("create, relate, patch, replace or "
+                + "clear").contains("Leave");
         assertThat(ProblemCode.DERIVATION_FAILED.explanation()).contains("has(").contains("10,000").contains("required")
                 .contains("range of an int");
     }

@@ -315,12 +315,12 @@ public enum ProblemCode {
             + "fails. The problem names the check and gives the error. Test optional attributes with has(self.name) in "
             + "the expression, or correct the expression in a new version of the schema, or open the store with an "
             + "expression language that compiles it."),
-    /** A write sets a derived attribute. */
-    DERIVED_ATTRIBUTE_WRITTEN("A derived attribute takes no values from writes: a create, a patch or a replace that "
-            + "names one is rejected, and the derivation does not run for the entity or relationship it names. The "
-            + "path names the attribute, and in a payload the problem is located at the attribute's value. Leave the "
-            + "attribute out of the write: the store computes it from the other values of the version when the "
-            + "transaction commits."),
+    /** A create, relate, patch, replace or clear names a derived attribute. */
+    DERIVED_ATTRIBUTE_WRITTEN("A derived attribute takes no values from writes: a create, relate, patch, replace or "
+            + "clear that names one is rejected, and the derivation does not run for the entity or relationship it "
+            + "names. The path names the attribute, and in a payload the problem is located at the attribute's value. "
+            + "Leave the attribute out of the write: the store computes it from the other values of the version when "
+            + "the transaction commits."),
     /** The derivation of an attribute gave no value that fits it: an evaluation error, a result that does not fit. */
     DERIVATION_FAILED("The expression of a derived attribute gave no value that fits it for a version that the "
             + "transaction writes: its evaluation failed, for example because it reads an attribute that has no value "

@@ -113,8 +113,9 @@ public final class PersistentStore implements DurableStore {
 
     /**
      * Opens the store over a key-value store, as {@link #open(PersistentKeyValueStore, InstantSource, IdGenerator,
-     * Collection, Collection)} does, with an expression language that compiles and runs the checks of the store's
-     * schema. The checks are compiled again when the schema is loaded.
+     * Collection, Collection)} does, with an expression language that compiles and runs the checks and the derived
+     * attributes of the store's schema. They are compiled again when the schema is loaded, and the derived values are
+     * loaded as they were stored, not computed again.
      *
      * @param persistent    the key-value store, which no one else writes to
      * @param clock         the source of transaction times

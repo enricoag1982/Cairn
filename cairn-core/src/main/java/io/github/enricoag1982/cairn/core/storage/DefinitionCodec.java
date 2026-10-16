@@ -29,7 +29,7 @@ import java.util.Set;
  * record without checks is the same as it was before checks existed, and one that has them is read only where bytes
  * remain.
  *
- * <p>The expressions of derived attributes (design D6 of {@code add-derived-attributes}) are not part of the attributes'
+ * <p>The expressions of derived attributes (design D8 of {@code add-derived-attributes}) are not part of the attributes'
  * fields either: they follow the checks as a section of their own, which is left out when no attribute is derived. A
  * record that has derived attributes but no checks has an empty checks section before it, so that the sections are told
  * apart by their position. Records without derived attributes are the same as they were before derived attributes

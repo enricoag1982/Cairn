@@ -100,11 +100,12 @@ final class SchemaValidator {
     }
 
     /**
-     * Validates a definition, compiling its checks.
+     * Validates a definition, compiling its checks and derived attributes.
      *
-     * @param definition     the types of every origin
-     * @param availableRules the rules that types may name
-     * @param expressionCompiler  compiles the expressions of checks; without an expression language, a check is a problem
+     * @param definition         the types of every origin
+     * @param availableRules     the rules that types may name
+     * @param expressionCompiler compiles the expressions of checks and derived attributes; without an expression
+     *                           language, a check or a derived attribute is a problem
      * @return every problem found
      */
     static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules,
@@ -113,15 +114,16 @@ final class SchemaValidator {
     }
 
     /**
-     * Validates a definition, compiling its checks, of which a registry without an expression language reports only those
-     * of some types: the types of the origin that is registered. The types of other origins were validated when those
-     * origins were registered, so their checks do not stop this registration.
+     * Validates a definition, compiling its checks and derived attributes, of which a registry without an expression
+     * language reports only those of some types: the types of the origin that is registered. The types of other origins
+     * were validated when those origins were registered, so their checks and derived attributes do not stop this
+     * registration.
      *
-     * @param definition     the types of every origin
-     * @param availableRules the rules that types may name
-     * @param expressionCompiler  compiles the expressions of checks
-     * @param checkedTypes   the keys of the names of the types whose checks are a problem if there is no expression
-     *                       language; {@code null} for every type
+     * @param definition         the types of every origin
+     * @param availableRules     the rules that types may name
+     * @param expressionCompiler compiles the expressions of checks and derived attributes
+     * @param checkedTypes       the keys of the names of the types whose checks and derived attributes are a problem if
+     *                           there is no expression language; {@code null} for every type
      * @return every problem found
      */
     static List<Problem> validate(SchemaDefinition definition, List<RuleDescriptor> availableRules,

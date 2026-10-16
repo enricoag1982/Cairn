@@ -70,9 +70,10 @@ public final class RocksDbStores {
      *
      * @param directory the directory, which is created if it does not exist
      * @param settings  the clock, ID generator, rules and expression language; the store works on a copy of the
-     *                  generator. The checks of the stored schema are compiled again with the expression language:
-     *                  without one, or with one that cannot compile a stored check, the store rejects writes to the
-     *                  types the checks apply to
+     *                  generator. The checks and derived attributes of the recovered schema are compiled again with the
+     *                  expression language, and the derived values are recovered as they were stored, not computed
+     *                  again: without a language, or with one that cannot compile a recorded check or derivation, the
+     *                  store rejects writes to the types the checks apply to or that have derived attributes
      * @return the open store, which the caller closes
      * @throws UncheckedIOException     if reading or writing the directory or the database fails
      * @throws IllegalStateException    if another open store holds the directory, if the directory holds a store kept

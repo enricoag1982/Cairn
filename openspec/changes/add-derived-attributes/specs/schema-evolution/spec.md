@@ -14,7 +14,7 @@ The system SHALL apply a registration whose differences from the stored definiti
 - removing a rule from a type
 - removing a check from a type, or adding, changing or removing a check's message
 - making a derived attribute plain, keeping its stored values
-- moving an optional attribute without a unique constraint that is not derived to a supertype, keeping its definition
+- moving an optional attribute without a unique constraint to a supertype, keeping its definition, unless that extends a derived attribute to more existing types
 - marking an attribute or type as deprecated
 - making an abstract entity type concrete
 - changing a relationship type's source or target to one of its supertypes, unless that end requires a relationship (a minimum of 1) and the change extends it to concrete entity types that already exist
