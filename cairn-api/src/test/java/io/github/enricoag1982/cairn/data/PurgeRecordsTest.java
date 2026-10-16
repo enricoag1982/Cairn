@@ -90,7 +90,7 @@ class PurgeRecordsTest {
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new Purge("dpo", Optional.empty(), null, List.of(ALICE)))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> Purge.by("dpo").entity(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> Purge.by("dpo").entity((EntityId) null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> Purge.by("dpo").onBehalfOf(null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> Purge.by("dpo").reason(null)).isInstanceOf(NullPointerException.class);
     }

@@ -24,7 +24,7 @@ import io.github.enricoag1982.cairn.schema.Basis;
  *       files, so that opening the store again replays no write-ahead log. A store that refuses writes after a failure
  *       does not flush when it closes.
  *   <li>A purge is one synchronous write, which a flush and a compaction of all of the store follow before the purge
- *       returns, so that no file of the store holds the purged data, not even the keys that named it. A purge whose write
+ *       returns, so that no file of the store holds the purged data, not even the RocksDB keys that held it. A purge whose write
  *       cannot be made applies nothing. If the flush, the compaction or the reopening of the database that follows it
  *       fails, the purge is applied, the call throws, and the store refuses commits; opening the store finishes the
  *       purge.

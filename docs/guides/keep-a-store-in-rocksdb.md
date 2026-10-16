@@ -60,8 +60,8 @@ To back a store up, close it and copy the directory.
 
 ## Purges
 
-A purge works as in every store ([ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md), the `purge` spec): it removes the entities from all of history and leaves a purge record.
-A RocksDB store writes the purge in one synchronous batch, then flushes and compacts the whole database, and opens it again so that RocksDB rewrites its MANIFEST ([ADR-0028](../decisions/0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) says why), before `purge` returns. Then no file of the store holds the purged data or the keys that named it.
+A purge works as in every store ([ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md), the `purge` spec): it removes the entities, named by ID or by unique key, from all of history and leaves a purge record.
+A RocksDB store writes the purge in one synchronous batch, then flushes and compacts the whole database, and opens it again so that RocksDB rewrites its MANIFEST ([ADR-0028](../decisions/0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) says why), before `purge` returns. Then no file of the store holds the purged data or the RocksDB keys that held it.
 Commits wait meanwhile, and the time grows with the size of the store; reads wait only while the database is opened again. A view that reads while a purge runs may see part of it.
 
 - **If the store stops during a purge,** after the batch was written, opening the store finishes the compaction before it opens. If flushing or compacting fails, `purge` throws `UncheckedIOException`; the purge is applied, the store refuses commits, and opening it again finishes the compaction. If opening the database again fails, the store refuses every call but `close` until it is opened again.

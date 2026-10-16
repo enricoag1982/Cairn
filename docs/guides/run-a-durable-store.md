@@ -59,6 +59,7 @@ Do not change the files. To back a store up, close it and copy the directory. Co
 ## Purges
 
 `store.purge(Purge.by("dpo").reason("Ticket DPO-1234").entity(aliceId).build())` removes Alice from all of history ([ADR-0024](../decisions/0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md), the `purge` spec): every version of her at every basis, her relationships, and the targets of her compositions that only she composed.
+A purge can name entities by unique key too, such as `.entity(Organization.byLei("5493001KJTIIGC8Y1R12"))`, which finds an entity that has ended; the `purge` spec and [ADR-0033](../decisions/0033-name-entities-to-purge-by-unique-keys-that-resolve-over-all-of-effective-time.md) say how keys resolve and when a purge refuses them.
 A durable store writes the purge to its log, then a snapshot file without the purged data, and deletes every older snapshot file and log segment before `purge` returns, so no file of the store holds the data any more. Commits wait while it rewrites the files.
 The store lists its purge records with `purges()`, which say how much was removed but not what; `wasPurged(id)` tells whether an ID was purged.
 

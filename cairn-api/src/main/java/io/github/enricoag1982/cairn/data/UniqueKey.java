@@ -11,7 +11,8 @@ import java.util.Objects;
  * entity type, an attribute that is unique in that type, and a value. The store resolves it when it commits, at the start
  * of the write's effective period and against what it held before the transaction, to the entity of that type, or of one
  * of its subtypes, that has the value then. A {@linkplain View view} finds the entity at its effective time with
- * {@link View#entity(UniqueKey)}.
+ * {@link View#entity(UniqueKey)}. A {@linkplain Purge purge} names entities by key too, but there is no effective period
+ * to resolve it at: it resolves over all of effective time (see {@link PurgeKey}, ADR-0033).
  *
  * <p>The record only holds what the caller wrote. Whether the type has the attribute, whether the attribute is unique
  * and whether the value fits are checked against a schema, by the store when it commits or by a view: a key that does

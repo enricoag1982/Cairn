@@ -4,30 +4,45 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA_EMPLOYS_ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.PURGE_PRINCIPAL;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.PURGE_REASON;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.rocksdb.ReferenceTales.entity;
 import static io.github.enricoag1982.cairn.rocksdb.ReferenceTales.relationship;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.enricoag1982.cairn.core.IdGenerators;
+import io.github.enricoag1982.cairn.core.StoreSettings;
+import io.github.enricoag1982.cairn.core.Stores;
 import io.github.enricoag1982.cairn.core.storage.LedgerCodec;
 import io.github.enricoag1982.cairn.core.storage.StoredMetadata;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DurableStore;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
+import io.github.enricoag1982.cairn.data.Purge;
+import io.github.enricoag1982.cairn.data.PurgeKey;
 import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
+import io.github.enricoag1982.cairn.fixtures.TestClock;
 import io.github.enricoag1982.cairn.schema.Basis;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +58,8 @@ class RocksDbPurgeScenariosTest {
     Path directory;
 
     private RocksDbFixture rocks;
+    /** The directory stores that a test opened besides, which {@link #tearDown()} closes. */
+    private final List<DurableStore> directoryStores = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -51,7 +68,52 @@ class RocksDbPurgeScenariosTest {
 
     @AfterEach
     void tearDown() {
+        directoryStores.forEach(DurableStore::close);
         rocks.closeAll();
+    }
+
+    /** Opens a durable store kept in a directory, with the rules of the reference domain, and keeps it to be closed. */
+    private DurableStore openDirectoryStore(Path files, TestClock clock) {
+        DurableStore store = Stores.durable(files, StoreSettings.builder().clock(clock)
+                .idGenerator(IdGenerators.deterministic()).rules(ReferenceModel.executableRules())
+                .declaredRules(ReferenceModel.declaredRules()).build());
+        directoryStores.add(store);
+        return store;
+    }
+
+    /**
+     * RD-1 and RD-9 are committed to a store that {@code open} opens, ACME is purged by the key of its LEI, and the store
+     * is closed and opened again: no file in its directory holds the LEI at any time after the purge, and the store lists
+     * a purge record of one entity.
+     */
+    private void purgeAcmeByItsLeiAndLookForTheKey(String kind, Path files, TestClock clock,
+            Supplier<DurableStore> open) {
+        UniqueKey acmeLei = new UniqueKey("Organization", "lei", Value.of(LEI));
+        DurableStore store = open.get();
+        RocksDbFixture.registerReferenceModel(store);
+        EntityId acme = entity(ReferenceStories.replay(store, clock, ReferenceStories.rd1Parties()), ACME);
+        ReferenceStories.replay(store, clock, ReferenceStories.rd9AcmeLei(acme));
+        assertThat(StoreFiles.filesContaining(files, LEI)).as(kind + ": the files hold the LEI before the purge")
+                .isNotEmpty();
+
+        PurgeResult result = store.purge(Purge.by(PURGE_PRINCIPAL).reason(PURGE_REASON).entity(acmeLei).build());
+
+        assertThat(result).as(kind).isInstanceOf(PurgeResult.Purged.class);
+        assertThat(((PurgeResult.Purged) result).keys()).as(kind + ": the key named ACME")
+                .containsExactly(new PurgeResult.ResolvedKey(new PurgeKey(acmeLei, Optional.empty()), acme));
+        assertThat(StoreFiles.filesContaining(files, LEI)).as(kind + ": the files after the purge").isEmpty();
+        store.close();
+        DurableStore reopened = open.get();
+
+        assertThat(StoreFiles.filesContaining(files, LEI)).as(kind + ": the files after reopening").isEmpty();
+        assertThat(StoreFiles.contents(files)).as(kind + ": the store has files").isNotEmpty();
+        assertThat(reopened.purges()).as(kind + ": a purge record of one entity").singleElement()
+                .satisfies(record -> {
+                    assertThat(record.entities()).isEqualTo(1);
+                    assertThat(record.relationships()).isZero();
+                });
+        assertThat(reopened.wasPurged(acme)).isTrue();
+        assertThat(reopened.view(Coordinates.effectiveAt(on(3, 31))).entity(acme)).isEmpty();
     }
 
     /** RD-1 with an idempotency key, which wrote Alice. */
@@ -135,6 +197,23 @@ class RocksDbPurgeScenariosTest {
         assertThat(store.wasPurged(acme)).isTrue();
         assertThat(StoreFiles.contents(directory).keySet()).as("the old MANIFEST is gone")
                 .filteredOn(name -> name.contains("MANIFEST")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: No trace of a key in a store's files")
+    void noTraceOfAKeyInAStoresFiles() {
+        Path directoryFiles = directory.resolve("directory-store");
+        TestClock directoryClock = new TestClock();
+        purgeAcmeByItsLeiAndLookForTheKey("a store kept in a directory", directoryFiles, directoryClock,
+                () -> openDirectoryStore(directoryFiles, directoryClock));
+
+        Path rocksFiles = directory.resolve("rocksdb-store");
+        RocksDbFixture rocksFixture = new RocksDbFixture(rocksFiles);
+        try {
+            purgeAcmeByItsLeiAndLookForTheKey("a RocksDB store", rocksFiles, rocksFixture.clock, rocksFixture::open);
+        } finally {
+            rocksFixture.closeAll();
+        }
     }
 
     @Test

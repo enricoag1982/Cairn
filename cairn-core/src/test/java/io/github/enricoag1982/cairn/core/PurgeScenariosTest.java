@@ -10,18 +10,22 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.BETA_EMPLOYS_ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.GAMMA;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.LEI;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Purge;
+import io.github.enricoag1982.cairn.data.PurgeKey;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
 import io.github.enricoag1982.cairn.data.PurgeResult;
 import io.github.enricoag1982.cairn.data.Receipt;
@@ -29,18 +33,21 @@ import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.TemporaryId;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.data.TransactionRecord;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.ReferenceQueries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
+import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +56,9 @@ class PurgeScenariosTest {
 
     private static final TemporaryId HOME = new TemporaryId("home");
     private static final TemporaryId HAS_ADDRESS = new TemporaryId("hasAddress");
+
+    /** The key of ACME's LEI, which the purges of the scenarios name ACME by. */
+    private static final UniqueKey ACME_LEI = new UniqueKey("Organization", "lei", Value.of(LEI));
 
     /** Effective times before the stories, at their dates, and after them. */
     private static final List<Instant> EFFECTIVE_TIMES = List.of(on(2025, 12, 1), on(1, 1), on(1, 31), on(3, 1),
@@ -247,6 +257,136 @@ class PurgeScenariosTest {
         assertThat(timelinesOf(acme, beforePurge)).as("ACME").isEqualTo(acmeBefore);
         assertThat(reference.view(on(3, 31)).navigate(a2, "HeldBy")).singleElement()
                 .satisfies(link -> assertThat(link.entity().id()).isEqualTo(acme));
+    }
+
+    // ------------------------------------------------------------------ purging by unique key
+
+    /** ACME's ID and Gamma's, in a store in which the LEI of RD-9 is ACME's until 1 March, and Gamma's from then on. */
+    private record LeiMoved(EntityId acme, EntityId beta, EntityId alice, EntityId gamma) {
+    }
+
+    /**
+     * RD-1 and RD-9, then ACME's LEI ends on 1 March, recorded on 20 January, and Gamma, another organization, has the
+     * LEI from 1 March, which RD-9 records on 1 February.
+     */
+    private LeiMoved leiMovesFromAcmeToGamma() {
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        reference.recordedOn(on(1, 20));
+        reference.commit(Transaction.by("importer")
+                .patch(acme, from(3, 1), values(), Set.of("lei"), ConflictCheck.none()).build());
+        Receipt gamma = reference.replay(ReferenceStories.rd9Gamma());
+        return new LeiMoved(acme, entity(parties, BETA), entity(parties, ALICE), entity(gamma, GAMMA));
+    }
+
+    @Test
+    @DisplayName("Scenario: Purging ACME by its LEI")
+    void purgingAcmeByItsLei() {
+        Receipt parties = reference.createParties();
+        EntityId acme = entity(parties, ACME);
+        EntityId beta = entity(parties, BETA);
+        EntityId alice = entity(parties, ALICE);
+        reference.replay(ReferenceStories.rd9AcmeLei(acme));
+        assertThat(reference.view(on(3, 31)).entity(ACME_LEI)).as("before the purge")
+                .hasValueSatisfying(state -> assertThat(state.id()).isEqualTo(acme));
+        Basis beforePurge = reference.store.latestBasis();
+        Map<String, Object> betaBefore = timelinesOf(beta, beforePurge);
+        Map<String, Object> aliceBefore = timelinesOf(alice, beforePurge);
+
+        PurgeResult.Purged result = purged(reference.store.purge(
+                Purge.by("dpo").reason("Erasure request").entity(ACME_LEI).build()));
+
+        assertThat(result.keys()).as("the purge returns that the key named ACME")
+                .containsExactly(new PurgeResult.ResolvedKey(new PurgeKey(ACME_LEI, Optional.empty()), acme));
+        assertThat(result.entities()).as("and ACME's ID among the removed entities").containsExactly(acme);
+        assertThat(everyView()).as("no view at any basis returns ACME").isNotEmpty().allSatisfy(view -> {
+            assertThat(view.entity(acme)).isEmpty();
+            assertThat(view.timeline(acme)).isEmpty();
+            assertThat(entitiesOf(view, "Organization")).extracting(EntityState::id).doesNotContain(acme);
+            if (view.schema().entityType("Organization").isPresent()) {
+                assertThat(view.entity(ACME_LEI)).isEmpty();
+            }
+        });
+        assertThat(timelinesOf(beta, beforePurge)).as("Beta").isEqualTo(betaBefore);
+        assertThat(timelinesOf(alice, beforePurge)).as("Alice").isEqualTo(aliceBefore);
+        assertThat(reference.view(on(3, 31)).entity(beta)).isPresent();
+        assertThat(reference.view(on(3, 31)).entity(alice)).isPresent();
+        assertThat(reference.store.purges()).singleElement().satisfies(record -> assertThat(record.entities())
+                .isEqualTo(1));
+    }
+
+    @Test
+    @DisplayName("Scenario: A key that names no entity to purge")
+    void aKeyThatNamesNoEntityToPurge() {
+        Receipt parties = reference.createParties();
+        Basis before = reference.store.latestBasis();
+
+        List<Problem> problems = rejected(reference.store.purge(
+                Purge.by("dpo").reason("Erasure request").entity(ACME_LEI).build()));
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.UNIQUE_KEY_NOT_FOUND);
+            assertThat(problem.path()).as("at the key").isEqualTo("@purge.key.0");
+            assertThat(problem.message()).contains(ACME_LEI.toString());
+        });
+        assertThat(reference.view(on(3, 31)).entity(entity(parties, ACME))).as("ACME still exists").isPresent();
+        assertThat(reference.view(on(3, 31)).entity(entity(parties, BETA))).as("Beta").isPresent();
+        assertThat(reference.view(on(3, 31)).entity(entity(parties, ALICE))).as("Alice").isPresent();
+        assertThat(reference.store.latestBasis()).as("no basis is used").isEqualTo(before);
+        assertThat(reference.store.purges()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Scenario: A value that two organizations held")
+    void aValueThatTwoOrganizationsHeld() {
+        LeiMoved moved = leiMovesFromAcmeToGamma();
+        Basis before = reference.store.latestBasis();
+
+        List<Problem> problems = rejected(reference.store.purge(
+                Purge.by("dpo").reason("Erasure request").entity(ACME_LEI).build()));
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.UNIQUE_KEY_AMBIGUOUS);
+            assertThat(problem.path()).as("at the key").isEqualTo("@purge.key.0");
+            String acmeHeld = moved.acme().value() + " from " + on(1, 1) + " until " + on(3, 1);
+            String gammaHeld = moved.gamma().value() + " from " + on(3, 1) + " until further notice";
+            assertThat(problem.message()).as("names ACME until 1 March and Gamma from 1 March")
+                    .contains(acmeHeld, gammaHeld);
+            assertThat(problem.message().indexOf(acmeHeld)).as("in the order of the periods")
+                    .isLessThan(problem.message().indexOf(gammaHeld));
+            assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("effective time")
+                    .contains("by ID"));
+        });
+        assertThat(reference.view(on(2, 1)).entity(moved.acme())).as("ACME still exists").isPresent();
+        assertThat(reference.view(on(4, 1)).entity(moved.gamma())).as("and so does Gamma").isPresent();
+        assertThat(reference.store.latestBasis()).as("no basis is used").isEqualTo(before);
+        assertThat(reference.store.purges()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Scenario: A key with an effective time")
+    void aKeyWithAnEffectiveTime() {
+        LeiMoved moved = leiMovesFromAcmeToGamma();
+        Basis beforePurge = reference.store.latestBasis();
+        Map<String, Object> acmeBefore = timelinesOf(moved.acme(), beforePurge);
+
+        PurgeResult.Purged result = purged(reference.store.purge(
+                Purge.by("dpo").reason("Erasure request").entity(ACME_LEI, on(4, 1)).build()));
+
+        assertThat(result.entities()).as("the purge removes Gamma").containsExactly(moved.gamma());
+        assertThat(result.keys()).containsExactly(new PurgeResult.ResolvedKey(
+                new PurgeKey(ACME_LEI, Optional.of(on(4, 1))), moved.gamma()));
+        assertThat(everyView()).allSatisfy(view -> {
+            assertThat(view.entity(moved.gamma())).isEmpty();
+            assertThat(view.timeline(moved.gamma())).isEmpty();
+            assertThat(entitiesOf(view, "Organization")).extracting(EntityState::id).doesNotContain(moved.gamma());
+        });
+        assertThat(timelinesOf(moved.acme(), beforePurge)).as("ACME is unchanged").isEqualTo(acmeBefore);
+        assertThat(reference.view(on(2, 1)).entity(moved.acme())).isPresent();
+        assertThat(reference.view(on(2, 1)).entity(ACME_LEI)).as("ACME still has the LEI until 1 March")
+                .hasValueSatisfying(state -> assertThat(state.id()).isEqualTo(moved.acme()));
+        assertThat(reference.view(on(4, 1)).entity(ACME_LEI)).as("and nobody has it afterwards").isEmpty();
     }
 
     // ------------------------------------------------------------------ the record of a purge

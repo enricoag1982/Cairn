@@ -405,7 +405,10 @@ public final class Brightwater {
     /**
      * HR-12. The principal {@code dpo} erases Gus's personal data under the ticket {@code DSR-2026-0042}: his person
      * and employment are purged, and with them, by the composition, his sick leave and its decision by Fay. The
-     * ticket, not his name, is the reason: purge records keep the principal and the reason.
+     * request starts from what the requester knows, his employee number, so the purge names his employment by the
+     * unique key {@code Employment.byEmployeeNumber("E-007")}, which finds it although it ended on 1 July (ADR-0033),
+     * and his person by ID, because a person has no unique attribute. The ticket, not his name, is the reason: purge
+     * records keep the principal and the reason, never the key or the employee number.
      *
      * @param ids the IDs of HR-1 and HR-2
      * @return the purge
@@ -413,7 +416,7 @@ public final class Brightwater {
     public static Purge hr12ErasureOfGus(Ids ids) {
         return Purge.by(DPO).reason(ERASURE_TICKET)
                 .entity(ids.entity("gus"))
-                .entity(ids.entity("e007"))
+                .entity(Employment.byEmployeeNumber("E-007"))
                 .build();
     }
 

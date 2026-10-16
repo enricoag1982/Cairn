@@ -95,21 +95,34 @@ public interface Store {
      * every basis and including views that were opened before the purge, and every timeline and query reads as if the
      * removed entities and relationships had never been recorded. The purge is recorded as a transaction of its own,
      * which {@link #purges()} lists with numbers, not IDs; the IDs of what was removed are returned to the caller, once.
-     * A durable store has removed the data from its files too before the call returns. Rules do not run, because a purge
-     * writes no versions, and they do not run again for what read the removed data either (ADR-0025): the store only
-     * forgets what rules read of the removed entities and relationships.
+     * A durable store has removed the data from its files too before the call returns. Rules do not run, because a
+     * purge writes no versions, and they do not run again for what read the removed data either (ADR-0025): the store
+     * only forgets what rules read of the removed entities and relationships.
+     *
+     * <p>A purge names entities by ID, by {@linkplain PurgeKey unique key}, or both (ADR-0033), and the result says which
+     * entity each key named. A key resolves against the store at the latest basis, before the purge, and unlike a key
+     * in a write, which resolves at the start of the write's effective period, over all of effective time: without an
+     * effective time, to the one entity of the key's type, or of a subtype, that holds the value at some effective time,
+     * even if it has ended; with one, to the entity that holds the value then. An entity that a key names is purged as if
+     * the purge named its ID, with its relationships and the targets of its compositions, and the minimums are checked
+     * over what remains. The purge writes neither the key nor its value, not in the purge record, the change feed or any
+     * file; the value stays only as data of entities that the purge does not remove.
      *
      * <p>The IDs of what was removed are never given to a new entity or relationship, and a write that supplies one is
      * rejected; the store keeps digests of them for that, and {@link #wasPurged(Id)} answers from them. The idempotency
      * keys of transactions that wrote removed data stay used, and a transaction that repeats one is rejected.
      *
      * <p>A purge is rejected, and nothing is changed and no basis is used, if it names an ID that no entity has
-     * ({@code UNKNOWN_ENTITY}, at {@code @purge.<n>}, with {@code n} the position in the purge counted from 0), or if
-     * an entity that remains would be left with fewer relationships of a type than the type's minimum at some point in
-     * effective time in which the entity exists ({@code TOO_FEW_RELATIONSHIPS}, at the entity's ID, with the hint to
-     * purge that entity too). That includes the target of a composition that another entity composed too: it is purged
-     * with its sources only if every composition that ever had it as target has a source in the purge, and otherwise it
-     * stays, and misses its source while the purge's entity composed it. Every problem is reported.
+     * ({@code UNKNOWN_ENTITY}, at {@code @purge.<n>}, with {@code n} the position in the purge's IDs counted from 0), if
+     * it names a key that is invalid ({@code INVALID_UNIQUE_KEY}), that no entity has the value of
+     * ({@code UNIQUE_KEY_NOT_FOUND}) or, without an effective time, that several entities held at different times
+     * ({@code UNIQUE_KEY_AMBIGUOUS}, which names each of them with the periods in which it held the value), all at
+     * {@code @purge.key.<n>}, with {@code n} the position in the purge's keys counted from 0, or if an entity that
+     * remains would be left with fewer relationships of a type than the type's minimum at some point in effective time
+     * in which the entity exists ({@code TOO_FEW_RELATIONSHIPS}, at the entity's ID, with the hint to purge that entity
+     * too). That includes the target of a composition that another entity composed too: it is purged with its sources
+     * only if every composition that ever had it as target has a source in the purge, and otherwise it stays, and misses
+     * its source while the purge's entity composed it. Every problem is reported.
      *
      * <p>Once the purge has returned, every view reads the purged state. While it runs, a single lookup of a view never
      * finds a relationship whose end is missing, because the relationships are removed before the entities, but a view
@@ -117,9 +130,9 @@ public interface Store {
      * when the end is read next, and a read that lists versions, such as {@code navigateTimeline}, may list a
      * relationship whose end is already gone. Applications should not rely on views across a purge.
      *
-     * @param purge the entities to purge, with who asks, for whom and why; the principal, the party and the reason stay
-     *              in the purge record, so they must not identify the data subject
-     * @return the record of the purge with the IDs it removed, or every problem found
+     * @param purge the entities to purge, by ID or by unique key, with who asks, for whom and why; the principal, the
+     *              party and the reason stay in the purge record, so they must not identify the data subject
+     * @return the record of the purge with the IDs it removed and the entity that each key named, or every problem found
      * @throws IllegalStateException if a rule of this store calls it while the store runs rules, or the calling thread is
      *                               committing: a rule must not write
      */
