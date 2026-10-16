@@ -1,7 +1,7 @@
 # attribute-access Specification
 
 ## Purpose
-TBD - created by archiving change add-attribute-access-control. Update Purpose after archive.
+Defines access to attribute values: classifications that attributes declare, clearances that views, queries, transactions and agents carry, what a clearance withholds and refuses, and what problems may tell a reader or writer with a clearance.
 
 ## Requirements
 
