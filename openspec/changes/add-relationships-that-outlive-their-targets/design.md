@@ -40,7 +40,7 @@ At the source end, a relationship counts for as long as it is effective, whether
 
 ### D4. Reads
 
-- **Navigation.** Navigating from the source by the type's name returns, for a relationship whose target does not exist at the view's effective time, the target's last version as known at the view's basis: the version whose period ends last before the view's effective time. A caller tells it by its period, which ends at or before the view's effective time. `Link` does not change.
+- **Navigation.** Navigating from the source by the type's name returns, for a relationship whose target does not exist at the view's effective time, the target's last version as known at the view's basis: the version whose period ends last at or before the view's effective time. A caller tells it by its period, which ends at or before the view's effective time. `Link` does not change.
 - **From the target.** Navigating from an entity that does not exist at the view's effective time finds nothing, as today, so no read reaches relationships from an ended target.
 - **Queries and traversals.** Follow steps bind the same version, so filters and projections read its values. Traversals reach it and go no further, because navigation from it finds nothing.
 - **Reads that rules record.** Reading the last version reads the target's timeline, which is recorded as a timeline read (ADR-0025), so a correction of that timeline runs the rules that read it again.
@@ -55,7 +55,7 @@ Declaring `outlivesTarget` on a relationship type that the stored schema already
 - **Test-only types.** Scenarios use the test-only association `OpenedBy` from Account to Person, with 0..1 targets per source and 0..* sources per target, which outlives its target, and a variant of `MailedTo` that outlives its target. Each scenario that needs one names it.
 - **`DecidedBy`.** The HR schema declares `outlivesTarget: true` for `DecidedBy`.
 - **HR-17.** Recorded 1 November: Cleo leaves on 30 November, her employment and its other relationships end, and her decision of Dev's vacation (HR-5) stays. Effective 1 December, navigating Dev's request's `decidedBy` returns Cleo's employment as it last was, with a period that ends on 1 December.
-- **The generated company (HR-14)** may end managers' employments: a later decision in their units goes to a manager of a unit above who exists on the request's first day, as `decided-by-manager` requires.
+- **The generated company (HR-14)** ends a manager's employment: a later decision in their units goes to a manager of a unit above who exists on the request's first day, as `decided-by-manager` requires.
 
 ## Risks / Trade-offs
 

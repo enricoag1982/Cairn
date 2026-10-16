@@ -7,12 +7,12 @@ Both ends of a relationship must exist at every point of its effective period, s
 ## What Changes
 
 - A relationship type MAY declare `outlivesTarget`: its relationships may continue after their target ends. Compositions and symmetric types cannot.
-- The target of such a relationship exists at the start of each stretch of its effective period. Ending the target does not require ending the relationship, and a composition cascade that ends the target leaves it.
+- The target of such a relationship exists at the start of its effective period. Ending the target does not require ending the relationship, and a composition cascade that ends the target leaves it.
 - Multiplicities at the target end hold while the target exists; at the source end the relationship counts for as long as it is effective.
 - Navigating from the source returns the target's last version, whose period shows that it has ended; queries that follow the relationship read the same version, and traversals reach it and go no further.
 - Declaring `outlivesTarget` on an existing type is compatible; removing it is breaking.
 - Schema documents, their JSON Schema, stored definitions, the agent tools' descriptions and generated Java types carry the declaration.
-- The HR example's `DecidedBy` outlives its target: HR-17 ends Cleo's employment, and her decision of Dev's vacation stays. The generated company ends managers' employments too.
+- The HR example's `DecidedBy` outlives its target: HR-17 ends Cleo's employment, and her decision of Dev's vacation stays. The generated company ends a manager's employment too.
 
 ### Non-goals
 
@@ -37,4 +37,4 @@ None.
 
 - **Decisions:** ADR-0034, accepted under the standing approval: relationships of a type may outlive their targets, as records of past facts. It relaxes the `relationships` spec's lifetime rule for those types; no accepted ADR changes.
 - **Code:** `cairn-api` (definitions, builder, resolved type); `cairn-core` (validation, compilation, compatibility, stored definitions, integrity, cascades, multiplicities, views and queries); `cairn-documents` (reading, writing, JSON Schema); `cairn-agent-tools` (descriptions); `cairn-codegen` (Javadoc of generated relationship types); `cairn-example-hr` (`DecidedBy`, HR-17, the generated company).
-- **Docs:** the glossary, the HR domain page (rule and type tables, HR-17, gaps), the reference domain page (the test-only types), the architecture page.
+- **Docs:** the glossary, the HR domain page (type table, HR-17, gaps), the reference domain page (the test-only types), the architecture page.

@@ -14,7 +14,7 @@
 
 ## 3. Examples
 
-- [x] 3.1 `DecidedBy` outlives its target; HR-17; the generated company ends managers' employments (D6)
+- [x] 3.1 `DecidedBy` outlives its target; HR-17; the generated company ends a manager's employment (D6)
 
 ## 4. Tests
 

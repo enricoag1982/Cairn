@@ -131,9 +131,9 @@ sequenceDiagram
     S->>Q: next() basis and transaction time (not advanced yet)
     S->>S: resolve unique keys against the committed state, at the start of each write's period
     S->>S: apply writes to working timelines, IDs from a copy of the generator
-    S->>S: end composition targets with their sources, and the targets' other relationships (cascades)
+    S->>S: end composition targets with their sources, and the targets' other relationships, but not those that outlive them (cascades)
     S->>S: compute the derived attributes of every written segment
-    S->>S: validate values and check relationships at both ends, at every point in effective time
+    S->>S: validate values and check relationships at both ends, at every point in effective time, or where it starts for a target that a relationship outlives
     S->>S: run the checks of their types on every changed segment
     S->>S: run the rules of changed entities and relationships on read-only views of that state and of the store as committed before it, recording what they read
     S->>S: if no other problems, run rules again for versions whose reads the transaction changes (re-checks)

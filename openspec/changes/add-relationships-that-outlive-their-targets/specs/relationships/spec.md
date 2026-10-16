@@ -2,7 +2,7 @@
 
 ### Requirement: Relationships stay within the lifetimes of their ends
 
-At every point of a relationship's effective period, both of its ends SHALL exist, except the target of a relationship whose type outlives its targets: that target SHALL exist at the start of each stretch of the relationship's effective period, and the relationship MAY continue after the target ends, as a record of a past fact. THE SYSTEM SHALL reject a transaction that relates entities outside their lifetimes, or that ends an entity while relationships to it continue after that instant, unless the same transaction also ends those relationships or their type outlives that entity as their target.
+At every point of a relationship's effective period, both of its ends SHALL exist, except the target of a relationship whose type outlives its targets: that target SHALL exist at the start of each part of the relationship's effective period that has no gap, and the relationship MAY continue after the target ends, as a record of a past fact. THE SYSTEM SHALL reject a transaction that relates entities outside their lifetimes, or that ends an entity while relationships to it continue after that instant, unless the same transaction also ends those relationships or their type outlives that entity as their target.
 
 #### Scenario: Ending an entity with continuing relationships
 
@@ -79,7 +79,7 @@ WHEN an entity that is the source of a composition ends, THE SYSTEM SHALL end, f
 
 ### Requirement: Navigating relationships
 
-A view SHALL navigate from an entity by a relationship type's name to the targets of the relationships it is the source of, and by the type's inverse name to the sources of the relationships it is the target of, including relationships of subtypes. Names and aliases SHALL be compared without regard to case; for a symmetric type, its name and its inverse name lead from both ends. Navigating by a name that the view's schema does not have SHALL fail. Each result SHALL hold the relationship's state and the state of the entity at the other end, at the view's coordinates, ordered by relationship ID. For a relationship whose type outlives its targets and whose target does not exist at the view's effective time, the result SHALL hold the target's last version as known at the view's basis, whose period ends at or before the view's effective time; queries that follow such a relationship SHALL bind the same version (see the `queries` capability). A view SHALL also read a relationship by its ID, and its timeline. A view SHALL also return, for an entity and a name, every version at any effective time of the relationships that navigation by that name would find at some effective time, as known at its basis, ordered by relationship and then by the start of the version's period, so that history across effective time can be read without knowing relationship IDs.
+A view SHALL navigate from an entity by a relationship type's name to the targets of the relationships it is the source of, and by the type's inverse name to the sources of the relationships it is the target of, including relationships of subtypes. Names and aliases SHALL be compared without regard to case; for a symmetric type, its name and its inverse name lead from both ends. Navigating by a name that the view's schema does not have SHALL fail. Each result SHALL hold the relationship's state and the state of the entity at the other end, at the view's coordinates, ordered by relationship ID. For a relationship whose type outlives its targets and whose target does not exist at the view's effective time, the result SHALL hold the target's last version as known at the view's basis, whose period ends at or before the view's effective time; queries that follow such a relationship SHALL bind the same version (see the `queries` capability). Navigating from an entity that does not exist at the view's effective time SHALL find nothing, also by the inverse name of a relationship that outlives it. A view SHALL also read a relationship by its ID, and its timeline. A view SHALL also return, for an entity and a name, every version at any effective time of the relationships that navigation by that name would find at some effective time, as known at its basis, ordered by relationship and then by the start of the version's period, so that history across effective time can be read without knowing relationship IDs.
 
 #### Scenario: Who owns Beta
 
@@ -105,6 +105,11 @@ A view SHALL navigate from an entity by a relationship type's name to the target
 
 - **WHEN** A-1 is opened by Alice through OpenedBy from 1 January, Alice has ended on 1 June, and A-1's `OpenedBy` is navigated through a view effective at 1 July
 - **THEN** the result is Alice's last version, whose period ends on 1 June, through the OpenedBy relationship
+
+#### Scenario: Navigating from an ended target
+
+- **WHEN** A-1 is opened by Alice through OpenedBy from 1 January, Alice has ended on 1 June, and Alice's `opened` is navigated through a view effective at 1 July
+- **THEN** the result is empty
 
 #### Scenario: A query that follows a relationship to an ended target
 
