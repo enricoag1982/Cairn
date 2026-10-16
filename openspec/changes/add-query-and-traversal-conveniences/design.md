@@ -27,7 +27,7 @@ The existing method stays, and a maximum depth of `Integer.MAX_VALUE` means no l
   - The record's canonical constructor changes, and a constructor with an `int` stays.
   - A minimum depth above a maximum is still an invalid query.
 - A new record, `Traversal`, collects the options with withers:
-  - `Traversal.of(from, name, binding)` starts one, with a minimum depth of 1 and no maximum;
+  - `Traversal.of(from, name, binding)` starts one, with a minimum depth of 0, as in JSON, and no maximum;
   - then `minDepth(int)`, `maxDepth(int)`, `depth(String binding)`, `relationship(String binding)` and `along(Condition)`.
   - `Query.Builder.traverse(Traversal)` adds the step.
   - The existing overloads stay.
@@ -42,9 +42,9 @@ The existing method stays, and a maximum depth of `Integer.MAX_VALUE` means no l
 - With IDs, the start binds the entities with those IDs that are of the start type (or its subtypes, unless the exact type is asked for) and effective at the view's effective time, each once.
   - IDs of other types, unknown IDs and entities that are not effective are left out without a problem, as a filter would leave them.
   - Rows are ordered as the results requirement says, so the order of the given IDs does not matter.
-- In a rule's view, such a start reads each given entity (key E of ADR-0025), not the type (key T). A change to another entity of the type no longer runs the rule again.
+- In a rule's view, such a start reads each given entity, not the entities of the type (ADR-0025). A change to another entity of the type no longer runs the rule again.
 - In JSON, the start (`from`) gains `ids`, an array of ID strings, and the JSON Schema follows; `ids: []` gives no rows. An ID that is not a non-blank string is a problem located at it; the format of IDs belongs to the store's generator, so an ID it never made is left out at run time.
-- `Query.Builder.ids(...)` replaces the IDs it was given before, and `Traversal.of` defaults to a minimum depth of 1 while the JSON form keeps its default of 0.
+- `Query.Builder.ids(...)` replaces the IDs it was given before,
 
 ### D4. Typed row accessors
 

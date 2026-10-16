@@ -156,7 +156,7 @@ Give the rule to the store with `StoreSettings.builder().rules(new LeiChecksum()
 A rule that several types name is generated for their closest common supertype.
 
 Name a rule only on the type it checks, and read everything else through its `RuleContext`: the store records what the rule reads there, and runs it again when a transaction changes that, such as a relationship that the rule navigated and that ends ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)). What a rule reads anywhere else, the store cannot see.
-Prefer navigating from what the rule checks: a rule that lists the entities of a type, finds an entity by a unique key, runs a query, which starts by listing its start type unless it starts from given entities, or reads a timeline, runs again whenever any of those entities changes at a time it read.
+Prefer navigating from what the rule checks: a rule that lists the entities of a type, finds an entity by a unique key, runs a query, which starts by listing its start type unless it [starts from given entities](query-a-store.md#in-java), or reads a timeline, runs again whenever any of those entities changes at a time it read.
 
 ## Names
 

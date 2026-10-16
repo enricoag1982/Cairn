@@ -76,4 +76,4 @@ Chosen option: "A pipeline of steps over named bindings", because each step has 
 
 - Accepted under the standing approval the user gave on 2026-10-13 to implement the roadmap without asking again, with the proposal of `add-queries-and-aggregation`.
 - Indexes, columnar copies for analytics, push-down to storage, and the text language are later steps of the research note's roadmap.
-- The change `add-query-and-traversal-conveniences` lets a query start from given entities of its start type, and traversal steps go to the end without a maximum depth; both extend this decision's steps without changing them.
+- The change `add-query-and-traversal-conveniences` extends the start, which may name IDs so that it binds only those entities of its type, and makes a traversal's maximum depth optional, so that it goes to the end; the rest of this decision stands.

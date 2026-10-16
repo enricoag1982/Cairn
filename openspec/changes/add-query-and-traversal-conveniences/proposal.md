@@ -11,6 +11,7 @@ The HR example found friction in reading data that rules and reports pay for on 
 - Queries that start from given entities: the entities with the given IDs that are of the start type and effective at the view's effective time. In rules, such a query reads only those entities.
 - Typed accessors on result rows: `string`, `bool`, `intValue`, `longValue`, `decimal`, `date`, `instant`, `number` for any numeric value, and `entity(column, as)` that reads a binding as a generated type.
 - Generated relationship types gain the constant `INVERSE`, their inverse name.
+- The agent tool `cairn_traverse` follows to the end when the call gives no maximum depth.
 - The JSON form of queries mirrors the new options; the HR example uses them.
 
 ### Non-goals
@@ -35,5 +36,5 @@ None.
 ## Impact
 
 - **Decisions:** none new. Starting from given entities extends the start of a query that ADR-0023 decides without changing it; ADR-0023 gets a More Information line. It relies on ADR-0025 for what rules read.
-- **Code:** `cairn-api` (`View`, `Query`, `Start`, `QueryStep.Traverse`, `Traversal`, `Row`); `cairn-core` (traversals and query execution, reads of rules); `cairn-documents` (the query JSON form and its JSON Schema); `cairn-codegen` (`INVERSE`); `cairn-example-hr` (rules, reports and tests).
-- **Docs:** the query guide, the codegen guide, the HR domain page (gaps), and the architecture page.
+- **Code:** `cairn-api` (`View`, `Query`, `Start`, `QueryStep.Traverse`, `Traversal`, `Row`); `cairn-core` (traversals and query execution, reads of rules); `cairn-documents` (the query JSON form and its JSON Schema); `cairn-codegen` (`INVERSE`); `cairn-agent-tools` (`cairn_traverse` and the tool descriptions); `cairn-example-hr` (rules, reports and tests).
+- **Docs:** the query guide, the codegen guide, the agent guide, the glossary, the HR and reference domain pages, the architecture page, and ADR-0023's More Information.
