@@ -369,6 +369,37 @@ class AgentToolsScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: The status of another agent's request")
+    void theStatusOfAnotherAgentsRequest() {
+        AgentFixture shared = new AgentFixture();
+        AgentPolicy requireApproval = new AgentPolicy(Decision.ALLOW, Decision.REQUIRE_APPROVAL);
+        AgentTools agentA = new AgentTools(shared.store, requireApproval, shared.queue, "agent:a", Optional.empty(),
+                Clearance.none());
+        AgentTools agentB = new AgentTools(shared.store, requireApproval, shared.queue, "agent:b", Optional.empty(),
+                Clearance.none());
+        JsonNode commit = Json.parse(agentA.commit(Json.render(args("payload",
+                payloadOf("agent:a", createOrganization("ACME"))))));
+        assertThat(commit.get("outcome").stringValue()).isEqualTo("pending");
+        String id = commit.get("request").get("id").stringValue();
+
+        JsonNode own = Json.parse(agentA.approvalStatus(Json.render(args("requestId", id))));
+        JsonNode other = Json.parse(agentB.approvalStatus(Json.render(args("requestId", id))));
+        JsonNode missing = Json.parse(agentB.approvalStatus(Json.render(args("requestId", "no-such-request"))));
+
+        assertThat(own.get("status").stringValue()).isEqualTo("pending");
+        assertThat(other.has("status")).isFalse();
+        assertThat(other.get("problems")).singleElement().satisfies(problem -> {
+            assertThat(problem.get("code").stringValue()).isEqualTo("INVALID_VALUE");
+            assertThat(problem.get("path").stringValue()).isEqualTo("@arguments.requestId");
+            assertThat(problem.get("message").stringValue()).isEqualTo("There is no approval request with the ID " + id
+                    + ".");
+        });
+        assertThat(missing.get("problems")).singleElement().satisfies(problem ->
+                assertThat(problem.get("code").stringValue()).isEqualTo("INVALID_VALUE"));
+        assertThat(other.toString()).doesNotContain("agent:a").doesNotContain("ACME");
+    }
+
+    @Test
     @DisplayName("Scenario: Denied schema registrations")
     void deniedSchemaRegistrations() {
         AgentFixture denying = new AgentFixture(new AgentPolicy(Decision.DENY, Decision.ALLOW));
