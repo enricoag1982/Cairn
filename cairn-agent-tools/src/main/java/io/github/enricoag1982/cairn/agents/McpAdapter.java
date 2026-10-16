@@ -32,7 +32,7 @@ public final class McpAdapter {
     private static final String INSTRUCTIONS = """
             Cairn is a system of record. These tools read and change one store.
             Start with cairn_describe: it returns the schema as YAML schema documents, the rules, the problem codes, \
-            the approval policy and the principal you act as.
+            the approval policy, the principal you act as and your clearance.
             To change the schema: take the document from cairn_describe, edit it, raise the version of its origin, call \
             cairn_plan_schema, then cairn_register_schema. Breaking changes are rejected.
             To write data: build a transaction payload from the JSON Schema of cairn_json_schema (kind payload), with \
@@ -40,6 +40,9 @@ public final class McpAdapter {
             Problems come back as JSON results, not as protocol errors: each has a code, a path, where it is in your \
             document or payload (line and column), what was expected, what was found and a hint. Fix them and try \
             again; cairn_explain_problem explains a code.
+            Your clearance lists the classifications of attributes you may read and write. The values of attributes \
+            with another classification are withheld: a state leaves them out and lists their names in withheld, \
+            and a query, a key or a write that names one is a problem with the code ACCESS_DENIED.
             A request that needs a person's approval comes back as pending with an approval request: poll \
             cairn_approval_status.
             Read data with cairn_read_entity, cairn_read_relationship, cairn_list_entities, cairn_timeline, \

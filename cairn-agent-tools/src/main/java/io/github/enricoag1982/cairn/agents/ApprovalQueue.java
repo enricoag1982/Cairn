@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.agents;
 import io.github.enricoag1982.cairn.agents.ApprovalRequest.Kind;
 import io.github.enricoag1982.cairn.agents.ApprovalRequest.Status;
 import io.github.enricoag1982.cairn.core.IdGenerators;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.IdGenerator;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.schema.Submission;
@@ -14,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -24,7 +26,8 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * <p>Approving a request applies it then, as if the agent had submitted it at that moment: against the store as it is,
  * and with the principal, the party acted for and the reason that the request records. A request that is not valid
- * any more is approved all the same, and its outcome holds the problems. The queue records who approved it.
+ * any more is approved all the same, and its outcome holds the problems. The queue records who approved it. A commit is
+ * applied with the clearance of the agent that asked for it (ADR-0036), which the request records.
  *
  * <p>A queue belongs to one store, which it applies approved requests to; give the same queue and the same store to
  * the {@link AgentTools} that submit to it. A queue is safe for use by several threads.
@@ -102,7 +105,8 @@ public final class ApprovalQueue {
         ObjectNode outcome = switch (request.kind()) {
             case SCHEMA_REGISTRATION -> operations.registerSchema(request.content(),
                     new Submission(request.principal(), request.onBehalfOf(), request.reason()));
-            case DATA_COMMIT -> operations.commit(request.content(), request.principal(), request.onBehalfOf());
+            case DATA_COMMIT -> operations.commit(request.content(), request.principal(), request.onBehalfOf(),
+                    request.clearance().orElse(Clearance.none()));
         };
         return decide(request, Status.APPROVED, outcome, approver);
     }
@@ -135,19 +139,21 @@ public final class ApprovalQueue {
     synchronized ObjectNode requestSchemaRegistration(String document, Submission submission) {
         return operations.schemaPreflight(document).orElseGet(() ->
                 pending(submit(Kind.SCHEMA_REGISTRATION, submission.principal(), submission.onBehalfOf(), document,
-                        submission.reason())));
+                        submission.reason(), Optional.empty())));
     }
 
     /**
      * Puts the commit of a transaction payload to a person, unless it would be rejected now. The request records the
-     * party that the transaction is for: the one the payload names, or else {@code onBehalfOf}.
+     * party that the transaction is for: the one the payload names, or else {@code onBehalfOf}; and the clearance of the
+     * agent, with which approving it commits the transaction.
      *
      * @return {@code {outcome: pending, request}}, or the rejection that ends the commit at once
      */
-    synchronized ObjectNode requestCommit(String payload, String principal, Optional<String> onBehalfOf) {
-        Operations.Preflight preflight = operations.commitPreflight(payload, principal, onBehalfOf);
-        return preflight.outcome().orElseGet(() ->
-                pending(submit(Kind.DATA_COMMIT, principal, preflight.onBehalfOf(), payload, preflight.reason())));
+    synchronized ObjectNode requestCommit(String payload, String principal, Optional<String> onBehalfOf,
+            Clearance clearance) {
+        Operations.Preflight preflight = operations.commitPreflight(payload, principal, onBehalfOf, clearance);
+        return preflight.outcome().orElseGet(() -> pending(submit(Kind.DATA_COMMIT, principal,
+                preflight.onBehalfOf(), payload, preflight.reason(), Optional.of(clearance))));
     }
 
     Operations operations() {
@@ -162,9 +168,10 @@ public final class ApprovalQueue {
     // ------------------------------------------------------------------ helpers
 
     private ApprovalRequest submit(Kind kind, String principal, Optional<String> onBehalfOf, String content,
-            Optional<String> reason) {
+            Optional<String> reason, Optional<Clearance> clearance) {
         ApprovalRequest request = new ApprovalRequest(ids.next(), kind, principal, onBehalfOf, reason,
-                clock.instant(), content, Status.PENDING, Optional.empty(), Optional.empty(), Optional.empty());
+                clock.instant(), content, Status.PENDING, Optional.empty(), Optional.empty(), Optional.empty(),
+                clearance);
         requests.put(request.id(), request);
         return request;
     }
@@ -189,7 +196,8 @@ public final class ApprovalQueue {
     private ApprovalRequest decide(ApprovalRequest before, Status status, ObjectNode outcome, String approver) {
         ApprovalRequest decided = new ApprovalRequest(before.id(), before.kind(), before.principal(),
                 before.onBehalfOf(), before.reason(), before.submittedAt(), before.content(), status,
-                Optional.of(Json.render(outcome)), Optional.of(approver), Optional.of(clock.instant()));
+                Optional.of(Json.render(outcome)), Optional.of(approver), Optional.of(clock.instant()),
+                before.clearance());
         requests.put(decided.id(), decided);
         return decided;
     }
@@ -208,6 +216,10 @@ public final class ApprovalQueue {
         request.onBehalfOf().ifPresent(party -> node.put("onBehalfOf", party));
         request.reason().ifPresent(reason -> node.put("reason", reason));
         node.put("submittedAt", request.submittedAt().toString());
+        request.clearance().ifPresent(clearance -> {
+            ArrayNode classifications = node.putArray("clearance");
+            clearance.classifications().forEach(classifications::add);
+        });
         node.put("content", request.content());
         request.outcome().ifPresent(outcome -> node.set("outcome", Json.parse(outcome)));
         request.decidedBy().ifPresent(who -> node.put("decidedBy", who));

@@ -7,6 +7,7 @@ import io.github.enricoag1982.cairn.core.kv.Batch;
 import io.github.enricoag1982.cairn.core.kv.InMemoryKeyValueStore;
 import io.github.enricoag1982.cairn.core.kv.KeyRange;
 import io.github.enricoag1982.cairn.core.kv.KeyValueStore;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.PurgeRecord;
@@ -92,6 +93,29 @@ class StoredMetadataTest {
         return new KeyedTransaction(transaction, new Receipt(new Basis(basis), T2, Map.of(),
                 List.of(new EntityId("e-1")), List.of(), "importer", Optional.empty(), Optional.empty(),
                 Optional.of(key)));
+    }
+
+    @Test
+    void aTransactionWithAnIdempotencyKeyKeepsItsClearance() {
+        Transaction cleared = Transaction.by("importer").idempotencyKey("import-1").clearance(Clearance.of("pay"))
+                .create("Person", EffectivePeriod.from(T2), Map.of("name", Value.of("Alice"))).build();
+        Transaction none = Transaction.by("importer").idempotencyKey("import-2").clearance(Clearance.none())
+                .create("Person", EffectivePeriod.from(T2), Map.of("name", Value.of("Bob"))).build();
+        KeyedTransaction withPay = new KeyedTransaction(cleared, keyed("import-1", 2).receipt());
+        KeyedTransaction withNone = new KeyedTransaction(none, keyed("import-2", 3).receipt());
+        InMemoryKeyValueStore store = new InMemoryKeyValueStore();
+        Batch batch = new Batch();
+        StoredMetadata.putKeyed(batch, withPay);
+        StoredMetadata.putKeyed(batch, withNone);
+        StoredMetadata.putKeyed(batch, keyed("import-3", 4));
+        store.apply(batch);
+        Received received = new Received();
+
+        StoredMetadata.load(store, received);
+
+        assertThat(received.items).containsExactly(withPay, withNone, keyed("import-3", 4));
+        assertThat(received.items).extracting(item -> ((KeyedTransaction) item).transaction().clearance())
+                .containsExactly(Optional.of(Clearance.of("pay")), Optional.of(Clearance.none()), Optional.empty());
     }
 
     private static List<Integer> kinds(KeyValueStore store) {

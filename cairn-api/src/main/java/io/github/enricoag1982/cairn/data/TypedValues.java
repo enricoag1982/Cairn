@@ -24,6 +24,10 @@ import java.util.Optional;
  * {@link IllegalArgumentException} whose message names the attribute. There is a pair of methods for each value type:
  * string, boolean, int, long, decimal, date and instant.
  *
+ * <p>A state read through a view restricted to a clearance has no value for the attributes that it withheld, listed in
+ * {@link EntityState#withheld()}; {@link #requireHeld(EntityState, String)} fails for such an attribute, so that a
+ * generated accessor does not report a value that was withheld as one that does not exist.
+ *
  * <p>It also lists the types from which a state's type extends, nearest first, in a schema: the generated {@code from}
  * methods that take a schema use the list to find the nearest type that the generator knew, so that a state of a type
  * that was registered after generation is read as the supertype it extends.
@@ -66,6 +70,48 @@ public final class TypedValues {
         line.add(relationshipType);
         schema.relationshipType(relationshipType).ifPresent(type -> line.addAll(type.supertypes()));
         return List.copyOf(line);
+    }
+
+    /**
+     * Fails if a state withheld an attribute. The accessors that the generator writes for a classified attribute call
+     * it: a state read through a {@linkplain View#restrictedTo view restricted to a clearance} that does not cover the
+     * classification has no value for the attribute, and an accessor that returned an empty optional, or a default,
+     * would tell the caller that the entity has no value, which is not what it knows (design D6 of
+     * {@code add-attribute-access-control}).
+     *
+     * @param state     the state that a generated type was read from
+     * @param attribute the attribute's name
+     * @throws IllegalStateException if the state withheld the attribute; its message names the attribute and the entity
+     */
+    public static void requireHeld(EntityState state, String attribute) {
+        Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(attribute, "attribute");
+        if (state.withheld().contains(attribute)) {
+            throw withheld(attribute, "entity", state.id().value());
+        }
+    }
+
+    /**
+     * Fails if a state withheld an attribute, as {@link #requireHeld(EntityState, String)} does for the state of an
+     * entity.
+     *
+     * @param state     the state that a generated type was read from
+     * @param attribute the attribute's name
+     * @throws IllegalStateException if the state withheld the attribute; its message names the attribute and the
+     *                               relationship
+     */
+    public static void requireHeld(RelationshipState state, String attribute) {
+        Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(attribute, "attribute");
+        if (state.withheld().contains(attribute)) {
+            throw withheld(attribute, "relationship", state.id().value());
+        }
+    }
+
+    private static IllegalStateException withheld(String attribute, String kind, String id) {
+        return new IllegalStateException("The attribute " + attribute + " of the " + kind + " " + id + " was withheld: "
+                + "the view that this state was read from is restricted to a clearance that does not cover its "
+                + "classification, so the state does not say whether the " + kind + " has a value for it.");
     }
 
     /**

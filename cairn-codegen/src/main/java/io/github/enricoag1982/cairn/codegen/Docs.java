@@ -81,6 +81,23 @@ final class Docs {
     }
 
     /**
+     * The paragraph that says an attribute is classified and what a withheld value does to its accessor, if it is
+     * classified (design D6 of {@code add-attribute-access-control}).
+     *
+     * @param attribute the attribute
+     * @param thing     {@code entity} or {@code relationship}
+     * @return the paragraph, or none for an attribute without a classification
+     */
+    static List<String> classified(Attribute attribute, String thing) {
+        return attribute.classification().map(classification -> List.of("<p>Classified " + code(classification)
+                + ": a state read through a view that is restricted to a clearance that does not cover "
+                + code(classification) + " withholds this attribute, and the accessor then throws an "
+                + "<code>IllegalStateException</code> that names the attribute and says that it was withheld, because "
+                + "the state does not say whether the " + thing + " has a value. The names of the attributes that a "
+                + "state withheld are in <code>withheld()</code> of its generic state.")).orElse(List.of());
+    }
+
+    /**
      * The facts about an attribute that its Javadoc states besides its description: that it is derived, with its
      * expression, allowed values, pattern, lengths, range and uniqueness. Each is a paragraph.
      */

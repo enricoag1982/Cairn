@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.core.schema;
 
+import io.github.enricoag1982.cairn.expressions.CompiledDerivation;
 import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -503,6 +505,17 @@ final class SchemaValidator {
         Optional<Range> range = checkRange(owner, attribute);
         TextConstraints text = checkText(owner, attribute);
         checkExamples(owner, attribute, range, text);
+        checkClassification(owner, attribute);
+    }
+
+    /** Checks that the classification of an attribute is written like a rule name (design D1 of {@code add-attribute-access-control}). */
+    private void checkClassification(String owner, AttributeDefinition attribute) {
+        attribute.classification().filter(classification -> !Names.isValidRuleName(classification))
+                .ifPresent(classification -> problems.add(Problems.of(ProblemCode.INVALID_CLASSIFICATION,
+                        Names.path(owner, attribute.name()), "The classification '" + classification + "' of the "
+                        + "attribute " + attribute.name() + " of " + owner + " must be lowercase letters, digits and "
+                        + "hyphens, starting with a letter (at most 128).", Names.RULE_NAME_FORM, classification,
+                        null)));
     }
 
     /** Checks the range of an attribute and returns it if it can be used to check examples. */
@@ -1098,7 +1111,9 @@ final class SchemaValidator {
             }
             String expression = attribute.derived().get();
             try {
-                expressionCompiler.compileDerivation(expression, readable, attribute.valueType());
+                CompiledDerivation compiled = expressionCompiler.compileDerivation(expression, readable,
+                        attribute.valueType());
+                checkDerivedClassification(typeName, attributes, derived, compiled, reported);
             } catch (ExpressionCompilationException e) {
                 String position = e.line().isPresent() && e.column().isPresent()
                         ? " at line " + e.line().getAsInt() + ", column " + e.column().getAsInt() : "";
@@ -1110,6 +1125,62 @@ final class SchemaValidator {
                             expression, derivationHint(typeName, readable, derivedNames, expression)));
                 }
             }
+        }
+    }
+
+    /**
+     * Checks that a derived attribute has the classification of the attributes its expression reads, so that it cannot
+     * reveal them (design D1 of {@code add-attribute-access-control}): the attributes that it reads have at most one
+     * classification between them, and a derived attribute that reads classified attributes has it. A classification
+     * that is not valid is a problem of its own attribute, not of this one. The same problem is reported once, however
+     * many types have the attribute; one that differs between types, because the types classify what is read
+     * differently, is reported for each of them.
+     */
+    private void checkDerivedClassification(String typeName, Map<String, Declared> attributes, DerivedAttribute derived,
+            CompiledDerivation compiled, Set<String> reported) {
+        TreeSet<String> classifications = new TreeSet<>();
+        Map<String, String> readBy = new LinkedHashMap<>();
+        for (String name : compiled.attributesRead()) {
+            Declared read = attributes.get(Names.key(name));
+            if (read == null) {
+                continue;
+            }
+            read.attribute().classification().filter(Names::isValidRuleName).ifPresent(classification -> {
+                classifications.add(classification);
+                readBy.putIfAbsent(classification, read.attribute().name());
+            });
+        }
+        AttributeDefinition attribute = derived.attribute();
+        Optional<String> own = attribute.classification();
+        if (classifications.isEmpty() || classifications.size() == 1 && own.equals(Optional.of(classifications.first()))) {
+            return;
+        }
+        String what = "the derived attribute " + attribute.name() + " of " + derived.declarer();
+        String where = Names.same(typeName, derived.declarer()) ? "" : " This is so for " + typeName + ".";
+        String message;
+        String expected;
+        String found;
+        String hint;
+        if (classifications.size() > 1) {
+            message = "The expression of " + what + " reads attributes of the classifications "
+                    + String.join(" and ", classifications) + " (" + String.join(", ", readBy.values())
+                    + "), but a derived attribute has one classification, so it cannot reveal both.";
+            expected = "an expression that reads attributes of one classification";
+            found = "attributes of the classifications " + String.join(", ", classifications);
+            hint = "Read attributes of one classification only, or derive one attribute for each classification.";
+        } else {
+            String classification = classifications.first();
+            message = "The expression of " + what + " reads the attribute " + readBy.get(classification) + ", which is "
+                    + "classified " + classification + ", but the derived attribute "
+                    + own.map(have -> "is classified " + have).orElse("has no classification")
+                    + ", so it would reveal the attribute to readers who are not cleared for " + classification + ".";
+            expected = "the classification " + classification;
+            found = own.map(have -> "the classification " + have).orElse("no classification");
+            hint = "Classify " + attribute.name() + " as " + classification + ".";
+        }
+        if (reported.add(derived.path() + "|classification|" + message)) {
+            problems.add(Problems.of(ProblemCode.INVALID_CLASSIFICATION, derived.path(), message + where, expected,
+                    found, hint));
         }
     }
 

@@ -343,6 +343,52 @@ class PropertyRulesTest {
     }
 
     @Nested
+    class Classifications {
+
+        @Test
+        void addingChangingAndRemovingAClassificationAreCompatible() {
+            AttributeDefinition none = attribute(a -> a);
+            AttributeDefinition pay = attribute(a -> a.classification("pay"));
+            AttributeDefinition finance = attribute(a -> a.classification("finance"));
+
+            assertThat(compare(none, pay)).singleElement().satisfies(change -> {
+                assertThat(change.compatible()).isTrue();
+                assertThat(change.path()).isEqualTo("Party.code");
+                assertThat(change.description()).contains("classified", "pay");
+                assertThat(change.hint()).isEmpty();
+            });
+            assertThat(compare(pay, finance)).singleElement().satisfies(change -> {
+                assertThat(change.compatible()).isTrue();
+                assertThat(change.description()).contains("changed the classification", "pay", "finance");
+            });
+            assertThat(compare(finance, none)).singleElement().satisfies(change -> {
+                assertThat(change.compatible()).isTrue();
+                assertThat(change.description()).contains("removed the classification", "finance");
+            });
+        }
+
+        @Test
+        void anAttributeThatKeepsItsClassificationHasNoChange() {
+            assertThat(compare(attribute(a -> a.classification("pay")), attribute(a -> a.classification("pay"))))
+                    .isEmpty();
+        }
+
+        @Test
+        void aClassificationHasARuleOfItsOwn() {
+            assertThat(PropertyRules.hasRule("attribute", "classification")).isTrue();
+        }
+
+        @Test
+        void aClassificationChangedTogetherWithABreakingChangeStillReportsTheBreakingOne() {
+            List<SchemaChange> changes = compare(attribute(a -> a), attribute(a -> a.required().classification("pay")));
+
+            assertThat(changes).hasSize(2);
+            assertThat(changes).filteredOn(change -> !change.compatible()).singleElement()
+                    .satisfies(change -> assertThat(change.description()).contains("required"));
+        }
+    }
+
+    @Nested
     class OutlivingTargets {
 
         @Test

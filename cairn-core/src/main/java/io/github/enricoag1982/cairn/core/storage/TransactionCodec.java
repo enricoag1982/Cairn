@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.core.storage;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
@@ -27,6 +28,11 @@ import java.util.Set;
  * Writes and reads a {@link Transaction} as submitted, the parts of a {@link Receipt} that the transaction does not
  * hold (its IDs, and the resolutions of the unique keys that it names), and the entries of the transaction history, in
  * format version 1.
+ *
+ * <p>The clearance of a transaction (design D4 of {@code add-attribute-access-control}) is not part of the transaction's
+ * fields: it is the very last section of a record that holds a transaction, left out when the transaction has none,
+ * after the resolutions of unique keys, which are written, empty, before it if the transaction names none, so that the
+ * two are told apart by position. A record without it reads as a transaction without a clearance.
  */
 final class TransactionCodec {
 
@@ -65,6 +71,30 @@ final class TransactionCodec {
         Optional<String> reason = in.readOptionalText();
         Optional<String> idempotencyKey = in.readOptionalText();
         return new Transaction(principal, onBehalfOf, reason, idempotencyKey, in.readAll(TransactionCodec::readWrite));
+    }
+
+    /**
+     * Writes the clearance of a transaction, as the number of classifications and the classifications. Writes nothing for
+     * a transaction without a clearance, so that its record is as it was before transactions had one; a record that has
+     * a clearance writes the resolutions of unique keys before it, even if there are none.
+     */
+    static void writeClearance(Encoder out, Transaction transaction) {
+        transaction.clearance().ifPresent(clearance -> out.writeAll(List.copyOf(clearance.classifications()),
+                Encoder::writeText));
+    }
+
+    /** Reads what {@link #writeClearance} wrote: none, if no bytes are left, as in a record of a transaction without one. */
+    static Optional<Clearance> readClearance(Decoder in) {
+        if (in.remaining() == 0) {
+            return Optional.empty();
+        }
+        return Optional.of(Clearance.of(in.readAll(Decoder::readText).toArray(String[]::new)));
+    }
+
+    /** The transaction as it is with the clearance that was read after it. */
+    static Transaction withClearance(Transaction transaction, Optional<Clearance> clearance) {
+        return clearance.isEmpty() ? transaction : new Transaction(transaction.principal(), transaction.onBehalfOf(),
+                transaction.reason(), transaction.idempotencyKey(), transaction.writes(), clearance);
     }
 
     private static void writeWrite(Encoder out, Write write) {
@@ -283,7 +313,15 @@ final class TransactionCodec {
      * record: {@link #readReceiptKeys} reads them only if bytes are left.
      */
     static void writeReceiptKeys(Encoder out, Receipt receipt) {
-        if (!receipt.keys().isEmpty()) {
+        writeReceiptKeys(out, receipt, false);
+    }
+
+    /**
+     * Writes the resolutions of unique keys as {@link #writeReceiptKeys(Encoder, Receipt)} does, but also, as an empty
+     * list, if there are none and the section is {@code required} because the clearance of the transaction follows it.
+     */
+    static void writeReceiptKeys(Encoder out, Receipt receipt, boolean required) {
+        if (!receipt.keys().isEmpty() || required) {
             out.writeAll(receipt.keys(), (encoder, resolution) -> {
                 encoder.writeInt(resolution.write());
                 writeKey(encoder, resolution.key());
@@ -356,14 +394,15 @@ final class TransactionCodec {
     /**
      * Writes a committed transaction with an idempotency key and its receipt, as a snapshot file and a store over a
      * key-value store keep them: the transaction as submitted, then the basis and the transaction time of the receipt,
-     * the IDs that it holds, and the keys that it resolved.
+     * the IDs that it holds, the keys that it resolved, and the clearance of the transaction, if it has one.
      */
     static void writeKeyed(Encoder out, KeyedTransaction keyed) {
         write(out, keyed.transaction());
         out.writeLong(keyed.receipt().basis().value());
         out.writeInstant(keyed.receipt().transactionTime());
         writeReceiptIds(out, keyed.receipt());
-        writeReceiptKeys(out, keyed.receipt());
+        writeReceiptKeys(out, keyed.receipt(), keyed.transaction().clearance().isPresent());
+        writeClearance(out, keyed.transaction());
     }
 
     /** Reads what {@link #writeKeyed} wrote, up to the end of the decoder. */
@@ -372,7 +411,8 @@ final class TransactionCodec {
         Basis basis = new Basis(in.readLong());
         Instant transactionTime = in.readInstant();
         Receipt receipt = readReceipt(in, basis, transactionTime, transaction);
-        return new KeyedTransaction(transaction, withKeys(receipt, readReceiptKeys(in)));
+        List<KeyResolution> keys = readReceiptKeys(in);
+        return new KeyedTransaction(withClearance(transaction, readClearance(in)), withKeys(receipt, keys));
     }
 
     // ------------------------------------------------------------------ history entry

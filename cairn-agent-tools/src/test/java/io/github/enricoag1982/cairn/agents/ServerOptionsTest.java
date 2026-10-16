@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.enricoag1982.cairn.agents.AgentPolicy.Decision;
+import io.github.enricoag1982.cairn.data.Clearance;
 import java.nio.file.Path;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,50 @@ class ServerOptionsTest {
         assertInvalid(new String[] {"--principal", "p", "--policy", "data=allow,data=deny"}, "data twice");
         assertInvalid(new String[] {"--principal", "p", "--policy", "schema=allow", "--policy", "data=deny"},
                 "given twice");
+    }
+
+    // ------------------------------------------------------------------ the clearance (ADR-0036)
+
+    @Test
+    void withoutTheOptionTheClearanceCoversNothing() throws Exception {
+        ServerOptions options = ServerOptions.parse(new String[] {"--principal", "agent:demo"});
+
+        assertThat(options.clearance()).isEqualTo(Clearance.none());
+        assertThat(options.clearance().classifications()).isEmpty();
+    }
+
+    @Test
+    void theClearanceIsAListOfClassificationsAndMayBeGivenWithAnEqualsSign() throws Exception {
+        ServerOptions pay = ServerOptions.parse(new String[] {"--principal", "p", "--clearance", "pay"});
+        ServerOptions several = ServerOptions.parse(new String[] {"--principal", "p", "--clearance=pay, identity-data"});
+
+        assertThat(pay.clearance()).isEqualTo(Clearance.of("pay"));
+        assertThat(several.clearance()).isEqualTo(Clearance.of("pay", "identity-data"));
+        assertThat(several.clearance().classifications()).containsExactly("pay", "identity-data");
+    }
+
+    @Test
+    void anEmptyClearanceIsTheClearanceThatCoversNothing() throws Exception {
+        assertThat(ServerOptions.parse(new String[] {"--principal", "p", "--clearance", ""}).clearance())
+                .isEqualTo(Clearance.none());
+    }
+
+    @Test
+    void aClearanceThatIsNotWrittenLikeClassificationsIsRejectedWithAMessage() {
+        assertInvalid(new String[] {"--principal", "p", "--clearance"}, "--clearance needs a value");
+        assertInvalid(new String[] {"--principal", "p", "--clearance", "Pay"}, "The classification 'Pay'");
+        assertInvalid(new String[] {"--principal", "p", "--clearance", "pay,"}, "The classification ''");
+        assertInvalid(new String[] {"--principal", "p", "--clearance", "pay,,identity"}, "The classification ''");
+        assertInvalid(new String[] {"--principal", "p", "--clearance", "1pay"}, "starting with a letter");
+        assertInvalid(new String[] {"--principal", "p", "--clearance", "pay_roll"}, "lowercase letters");
+        assertInvalid(new String[] {"--principal", "p", "--clearance", "a".repeat(129)}, "lowercase letters");
+        assertInvalid(new String[] {"--principal", "p", "--clearance", "pay", "--clearance", "identity"},
+                "--clearance is given twice");
+    }
+
+    @Test
+    void theUsageTellsAboutTheClearance() {
+        assertThat(ServerOptions.USAGE).contains("--clearance <classification>[,...]").contains("by default none");
     }
 
     private static void assertInvalid(String[] args, String message) {

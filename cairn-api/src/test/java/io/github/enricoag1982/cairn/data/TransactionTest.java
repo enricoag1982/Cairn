@@ -333,4 +333,47 @@ class TransactionTest {
 
         assertThat(endDate.from()).isEqualTo(Instant.parse("2026-06-01T00:00:00.123456Z"));
     }
+
+    @Test
+    void aTransactionHasNoClearanceUnlessItIsGivenOne() {
+        Transaction plain = Transaction.by("agent:onboarding").build();
+        Transaction cleared = Transaction.by("agent:onboarding").clearance(Clearance.of("pay")).build();
+        Transaction none = Transaction.by("agent:onboarding").clearance(Clearance.none()).build();
+
+        assertThat(plain.clearance()).isEmpty();
+        assertThat(cleared.clearance()).hasValue(Clearance.of("pay"));
+        assertThat(none.clearance()).as("a clearance that covers nothing is a clearance").hasValue(Clearance.none());
+    }
+
+    @Test
+    void theClearanceIsPartOfWhatMakesTransactionsEqual() {
+        Transaction.Builder builder = Transaction.by("p").idempotencyKey("k");
+
+        Transaction plain = builder.build();
+        Transaction cleared = builder.clearance(Clearance.of("pay", "identity")).build();
+
+        assertThat(cleared).isEqualTo(Transaction.by("p").idempotencyKey("k").clearance(Clearance.of("identity", "pay"))
+                .build());
+        assertThat(cleared).isNotEqualTo(plain);
+        assertThat(cleared).isNotEqualTo(Transaction.by("p").idempotencyKey("k").clearance(Clearance.of("pay")).build());
+        assertThat(cleared).isNotEqualTo(Transaction.by("p").idempotencyKey("k").clearance(Clearance.none()).build());
+        assertThat(Transaction.by("p").clearance(Clearance.none()).build()).isNotEqualTo(Transaction.by("p").build());
+    }
+
+    @Test
+    void theConstructorWithoutAClearanceMakesATransactionWithoutOne() {
+        Transaction transaction = new Transaction("p", Optional.empty(), Optional.empty(), Optional.empty(), List.of());
+
+        assertThat(transaction.clearance()).isEmpty();
+        assertThat(transaction).isEqualTo(Transaction.by("p").build());
+        assertThat(new Transaction("p", Optional.empty(), Optional.empty(), Optional.empty(), List.of(),
+                Optional.of(Clearance.none())).clearance()).hasValue(Clearance.none());
+    }
+
+    @Test
+    void theClearanceIsRejectedWhenNull() {
+        assertThatThrownBy(() -> Transaction.by("p").clearance(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Transaction("p", Optional.empty(), Optional.empty(), Optional.empty(), List.of(),
+                null)).isInstanceOf(NullPointerException.class);
+    }
 }

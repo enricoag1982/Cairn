@@ -11,8 +11,9 @@ import java.util.Objects;
  * {@code schema}, {@code entities} (or {@code entity}, for a start from given entities), {@code navigate} and
  * {@code traverse}.
  *
- * <p>A query is checked against the view's schema first, with every problem reported and nothing read; then its steps
- * apply in order to lists of rows. Nothing is cached between queries.
+ * <p>A query is checked against the view's schema first, and against its clearance if the view is restricted (ADR-0036),
+ * with every problem reported and nothing read; then its steps apply in order to lists of rows. Nothing is cached between
+ * queries.
  */
 public final class QueryRunner {
 
@@ -29,7 +30,7 @@ public final class QueryRunner {
     public static QueryResult run(View view, Query query) {
         Objects.requireNonNull(view, "view");
         Objects.requireNonNull(query, "query");
-        Checker.Checked checked = Checker.check(view.schema(), query);
+        Checker.Checked checked = Checker.check(view.schema(), query, view.clearance());
         if (!checked.problems().isEmpty()) {
             return new QueryResult.Invalid(checked.problems());
         }

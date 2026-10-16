@@ -74,8 +74,14 @@ final class Amendments {
             } else if (attribute.get().derived().isPresent()) {
                 checks.derivedAttributeWritten(path, type, attribute.get());
                 derivedNamed = true;
-            } else if (cleared.add(attribute.get().id()) && !affected.contains(attribute.get())) {
-                affected.add(attribute.get());
+            } else {
+                if (checks.denies(attribute.get()) && !set.attributes().contains(attribute.get())
+                        && !cleared.contains(attribute.get().id())) {
+                    checks.accessDenied(path, type, attribute.get(), "clear");
+                }
+                if (cleared.add(attribute.get().id()) && !affected.contains(attribute.get())) {
+                    affected.add(attribute.get());
+                }
             }
         }
         target.namesUnresolved |= unresolved;
@@ -104,9 +110,28 @@ final class Amendments {
         target.derivedUnresolved |= values.derivedNamed();
         checkConflict(write.check(), target, path, null);
         if (validPeriod && isEffective(target, path, write.period())) {
+            SubjectType type = target.type();
             target.timeline = target.timeline.update(write.period().from(), Segment.endOf(write.period()),
-                    old -> values.values(), commit.transactionTime(), commit.basis());
+                    old -> replaced(type, old, values.values()), commit.transactionTime(), commit.basis());
         }
+    }
+
+    /**
+     * The values that a replace leaves: the values it gives, and, if the transaction has a clearance, the values of the
+     * attributes that the clearance does not cover that the version had, which a replace without them does not touch (design
+     * D4 of {@code add-attribute-access-control}), so that it clears nothing that the transaction may not clear.
+     */
+    private Map<AttributeId, Value> replaced(SubjectType type, Map<AttributeId, Value> old,
+            Map<AttributeId, Value> given) {
+        Map<AttributeId, Value> values = new HashMap<>(given);
+        for (Attribute attribute : type.attributes()) {
+            Value held = old.get(attribute.id());
+            if (held != null && attribute.derived().isEmpty() && checks.denies(attribute)
+                    && !given.containsKey(attribute.id())) {
+                values.put(attribute.id(), held);
+            }
+        }
+        return values;
     }
 
     void endDate(Write.EndDate write, int position) {

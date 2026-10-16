@@ -82,7 +82,8 @@ class DocumentWriterTest {
         AttributeDefinition attribute = new AttributeDefinition("code", ValueType.STRING, true, true,
                 Optional.of(Range.between(Bound.inclusive(Value.of("a")), Bound.exclusive(Value.of("z")))),
                 List.of("old"), true, Optional.of("A code."), List.of(Value.of("x")), List.of("x", "y"),
-                Optional.of("[a-z]+"), OptionalInt.of(1), OptionalInt.of(9), Optional.of("has(self.id) ? self.id : 'x'"));
+                Optional.of("[a-z]+"), OptionalInt.of(1), OptionalInt.of(9), Optional.of("has(self.id) ? self.id : 'x'"),
+                Optional.of("pay"));
         SchemaDefinition definition = new SchemaDefinition(
                 List.of(new EntityTypeDefinition("Full", true, Optional.of("Base"), List.of("Named"), List.of(attribute),
                         List.of("Old"), true, Optional.of("An entity type."), List.of(new RuleReference("a-rule", 2)),

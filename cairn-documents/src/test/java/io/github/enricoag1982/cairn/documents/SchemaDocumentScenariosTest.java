@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.core.SchemaRegistries;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
+import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Bound;
 import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.DocumentLocation;
@@ -130,6 +131,23 @@ class SchemaDocumentScenariosTest {
         assertThat(document.definition().relationshipTypes()).extracting(RelationshipTypeDefinition::name,
                 RelationshipTypeDefinition::outlivesTarget).containsExactly(tuple("OpenedBy", true),
                 tuple("HeldBy", false));
+    }
+
+    @Test
+    @DisplayName("Scenario: Reading a classified attribute")
+    void readingAClassifiedAttribute() {
+        SchemaDocument document = valid(document(
+                "entityTypes:",
+                "  Account:",
+                "    attributes:",
+                "      number: { type: string, required: true }",
+                "      balance: { type: decimal, required: true, classification: finance }"));
+
+        assertThat(document.definition().entityTypes()).singleElement().satisfies(account ->
+                assertThat(account.attributes()).extracting(AttributeDefinition::name,
+                        AttributeDefinition::classification).containsExactly(
+                                tuple("number", Optional.empty()),
+                                tuple("balance", Optional.of("finance"))));
     }
 
     @Test

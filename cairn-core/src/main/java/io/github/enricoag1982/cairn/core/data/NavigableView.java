@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.query.QueryRunner;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
@@ -154,6 +155,17 @@ abstract class NavigableView implements View {
     @Override
     public QueryResult query(Query query) {
         return QueryRunner.run(this, query);
+    }
+
+    /** A view that is not restricted reads every value; the view that results from restricting it is a {@link RestrictedView}. */
+    @Override
+    public View restrictedTo(Clearance clearance) {
+        return new RestrictedView(this, Objects.requireNonNull(clearance, "clearance"));
+    }
+
+    @Override
+    public Optional<Clearance> clearance() {
+        return Optional.empty();
     }
 
     @Override

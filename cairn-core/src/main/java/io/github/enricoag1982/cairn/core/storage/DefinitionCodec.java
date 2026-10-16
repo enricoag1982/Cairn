@@ -40,6 +40,13 @@ import java.util.Set;
  * relationship type declares it. A record that has such a type but no derived attributes or checks has the empty
  * sections before it, so that the sections are told apart by their position. A record without the section reads as
  * a definition whose relationships do not outlive their targets.
+ *
+ * <p>The classifications of attributes (design D1 of {@code add-attribute-access-control}) follow in the very last
+ * section, which is left out when no attribute is classified: for each classified attribute, the name of the trait,
+ * entity type or relationship type that declares it, its name and its classification. A record that has a classified
+ * attribute but no relationship type that outlives its targets, no derived attributes or no checks has the empty
+ * sections before it, so that the sections are told apart by their position. A record without the section reads as a
+ * definition whose attributes have no classification.
  */
 final class DefinitionCodec {
 
@@ -183,11 +190,62 @@ final class DefinitionCodec {
      * definition. Writes nothing if there are none.
      */
     static void writeOutliving(Encoder out, SchemaDefinition definition) {
-        if (!hasOutliving(definition)) {
+        writeOutliving(out, definition, false);
+    }
+
+    /**
+     * Writes the outliving section: the names of the relationship types whose relationships outlive their targets, in the
+     * order of the definition. Writes nothing if there are none, unless the section is {@code required} because a section
+     * that follows it needs to be told apart; it is then written empty.
+     */
+    static void writeOutliving(Encoder out, SchemaDefinition definition, boolean required) {
+        if (!hasOutliving(definition) && !required) {
             return;
         }
         out.writeAll(definition.relationshipTypes().stream().filter(RelationshipTypeDefinition::outlivesTarget)
                 .map(RelationshipTypeDefinition::name).toList(), Encoder::writeText);
+    }
+
+    /** One classified attribute with the element that declares it: a trait, an entity type or a relationship type. */
+    private record ClassifiedAttribute(String declarer, String attribute, String classification) {
+    }
+
+    /** Tells whether any attribute of the definition has a classification. */
+    static boolean hasClassified(SchemaDefinition definition) {
+        return !classifiedAttributes(definition).isEmpty();
+    }
+
+    private static List<ClassifiedAttribute> classifiedAttributes(SchemaDefinition definition) {
+        List<ClassifiedAttribute> classified = new ArrayList<>();
+        definition.traits().forEach(trait -> classifiedOf(trait.name(), trait.attributes(), classified));
+        definition.entityTypes().forEach(type -> classifiedOf(type.name(), type.attributes(), classified));
+        definition.relationshipTypes().forEach(type -> classifiedOf(type.name(), type.attributes(), classified));
+        return classified;
+    }
+
+    private static void classifiedOf(String declarer, List<AttributeDefinition> attributes,
+            List<ClassifiedAttribute> into) {
+        for (AttributeDefinition attribute : attributes) {
+            attribute.classification().ifPresent(classification ->
+                    into.add(new ClassifiedAttribute(declarer, attribute.name(), classification)));
+        }
+    }
+
+    /**
+     * Writes the classifications of the attributes: for each classified attribute, the name of the trait, entity type or
+     * relationship type that declares it, the attribute's name and the classification, traits first, then entity types,
+     * then relationship types, in the order of the definition. Writes nothing if no attribute is classified.
+     */
+    static void writeClassifications(Encoder out, SchemaDefinition definition) {
+        List<ClassifiedAttribute> classified = classifiedAttributes(definition);
+        if (classified.isEmpty()) {
+            return;
+        }
+        out.writeAll(classified, (encoder, attribute) -> {
+            encoder.writeText(attribute.declarer());
+            encoder.writeText(attribute.attribute());
+            encoder.writeText(attribute.classification());
+        });
     }
 
     private static void writeCheck(Encoder out, Check check) {
@@ -399,6 +457,75 @@ final class DefinitionCodec {
         return new SchemaDefinition(definition.entityTypes(), definition.traits(), relationshipTypes);
     }
 
+    /**
+     * Reads what {@link #writeClassifications} wrote and gives the attributes it names their classifications. A record
+     * that has no bytes left has no classified attributes.
+     *
+     * @throws CorruptRecordException if an attribute is named twice, or the definition does not have it
+     */
+    static SchemaDefinition readClassifications(Decoder in, SchemaDefinition definition) {
+        if (in.remaining() == 0) {
+            return definition;
+        }
+        Map<String, String> classifications = new HashMap<>();
+        for (ClassifiedAttribute attribute : in.readAll(decoder ->
+                new ClassifiedAttribute(decoder.readText(), decoder.readText(), decoder.readText()))) {
+            if (classifications.put(attribute.declarer() + "." + attribute.attribute(), attribute.classification())
+                    != null) {
+                throw new CorruptRecordException("The classification of the attribute " + attribute.declarer() + "."
+                        + attribute.attribute() + " is recorded twice.");
+            }
+        }
+        Set<String> used = new HashSet<>();
+        List<TraitDefinition> traits = new ArrayList<>();
+        for (TraitDefinition trait : definition.traits()) {
+            traits.add(new TraitDefinition(trait.name(), classify(trait.name(), trait.attributes(), classifications, used),
+                    trait.aliases(), trait.deprecated(), trait.description()));
+        }
+        List<EntityTypeDefinition> entityTypes = new ArrayList<>();
+        for (EntityTypeDefinition type : definition.entityTypes()) {
+            entityTypes.add(new EntityTypeDefinition(type.name(), type.isAbstract(), type.supertype(), type.traits(),
+                    classify(type.name(), type.attributes(), classifications, used), type.aliases(), type.deprecated(),
+                    type.description(), type.rules(), type.checks()));
+        }
+        List<RelationshipTypeDefinition> relationshipTypes = new ArrayList<>();
+        for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
+            relationshipTypes.add(new RelationshipTypeDefinition(type.name(), type.source(), type.target(),
+                    type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(),
+                    type.kind(), type.symmetric(), type.outlivesTarget(), type.supertype(),
+                    classify(type.name(), type.attributes(), classifications, used), type.aliases(), type.deprecated(),
+                    type.description(), type.rules(), type.checks()));
+        }
+        for (String key : classifications.keySet()) {
+            if (!used.contains(key)) {
+                throw new CorruptRecordException("The classified attribute " + key + " is not an attribute of the "
+                        + "definition.");
+            }
+        }
+        return new SchemaDefinition(entityTypes, traits, relationshipTypes);
+    }
+
+    /** The attributes of an element, with the classifications of those that are recorded as classified. */
+    private static List<AttributeDefinition> classify(String declarer, List<AttributeDefinition> attributes,
+            Map<String, String> classifications, Set<String> used) {
+        List<AttributeDefinition> result = new ArrayList<>();
+        for (AttributeDefinition attribute : attributes) {
+            String key = declarer + "." + attribute.name();
+            String classification = classifications.get(key);
+            if (classification == null) {
+                result.add(attribute);
+            } else {
+                used.add(key);
+                result.add(new AttributeDefinition(attribute.name(), attribute.valueType(), attribute.required(),
+                        attribute.unique(), attribute.range(), attribute.aliases(), attribute.deprecated(),
+                        attribute.description(), attribute.examples(), attribute.allowedValues(), attribute.pattern(),
+                        attribute.minLength(), attribute.maxLength(), attribute.derived(),
+                        Optional.of(classification)));
+            }
+        }
+        return result;
+    }
+
     /** The attributes of an element, with the expressions of those that are recorded as derived. */
     private static List<AttributeDefinition> derive(String declarer, List<AttributeDefinition> attributes,
             Map<String, String> derived, Set<String> used) {
@@ -413,7 +540,8 @@ final class DefinitionCodec {
                 result.add(new AttributeDefinition(attribute.name(), attribute.valueType(), attribute.required(),
                         attribute.unique(), attribute.range(), attribute.aliases(), attribute.deprecated(),
                         attribute.description(), attribute.examples(), attribute.allowedValues(), attribute.pattern(),
-                        attribute.minLength(), attribute.maxLength(), Optional.of(expression)));
+                        attribute.minLength(), attribute.maxLength(), Optional.of(expression),
+                        attribute.classification()));
             }
         }
         return result;

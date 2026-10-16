@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.core.data;
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.core.schema.Values;
 import io.github.enricoag1982.cairn.core.storage.IdDigests;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Id;
 import io.github.enricoag1982.cairn.data.IdGenerator;
@@ -19,6 +20,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -38,6 +40,8 @@ final class Workspace {
     private final Set<String> purgedDigests;
     private final IdGenerator generator;
     private final ProblemLog problems;
+    /** The clearance of the transaction, if it has one: a write cannot name an entity by a key it does not cover. */
+    private final Optional<Clearance> clearance;
     /** The entities and relationships the transaction touches, in the order of the first touch. */
     private final Map<Id, Working> working = new LinkedHashMap<>();
     /** Entities and relationships share one namespace of temporary IDs. */
@@ -54,14 +58,16 @@ final class Workspace {
      *                            never given to a new entity or relationship
      * @param generator           a copy of the store's ID generator, which the preparation advances
      * @param problems            where problems about references and IDs are reported
+     * @param clearance           the clearance of the transaction, if it has one
      */
     Workspace(SchemaIndex index, Ledger ledger, Set<String> purgedDigests, IdGenerator generator,
-            ProblemLog problems) {
+            ProblemLog problems, Optional<Clearance> clearance) {
         this.index = index;
         this.ledger = ledger;
         this.purgedDigests = purgedDigests;
         this.generator = generator;
         this.problems = problems;
+        this.clearance = clearance;
     }
 
     SchemaIndex index() {
@@ -118,11 +124,16 @@ final class Workspace {
      * does not depend on the order of the writes. Any other reference is returned as it is. Each resolution is kept for
      * the receipt, with the position of the write.
      *
+     * <p>A transaction with a clearance cannot name an entity by a key of an attribute that the clearance does not cover
+     * (ADR-0036, design D4 of {@code add-attribute-access-control}): the key is refused with {@code ACCESS_DENIED} before
+     * anything is looked up, so the problem is the same whether or not an entity has the value.
+     *
      * @param ref      the reference that the write names
      * @param at       the start of the write's effective period
      * @param position the position of the write in the transaction, from 0, which locates the problems
      * @return the reference to go on with: the entity's ID for a key that names one; null, after the problem was
-     *         reported, for a key that is invalid or names no entity
+     *         reported, for a key that is invalid, names no entity or is of an attribute that the clearance does not
+     *         cover
      */
     Ref resolveKey(Ref ref, Instant at, int position) {
         if (!(ref instanceof UniqueKey key)) {
@@ -133,6 +144,20 @@ final class Workspace {
             case UniqueKeys.Invalid invalid -> {
                 problems.add(Problems.of(ProblemCode.INVALID_UNIQUE_KEY, path, invalid.message(), invalid.expected(),
                         invalid.found(), invalid.hint()));
+                return null;
+            }
+            case UniqueKeys.Valid valid when clearance.isPresent() && !clearance.get().covers(valid.attribute()) -> {
+                String classification = valid.attribute().classification().orElseThrow();
+                Set<String> covered = clearance.get().classifications();
+                problems.add(Problems.of(ProblemCode.ACCESS_DENIED, path, "The write names an entity by the unique key "
+                        + key + ", but the attribute " + valid.attribute().name() + " of " + valid.type().name()
+                        + " is classified " + classification + " and the clearance of the transaction does not cover "
+                        + classification + ", so the key is not looked up.",
+                        "a transaction whose clearance covers " + classification + ", or a reference by ID",
+                        covered.isEmpty() ? "a clearance that covers no classification"
+                                : "a clearance that covers " + String.join(", ", covered),
+                        "Name the entity by its ID or by a unique key of an attribute that the clearance covers, or "
+                        + "submit the transaction with a clearance that covers " + classification + "."));
                 return null;
             }
             case UniqueKeys.Valid valid -> {

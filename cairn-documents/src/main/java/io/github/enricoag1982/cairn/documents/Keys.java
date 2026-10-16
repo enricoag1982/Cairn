@@ -46,8 +46,8 @@ final class Keys {
 
     /** The keys of an attribute. */
     static final List<String> ATTRIBUTE = List.of(
-            "type", "required", "unique", "derived", "range", "aliases", "deprecated", "description", "examples",
-            "allowedValues", "pattern", "minLength", "maxLength");
+            "type", "required", "unique", "derived", "range", "aliases", "deprecated", "classification", "description",
+            "examples", "allowedValues", "pattern", "minLength", "maxLength");
     /** The keys an attribute must have. */
     static final List<String> ATTRIBUTE_REQUIRED = List.of("type");
 

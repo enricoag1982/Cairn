@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core;
 
 import io.github.enricoag1982.cairn.core.query.QueryRunner;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
@@ -49,6 +50,16 @@ final class CountingView implements View {
     @Override
     public Schema schema() {
         return view.schema();
+    }
+
+    @Override
+    public View restrictedTo(Clearance clearance) {
+        return new CountingView(view.restrictedTo(clearance));
+    }
+
+    @Override
+    public Optional<Clearance> clearance() {
+        return view.clearance();
     }
 
     @Override

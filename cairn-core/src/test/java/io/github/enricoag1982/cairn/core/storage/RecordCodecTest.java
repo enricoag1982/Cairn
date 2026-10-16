@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
@@ -109,9 +110,11 @@ class RecordCodecTest {
         // Some are derived and some are not, with an expression that has quotes, a colon and non-ASCII text.
         Optional<String> derived = name.length() % 2 == 0 ? Optional.of("has(self.text) ? self.text : 'ünïcode 😀'")
                 : Optional.empty();
+        // Some are classified and some are not.
+        Optional<String> classification = name.length() % 3 == 0 ? Optional.of("pay-data") : Optional.empty();
         return new AttributeDefinition(name, type, true, true, Optional.ofNullable(range), List.of("old" + name, "older"),
                 true, Optional.of("The " + name + " with ünïcode and 😀."), examples, List.of("A", "B"),
-                Optional.of("[A-Z]+"), OptionalInt.of(1), OptionalInt.of(12), derived);
+                Optional.of("[A-Z]+"), OptionalInt.of(1), OptionalInt.of(12), derived, classification);
     }
 
     private static SchemaDefinition everythingSet() {
@@ -180,7 +183,7 @@ class RecordCodecTest {
         return attributes.stream().map(attribute -> new AttributeDefinition(attribute.name(), attribute.valueType(),
                 attribute.required(), attribute.unique(), attribute.range(), attribute.aliases(), attribute.deprecated(),
                 attribute.description(), attribute.examples(), attribute.allowedValues(), attribute.pattern(),
-                attribute.minLength(), attribute.maxLength())).toList();
+                attribute.minLength(), attribute.maxLength(), Optional.empty(), attribute.classification())).toList();
     }
 
     /** The definition with every derived attribute made plain. */
@@ -195,6 +198,29 @@ class RecordCodecTest {
                         type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(),
                         type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
                         type.outlivesTarget(), type.supertype(), plain(type.attributes()), type.aliases(),
+                        type.deprecated(), type.description(), type.rules(), type.checks())).toList());
+    }
+
+    private static List<AttributeDefinition> unclassified(List<AttributeDefinition> attributes) {
+        return attributes.stream().map(attribute -> new AttributeDefinition(attribute.name(), attribute.valueType(),
+                attribute.required(), attribute.unique(), attribute.range(), attribute.aliases(), attribute.deprecated(),
+                attribute.description(), attribute.examples(), attribute.allowedValues(), attribute.pattern(),
+                attribute.minLength(), attribute.maxLength(), attribute.derived(), Optional.empty())).toList();
+    }
+
+    /** The definition with no attribute classified. */
+    private static SchemaDefinition withoutClassifications(SchemaDefinition definition) {
+        return new SchemaDefinition(
+                definition.entityTypes().stream().map(type -> new EntityTypeDefinition(type.name(), type.isAbstract(),
+                        type.supertype(), type.traits(), unclassified(type.attributes()), type.aliases(),
+                        type.deprecated(), type.description(), type.rules(), type.checks())).toList(),
+                definition.traits().stream().map(trait -> new TraitDefinition(trait.name(),
+                        unclassified(trait.attributes()), trait.aliases(), trait.deprecated(), trait.description()))
+                        .toList(),
+                definition.relationshipTypes().stream().map(type -> new RelationshipTypeDefinition(type.name(),
+                        type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(),
+                        type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
+                        type.outlivesTarget(), type.supertype(), unclassified(type.attributes()), type.aliases(),
                         type.deprecated(), type.description(), type.rules(), type.checks())).toList());
     }
 
@@ -259,7 +285,7 @@ class RecordCodecTest {
     @Test
     void aRecordWithoutDerivedAttributesIsTheSameAsItWasBeforeTheyExisted() {
         // Checks follow the identifiers, and nothing follows the checks, as in a record written before derived attributes.
-        SchemaRecord record = schemaRecord(withoutOutliving(withoutDerived(everythingSet())));
+        SchemaRecord record = schemaRecord(withoutOutliving(withoutDerived(withoutClassifications(everythingSet()))));
         byte[] payload = payload(record);
 
         assertThat(RecordCodec.decode(RecordCodec.VERSION, payload)).isEqualTo(record);
@@ -308,7 +334,7 @@ class RecordCodecTest {
 
     @Test
     void theRelationshipTypesThatOutliveTheirTargetsFollowTheOtherSectionsAsASectionOfTheirOwn() {
-        SchemaDefinition definition = everythingSet();
+        SchemaDefinition definition = withoutClassifications(everythingSet());
         byte[] without = payload(schemaRecord(withoutOutliving(definition)));
         byte[] with = payload(schemaRecord(definition));
 
@@ -345,7 +371,7 @@ class RecordCodecTest {
     @Test
     void aRecordWithoutTheSectionReadsAsOneWhoseRelationshipsDoNotOutliveTheirTargets() {
         // A record as it was written before the section existed: the definition without the flag, nothing after it.
-        SchemaRecord record = schemaRecord(withoutOutliving(everythingSet()));
+        SchemaRecord record = schemaRecord(withoutOutliving(withoutClassifications(everythingSet())));
         byte[] payload = payload(record);
 
         SchemaRecord read = (SchemaRecord) RecordCodec.decode(RecordCodec.VERSION, payload);
@@ -390,6 +416,107 @@ class RecordCodecTest {
 
         assertThatThrownBy(() -> DefinitionCodec.readOutliving(new Decoder(section.toByteArray()),
                 withoutOutliving(derivedAndOutliving()))).isInstanceOf(CorruptRecordException.class)
+                .hasMessageContaining("twice");
+    }
+
+    // ------------------------------------------------------------------ classifications (D1)
+
+    /** The section of classifications for entries of a declarer, an attribute and a classification. */
+    private static byte[] classificationSection(String... entries) {
+        Encoder section = Encoder.plain();
+        section.writeInt(entries.length / 3);
+        for (String entry : entries) {
+            section.writeText(entry);
+        }
+        return section.toByteArray();
+    }
+
+    @Test
+    void theClassificationsFollowTheOtherSectionsAsASectionOfTheirOwn() {
+        SchemaDefinition definition = everythingSet();
+        byte[] without = payload(schemaRecord(withoutClassifications(definition)));
+        byte[] with = payload(schemaRecord(definition));
+
+        // Traits first, then entity types, then relationship types, each with its attributes in the order of the definition.
+        byte[] section = classificationSection(
+                "Party", "big", "pay-data", "Party", "amount", "pay-data", "Party", "day", "pay-data",
+                "Party", "moment", "pay-data", "Person", "big", "pay-data", "Owns", "amount", "pay-data",
+                "Owns", "day", "pay-data", "Owns", "moment", "pay-data");
+
+        assertThat(Arrays.copyOf(with, without.length)).as("the record up to the section").isEqualTo(without);
+        assertThat(Arrays.copyOfRange(with, without.length, with.length)).as("the section").isEqualTo(section);
+        assertThat(RecordCodec.decode(RecordCodec.VERSION, with)).isEqualTo(schemaRecord(definition));
+    }
+
+    @Test
+    void emptySectionsBeforeTheClassificationsTellThemApartFromTheOtherSections() {
+        AttributeDefinition salary = AttributeDefinition.builder("salary", ValueType.DECIMAL).classification("pay")
+                .build();
+        SchemaDefinition definition = new SchemaDefinition(List.of(new EntityTypeDefinition("Person", false,
+                Optional.empty(), List.of(), List.of(salary), List.of(), false, Optional.empty(), List.of())),
+                List.of(), List.of());
+        byte[] without = payload(schemaRecord(withoutClassifications(definition)));
+        byte[] with = payload(schemaRecord(definition));
+
+        Encoder sections = Encoder.plain();
+        sections.writeInt(0); // The checks of the entity types: none, but present, so that the sections are told apart.
+        sections.writeInt(0); // The checks of the relationship types.
+        sections.writeInt(0); // The derivations.
+        sections.writeInt(0); // The relationship types that outlive their targets.
+        sections.writeRaw(classificationSection("Person", "salary", "pay"));
+
+        assertThat(Arrays.copyOf(with, without.length)).isEqualTo(without);
+        assertThat(Arrays.copyOfRange(with, without.length, with.length)).isEqualTo(sections.toByteArray());
+        assertThat(RecordCodec.decode(RecordCodec.VERSION, with)).isEqualTo(schemaRecord(definition));
+    }
+
+    @Test
+    void aRecordWithoutTheSectionReadsAsAttributesWithoutClassifications() {
+        // A record as it was written before the section existed: the definition without classifications, nothing after.
+        SchemaRecord record = schemaRecord(withoutClassifications(everythingSet()));
+
+        SchemaRecord read = (SchemaRecord) RecordCodec.decode(RecordCodec.VERSION, payload(record));
+
+        assertThat(read).isEqualTo(record);
+        assertThat(recordsIn(read.definition()).get(AttributeDefinition.class)).isNotEmpty()
+                .allSatisfy(attribute -> assertThat(((AttributeDefinition) attribute).classification()).isEmpty());
+        SchemaRecord plain = schemaRecord(ReferenceModel.definition());
+        assertThat(((SchemaRecord) RecordCodec.decode(RecordCodec.VERSION, payload(plain))).definition())
+                .isEqualTo(ReferenceModel.definition());
+    }
+
+    @Test
+    void classificationsOfTraitsEntityTypesAndRelationshipTypesReadBackEqual() {
+        SchemaRecord record = schemaRecord(everythingSet());
+
+        SchemaRecord read = (SchemaRecord) roundTrip(record);
+
+        assertThat(read).isEqualTo(record);
+        assertThat(read.definition().traits().getFirst().attributes()).extracting(AttributeDefinition::classification)
+                .containsOnly(Optional.empty());
+        assertThat(read.definition().entityTypes().getFirst().attributes())
+                .filteredOn(attribute -> attribute.classification().isPresent())
+                .extracting(AttributeDefinition::name).containsExactly("big", "amount", "day", "moment");
+        assertThat(read.definition().relationshipTypes().getFirst().attributes())
+                .filteredOn(attribute -> attribute.classification().isPresent())
+                .extracting(AttributeDefinition::name).containsExactly("amount", "day", "moment");
+    }
+
+    @Test
+    void anAttributeThatTheClassificationsNameAndTheDefinitionDoesNotHaveIsCorrupt() {
+        byte[] section = classificationSection("Person", "nothing", "pay");
+
+        assertThatThrownBy(() -> DefinitionCodec.readClassifications(new Decoder(section),
+                withoutDerived(derivedWithoutChecks()))).isInstanceOf(CorruptRecordException.class)
+                .hasMessageContaining("Person.nothing");
+    }
+
+    @Test
+    void anAttributeThatTheClassificationsNameTwiceIsCorrupt() {
+        byte[] section = classificationSection("Person", "shout", "pay", "Person", "shout", "pay");
+
+        assertThatThrownBy(() -> DefinitionCodec.readClassifications(new Decoder(section),
+                withoutDerived(derivedWithoutChecks()))).isInstanceOf(CorruptRecordException.class)
                 .hasMessageContaining("twice");
     }
 
@@ -485,7 +612,7 @@ class RecordCodecTest {
         values.put("since", Value.of(LocalDate.of(2026, 2, 1)));
         values.put("seen", Value.of(Instant.parse("2026-02-01T10:00:00.000000007Z")));
         return Transaction.by("agent:onboarding").onBehalfOf("sales").reason("Onboarding of ACME")
-                .idempotencyKey("onboard-1")
+                .idempotencyKey("onboard-1").clearance(Clearance.of("pay", "finance"))
                 .write(new Write.Create(Optional.of(new TemporaryId("acme")), Optional.of(new EntityId("e-1")),
                         "Organization", EffectivePeriod.between(T2, T1.plusSeconds(86_400 * 400L)), values))
                 .write(new Write.Relate(Optional.of(new TemporaryId("owns")), Optional.of(new RelationshipId("r-1")),
@@ -547,6 +674,64 @@ class RecordCodecTest {
         assertThat(read.transaction().writes()).hasSize(9);
         assertThat(read.receipt().temporaryIds().keySet()).containsExactly(new TemporaryId("acme"),
                 new TemporaryId("owns"));
+    }
+
+    // ------------------------------------------------------------------ clearances (D4)
+
+    private static DataRecord recordOf(Transaction transaction, List<KeyResolution> keys) {
+        return new DataRecord(transaction, new Receipt(new Basis(4), T2, Map.of(), List.of(), List.of(), keys,
+                "importer", Optional.empty(), Optional.empty(), transaction.idempotencyKey()), List.of());
+    }
+
+    @Test
+    void theClearanceOfATransactionIsTheLastOfARecordAndARecordWithoutOneReadsAsBefore() {
+        Transaction plain = Transaction.by("importer").endDate(new EntityId("e-1"), T2).build();
+        Transaction cleared = Transaction.by("importer").clearance(Clearance.of("pay", "finance"))
+                .endDate(new EntityId("e-1"), T2).build();
+
+        byte[] before = payload(RecordCodec.encode(recordOf(plain, List.of())));
+        byte[] after = payload(RecordCodec.encode(recordOf(cleared, List.of())));
+
+        // The resolutions of keys are present, and empty, so that the clearance is told apart from them by position.
+        Encoder tail = Encoder.plain();
+        tail.writeInt(0);
+        tail.writeInt(2);
+        tail.writeText("pay");
+        tail.writeText("finance");
+        assertThat(Arrays.copyOf(after, before.length)).as("a record up to the clearance").isEqualTo(before);
+        assertThat(Arrays.copyOfRange(after, before.length, after.length)).isEqualTo(tail.toByteArray());
+        assertThat(((DataRecord) RecordCodec.decode(RecordCodec.VERSION, before)).transaction().clearance()).isEmpty();
+        assertThat(RecordCodec.decode(RecordCodec.VERSION, after)).isEqualTo(recordOf(cleared, List.of()));
+        byte[] cut = Arrays.copyOf(after, after.length - 1);
+        assertThatThrownBy(() -> RecordCodec.decode(RecordCodec.VERSION, cut)).isInstanceOf(CorruptRecordException.class);
+    }
+
+    @Test
+    void aClearanceThatCoversNothingIsNotNoClearance() {
+        Transaction none = Transaction.by("importer").clearance(Clearance.none()).endDate(new EntityId("e-1"), T2)
+                .build();
+        Transaction absent = Transaction.by("importer").endDate(new EntityId("e-1"), T2).build();
+
+        DataRecord readNone = (DataRecord) roundTrip(recordOf(none, List.of()));
+        DataRecord readAbsent = (DataRecord) roundTrip(recordOf(absent, List.of()));
+
+        assertThat(readNone.transaction().clearance()).hasValue(Clearance.none());
+        assertThat(readAbsent.transaction().clearance()).isEmpty();
+        assertThat(readNone.transaction()).isNotEqualTo(readAbsent.transaction());
+    }
+
+    @Test
+    void aClearanceAfterTheResolutionsOfUniqueKeysReadsBackEqual() {
+        UniqueKey key = new UniqueKey("Account", "number", Value.of("A-1"));
+        Transaction transaction = Transaction.by("importer").clearance(Clearance.of("finance"))
+                .patch(key, EffectivePeriod.from(T2), Map.of()).build();
+        List<KeyResolution> resolutions = List.of(new KeyResolution(0, key, new EntityId("e-1")));
+
+        DataRecord read = (DataRecord) roundTrip(recordOf(transaction, resolutions));
+
+        assertThat(read).isEqualTo(recordOf(transaction, resolutions));
+        assertThat(read.receipt().keys()).containsExactlyElementsOf(resolutions);
+        assertThat(read.transaction().clearance()).hasValue(Clearance.of("finance"));
     }
 
     @Test

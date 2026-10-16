@@ -15,7 +15,9 @@ import java.util.stream.Collectors;
  * {@code from}, the snapshot record and the builders; for entity types also a {@code by<Attribute>} method for each unique
  * attribute, which makes a unique key (design D7 of {@code add-unique-key-references}). The accessors, the snapshot record
  * and the typed references include the derived attributes, which say that they are derived and give their expression; the
- * builders of writes have no setter for them (design D7 of {@code add-derived-attributes}).
+ * builders of writes have no setter for them (design D7 of {@code add-derived-attributes}). The snapshot record of a type
+ * with classified attributes is built also from a state that withheld them, and their accessors then fail instead of
+ * reporting a value that does not exist (design D6 of {@code add-attribute-access-control}).
  */
 final class TypeSource {
 
@@ -286,13 +288,18 @@ final class TypeSource {
         List<String> tags = new ArrayList<>();
         tags.add("@return the value of " + Docs.code(attribute.name())
                 + (attribute.required() ? "" : ", or empty if the " + thing() + " has none"));
+        if (attribute.classification().isPresent()) {
+            tags.add("@throws " + ref(Library.ILLEGAL_STATE_EXCEPTION) + " if the state withheld the attribute");
+        }
         if (attribute.deprecated()) {
             tags.add("@deprecated The attribute " + Docs.code(attribute.name())
                     + " is deprecated in its schema document.");
         }
+        List<String> paragraphs = new ArrayList<>(Docs.constraints(attribute, things()));
+        paragraphs.addAll(Docs.classified(attribute, thing()));
         out.javadoc(doc(summary(attribute.description(),
                 "The value of the attribute " + Docs.code(attribute.name()) + "."),
-                Docs.constraints(attribute, things()), tags));
+                paragraphs, tags));
         if (attribute.deprecated()) {
             out.line("@" + ref(Library.DEPRECATED));
         }
@@ -522,7 +529,10 @@ final class TypeSource {
         for (Attribute attribute : element.attributes()) {
             lines.add("@param " + attribute(attribute) + " the value of " + Docs.code(attribute.name())
                     + (attribute.derived().isPresent() ? ", which is derived from " + Docs.code(attribute.derived().get())
-                            : ""));
+                            : "")
+                    + attribute.classification().map(classification -> ", which is classified "
+                            + Docs.code(classification) + ": if the state withheld it, the record holds no value for it "
+                            + "and its accessor throws").orElse(""));
         }
         out.javadoc(lines);
         List<String> components = new ArrayList<>();
@@ -551,13 +561,51 @@ final class TypeSource {
             List<Attribute> attributes = element.attributes();
             for (int i = 0; i < attributes.size(); i++) {
                 Attribute attribute = attributes.get(i);
-                out.line(ref(Library.TYPED_VALUES) + "." + reader(attribute) + "(values, "
-                        + Docs.literal(attribute.name()) + ")" + (i < attributes.size() - 1 ? "," : ");"));
+                String read = ref(Library.TYPED_VALUES) + "." + reader(attribute) + "(values, "
+                        + Docs.literal(attribute.name()) + ")";
+                // A required value that a state withheld is absent from it, and the record is still made (design D6 of
+                // add-attribute-access-control): the component holds a placeholder that its accessor never returns.
+                if (attribute.classification().isPresent() && attribute.required()) {
+                    read = "state.withheld().contains(" + Docs.literal(attribute.name()) + ") ? "
+                            + placeholder(attribute.valueType()) + " : " + read;
+                }
+                out.line(read + (i < attributes.size() - 1 ? "," : ");"));
             }
             out.outdent().outdent();
         }
         out.close("}");
+        writeWithheldAccessors();
         out.close("}");
+    }
+
+    /** What a required component of the snapshot record holds when its value was withheld: no value. */
+    private static String placeholder(ValueType type) {
+        return switch (type) {
+            case BOOLEAN -> "false";
+            case INT -> "0";
+            case LONG -> "0L";
+            case STRING, DECIMAL, DATE, INSTANT -> "null";
+        };
+    }
+
+    /**
+     * Writes the accessors of the snapshot record for the classified attributes: they fail if the state withheld the
+     * attribute, because a record would otherwise report the placeholder, or an empty optional, as if the entity or
+     * relationship had no value (design D6 of {@code add-attribute-access-control}).
+     */
+    private void writeWithheldAccessors() {
+        for (Attribute attribute : element.attributes()) {
+            if (attribute.classification().isEmpty()) {
+                continue;
+            }
+            out.blank();
+            out.line("@" + ref(Library.OVERRIDE));
+            out.open("public " + javaType(attribute) + " " + attribute(attribute) + "() {");
+            out.line(ref(Library.TYPED_VALUES) + ".requireHeld(" + stateMethod() + ", "
+                    + Docs.literal(attribute.name()) + ");");
+            out.line("return " + attribute(attribute) + ";");
+            out.close("}");
+        }
     }
 
     // ------------------------------------------------------------------ builders

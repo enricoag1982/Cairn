@@ -6,8 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class CoordinatesAndStatesTest {
@@ -193,5 +197,59 @@ class CoordinatesAndStatesTest {
     private static EntityState state(Map<String, Value> values) {
         return new EntityState(new EntityId("a"), "Account", values, EffectivePeriod.from(MARCH_31), APRIL_5,
                 new Basis(2));
+    }
+
+    @Test
+    void aStateWithholdsNothingUnlessItIsToldWhatItWithheld() {
+        EntityState entity = new EntityState(new EntityId("e-1"), "Employment", Map.of(), EffectivePeriod.from(MARCH_31),
+                APRIL_5, new Basis(2));
+        RelationshipState relationship = new RelationshipState(new RelationshipId("r-1"), "Employs", new EntityId("e-1"),
+                new EntityId("e-2"), Map.of(), EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2));
+
+        assertThat(entity.withheld()).isEmpty();
+        assertThat(relationship.withheld()).isEmpty();
+    }
+
+    @Test
+    void aStateKeepsTheNamesItWithheldInTheirOrderAndCopiesThem() {
+        Set<String> given = new LinkedHashSet<>(List.of("currency", "annualSalary"));
+        EntityState entity = new EntityState(new EntityId("e-1"), "Employment", Map.of(), EffectivePeriod.from(MARCH_31),
+                APRIL_5, new Basis(2), given);
+        RelationshipState relationship = new RelationshipState(new RelationshipId("r-1"), "Employs",
+                new EntityId("e-1"), new EntityId("e-2"), Map.of(), EffectivePeriod.from(MARCH_31), APRIL_5,
+                new Basis(2), given);
+
+        given.add("other");
+
+        assertThat(entity.withheld()).containsExactly("currency", "annualSalary");
+        assertThat(relationship.withheld()).containsExactly("currency", "annualSalary");
+        assertThatThrownBy(() -> entity.withheld().add("x")).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> relationship.withheld().add("x")).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void aStateThatWithheldSomethingIsNotEqualToOneThatDidNot() {
+        EntityState open = new EntityState(new EntityId("e-1"), "Employment", Map.of(), EffectivePeriod.from(MARCH_31),
+                APRIL_5, new Basis(2));
+        EntityState restricted = new EntityState(new EntityId("e-1"), "Employment", Map.of(),
+                EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2), Set.of("annualSalary"));
+
+        assertThat(restricted).isNotEqualTo(open);
+        assertThat(restricted).isEqualTo(new EntityState(new EntityId("e-1"), "Employment", Map.of(),
+                EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2), Set.of("annualSalary")));
+    }
+
+    @Test
+    void whatAStateWithheldIsRejectedWhenNull() {
+        assertThatThrownBy(() -> new EntityState(new EntityId("e-1"), "Employment", Map.of(),
+                EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2), null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new RelationshipState(new RelationshipId("r-1"), "Employs", new EntityId("e-1"),
+                new EntityId("e-2"), Map.of(), EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2), null))
+                .isInstanceOf(NullPointerException.class);
+        Set<String> withNull = new HashSet<>();
+        withNull.add(null);
+        assertThatThrownBy(() -> new EntityState(new EntityId("e-1"), "Employment", Map.of(),
+                EffectivePeriod.from(MARCH_31), APRIL_5, new Basis(2), withNull))
+                .isInstanceOf(NullPointerException.class);
     }
 }

@@ -133,6 +133,14 @@ public enum ProblemCode {
             + "C\"; the found details give the expression. For an attribute in a schema document, the problem is also "
             + "located in the document, at the key derived and, where the text allows it, at that position. "
             + Texts.CAIRN_FUNCTIONS + " Correct the expression."),
+    /** A classification is not a valid name, or a derived attribute does not have the classification of what it reads. */
+    INVALID_CLASSIFICATION("The classification of an attribute is a name of lowercase ASCII letters, digits and hyphens "
+            + "that starts with a letter and has at most 128 characters, such as pay, as a rule name is. A derived "
+            + "attribute that reads classified attributes must have exactly the classification that they have, so "
+            + "that it does not reveal them: one that reads attributes of two classifications, or of a classification "
+            + "that it does not have, is invalid. The path is the type that declares the attribute and the attribute's "
+            + "name; the found details give the classification, or the classifications that the expression reads. "
+            + "Correct the name, or give the derived attribute the classification of the attributes it reads."),
     /** A registry or a store has no expression language, so it cannot compile or run checks or derived attributes. */
     EXPRESSIONS_UNAVAILABLE("A definition declares checks or derived attributes, or a write concerns a type to which "
             + "checks apply or that has derived attributes, but there is no expression language to compile or run "
@@ -420,7 +428,21 @@ public enum ProblemCode {
     INVALID_AGGREGATE("An aggregate needs an attribute, except a count of rows, and the values must suit the function: "
             + "a sum or an average needs numbers, and a minimum or a maximum needs numbers, dates, instants or "
             + "strings. The expected and found details name the value types. Aggregate another attribute, or count "
-            + "the rows.");
+            + "the rows."),
+    /** A query or a write names an attribute that the clearance of the view or of the transaction does not cover. */
+    ACCESS_DENIED("The clearance of the view that runs a query, or of the transaction that carries a write, does not "
+            + "cover the classification of an attribute that the query or the write names. A query is rejected, and "
+            + "reads nothing, if it names such an attribute in a filter, an order, a group key, an aggregate, a "
+            + "column or the condition of a traversal or a link test, because even a filter would reveal the value; "
+            + "the path is the place in the query. A write is rejected, as is the transaction, if it sets or clears "
+            + "such an attribute, also in a create; the path is the attribute of the write, and a dry run reports it "
+            + "too. Values that a write does not touch carry forward. Finding an entity through a restricted view by a "
+            + "unique key of such an attribute fails as a key that the schema does not allow does. An agent tool "
+            + "reports it too, for a query or a key that its clearance refuses. Rules, checks and derivations always "
+            + "see every value. The expected details name the clearance that is needed, and the found details the "
+            + "classifications that the clearance covers; run the query through a view, or submit the transaction, "
+            + "with a clearance that covers the classification, if the caller may read or write the attribute, or "
+            + "leave the attribute out.");
 
     /** Text that explanations share; a nested class, because an enum constant cannot name a field declared after it. */
     private static final class Texts {

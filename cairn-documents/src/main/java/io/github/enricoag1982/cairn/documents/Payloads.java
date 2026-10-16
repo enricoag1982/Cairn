@@ -160,7 +160,8 @@ public final class Payloads {
     /**
      * Writes the state of an entity as JSON: {@code id}, {@code entityType}, {@code values} (always, as {@code {}} when
      * the state has none), {@code period} (with {@code from} and {@code until}), {@code recordedAt} and
-     * {@code recordedBasis}.
+     * {@code recordedBasis}, and, if a view restricted to a clearance withheld attributes, {@code withheld}: their names
+     * (ADR-0036).
      *
      * @param state the state
      * @return the JSON text
@@ -172,7 +173,8 @@ public final class Payloads {
     /**
      * Writes the state of a relationship as JSON: {@code id}, {@code relationshipType}, {@code source}, {@code target},
      * {@code values} (always, as {@code {}} when the state has none, as for a relationship type without attributes),
-     * {@code period} (with {@code from} and {@code until}), {@code recordedAt} and {@code recordedBasis}.
+     * {@code period} (with {@code from} and {@code until}), {@code recordedAt} and {@code recordedBasis}, and, if a view
+     * restricted to a clearance withheld attributes, {@code withheld}: their names (ADR-0036).
      *
      * @param state the state
      * @return the JSON text

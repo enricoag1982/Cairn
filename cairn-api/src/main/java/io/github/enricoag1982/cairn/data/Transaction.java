@@ -14,7 +14,13 @@ import java.util.Set;
  * {@code transactions}, {@code entity-versions} and {@code relationships}). Either every write is recorded or none is.
  *
  * <p>Build one with {@link #by(String)}. Two transactions are equal if their principal, party acted for, reason,
- * idempotency key and writes are, which is how a store recognizes a retry of a transaction with an idempotency key.
+ * idempotency key, writes and clearance are, which is how a store recognizes a retry of a transaction with an
+ * idempotency key.
+ *
+ * <p>A transaction may carry a {@linkplain Clearance clearance} (ADR-0036, capability {@code attribute-access}): a write
+ * in it that sets or clears an attribute whose classification the clearance does not cover is rejected with a problem
+ * {@code ACCESS_DENIED}. Rules, checks and derivations still see every value. A transaction without a clearance writes
+ * as before; a caller that acts for a user or an agent must give it one.
  *
  * <p>The record only holds what the caller wrote. A store checks it when it commits or runs it dry, and reports every
  * problem found; a transaction without a principal is a problem ({@code MISSING_PRINCIPAL}), not an exception.
@@ -24,13 +30,16 @@ import java.util.Set;
  * @param reason         why the transaction is submitted, if given
  * @param idempotencyKey a key that makes a retry of the transaction safe, if given
  * @param writes         the writes, applied in order
+ * @param clearance      the classifications whose attributes the writes may set or clear; empty if the transaction has
+ *                       no clearance and may write every attribute
  */
 public record Transaction(
         String principal,
         Optional<String> onBehalfOf,
         Optional<String> reason,
         Optional<String> idempotencyKey,
-        List<Write> writes) {
+        List<Write> writes,
+        Optional<Clearance> clearance) {
 
     /**
      * Rejects null components, except that a null principal is the same as an empty one, which a store reports as a
@@ -42,6 +51,21 @@ public record Transaction(
         Objects.requireNonNull(reason, "reason");
         Objects.requireNonNull(idempotencyKey, "idempotencyKey");
         writes = List.copyOf(writes);
+        Objects.requireNonNull(clearance, "clearance");
+    }
+
+    /**
+     * Creates a transaction without a clearance.
+     *
+     * @param principal      who submits the transaction; empty or null if none was given
+     * @param onBehalfOf     the party the principal acts for, if any
+     * @param reason         why the transaction is submitted, if given
+     * @param idempotencyKey a key that makes a retry of the transaction safe, if given
+     * @param writes         the writes, applied in order
+     */
+    public Transaction(String principal, Optional<String> onBehalfOf, Optional<String> reason,
+            Optional<String> idempotencyKey, List<Write> writes) {
+        this(principal, onBehalfOf, reason, idempotencyKey, writes, Optional.empty());
     }
 
     /**
@@ -63,6 +87,7 @@ public record Transaction(
         private Optional<String> onBehalfOf = Optional.empty();
         private Optional<String> reason = Optional.empty();
         private Optional<String> idempotencyKey = Optional.empty();
+        private Optional<Clearance> clearance = Optional.empty();
         private final List<Write> writes = new ArrayList<>();
 
         private Builder(String principal) {
@@ -100,6 +125,19 @@ public record Transaction(
          */
         public Builder idempotencyKey(String key) {
             this.idempotencyKey = Optional.of(Objects.requireNonNull(key, "key"));
+            return this;
+        }
+
+        /**
+         * Gives the transaction a clearance: a write in it that sets or clears an attribute whose classification the
+         * clearance does not cover is rejected with {@code ACCESS_DENIED}, in a commit and in a dry run. Rules, checks
+         * and derivations see every value whatever the clearance is.
+         *
+         * @param clearance the classifications whose attributes the writes may set or clear
+         * @return this builder
+         */
+        public Builder clearance(Clearance clearance) {
+            this.clearance = Optional.of(Objects.requireNonNull(clearance, "clearance"));
             return this;
         }
 
@@ -335,7 +373,7 @@ public record Transaction(
          * @return the transaction
          */
         public Transaction build() {
-            return new Transaction(principal, onBehalfOf, reason, idempotencyKey, writes);
+            return new Transaction(principal, onBehalfOf, reason, idempotencyKey, writes, clearance);
         }
     }
 }

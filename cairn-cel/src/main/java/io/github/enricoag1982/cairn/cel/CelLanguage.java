@@ -162,7 +162,9 @@ public final class CelLanguage implements ExpressionLanguage {
             throw firstError(validation);
         }
         try {
-            return new CelDerivation(cel.createProgram(validation.getAst()), types, result);
+            CelAbstractSyntaxTree ast = validation.getAst();
+            return new CelDerivation(cel.createProgram(ast), types, result,
+                    SelfReads.of(ast.getExpr(), types.keySet()));
         } catch (CelValidationException | CelEvaluationException e) {
             throw new ExpressionCompilationException(e.getMessage());
         }

@@ -102,7 +102,8 @@ final class PropertyRules {
             Map.entry("attribute.pattern", PropertyRules::pattern),
             Map.entry("attribute.minLength", PropertyRules::minLength),
             Map.entry("attribute.maxLength", PropertyRules::maxLength),
-            Map.entry("attribute.derived", PropertyRules::derived));
+            Map.entry("attribute.derived", PropertyRules::derived),
+            Map.entry("attribute.classification", PropertyRules::classification));
 
     private static final Set<String> WIDENINGS = Set.of("INT>LONG", "INT>DECIMAL", "LONG>DECIMAL");
 
@@ -461,6 +462,19 @@ final class PropertyRules {
         }
         return List.of(Changes.breaking(context.path(), "changed the expression of the derived attribute from "
                 + oldValue.get() + " to " + newValue.get(), Changes.DERIVE_WITH_THE_TYPE));
+    }
+
+    /**
+     * A classification may be added, changed or removed: stored values do not change, only who reads them (ADR-0036,
+     * design D1 of {@code add-attribute-access-control}).
+     */
+    private static List<SchemaChange> classification(Context context) {
+        Optional<?> oldValue = (Optional<?>) context.oldValue();
+        Optional<?> newValue = (Optional<?>) context.newValue();
+        String what = oldValue.isEmpty() ? "classified the attribute as " + newValue.orElseThrow()
+                : newValue.isEmpty() ? "removed the classification " + oldValue.get()
+                : "changed the classification from " + oldValue.get() + " to " + newValue.get();
+        return List.of(Changes.compatible(context.path(), what));
     }
 
     // ------------------------------------------------------------------ reflection

@@ -27,6 +27,7 @@ final class Library {
     static final String OVERRIDE = "java.lang.Override";
     static final String SUPPRESS_WARNINGS = "java.lang.SuppressWarnings";
     static final String ILLEGAL_ARGUMENT_EXCEPTION = "java.lang.IllegalArgumentException";
+    static final String ILLEGAL_STATE_EXCEPTION = "java.lang.IllegalStateException";
 
     private static final String DATA = "io.github.enricoag1982.cairn.data.";
     private static final String SCHEMA = "io.github.enricoag1982.cairn.schema.";

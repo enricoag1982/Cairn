@@ -3,10 +3,12 @@ package io.github.enricoag1982.cairn.expressions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.enricoag1982.cairn.fixtures.Derivations;
 import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /** The interface between the engine and an expression language (capabilities {@code checks} and {@code derived-attributes}). */
@@ -55,7 +57,7 @@ class ExpressionInterfaceTest {
             @Override
             public CompiledDerivation compileDerivation(String expression, Map<String, ValueType> attributes,
                     ValueType result) {
-                return values -> Optional.ofNullable(values.get("x"));
+                return Derivations.reading(Set.of("x"), values -> Optional.ofNullable(values.get("x")));
             }
         };
 
@@ -81,7 +83,7 @@ class ExpressionInterfaceTest {
             @Override
             public CompiledDerivation compileDerivation(String expression, Map<String, ValueType> attributes,
                     ValueType result) {
-                return values -> Optional.ofNullable(values.get("x"));
+                return Derivations.reading(Set.of("x"), values -> Optional.ofNullable(values.get("x")));
             }
         };
 
@@ -92,10 +94,36 @@ class ExpressionInterfaceTest {
     }
 
     @Test
-    void anEvaluationExceptionIsWhatADerivationThrows() {
-        CompiledDerivation failing = values -> {
-            throw new ExpressionEvaluationException("The result does not fit.");
+    void aDerivationSaysWhichAttributesItReads() throws Exception {
+        ExpressionLanguage language = new ExpressionLanguage() {
+            @Override
+            public String name() {
+                return "copy";
+            }
+
+            @Override
+            public CompiledCheck compile(String expression, Map<String, ValueType> attributes) {
+                return values -> true;
+            }
+
+            @Override
+            public CompiledDerivation compileDerivation(String expression, Map<String, ValueType> attributes,
+                    ValueType result) {
+                return Derivations.reading(attributes.keySet(), values -> Optional.ofNullable(values.get("x")));
+            }
         };
+
+        CompiledDerivation derivation = language.compileDerivation("x", Map.of("x", ValueType.INT), ValueType.INT);
+
+        assertThat(derivation.attributesRead()).containsExactly("x");
+        assertThat(Derivations.of(values -> Optional.empty()).attributesRead()).isEmpty();
+    }
+
+    @Test
+    void anEvaluationExceptionIsWhatADerivationThrows() {
+        CompiledDerivation failing = Derivations.of(values -> {
+            throw new ExpressionEvaluationException("The result does not fit.");
+        });
 
         assertThatThrownBy(() -> failing.evaluate(Map.of())).isInstanceOf(ExpressionEvaluationException.class)
                 .hasMessage("The result does not fit.");

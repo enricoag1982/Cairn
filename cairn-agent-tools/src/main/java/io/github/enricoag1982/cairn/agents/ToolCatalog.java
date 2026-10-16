@@ -30,9 +30,14 @@ final class ToolCatalog {
     static final String LIST_CHANGES = "cairn_list_changes";
     static final String APPROVAL_STATUS = "cairn_approval_status";
 
+    private static final String WITHHELD = " Attributes whose classification the server's clearance (see "
+            + "cairn_describe) does not cover are withheld: a state leaves their values out and lists their names in "
+            + "withheld, so a value that is missing and not listed there is a value the entity or relationship does "
+            + "not have.";
+
     private static final String READ_COORDINATES = " Reads through a view: effectiveAt says when the facts are true, "
             + "and knownAt, if given, reads the store as it was at a basis or a transaction time (the default is "
-            + "now). The result reports the effectiveAt and the basis it was read at.";
+            + "now). The result reports the effectiveAt and the basis it was read at." + WITHHELD;
 
     private static final String ID_OF_ENTITY = "The ID of the entity. Give this or key, not both.";
     private static final String ID_TO_START_FROM = "The ID of the entity to start from. Give this or key, not both.";
@@ -48,7 +53,9 @@ final class ToolCatalog {
                         + "origin; the rules that types may name, with their descriptions, the types they are for, "
                         + "their codes and whether the store has their code (hasCode); every problem code with its "
                         + "explanation; the approval policy; and the principal this server acts as, which every "
-                        + "payload you commit must name. Call this first.",
+                        + "payload you commit must name; and the clearance, the classifications of attributes that "
+                        + "this server lets you read and write (none unless a person gave some). In the schema "
+                        + "documents an attribute with a classification states it as classification. Call this first.",
                 object(List.of())));
         tools.add(tool(JSON_SCHEMA,
                 "Returns a JSON Schema to build input from. kind \"document\" is the published schema of schema "
@@ -84,7 +91,10 @@ final class ToolCatalog {
         tools.add(tool(DRY_RUN,
                 "Validates a transaction payload without committing it. Returns outcome wouldCommit, or rejected "
                         + "with every problem, located in the payload by line and column, with what was expected, "
-                        + "what was found and a hint. Fix the problems and run it again.",
+                        + "what was found and a hint. Fix the problems and run it again. The transaction carries the "
+                        + "server's clearance: a write that sets or clears an attribute with a classification that "
+                        + "the clearance does not cover, or that names an entity by a unique key of such an "
+                        + "attribute, is rejected with ACCESS_DENIED.",
                 object(List.of("payload"), "payload", string("The text of the transaction payload, as JSON or YAML. "
                         + "Build it from cairn_json_schema with kind \"payload\"; its principal is the one "
                         + "cairn_describe reports."))));
@@ -92,7 +102,9 @@ final class ToolCatalog {
                 "Commits a transaction payload, subject to the approval policy. Returns outcome committed (with "
                         + "the receipt: basis, transaction time and the IDs created), rejected (with located "
                         + "problems; nothing is recorded) or pending (with the approval request, which a person has "
-                        + "to approve: poll cairn_approval_status). Dry-run it first.",
+                        + "to approve: poll cairn_approval_status). Dry-run it first. The transaction carries the "
+                        + "server's clearance, as for cairn_dry_run (ACCESS_DENIED when it does not cover a write), "
+                        + "and so does a request that a person approves.",
                 object(List.of("payload"), "payload", string("The text of the transaction payload, as JSON or YAML. "
                         + "Build it from cairn_json_schema with kind \"payload\"; its principal is the one "
                         + "cairn_describe reports."))));
@@ -101,7 +113,8 @@ final class ToolCatalog {
                         + "unique key (key): its entity type and one unique attribute with its value, such as the "
                         + "Account with the number A-1. Give exactly one of the two." + READ_COORDINATES
                         + " The result is null if the entity does not exist at that effective time, and, for a key, "
-                        + "if no entity has the value at that time.",
+                        + "if no entity has the value at that time. A key of a unique attribute that the clearance "
+                        + "does not cover is refused with ACCESS_DENIED.",
                 coordinates(List.of("effectiveAt"), "id", string(ID_OF_ENTITY), "key", key())));
         tools.add(tool(READ_RELATIONSHIP,
                 "Reads one relationship: its type, source, target, values and effective period." + READ_COORDINATES
@@ -115,7 +128,7 @@ final class ToolCatalog {
         tools.add(tool(TIMELINE,
                 "Reads every version of an entity or a relationship across effective time, as known at a basis or a "
                         + "transaction time (the default is now). Use it to see corrections and future-dated "
-                        + "changes. The result reports the basis it was read at.",
+                        + "changes. The result reports the basis it was read at." + WITHHELD,
                 object(List.of("id"),
                         "id", string("The ID of an entity or a relationship."),
                         "knownAt", knownAt())));
@@ -158,7 +171,10 @@ final class ToolCatalog {
                         + "cairn_describe. The result is {columns, rows}, each row a list of cells in the order of the "
                         + "columns: the state of an entity or a relationship, a value, or null. A query that does not fit "
                         + "the schema returns problems located in the query text, with the path of the step or part "
-                        + "they concern and a hint, and nothing is read." + READ_COORDINATES,
+                        + "they concern and a hint, and nothing is read. So does a query that names an attribute the "
+                        + "clearance does not cover, in a filter, a group, an aggregate, a column, an order or a "
+                        + "condition: its problem is ACCESS_DENIED, because even a filter would reveal the value."
+                        + READ_COORDINATES,
                 coordinates(List.of("query", "effectiveAt"),
                         "query", string("The text of the query, as JSON or YAML, in the form of the JSON Schema of "
                                 + "cairn_json_schema with kind \"query\"."))));

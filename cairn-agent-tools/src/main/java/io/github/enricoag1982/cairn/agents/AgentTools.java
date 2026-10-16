@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.agents;
 
 import io.github.enricoag1982.cairn.agents.AgentPolicy.Decision;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.documents.JsonSchemas;
 import io.github.enricoag1982.cairn.documents.Queries;
@@ -43,6 +44,12 @@ import tools.jackson.databind.node.ObjectNode;
  * The {@link AgentPolicy} says whether a registration or a commit is applied, waits for a person in the
  * {@link ApprovalQueue}, or is denied.
  *
+ * <p>The tools read and write through a {@linkplain Clearance clearance} (ADR-0036, design D5 of
+ * {@code add-attribute-access-control}), which is none unless the tools are created with one: every tool that reads uses
+ * views restricted to it, so a state lists the attributes it {@code withheld} and a query or a key that names one is a
+ * problem {@code ACCESS_DENIED}, and every commit and dry run carries it, so a write of a classified attribute that it does
+ * not cover is rejected with {@code ACCESS_DENIED} too. A payload has no way to give or widen a clearance.
+ *
  * <p>The tools are safe for use by several threads.
  */
 public final class AgentTools {
@@ -70,12 +77,14 @@ public final class AgentTools {
     private final ApprovalQueue queue;
     private final String principal;
     private final Optional<String> onBehalfOf;
+    private final Clearance clearance;
     private final Operations operations;
     private final Reads reads;
     private final Map<String, UnaryOperator<String>> handlers;
 
     /**
-     * Creates the tools of a store.
+     * Creates the tools of a store with the clearance that covers no classification: they read no value of a classified
+     * attribute and write none.
      *
      * @param store      the store the tools serve
      * @param policy     what the tools do with registrations and commits
@@ -87,7 +96,26 @@ public final class AgentTools {
      */
     public AgentTools(Store store, AgentPolicy policy, ApprovalQueue queue, String principal,
             Optional<String> onBehalfOf) {
+        this(store, policy, queue, principal, onBehalfOf, Clearance.none());
+    }
+
+    /**
+     * Creates the tools of a store.
+     *
+     * @param store      the store the tools serve
+     * @param policy     what the tools do with registrations and commits
+     * @param queue      where requests wait for a person's approval; it must be the queue of the same store
+     * @param principal  the principal the tools act as, for example {@code agent:onboarding}; recorded on every
+     *                   transaction they submit
+     * @param onBehalfOf the party the principal acts for, if any
+     * @param clearance  the classifications the tools may read and write: they read through views restricted to it, and
+     *                   every commit and dry run carries it
+     * @throws IllegalArgumentException if the principal is blank, or the queue belongs to another store
+     */
+    public AgentTools(Store store, AgentPolicy policy, ApprovalQueue queue, String principal,
+            Optional<String> onBehalfOf, Clearance clearance) {
         this.store = Objects.requireNonNull(store, "store");
+        this.clearance = Objects.requireNonNull(clearance, "clearance");
         this.policy = Objects.requireNonNull(policy, "policy");
         this.queue = Objects.requireNonNull(queue, "queue");
         this.principal = Objects.requireNonNull(principal, "principal");
@@ -99,7 +127,7 @@ public final class AgentTools {
             throw new IllegalArgumentException("The approval queue belongs to another store.");
         }
         this.operations = queue.operations();
-        this.reads = new Reads(store);
+        this.reads = new Reads(store, clearance);
         this.handlers = Map.ofEntries(
                 Map.entry(ToolCatalog.DESCRIBE, this::describe),
                 Map.entry(ToolCatalog.JSON_SCHEMA, this::jsonSchema),
@@ -153,7 +181,8 @@ public final class AgentTools {
     /**
      * {@code cairn_describe}: the latest basis, the stored definition of every origin as a YAML schema document, the
      * available rules with their descriptions, types and codes and whether the store has their code, every problem
-     * code with its explanation, the approval policy, and the principal the tools act as. Takes no arguments.
+     * code with its explanation, the approval policy, the principal the tools act as, and the clearance they read and
+     * write with (in the documents of the origins, each attribute states its classification). Takes no arguments.
      *
      * @param arguments the arguments, an empty JSON object
      * @return the description, as JSON text
@@ -167,6 +196,8 @@ public final class AgentTools {
         out.put("basis", store.latestBasis().value());
         out.put("principal", principal);
         onBehalfOf.ifPresent(party -> out.put("onBehalfOf", party));
+        ArrayNode cleared = out.putArray("clearance");
+        clearance.classifications().forEach(cleared::add);
         ObjectNode policyNode = out.putObject("policy");
         policyNode.put("schemaRegistrations", name(policy.schemaRegistrations()));
         policyNode.put("dataCommits", name(policy.dataCommits()));
@@ -336,7 +367,7 @@ public final class AgentTools {
         if (!in.valid()) {
             return Json.render(Operations.rejected(in.problems()));
         }
-        return Json.render(operations.dryRun(payload, principal, onBehalfOf));
+        return Json.render(operations.dryRun(payload, principal, onBehalfOf, clearance));
     }
 
     /**
@@ -352,9 +383,9 @@ public final class AgentTools {
             return Json.render(Operations.rejected(in.problems()));
         }
         return Json.render(switch (policy.dataCommits()) {
-            case ALLOW -> operations.commit(payload, principal, onBehalfOf);
-            case REQUIRE_APPROVAL -> queue.requestCommit(payload, principal, onBehalfOf);
-            case DENY -> operations.denyCommit(payload, principal, onBehalfOf);
+            case ALLOW -> operations.commit(payload, principal, onBehalfOf, clearance);
+            case REQUIRE_APPROVAL -> queue.requestCommit(payload, principal, onBehalfOf, clearance);
+            case DENY -> operations.denyCommit(payload, principal, onBehalfOf, clearance);
         });
     }
 

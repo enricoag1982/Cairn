@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -367,5 +368,66 @@ class CelDerivationTest {
         assertThat(derive("self.count > 0", ValueType.BOOLEAN, Map.of("count", Value.of(1)))).contains(Value.of(true));
         assertThatThrownBy(() -> language.compile("self.count", ATTRIBUTES))
                 .isInstanceOf(ExpressionCompilationException.class).hasMessageContaining("boolean");
+    }
+
+    // ------------------------------------------------------------------ the attributes a derivation reads
+
+    private Set<String> read(String expression, ValueType result) throws ExpressionCompilationException {
+        return compile(expression, result).attributesRead();
+    }
+
+    @Test
+    @DisplayName("A derivation reports the attributes it selects from self")
+    void aDerivationReportsTheAttributesItSelectsFromSelf() throws Exception {
+        assertThat(read("self.name", ValueType.STRING)).containsExactly("name");
+        assertThat(read("self.name + ' ' + string(self.count)", ValueType.STRING))
+                .containsExactlyInAnyOrder("name", "count");
+        assertThat(read("self.name + self.name", ValueType.STRING)).containsExactly("name");
+    }
+
+    @Test
+    @DisplayName("A derivation reports an attribute that it only tests for a value")
+    void aDerivationReportsAnAttributeThatItOnlyTestsForAValue() throws Exception {
+        assertThat(read("has(self.balance)", ValueType.BOOLEAN)).containsExactly("balance");
+        assertThat(read("has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null", ValueType.INT))
+                .containsExactly("birthDate");
+    }
+
+    @Test
+    @DisplayName("A derivation that reads nothing reports no attribute")
+    void aDerivationThatReadsNothingReportsNoAttribute() throws Exception {
+        assertThat(read("'constant'", ValueType.STRING)).isEmpty();
+        assertThat(read("string(1 + 2)", ValueType.STRING)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A derivation reports what it reads inside comprehensions, lists, maps and calls")
+    void aDerivationReportsWhatItReadsInsideComprehensionsListsMapsAndCalls() throws Exception {
+        assertThat(read("[1, 2].exists(n, double(n) < self.balance)", ValueType.BOOLEAN)).containsExactly("balance");
+        assertThat(read("self.name.size() > 0 && [1, 2].all(n, n < self.count)", ValueType.BOOLEAN))
+                .containsExactlyInAnyOrder("name", "count");
+        assertThat(read("string([self.count, self.count + 1].size())", ValueType.STRING)).containsExactly("count");
+        assertThat(read("string({'a': self.count}.size())", ValueType.STRING)).containsExactly("count");
+        assertThat(read("{'a': 1}.map(k, k + self.name).size() > 0", ValueType.BOOLEAN)).containsExactly("name");
+        assertThat(read("cairn.calendarDays(self.birthDate, self.seenAt)", ValueType.INT))
+                .containsExactlyInAnyOrder("birthDate", "seenAt");
+    }
+
+    @Test
+    @DisplayName("A derivation that uses self other than to select a field reports every attribute")
+    void aDerivationThatUsesSelfOtherThanToSelectAFieldReportsEveryAttribute() throws Exception {
+        assertThat(read("string(dyn(self)['name'])", ValueType.STRING)).containsExactlyInAnyOrderElementsOf(
+                ATTRIBUTES.keySet());
+        assertThat(read("string(dyn(self).name)", ValueType.STRING)).containsExactlyInAnyOrderElementsOf(
+                ATTRIBUTES.keySet());
+    }
+
+    @Test
+    @DisplayName("The attributes that a derivation reports cannot be changed")
+    void theAttributesThatADerivationReportsCannotBeChanged() throws Exception {
+        Set<String> attributes = read("self.name", ValueType.STRING);
+
+        assertThatThrownBy(() -> attributes.add("count")).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(read("self.name", ValueType.STRING)).isEqualTo(attributes);
     }
 }

@@ -41,9 +41,11 @@ entityTypes:
       employeeNumber: { type: string, required: true, unique: true, pattern: "E-[0-9]{3}" }
       kind: { type: string, required: true, allowedValues: [permanent, fixed-term] }
       weeklyHours: { type: int }
-      annualSalary: { type: decimal, required: true }
+      # Pay is classified (ADR-0036): a reader whose clearance does not cover "pay" sees neither the salary nor its
+      # currency, and cannot write them.
+      annualSalary: { type: decimal, required: true, classification: pay }
       # ISO 4217
-      currency: { type: string, required: true, pattern: "[A-Z]{3}" }
+      currency: { type: string, required: true, pattern: "[A-Z]{3}", classification: pay }
   LeaveRequest:
     attributes:
       kind: { type: string, required: true, allowedValues: [vacation, sick, unpaid] }

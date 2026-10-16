@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.core.storage;
 
+import io.github.enricoag1982.cairn.data.KeyResolution;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.schema.Basis;
@@ -19,7 +20,8 @@ final class DataRecordReader {
         Transaction transaction = TransactionCodec.read(in);
         Receipt receipt = TransactionCodec.readReceipt(in, basis, transactionTime, transaction);
         List<Effect> effects = in.readAll(EffectCodec::readEffect);
-        return new DataRecord(transaction, TransactionCodec.withKeys(receipt, TransactionCodec.readReceiptKeys(in)),
-                effects);
+        List<KeyResolution> keys = TransactionCodec.readReceiptKeys(in);
+        return new DataRecord(TransactionCodec.withClearance(transaction, TransactionCodec.readClearance(in)),
+                TransactionCodec.withKeys(receipt, keys), effects);
     }
 }

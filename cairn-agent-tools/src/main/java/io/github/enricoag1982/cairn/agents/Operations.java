@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.agents;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -31,6 +32,10 @@ import tools.jackson.databind.node.ObjectNode;
  * transaction payload (design D2, D4, D5 and D6 of {@code add-agent-tools}). Every method takes the text of a document
  * or payload, never throws for a text that is wrong, and returns the JSON of the outcome. People approving a request
  * run the same code as an agent whose request is allowed, so both get the same outcome for the same state.
+ *
+ * <p>A transaction is submitted with the clearance of the agent that asks (ADR-0036, design D5 of
+ * {@code add-attribute-access-control}), whatever the payload says: a payload has no way to give one, and a person who
+ * approves a request applies it with the clearance it was made with, not a wider one.
  */
 final class Operations {
 
@@ -105,9 +110,9 @@ final class Operations {
 
     // ------------------------------------------------------------------ transaction payloads
 
-    /** Runs a payload dry: {@code {outcome: wouldCommit | rejected, problems?}}. */
-    ObjectNode dryRun(String text, String principal, Optional<String> onBehalfOf) {
-        return dryRun(prepare(text, principal, onBehalfOf));
+    /** Runs a payload dry with a clearance: {@code {outcome: wouldCommit | rejected, problems?}}. */
+    ObjectNode dryRun(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        return dryRun(prepare(text, principal, onBehalfOf, clearance));
     }
 
     private ObjectNode dryRun(Prepared prepared) {
@@ -120,9 +125,9 @@ final class Operations {
         };
     }
 
-    /** Commits a payload: {@code {outcome: committed | rejected, receipt?, problems?}}. */
-    ObjectNode commit(String text, String principal, Optional<String> onBehalfOf) {
-        return switch (prepare(text, principal, onBehalfOf)) {
+    /** Commits a payload with a clearance: {@code {outcome: committed | rejected, receipt?, problems?}}. */
+    ObjectNode commit(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        return switch (prepare(text, principal, onBehalfOf, clearance)) {
             case Prepared.Failed failed -> rejected(failed.problems());
             case Prepared.Ready ready -> switch (store.commit(ready.transaction())) {
                 case CommitResult.Committed committed -> Json.object()
@@ -146,8 +151,8 @@ final class Operations {
     }
 
     /** Runs a payload dry, and reads the reason and the party it gives, to put it to a person if the dry run passes. */
-    Preflight commitPreflight(String text, String principal, Optional<String> onBehalfOf) {
-        Prepared prepared = prepare(text, principal, onBehalfOf);
+    Preflight commitPreflight(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        Prepared prepared = prepare(text, principal, onBehalfOf, clearance);
         ObjectNode dryRun = dryRun(prepared);
         if ("wouldCommit".equals(dryRun.get("outcome").stringValue())) {
             Transaction transaction = ((Prepared.Ready) prepared).transaction();
@@ -157,8 +162,8 @@ final class Operations {
     }
 
     /** The refusal of a commit that the approval policy denies, located at the root of the payload. */
-    ObjectNode denyCommit(String text, String principal, Optional<String> onBehalfOf) {
-        return switch (prepare(text, principal, onBehalfOf)) {
+    ObjectNode denyCommit(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        return switch (prepare(text, principal, onBehalfOf, clearance)) {
             case Prepared.Failed failed -> rejected(failed.problems());
             case Prepared.Ready ready -> rejected(ready.payload().locate(List.of(denied("@transaction",
                     "committing transactions"))));
@@ -178,12 +183,13 @@ final class Operations {
     }
 
     /**
-     * Reads a payload with the store's latest schema, the IDs it holds and the entities that its unique keys name, and
-     * checks that it names the principal the adapter acts as. A payload that names no party acted for gets the adapter's, if it has one.
+     * Reads a payload with the store's latest schema, the IDs it holds and the entities that its unique keys name, as a
+     * view restricted to the clearance finds them, and checks that it names the principal the adapter acts as. A payload
+     * that names no party acted for gets the adapter's, if it has one. The transaction gets the adapter's clearance.
      */
-    private Prepared prepare(String text, String principal, Optional<String> onBehalfOf) {
+    private Prepared prepare(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
         View view = store.view(Coordinates.effectiveAt(Instant.EPOCH));
-        return switch (Payloads.readTransaction(text, view.schema(), IdLookup.fromStore(store))) {
+        return switch (Payloads.readTransaction(text, view.schema(), IdLookup.fromStore(store, clearance))) {
             case PayloadReadResult.Invalid invalid -> new Prepared.Failed(invalid.problems());
             case PayloadReadResult.Read read -> {
                 TransactionPayload payload = read.payload();
@@ -191,10 +197,10 @@ final class Operations {
                 if (!transaction.principal().equals(principal)) {
                     yield new Prepared.Failed(payload.locate(List.of(mismatch(transaction.principal(), principal))));
                 }
-                if (transaction.onBehalfOf().isEmpty() && onBehalfOf.isPresent()) {
-                    transaction = new Transaction(transaction.principal(), onBehalfOf, transaction.reason(),
-                            transaction.idempotencyKey(), transaction.writes());
-                }
+                transaction = new Transaction(transaction.principal(),
+                        transaction.onBehalfOf().isEmpty() ? onBehalfOf : transaction.onBehalfOf(),
+                        transaction.reason(), transaction.idempotencyKey(), transaction.writes(),
+                        Optional.of(clearance));
                 yield new Prepared.Ready(payload, transaction);
             }
         };

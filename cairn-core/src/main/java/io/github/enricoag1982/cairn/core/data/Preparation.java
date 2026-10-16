@@ -113,8 +113,8 @@ final class Preparation {
             CommitSequence sequence, ReadIndex reads) {
         this.transaction = transaction;
         this.commit = commit;
-        this.workspace = new Workspace(index, ledger, purgedDigests, generator, problems);
-        WriteChecks writeChecks = new WriteChecks(problems);
+        this.workspace = new Workspace(index, ledger, purgedDigests, generator, problems, transaction.clearance());
+        WriteChecks writeChecks = new WriteChecks(problems, transaction.clearance());
         this.creations = new Creations(workspace, writeChecks, commit);
         this.amendments = new Amendments(workspace, writeChecks, commit);
         this.cascades = new Cascades(workspace);
