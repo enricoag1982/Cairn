@@ -96,3 +96,4 @@ Conformance scenarios check that reads through one view are repeatable, that unk
 - OpenFeature's "evaluation context" is a similar idea, for the gateway side.
 - Shadow mode suits an engine: run the old and the new path, return the old result, and log any difference.
 - A purge is the one exception to this decision: it removes entities from all of history, and from views already open. See [ADR-0024](0024-purge-entities-by-removing-them-from-all-of-history-and-record-that-a-purge-happened.md).
+- A view may be restricted to a clearance that withholds the values of classified attributes it does not cover, as [ADR-0036](0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md) decides.
