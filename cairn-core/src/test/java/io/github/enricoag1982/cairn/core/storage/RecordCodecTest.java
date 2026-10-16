@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.core.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
@@ -148,8 +149,8 @@ class RecordCodecTest {
                 List.of(new Check("share-set", "has(self.amount)", Optional.of("A share needs an amount."))));
         RelationshipTypeDefinition link = new RelationshipTypeDefinition("Link", "Party", "Person",
                 Multiplicity.ZERO_OR_ONE, Multiplicity.ONE_OR_MORE, "linkedFrom", List.of(),
-                RelationshipKind.ASSOCIATION, false, Optional.empty(), List.of(), List.of(), false, Optional.empty(),
-                List.of());
+                RelationshipKind.ASSOCIATION, false, true, Optional.empty(), List.of(), List.of(), false,
+                Optional.empty(), List.of(), List.of());
         return new SchemaDefinition(List.of(parent, child), List.of(trait), List.of(owns, link));
     }
 
@@ -192,9 +193,31 @@ class RecordCodecTest {
                         trait.aliases(), trait.deprecated(), trait.description())).toList(),
                 definition.relationshipTypes().stream().map(type -> new RelationshipTypeDefinition(type.name(),
                         type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(),
-                        type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(),
-                        plain(type.attributes()), type.aliases(), type.deprecated(), type.description(), type.rules(),
-                        type.checks())).toList());
+                        type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
+                        type.outlivesTarget(), type.supertype(), plain(type.attributes()), type.aliases(),
+                        type.deprecated(), type.description(), type.rules(), type.checks())).toList());
+    }
+
+    /** The definition with no relationship type outliving its targets. */
+    private static SchemaDefinition withoutOutliving(SchemaDefinition definition) {
+        return new SchemaDefinition(definition.entityTypes(), definition.traits(),
+                definition.relationshipTypes().stream().map(type -> new RelationshipTypeDefinition(type.name(),
+                        type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(),
+                        type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), false,
+                        type.supertype(), type.attributes(), type.aliases(), type.deprecated(), type.description(),
+                        type.rules(), type.checks())).toList());
+    }
+
+    /** A definition with one derived attribute, no check and a relationship type that outlives its targets. */
+    private static SchemaDefinition derivedAndOutliving() {
+        SchemaDefinition derived = derivedWithoutChecks();
+        RelationshipTypeDefinition opened = new RelationshipTypeDefinition("OpenedBy", "Person", "Person",
+                Multiplicity.ZERO_OR_ONE, Multiplicity.ZERO_OR_MORE, "opened", List.of(), RelationshipKind.ASSOCIATION,
+                false, true, Optional.empty(), List.of(), List.of(), false, Optional.empty(), List.of(), List.of());
+        RelationshipTypeDefinition kept = new RelationshipTypeDefinition("Kept", "Person", "Person",
+                Multiplicity.ZERO_OR_ONE, Multiplicity.ZERO_OR_MORE, "keptBy", List.of(), RelationshipKind.ASSOCIATION,
+                false, false, Optional.empty(), List.of(), List.of(), false, Optional.empty(), List.of(), List.of());
+        return new SchemaDefinition(derived.entityTypes(), derived.traits(), List.of(kept, opened));
     }
 
     private static byte[] payload(LogRecord record) {
@@ -236,7 +259,7 @@ class RecordCodecTest {
     @Test
     void aRecordWithoutDerivedAttributesIsTheSameAsItWasBeforeTheyExisted() {
         // Checks follow the identifiers, and nothing follows the checks, as in a record written before derived attributes.
-        SchemaRecord record = schemaRecord(withoutDerived(everythingSet()));
+        SchemaRecord record = schemaRecord(withoutOutliving(withoutDerived(everythingSet())));
         byte[] payload = payload(record);
 
         assertThat(RecordCodec.decode(RecordCodec.VERSION, payload)).isEqualTo(record);
@@ -278,6 +301,95 @@ class RecordCodecTest {
 
         assertThatThrownBy(() -> DefinitionCodec.readDerivations(new Decoder(section.toByteArray()),
                 withoutDerived(derivedWithoutChecks()))).isInstanceOf(CorruptRecordException.class)
+                .hasMessageContaining("twice");
+    }
+
+    // ------------------------------------------------------------------ relationships that outlive their targets (D1)
+
+    @Test
+    void theRelationshipTypesThatOutliveTheirTargetsFollowTheOtherSectionsAsASectionOfTheirOwn() {
+        SchemaDefinition definition = everythingSet();
+        byte[] without = payload(schemaRecord(withoutOutliving(definition)));
+        byte[] with = payload(schemaRecord(definition));
+
+        // The checks of the entity types and of the relationship types, and the derivations, are written by the
+        // definition itself, as they are without the section; it adds the names of the types, last.
+        Encoder section = Encoder.plain();
+        section.writeInt(1);
+        section.writeText("Link");
+        byte[] names = section.toByteArray();
+
+        assertThat(Arrays.copyOf(with, without.length)).as("the record up to the section").isEqualTo(without);
+        assertThat(Arrays.copyOfRange(with, without.length, with.length)).as("the section").isEqualTo(names);
+    }
+
+    @Test
+    void emptySectionsBeforeItTellItApartFromTheOtherSections() {
+        SchemaDefinition definition = new SchemaDefinition(List.of(), List.of(), derivedAndOutliving().relationshipTypes());
+        byte[] without = payload(schemaRecord(withoutOutliving(definition)));
+        byte[] with = payload(schemaRecord(definition));
+
+        Encoder sections = Encoder.plain();
+        sections.writeInt(0); // The checks of the entity types: none, but present, so that the sections are told apart.
+        sections.writeInt(0); // The checks of the relationship types.
+        sections.writeInt(0); // The derivations.
+        sections.writeInt(1);
+        sections.writeText("OpenedBy");
+
+        assertThat(without).as("without the section, nothing follows the identifiers").hasSizeLessThan(with.length);
+        assertThat(Arrays.copyOf(with, without.length)).isEqualTo(without);
+        assertThat(Arrays.copyOfRange(with, without.length, with.length)).isEqualTo(sections.toByteArray());
+        assertThat(RecordCodec.decode(RecordCodec.VERSION, with)).isEqualTo(schemaRecord(definition));
+    }
+
+    @Test
+    void aRecordWithoutTheSectionReadsAsOneWhoseRelationshipsDoNotOutliveTheirTargets() {
+        // A record as it was written before the section existed: the definition without the flag, nothing after it.
+        SchemaRecord record = schemaRecord(withoutOutliving(everythingSet()));
+        byte[] payload = payload(record);
+
+        SchemaRecord read = (SchemaRecord) RecordCodec.decode(RecordCodec.VERSION, payload);
+
+        assertThat(read).isEqualTo(record);
+        assertThat(read.definition().relationshipTypes()).isNotEmpty()
+                .noneMatch(RelationshipTypeDefinition::outlivesTarget);
+        SchemaRecord plain = schemaRecord(ReferenceModel.definition());
+        assertThat(((SchemaRecord) RecordCodec.decode(RecordCodec.VERSION, payload(plain))).definition()
+                .relationshipTypes()).isNotEmpty().noneMatch(RelationshipTypeDefinition::outlivesTarget);
+    }
+
+    @Test
+    void derivedAttributesAndTypesThatOutliveTheirTargetsReadBackEqual() {
+        SchemaRecord record = schemaRecord(derivedAndOutliving());
+
+        SchemaRecord read = (SchemaRecord) roundTrip(record);
+
+        assertThat(read).isEqualTo(record);
+        assertThat(read.definition().relationshipTypes()).extracting(RelationshipTypeDefinition::name,
+                RelationshipTypeDefinition::outlivesTarget).containsExactly(
+                        tuple("Kept", false),
+                        tuple("OpenedBy", true));
+    }
+
+    @Test
+    void aTypeThatTheSectionNamesAndTheDefinitionDoesNotHaveIsCorrupt() {
+        Encoder section = Encoder.plain();
+        section.writeInt(1);
+        section.writeText("Nothing");
+
+        assertThatThrownBy(() -> DefinitionCodec.readOutliving(new Decoder(section.toByteArray()),
+                derivedAndOutliving())).isInstanceOf(CorruptRecordException.class).hasMessageContaining("Nothing");
+    }
+
+    @Test
+    void aTypeThatTheSectionNamesTwiceIsCorrupt() {
+        Encoder section = Encoder.plain();
+        section.writeInt(2);
+        section.writeText("OpenedBy");
+        section.writeText("OpenedBy");
+
+        assertThatThrownBy(() -> DefinitionCodec.readOutliving(new Decoder(section.toByteArray()),
+                withoutOutliving(derivedAndOutliving()))).isInstanceOf(CorruptRecordException.class)
                 .hasMessageContaining("twice");
     }
 

@@ -110,6 +110,12 @@ public interface View {
      * one of its inverse aliases) from the target to the source; relationships of the type's subtypes are included.
      * For a symmetric relationship type either name leads from both ends. Names are compared without regard to case.
      *
+     * <p>For a relationship whose type {@linkplain io.github.enricoag1982.cairn.schema.RelationshipType#outlivesTarget()
+     * outlives its targets} and whose target does not exist at the effective time, the entity at the other end is the
+     * target's last version as known at the view's basis: the version whose period ends last at or before the
+     * effective time, so that the caller tells from its period that the target has ended. Queries and traversals read
+     * the same version.
+     *
      * @param from the entity to navigate from; one that does not exist at the effective time has no relationships
      * @param name the name of a relationship type or the inverse name of one in the view's schema, such as {@code Owns}
      *             or {@code ownedBy}

@@ -16,6 +16,9 @@ import java.util.Optional;
  * @param inverseAliases   previous inverse names
  * @param kind             composition or association
  * @param symmetric        {@code true} if the two ends are interchangeable
+ * @param outlivesTarget   {@code true} if the relationships of the type may continue after their target ends, as
+ *                         records of a past fact; not inherited by subtypes, and not for compositions or symmetric
+ *                         types
  * @param supertype        the name of the relationship supertype, if any
  * @param attributes       the attributes the type declares itself
  * @param aliases          previous names of the type
@@ -34,6 +37,7 @@ public record RelationshipTypeDefinition(
         List<String> inverseAliases,
         RelationshipKind kind,
         boolean symmetric,
+        boolean outlivesTarget,
         Optional<String> supertype,
         List<AttributeDefinition> attributes,
         List<String> aliases,
@@ -43,7 +47,37 @@ public record RelationshipTypeDefinition(
         List<Check> checks) {
 
     /**
-     * Creates the definition of a relationship type that declares no checks.
+     * Creates the definition of a relationship type whose relationships do not outlive their targets.
+     *
+     * @param name             the type name, which also names navigation from source to target
+     * @param source           the name of the source entity type
+     * @param target           the name of the target entity type
+     * @param targetsPerSource how many targets each source can have
+     * @param sourcesPerTarget how many sources each target can have
+     * @param inverseName      the name of navigation from target to source
+     * @param inverseAliases   previous inverse names
+     * @param kind             composition or association
+     * @param symmetric        {@code true} if the two ends are interchangeable
+     * @param supertype        the name of the relationship supertype, if any
+     * @param attributes       the attributes the type declares itself
+     * @param aliases          previous names of the type
+     * @param deprecated       {@code true} if the type should no longer be used
+     * @param description      what the type means, if described
+     * @param rules            the rules that apply to the type and its subtypes
+     * @param checks           the checks that apply to the type and its subtypes (capability {@code checks})
+     */
+    public RelationshipTypeDefinition(String name, String source, String target, Multiplicity targetsPerSource,
+            Multiplicity sourcesPerTarget, String inverseName, List<String> inverseAliases, RelationshipKind kind,
+            boolean symmetric, Optional<String> supertype, List<AttributeDefinition> attributes,
+            List<String> aliases, boolean deprecated, Optional<String> description, List<RuleReference> rules,
+            List<Check> checks) {
+        this(name, source, target, targetsPerSource, sourcesPerTarget, inverseName, inverseAliases, kind, symmetric,
+                false, supertype, attributes, aliases, deprecated, description, rules, checks);
+    }
+
+    /**
+     * Creates the definition of a relationship type that declares no checks, and whose relationships do not outlive
+     * their targets.
      *
      * @param name             the type name, which also names navigation from source to target
      * @param source           the name of the source entity type
@@ -66,7 +100,7 @@ public record RelationshipTypeDefinition(
             boolean symmetric, Optional<String> supertype, List<AttributeDefinition> attributes,
             List<String> aliases, boolean deprecated, Optional<String> description, List<RuleReference> rules) {
         this(name, source, target, targetsPerSource, sourcesPerTarget, inverseName, inverseAliases, kind, symmetric,
-                supertype, attributes, aliases, deprecated, description, rules, List.of());
+                false, supertype, attributes, aliases, deprecated, description, rules, List.of());
     }
 
     /**

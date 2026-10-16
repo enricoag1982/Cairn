@@ -51,13 +51,16 @@ import org.junit.jupiter.api.Test;
  * depend on column widths, the order of rows, or the Markdown around a name. It is strict on what the page says: the
  * names, the attributes with whether they are required and unique, their allowed values and patterns, the expression
  * of those that are derived ({@code derived from} and the expression in a code span, among the details of the attribute),
- * the kind, source, target, multiplicities and inverse name of each relationship type, the version, type, description
- * and codes of each rule, and the type, expression and message of each check.
+ * the kind, whether its relationships outlive their targets, source, target, multiplicities and inverse name of each
+ * relationship type, the version, type, description and codes of each rule, and the type, expression and message of each
+ * check.
  */
 class HrDomainPageTest {
 
     private static final Path PAGE = Path.of("").toAbsolutePath().getParent()
             .resolve("docs/reference/hr-domain.md");
+    /** What the kind cell of a relationship type says after the kind if its relationships outlive their targets. */
+    private static final String OUTLIVES_TARGET = ", outlives its target";
     private static final Pattern QUOTED = Pattern.compile("`([^`]+)`");
     private static final Pattern PATTERN_OF_LETTERS = Pattern.compile("(two|three) capital letters");
     private static final Pattern PATTERN_OF_DIGITS = Pattern.compile("`([^`]+)` and (two|three|four) digits");
@@ -295,8 +298,12 @@ class HrDomainPageTest {
                     .hasToString(plain(page.cell(row, "Targets per source")));
             assertThat(type.sourcesPerTarget()).as("%s sources per target", name)
                     .hasToString(plain(page.cell(row, "Sources per target")));
+            // The kind cell is the kind, and, for a type whose relationships outlive their targets, says so after it.
+            String kind = plain(page.cell(row, "Kind"));
+            boolean outlives = kind.endsWith(OUTLIVES_TARGET);
             assertThat(type.kind().name().toLowerCase(Locale.ROOT)).as("%s kind", name)
-                    .isEqualTo(plain(page.cell(row, "Kind")));
+                    .isEqualTo(outlives ? kind.substring(0, kind.length() - OUTLIVES_TARGET.length()) : kind);
+            assertThat(type.outlivesTarget()).as("%s outlives its target", name).isEqualTo(outlives);
             assertThat(type.inverseName()).as("%s inverse name", name).isEqualTo(plain(page.cell(row, "Inverse name")));
             assertThat(type.attributes()).as("%s has no attributes: the page lists none", name).isEmpty();
             assertThat(type.symmetric()).as("%s is symmetric", name).isFalse();

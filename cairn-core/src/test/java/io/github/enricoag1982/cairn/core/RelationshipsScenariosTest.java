@@ -38,6 +38,8 @@ import io.github.enricoag1982.cairn.data.View;
 import io.github.enricoag1982.cairn.fixtures.Definitions;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
+import io.github.enricoag1982.cairn.query.Query;
+import io.github.enricoag1982.cairn.query.QueryResult;
 import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
@@ -63,6 +65,9 @@ class RelationshipsScenariosTest {
     private static final TemporaryId OFFICE = new TemporaryId("office");
     private static final TemporaryId MAILED_TO = new TemporaryId("mailedTo");
     private static final TemporaryId GAMMA_OWNS_ACME = new TemporaryId("gammaOwnsAcme");
+    private static final TemporaryId OPENED_BY_A1 = new TemporaryId("openedByA1");
+    private static final TemporaryId OPENED_BY_A2 = new TemporaryId("openedByA2");
+    private static final TemporaryId DANA = new TemporaryId("dana");
 
     /** The reference domain with the symmetric relationship type of the scenario "Related parties". */
     private static final SchemaDefinition WITH_RELATED_PARTY = Definitions.plus(ReferenceModel.definition(),
@@ -79,9 +84,22 @@ class RelationshipsScenariosTest {
      * statements are mailed to, of the scenarios of cascades: many accounts may be mailed to one address.
      */
     private static SchemaDefinition withMailedTo(Multiplicity targetsPerSource) {
+        return withMailedTo(targetsPerSource, false);
+    }
+
+    /**
+     * The same, where the relationships of {@code MailedTo} may outlive their targets if the flag says so: the scenario
+     * "A cascade leaves a relationship that outlives its target".
+     */
+    private static SchemaDefinition withMailedTo(Multiplicity targetsPerSource, boolean outlivesTarget) {
         return Definitions.plus(ReferenceModel.definition(), SchemaDefinition.builder()
-                .relationshipType("MailedTo", r -> r.from("Account").to("Address").targetsPerSource(targetsPerSource)
-                        .sourcesPerTarget(Multiplicity.ZERO_OR_MORE).inverse("mailedFrom"))
+                .relationshipType("MailedTo", r -> {
+                    r.from("Account").to("Address").targetsPerSource(targetsPerSource)
+                            .sourcesPerTarget(Multiplicity.ZERO_OR_MORE).inverse("mailedFrom");
+                    if (outlivesTarget) {
+                        r.outlivesTarget();
+                    }
+                })
                 .build());
     }
 
@@ -480,6 +498,81 @@ class RelationshipsScenariosTest {
         assertThat(reference.view(on(6, 1)).entities("Address")).extracting(EntityState::id).isEmpty();
     }
 
+    // ------------------------------------------------------------------ relationships that outlive their targets
+
+    /**
+     * A store of the reference domain with the test-only association {@code OpenedBy}, which outlives its targets, in
+     * which RD-1 and RD-5 are recorded and A-1 is opened by Alice from 1 January, recorded on 20 May.
+     */
+    private static final class Opened {
+        final ReferenceStore store = ReferenceStore.with(Definitions.plus(ReferenceModel.definition(),
+                Definitions.openedBy(true)));
+        final EntityId a1;
+        final EntityId a2;
+        final EntityId alice;
+        final RelationshipId openedBy;
+
+        Opened() {
+            Receipt accounts = store.createAccounts();
+            a1 = entity(accounts, A1);
+            a2 = entity(accounts, A2);
+            alice = entity(store.parties, ALICE);
+            store.recordedOn(on(5, 20));
+            openedBy = relationship(store.commit(Transaction.by("importer")
+                    .relate(OPENED_BY_A1, "OpenedBy", a1, alice, from(1, 1), values()).build()), OPENED_BY_A1);
+        }
+
+        /** Ends Alice from 1 June, in a transaction recorded on 25 May that ends nothing else. */
+        Receipt aliceEnds() {
+            store.recordedOn(on(5, 25));
+            return store.commit(Transaction.by("importer").endDate(alice, on(6, 1)).build());
+        }
+    }
+
+    @Test
+    @DisplayName("Scenario: Ending the target of a relationship that outlives it")
+    void endingTheTargetOfARelationshipThatOutlivesIt() {
+        Opened opened = new Opened();
+
+        Receipt receipt = opened.aliceEnds();
+
+        assertThat(receipt.ended()).as("nothing had to be ended with Alice").isEmpty();
+        assertThat(opened.store.view(on(5, 31)).entity(opened.alice)).isPresent();
+        assertThat(opened.store.view(on(7, 1)).entity(opened.alice)).as("Alice has ended").isEmpty();
+        assertThat(opened.store.view(on(7, 1)).relationship(opened.openedBy))
+                .as("A-1's OpenedBy is still effective on 1 July")
+                .hasValueSatisfying(state -> assertThat(state.period()).isEqualTo(from(1, 1)));
+    }
+
+    @Test
+    @DisplayName("Scenario: A relationship that starts after its target ended")
+    void aRelationshipThatStartsAfterItsTargetEnded() {
+        Opened opened = new Opened();
+        opened.aliceEnds();
+        opened.store.recordedOn(on(6, 15));
+
+        List<Problem> problems = opened.store.reject(Transaction.by("importer")
+                .relate(OPENED_BY_A2, "OpenedBy", opened.a2, opened.alice, from(7, 1), values()).build());
+
+        Problem problem = only(problems);
+        assertProblem(problem, ProblemCode.END_NOT_EFFECTIVE, "$openedByA2");
+        assertThat(problem.message()).contains("OpenedBy", "target", "does not exist at 2026-07-01T00:00:00Z");
+    }
+
+    @Test
+    @DisplayName("Scenario: A record still counts at its source")
+    void aRecordStillCountsAtItsSource() {
+        Opened opened = new Opened();
+        opened.aliceEnds();
+        opened.store.recordedOn(on(6, 15));
+
+        List<Problem> problems = opened.store.reject(Transaction.by("importer")
+                .create(DANA, "Person", from(7, 1), values("name", "Dana"))
+                .relate(OPENED_BY_A2, "OpenedBy", opened.a1, DANA, from(7, 1), values()).build());
+
+        assertProblem(only(problems), ProblemCode.TOO_MANY_RELATIONSHIPS, opened.a1.value() + "[OpenedBy]");
+    }
+
     // ------------------------------------------------------------------ the relationships of a target end with it
 
     /**
@@ -558,5 +651,97 @@ class RelationshipsScenariosTest {
         assertThat(problem.message()).contains("MailedTo", "from 2026-06-01T00:00:00Z until further notice");
         assertThat(store.view(on(6, 1)).entity(entity(parties, BETA))).as("nothing was ended").isPresent();
         assertThat(store.view(on(6, 1)).navigate(a1, "MailedTo")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Scenario: A cascade leaves a relationship that outlives its target")
+    void aCascadeLeavesARelationshipThatOutlivesItsTarget() {
+        ReferenceStore store = ReferenceStore.with(withMailedTo(Multiplicity.ZERO_OR_ONE, true));
+        Receipt parties = store.createParties();
+        Receipt accounts = mailedAccounts(store, parties);
+        RelationshipId mailedTo = relationship(accounts, MAILED_TO);
+
+        Receipt receipt = store.commit(endBeta(parties, accounts));
+
+        assertThat(receipt.ended()).as("the cascade ended the composition and its target, and left MailedTo")
+                .containsExactly(relationship(accounts, HAS_ADDRESS), entity(accounts, HOME));
+        assertThat(store.view(on(6, 1)).entity(entity(accounts, HOME))).as("the address has ended").isEmpty();
+        for (Instant instant : List.of(on(6, 1), on(6, 2), on(12, 31))) {
+            assertThat(store.view(instant).relationship(mailedTo)).as("A-1's MailedTo is effective on %s", instant)
+                    .hasValueSatisfying(state -> assertThat(state.period()).isEqualTo(from(1, 1)));
+        }
+    }
+
+    // ------------------------------------------------------------------ reading what outlives its target
+
+    @Test
+    @DisplayName("Scenario: Who opened A-1 after Alice ended")
+    void whoOpenedA1AfterAliceEnded() {
+        Opened opened = new Opened();
+        opened.aliceEnds();
+
+        List<Link> openers = opened.store.view(on(7, 1)).navigate(opened.a1, "OpenedBy");
+
+        assertThat(openers).singleElement().satisfies(link -> {
+            assertThat(link.relationship().id()).isEqualTo(opened.openedBy);
+            assertThat(link.relationship().relationshipType()).isEqualTo("OpenedBy");
+            assertThat(link.entity().id()).isEqualTo(opened.alice);
+            assertThat(link.entity().values()).containsEntry("name", Value.of("Alice"));
+            assertThat(link.entity().period()).as("Alice's last version ends on 1 June")
+                    .isEqualTo(EffectivePeriod.between(on(1, 1), on(6, 1)));
+        });
+        assertThat(opened.store.view(on(5, 31)).navigate(opened.a1, "OpenedBy")).as("before Alice ended")
+                .singleElement().satisfies(link -> {
+                    assertThat(link.entity().id()).isEqualTo(opened.alice);
+                    assertThat(link.entity().period().contains(on(5, 31))).as("she exists on 31 May").isTrue();
+                });
+    }
+
+    @Test
+    @DisplayName("Scenario: Navigating from an ended target")
+    void navigatingFromAnEndedTarget() {
+        Opened opened = new Opened();
+        opened.aliceEnds();
+
+        List<Link> openedAccounts = opened.store.view(on(7, 1)).navigate(opened.alice, "opened");
+
+        assertThat(openedAccounts).isEmpty();
+        assertThat(opened.store.view(on(7, 1)).relationship(opened.openedBy)).as("the relationship goes on")
+                .isPresent();
+        assertThat(opened.store.view(on(5, 31)).navigate(opened.alice, "opened")).as("before Alice ended")
+                .singleElement().satisfies(link -> assertThat(link.entity().id()).isEqualTo(opened.a1));
+    }
+
+    @Test
+    @DisplayName("Scenario: A query that follows a relationship to an ended target")
+    void aQueryThatFollowsARelationshipToAnEndedTarget() {
+        Opened opened = new Opened();
+        opened.aliceEnds();
+        Query query = Query.from("Account", "account").follow("account", "OpenedBy", "opener").build();
+
+        QueryResult.Rows result = QueryRows.rows(opened.store.view(on(7, 1)).query(query));
+
+        assertThat(result.rows()).singleElement().satisfies(row -> {
+            assertThat(QueryRows.text(row, "account", "number")).isEqualTo("A-1");
+            assertThat(QueryRows.name(row, "opener")).isEqualTo("Alice");
+            assertThat(row.entity("opener").orElseThrow().period()).as("Alice's last version")
+                    .isEqualTo(EffectivePeriod.between(on(1, 1), on(6, 1)));
+        });
+    }
+
+    @Test
+    @DisplayName("Scenario: A traversal that reaches an ended target")
+    void aTraversalThatReachesAnEndedTarget() {
+        Opened opened = new Opened();
+        opened.aliceEnds();
+
+        List<Step> steps = opened.store.view(on(7, 1)).traverse(opened.a1, "OpenedBy");
+
+        assertThat(steps).singleElement().satisfies(step -> {
+            assertThat(step.depth()).isEqualTo(1);
+            assertThat(step.entity().id()).isEqualTo(opened.alice);
+            assertThat(step.entity().period()).isEqualTo(EffectivePeriod.between(on(1, 1), on(6, 1)));
+            assertThat(step.via().id()).isEqualTo(opened.openedBy);
+        });
     }
 }

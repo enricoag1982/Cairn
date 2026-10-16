@@ -48,8 +48,12 @@ import java.util.random.RandomGeneratorFactory;
  * is committed, because it refers to what earlier steps created by the names {@link Ids} keeps. The generator also
  * simulates the company while it generates it, so it knows what the company looks like at the end of each month
  * ({@link MonthEnd}), which a store must then answer too. Generated data follows the rules of the domain: every leave
- * is decided by the manager of the requester's unit or of a unit above it, a vacation never takes the approved days
- * of a year above 25, and managers stay.
+ * is decided by a manager of the requester's unit or of a unit above it who is employed on the request's first day, a
+ * vacation never takes the approved days of a year above 25, and the manager of the root unit stays.
+ *
+ * <p>The first termination of the year is that of a manager of another unit, if one can leave on the day: one who
+ * decided no request with a first day on or after it, so that the decisions of the manager stay as they were taken
+ * (ADR-0034). The unit then has no manager, and a later request in it goes to a manager of a unit above.
  *
  * <p>The year is 2026. Hires of the first month are effective from 1 January and recorded on 2 January; every later
  * event is recorded on the day it takes effect, and no two events fall on the same day.
@@ -212,6 +216,8 @@ public final class CompanyGenerator {
         PlaceSpec place;
         BigDecimal salary;
         boolean active = true;
+        /** The latest first day of the leave requests that this employee decided: a manager leaves only after it. */
+        LocalDate decidedUntil = LocalDate.MIN;
         int vacationDays;
         String employmentOf;
         String employedBy;
@@ -250,6 +256,7 @@ public final class CompanyGenerator {
         private final List<String> familyNames;
         private final Map<String, Integer> events = new TreeMap<>();
         private int leaves;
+        private boolean managerLeft;
 
         Generation(RandomGenerator random) {
             this.random = random;
@@ -546,6 +553,9 @@ public final class CompanyGenerator {
             LocalDate lastDay = firstDay.plusDays(length - 1);
             List<Employee> deciders = managersAbove(employee.slot.unit);
             Employee decider = deciders.get(random.nextInt(deciders.size()));
+            if (firstDay.isAfter(decider.decidedUntil)) {
+                decider.decidedUntil = firstDay;
+            }
 
             int leave = ++leaves;
             String request = "leave" + leave;
@@ -567,13 +577,13 @@ public final class CompanyGenerator {
                     .build()));
         }
 
-        /** The managers of a unit and of the units above it, nearest first. */
+        /** The managers of a unit and of the units above it, nearest first; a unit whose manager left has none. */
         private List<Employee> managersAbove(String unit) {
             List<Employee> managers = new ArrayList<>();
             for (String code = unit; code != null; code = parentOf(code)) {
                 String current = code;
                 slots.stream().filter(s -> s.unit.equals(current) && s.job.equals("MGR")).findFirst()
-                        .ifPresent(s -> managers.add(s.occupant));
+                        .map(s -> s.occupant).ifPresent(managers::add);
             }
             return managers;
         }
@@ -582,19 +592,43 @@ public final class CompanyGenerator {
             return UNITS.stream().filter(u -> u.code().equals(unit)).findFirst().orElseThrow().parent();
         }
 
-        /** An employee who was hired at least 20 days ago leaves: the employment and what hangs on it end. */
+        /**
+         * The managers who can leave on a day: those of the units but the root, who decided no request whose first day
+         * is on or after the day. The decision of a manager who left before the first day of a request would no longer
+         * meet {@code decided-by-manager}, which reads who manages the unit on that day.
+         */
+        private List<Employee> managersWhoCanLeave(LocalDate day) {
+            String root = UNITS.getFirst().code();
+            return employees.stream().filter(e -> e.active && e.manager && !e.slot.unit.equals(root)
+                    && e.decidedUntil.isBefore(day)).toList();
+        }
+
+        /**
+         * An employee who was hired at least 20 days ago leaves, or, the first time, a manager: the employment and what
+         * hangs on it end. A manager's employment ends with the {@code ManagedBy} of the unit, and the decisions that
+         * the manager took stay, as records of past facts.
+         */
         private void terminate(LocalDate day) {
+            List<Employee> managers = managersWhoCanLeave(day);
             List<Employee> leavers = staff(day).stream().filter(e -> e.hired.isBefore(day.minusDays(20))).toList();
-            if (leavers.isEmpty()) {
+            Employee employee;
+            if (!managerLeft && !managers.isEmpty()) {
+                employee = managers.get(random.nextInt(managers.size()));
+                managerLeft = true;
+            } else if (leavers.isEmpty()) {
                 return;
+            } else {
+                employee = leavers.get(random.nextInt(leavers.size()));
             }
-            Employee employee = leavers.get(random.nextInt(leavers.size()));
             employee.active = false;
             employee.slot.occupant = null;
             String key = employee.key;
             String code = employee.code;
             List<String> relationships = new ArrayList<>(List.of(employee.employmentOf, employee.employedBy,
                     employee.worksAt, employee.fills));
+            if (employee.manager) {
+                relationships.add("managedBy" + employee.slot.unit);
+            }
             Instant from = instant(day);
             events.merge("terminations", 1, Integer::sum);
             steps.add(new Step(from, ids -> {

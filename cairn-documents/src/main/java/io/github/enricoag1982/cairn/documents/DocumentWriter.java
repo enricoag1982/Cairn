@@ -111,6 +111,7 @@ final class DocumentWriter {
             mapping.put("kind", type.kind().name().toLowerCase(Locale.ROOT));
         }
         flag(mapping, "symmetric", type.symmetric());
+        flag(mapping, "outlivesTarget", type.outlivesTarget());
         type.supertype().ifPresent(supertype -> mapping.put("supertype", supertype));
         attributes(mapping, type.attributes());
         strings(mapping, "aliases", type.aliases());

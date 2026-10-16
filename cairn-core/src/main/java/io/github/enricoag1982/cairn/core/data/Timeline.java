@@ -117,6 +117,43 @@ final class Timeline {
                 : Optional.of(new Lifetime(segments.getFirst().from(), segments.getLast().end()));
     }
 
+    /**
+     * The first instants of the stretches of this timeline: a stretch is a maximal run of adjacent segments, so a
+     * segment starts one unless the segment before it ends where it starts. The relationships that outlive their
+     * targets need their target to exist at each of these instants.
+     *
+     * @return the starts of the stretches, in order; empty for an empty timeline
+     */
+    List<Instant> stretchStarts() {
+        List<Instant> starts = new ArrayList<>();
+        Instant previousEnd = null;
+        for (Segment segment : segments) {
+            if (previousEnd == null || !previousEnd.equals(segment.from())) {
+                starts.add(segment.from());
+            }
+            previousEnd = segment.end();
+        }
+        return starts;
+    }
+
+    /**
+     * The version that ends last at or before an instant: the last that the entity had before it ended, as a view at the
+     * instant reads an ended target of a relationship that outlives it. A version without an end is never one.
+     *
+     * @param instant the instant
+     * @return the segment; empty if no version ended at or before the instant
+     */
+    Optional<Segment> lastEndingAtOrBefore(Instant instant) {
+        Segment found = null;
+        for (Segment segment : segments) {
+            if (segment.end().isAfter(instant)) {
+                break;
+            }
+            found = segment;
+        }
+        return Optional.ofNullable(found);
+    }
+
     /** From when until when an entity exists; the end is {@link Segment#OPEN} for an entity without one. */
     record Lifetime(Instant from, Instant end) {
     }

@@ -60,6 +60,7 @@ class JsonSchemaTest {
                         "    inverseAliases: [linkedFrom]",
                         "    kind: composition",
                         "    symmetric: true",
+                        "    outlivesTarget: true",
                         "    supertype: Base",
                         "    attributes:",
                         "      since: { type: date }",
@@ -171,6 +172,8 @@ class JsonSchemaTest {
                 Arguments.of("a multiplicity in another form", relationship("    kind: association")
                         .replace("targetsPerSource: \"0..*\"", "targetsPerSource: \"0..n\"")),
                 Arguments.of("an unknown kind", relationship("    kind: aggregation")),
+                Arguments.of("an outlivesTarget flag that is a string", relationship("    outlivesTarget: \"true\"")),
+                Arguments.of("an outlivesTarget flag that is a number", relationship("    outlivesTarget: 1")),
                 Arguments.of("rules that are a mapping", document("entityTypes:", "  Thing:", "    rules: { name: a-rule }")),
                 Arguments.of("a rule version that is a string", document(
                         "entityTypes:", "  Thing:", "    rules:", "      - { name: a-rule, version: \"1\" }")));

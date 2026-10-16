@@ -34,6 +34,12 @@ import java.util.Set;
  * record that has derived attributes but no checks has an empty checks section before it, so that the sections are told
  * apart by their position. Records without derived attributes are the same as they were before derived attributes
  * existed, and a section is read only where bytes remain.
+ *
+ * <p>The relationship types whose relationships outlive their targets (design D1 of
+ * {@code add-relationships-that-outlive-their-targets}) are named in a last section, which is left out when no
+ * relationship type declares it. A record that has such a type but no derived attributes or checks has the empty
+ * sections before it, so that the sections are told apart by their position. A record without the section reads as
+ * a definition whose relationships do not outlive their targets.
  */
 final class DefinitionCodec {
 
@@ -147,8 +153,17 @@ final class DefinitionCodec {
      * relationship types, in the order of the definition. Writes nothing if no attribute is derived.
      */
     static void writeDerivations(Encoder out, SchemaDefinition definition) {
+        writeDerivations(out, definition, false);
+    }
+
+    /**
+     * Writes the derivations section: the expressions of the derived attributes, as {@link #writeDerivations(Encoder,
+     * SchemaDefinition)} does. Writes nothing if no attribute is derived, unless the section is {@code required} because
+     * a section that follows it needs to be told apart; it is then written empty.
+     */
+    static void writeDerivations(Encoder out, SchemaDefinition definition, boolean required) {
         List<DerivedAttribute> derived = derivedAttributes(definition);
-        if (derived.isEmpty()) {
+        if (derived.isEmpty() && !required) {
             return;
         }
         out.writeAll(derived, (encoder, attribute) -> {
@@ -156,6 +171,23 @@ final class DefinitionCodec {
             encoder.writeText(attribute.attribute());
             encoder.writeText(attribute.expression());
         });
+    }
+
+    /** Tells whether any relationship type of the definition lets its relationships outlive their targets. */
+    static boolean hasOutliving(SchemaDefinition definition) {
+        return definition.relationshipTypes().stream().anyMatch(RelationshipTypeDefinition::outlivesTarget);
+    }
+
+    /**
+     * Writes the names of the relationship types whose relationships outlive their targets, in the order of the
+     * definition. Writes nothing if there are none.
+     */
+    static void writeOutliving(Encoder out, SchemaDefinition definition) {
+        if (!hasOutliving(definition)) {
+            return;
+        }
+        out.writeAll(definition.relationshipTypes().stream().filter(RelationshipTypeDefinition::outlivesTarget)
+                .map(RelationshipTypeDefinition::name).toList(), Encoder::writeText);
     }
 
     private static void writeCheck(Encoder out, Check check) {
@@ -279,8 +311,8 @@ final class DefinitionCodec {
             List<Check> checks = relationships.get(type.name());
             relationshipTypes.add(checks == null ? type : new RelationshipTypeDefinition(type.name(), type.source(),
                     type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
-                    type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(), type.attributes(),
-                    type.aliases(), type.deprecated(), type.description(), type.rules(), checks));
+                    type.inverseAliases(), type.kind(), type.symmetric(), type.outlivesTarget(), type.supertype(),
+                    type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules(), checks));
         }
         entities.keySet().forEach(name -> requireType(known, "entity " + name));
         relationships.keySet().forEach(name -> requireType(known, "relationship " + name));
@@ -322,8 +354,9 @@ final class DefinitionCodec {
         for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
             relationshipTypes.add(new RelationshipTypeDefinition(type.name(), type.source(), type.target(),
                     type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(),
-                    type.kind(), type.symmetric(), type.supertype(), derive(type.name(), type.attributes(), derived, used),
-                    type.aliases(), type.deprecated(), type.description(), type.rules(), type.checks()));
+                    type.kind(), type.symmetric(), type.outlivesTarget(), type.supertype(),
+                    derive(type.name(), type.attributes(), derived, used), type.aliases(), type.deprecated(),
+                    type.description(), type.rules(), type.checks()));
         }
         for (String key : derived.keySet()) {
             if (!used.contains(key)) {
@@ -332,6 +365,38 @@ final class DefinitionCodec {
             }
         }
         return new SchemaDefinition(entityTypes, traits, relationshipTypes);
+    }
+
+    /**
+     * Reads what {@link #writeOutliving} wrote and makes the relationship types it names let their relationships outlive
+     * their targets. A record that has no bytes left has no such type.
+     *
+     * @throws CorruptRecordException if a relationship type is named twice, or the definition does not have it
+     */
+    static SchemaDefinition readOutliving(Decoder in, SchemaDefinition definition) {
+        if (in.remaining() == 0) {
+            return definition;
+        }
+        Set<String> outliving = new HashSet<>();
+        for (String name : in.readAll(Decoder::readText)) {
+            if (!outliving.add(name)) {
+                throw new CorruptRecordException("The relationship type " + name + " is recorded twice as one whose "
+                        + "relationships outlive their targets.");
+            }
+        }
+        List<RelationshipTypeDefinition> relationshipTypes = new ArrayList<>();
+        for (RelationshipTypeDefinition type : definition.relationshipTypes()) {
+            boolean outlives = outliving.remove(type.name());
+            relationshipTypes.add(!outlives ? type : new RelationshipTypeDefinition(type.name(), type.source(),
+                    type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
+                    type.inverseAliases(), type.kind(), type.symmetric(), true, type.supertype(), type.attributes(),
+                    type.aliases(), type.deprecated(), type.description(), type.rules(), type.checks()));
+        }
+        if (!outliving.isEmpty()) {
+            throw new CorruptRecordException("The relationship types " + outliving.stream().sorted().toList()
+                    + ", whose relationships outlive their targets, are not relationship types of the definition.");
+        }
+        return new SchemaDefinition(definition.entityTypes(), definition.traits(), relationshipTypes);
     }
 
     /** The attributes of an element, with the expressions of those that are recorded as derived. */

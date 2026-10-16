@@ -38,7 +38,8 @@ final class Keys {
     /** The keys of a relationship type. */
     static final List<String> RELATIONSHIP_TYPE = List.of(
             "description", "source", "target", "targetsPerSource", "sourcesPerTarget", "inverseName", "inverseAliases",
-            "kind", "symmetric", "supertype", "attributes", "aliases", "deprecated", "rules", "checks");
+            "kind", "symmetric", "outlivesTarget", "supertype", "attributes", "aliases", "deprecated", "rules",
+            "checks");
     /** The keys a relationship type must have. */
     static final List<String> RELATIONSHIP_TYPE_REQUIRED = List.of(
             "source", "target", "targetsPerSource", "sourcesPerTarget", "inverseName");

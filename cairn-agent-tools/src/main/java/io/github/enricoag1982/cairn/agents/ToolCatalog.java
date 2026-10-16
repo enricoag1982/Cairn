@@ -122,7 +122,10 @@ final class ToolCatalog {
         tools.add(tool(NAVIGATE,
                 "Follows the relationships of an entity by a name that exists at the effective time: the name of a "
                         + "relationship type leads from its source to its targets, and its inverse name from the "
-                        + "target to the sources. Returns each relationship and the entity at its other end. Name "
+                        + "target to the sources. Returns each relationship and the entity at its other end. A "
+                        + "relationship type that declares outlivesTarget in its schema document has relationships "
+                        + "that may go on after their target has ended: from the source, the entity at the other end "
+                        + "is then the target's last version, whose period ends at or before effectiveAt. Name "
                         + "the entity to start from by its ID (id) or by a unique key (key), exactly one of the two; "
                         + "a key that no entity has at that time leads nowhere." + READ_COORDINATES,
                 coordinates(List.of("name", "effectiveAt"),
@@ -132,7 +135,10 @@ final class ToolCatalog {
         tools.add(tool(TRAVERSE,
                 "Follows every relationship of a name, recursively and breadth first, up to a maximum depth, or "
                         + "to the end if you give none. Returns each entity reached, its depth and the relationship it "
-                        + "was reached through; each entity once, so a cycle ends the traversal. Name the entity to start from by its ID (id) or by a unique key (key), "
+                        + "was reached through; each entity once, so a cycle ends the traversal. A traversal "
+                        + "reaches the last version of an ended target of a relationship type that declares "
+                        + "outlivesTarget, and goes no further from it. Name the entity to start from by its ID (id) "
+                        + "or by a unique key (key), "
                         + "exactly one of the two; a key that no entity has at that time leads nowhere."
                         + READ_COORDINATES,
                 coordinates(List.of("name", "effectiveAt"),

@@ -33,10 +33,15 @@ import java.util.TreeSet;
  *   <li><b>Ends.</b> Both ends of a relationship exist throughout its lifetime. A relationship whose lifetime grew in
  *       the transaction is related outside the lifetimes of its ends ({@code END_NOT_EFFECTIVE}); one whose lifetime
  *       did not grow lasts longer than an end that was ended or shortened ({@code RELATIONSHIP_OUTLIVES_END}), which is
- *       also found for relationships the transaction does not touch.</li>
+ *       also found for relationships the transaction does not touch. The target of a relationship whose type outlives
+ *       its targets (design D2 of {@code add-relationships-that-outlive-their-targets}) must exist only at the start
+ *       of each stretch of the relationship's lifetime, a stretch being a maximal run of adjacent segments; the source
+ *       must exist throughout, as for every type.</li>
  *   <li><b>Multiplicities.</b> For every entity of a transaction and every relationship type with a multiplicity that
  *       can be broken, the number of relationships of the type and its subtypes on each interval is within the minimum
- *       and the maximum. A minimum of 1 applies only where the entity exists.</li>
+ *       and the maximum. A minimum of 1 applies only where the entity exists. A relationship that outlives its target
+ *       counts at its source for as long as it is effective, and at its target only while the target exists (design
+ *       D3).</li>
  *   <li><b>Duplicates.</b> Two relationships of one type with the same ends, in either order for a symmetric type, do
  *       not overlap.</li>
  * </ul>
@@ -157,12 +162,30 @@ final class Integrity {
         return problems;
     }
 
-    /** Describes where each end of a relationship does not exist although the relationship does. */
+    /**
+     * Describes where each end of a relationship does not exist although the relationship does: for the target of a
+     * relationship that outlives its targets, only the starts of the stretches of the relationship's lifetime at which
+     * it does not exist.
+     */
     private List<String> missingEnds(Live relationship) {
         List<String> missing = new ArrayList<>();
         missing(relationship, "source", relationship.source(), missing);
-        missing(relationship, "target", relationship.target(), missing);
+        if (relationship.type().outlivesTarget()) {
+            missingAtStarts(relationship, "target", relationship.target(), missing);
+        } else {
+            missing(relationship, "target", relationship.target(), missing);
+        }
         return missing;
+    }
+
+    private void missingAtStarts(Live relationship, String role, EntityId end, List<String> missing) {
+        Timeline lifetime = timelineOf(end);
+        for (Instant start : relationship.timeline().stretchStarts()) {
+            if (lifetime.at(start).isEmpty()) {
+                missing.add("its " + role + " " + pathOf(end) + " does not exist at " + start
+                        + ", where the relationship starts");
+            }
+        }
     }
 
     private void missing(Live relationship, String role, EntityId end, List<String> missing) {
@@ -291,7 +314,7 @@ final class Integrity {
         for (int i = 0; i + 1 < points.size(); i++) {
             Instant from = points.get(i);
             Instant end = points.get(i + 1);
-            int count = (int) related.stream().filter(relationship -> relationship.timeline().at(from).isPresent())
+            int count = (int) related.stream().filter(relationship -> counts(role, relationship, entity, from))
                     .count();
             ProblemCode code = null;
             if (count > multiplicity.maximum()) {
@@ -317,6 +340,17 @@ final class Integrity {
             problems.add(multiplicityProblem(entity, type, role, multiplicity, label, runCode, runCount, runFrom,
                     runEnd));
         }
+    }
+
+    /**
+     * Tells whether a relationship counts for an entity at an instant: it is effective then, and, if it outlives its
+     * target and the entity is its target, the entity exists.
+     */
+    private static boolean counts(Role role, Live relationship, Working entity, Instant instant) {
+        if (relationship.timeline().at(instant).isEmpty()) {
+            return false;
+        }
+        return !(role == Role.TARGET && relationship.type().outlivesTarget() && entity.timeline.at(instant).isEmpty());
     }
 
     private static boolean at(Role role, Live relationship, EntityId id) {

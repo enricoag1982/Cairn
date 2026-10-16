@@ -86,6 +86,9 @@ class RuleRechecksTest {
                 .relationshipType("Contracts", r -> r.supertype("WorksFor").from("Person").to("Organization")
                         .targetsPerSource(Multiplicity.ZERO_OR_MORE).sourcesPerTarget(Multiplicity.ZERO_OR_MORE)
                         .inverse("contractors"))
+                .relationshipType("Reports", r -> r.from("Probe").to("Person")
+                        .targetsPerSource(Multiplicity.ZERO_OR_MORE).sourcesPerTarget(Multiplicity.ZERO_OR_MORE)
+                        .outlivesTarget().inverse("reportedTo"))
                 .build());
     }
 
@@ -409,6 +412,40 @@ class RuleRechecksTest {
 
         assertThat(rechecked(by().relate("Bond", beta, alice, from(6, 1), values()).build()))
                 .as("Alice is the target of a Bond, which navigation by the symmetric RelatedParty finds").isTrue();
+    }
+
+    @Test
+    void theLastVersionOfAnEndedTargetThatNavigationReturnsIsReadAcrossEffectiveTime() {
+        List<EffectivePeriod> seen = new ArrayList<>();
+        reading = (version, context) -> context.viewAt(on(9, 1)).navigate(version.id(), "Reports")
+                .forEach(link -> seen.add(link.entity().period()));
+        EntityId probe = probe();
+        reference.commit(by().relate("Reports", probe, alice, from(1, 1), values()).build());
+
+        assertThat(rechecked(by().endDate(alice, JUNE_1).build())).as("Alice ends before the instant read").isTrue();
+
+        assertThat(seen).as("the rule read Alice's last version, which ends on 1 June").last()
+                .isEqualTo(EffectivePeriod.between(on(1, 1), JUNE_1));
+        assertThat(rechecked(rename(beta, from(1, 1), "Other"))).as("another entity").isFalse();
+        assertThat(rechecked(rename(alice, EffectivePeriod.between(on(2, 1), on(3, 1)), "Alicia")))
+                .as("a correction of Alice before she ended, which an effective time after it does not reach")
+                .isTrue();
+        assertThat(seen).last().isEqualTo(EffectivePeriod.between(on(3, 1), JUNE_1));
+        assertThat(rechecked(rename(alice, EffectivePeriod.between(on(2, 1), on(3, 1)), "Alicia")))
+                .as("a patch of the values she has").isFalse();
+    }
+
+    @Test
+    void aTargetThatExistsAtTheInstantReadIsReadAtThatInstantOnly() {
+        reading = (version, context) -> context.viewAt(on(5, 1)).navigate(version.id(), "Reports");
+        EntityId probe = probe();
+        reference.commit(by().relate("Reports", probe, alice, from(1, 1), values()).build());
+
+        assertThat(rechecked(by().endDate(alice, JUNE_1).build())).as("Alice exists on 1 May still").isFalse();
+        assertThat(rechecked(rename(alice, EffectivePeriod.between(on(2, 1), on(3, 1)), "Alicia")))
+                .as("her name on 1 May is the same").isFalse();
+        assertThat(rechecked(rename(alice, EffectivePeriod.between(on(4, 1), on(6, 1)), "Alicia")))
+                .as("her name on 1 May changes").isTrue();
     }
 
     // ------------------------------------------------------------------ the entities of a type

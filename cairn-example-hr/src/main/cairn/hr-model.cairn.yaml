@@ -123,5 +123,7 @@ relationshipTypes:
     targetsPerSource: "0..1"
     sourcesPerTarget: "0..*"
     inverseName: decisions
+    # A decision records a past fact: it stays after the decider's employment ends (ADR-0034).
+    outlivesTarget: true
     rules:
       - { name: decided-by-manager, version: 1 }

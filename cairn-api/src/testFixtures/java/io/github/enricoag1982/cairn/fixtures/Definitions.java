@@ -4,6 +4,7 @@ import io.github.enricoag1982.cairn.schema.AttributeBuilder;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
+import io.github.enricoag1982.cairn.schema.Multiplicity;
 import io.github.enricoag1982.cairn.schema.RelationshipTypeDefinition;
 import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.RuleReference;
@@ -87,8 +88,8 @@ public final class Definitions {
             rules.add(new RuleReference(rule.name(), rule.version()));
             return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
                     type.sourcesPerTarget(), type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(),
-                    type.supertype(), type.attributes(), type.aliases(), type.deprecated(), type.description(),
-                    rules, type.checks());
+                    type.outlivesTarget(), type.supertype(), type.attributes(), type.aliases(), type.deprecated(),
+                    type.description(), rules, type.checks());
         });
     }
 
@@ -120,8 +121,9 @@ public final class Definitions {
             return new RelationshipTypeDefinition(relationship.name(), relationship.source(), relationship.target(),
                     relationship.targetsPerSource(), relationship.sourcesPerTarget(), relationship.inverseName(),
                     relationship.inverseAliases(), relationship.kind(), relationship.symmetric(),
-                    relationship.supertype(), relationship.attributes(), relationship.aliases(),
-                    relationship.deprecated(), relationship.description(), relationship.rules(), checks);
+                    relationship.outlivesTarget(), relationship.supertype(), relationship.attributes(),
+                    relationship.aliases(), relationship.deprecated(), relationship.description(),
+                    relationship.rules(), checks);
         });
     }
 
@@ -157,8 +159,9 @@ public final class Definitions {
             return new RelationshipTypeDefinition(relationship.name(), relationship.source(), relationship.target(),
                     relationship.targetsPerSource(), relationship.sourcesPerTarget(), relationship.inverseName(),
                     relationship.inverseAliases(), relationship.kind(), relationship.symmetric(),
-                    relationship.supertype(), attributes, relationship.aliases(), relationship.deprecated(),
-                    relationship.description(), relationship.rules(), relationship.checks());
+                    relationship.outlivesTarget(), relationship.supertype(), attributes, relationship.aliases(),
+                    relationship.deprecated(), relationship.description(), relationship.rules(),
+                    relationship.checks());
         });
     }
 
@@ -174,6 +177,42 @@ public final class Definitions {
                 definition.entityTypes().stream().filter(type -> !type.name().equals(name)).toList(),
                 definition.traits(),
                 definition.relationshipTypes());
+    }
+
+    /**
+     * Makes the relationships of a relationship type outlive their targets, or not.
+     *
+     * @param definition       the definition to change
+     * @param relationshipType the name of the relationship type
+     * @param outlivesTarget   whether its relationships may continue after their target ends
+     * @return the changed definition
+     */
+    public static SchemaDefinition withOutlivesTarget(
+            SchemaDefinition definition, String relationshipType, boolean outlivesTarget) {
+        return changeRelationshipType(definition, relationshipType, type -> new RelationshipTypeDefinition(type.name(),
+                type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
+                type.inverseAliases(), type.kind(), type.symmetric(), outlivesTarget, type.supertype(),
+                type.attributes(), type.aliases(), type.deprecated(), type.description(), type.rules(), type.checks()));
+    }
+
+    /**
+     * The test-only association {@code OpenedBy} of the scenarios of relationships that outlive their targets, to add
+     * to the reference model with {@link #plus}: from an account to the person who opened it, with from 0 to 1 targets
+     * per source, from 0 to unbounded sources per target, and the inverse name {@code opened}.
+     *
+     * @param outlivesTarget whether its relationships may continue after their target ends
+     * @return a definition with the relationship type and nothing else
+     */
+    public static SchemaDefinition openedBy(boolean outlivesTarget) {
+        return SchemaDefinition.builder()
+                .relationshipType("OpenedBy", r -> {
+                    r.from("Account").to("Person").targetsPerSource(Multiplicity.ZERO_OR_ONE)
+                            .sourcesPerTarget(Multiplicity.ZERO_OR_MORE).inverse("opened");
+                    if (outlivesTarget) {
+                        r.outlivesTarget();
+                    }
+                })
+                .build();
     }
 
     /**

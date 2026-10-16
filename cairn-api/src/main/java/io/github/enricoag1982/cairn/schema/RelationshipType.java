@@ -17,6 +17,8 @@ import java.util.Optional;
  * @param inverseAliases   previous inverse names
  * @param kind             composition or association
  * @param symmetric        {@code true} if the two ends are interchangeable
+ * @param outlivesTarget   {@code true} if the relationships of the type may continue after their target ends; navigation
+ *                         then returns the target's last version (capability {@code relationships})
  * @param deprecated       {@code true} if the type should no longer be used
  * @param description      what the type means, if described
  * @param supertypes       the names of all supertypes, nearest first
@@ -42,6 +44,7 @@ public record RelationshipType(
         List<String> inverseAliases,
         RelationshipKind kind,
         boolean symmetric,
+        boolean outlivesTarget,
         boolean deprecated,
         Optional<String> description,
         List<String> supertypes,

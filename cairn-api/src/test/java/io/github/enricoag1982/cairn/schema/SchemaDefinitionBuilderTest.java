@@ -1,7 +1,9 @@
 package io.github.enricoag1982.cairn.schema;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +44,32 @@ class SchemaDefinitionBuilderTest {
         assertThat(knows.aliases()).containsExactly("Met");
         assertThat(knows.description()).isEmpty();
         assertThat(knows.rules()).isEmpty();
+    }
+
+    @Test
+    void aRelationshipTypeOutlivesItsTargetsOnlyIfItSaysSo() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .relationshipType("OpenedBy", r -> r.from("Account").to("Person").inverse("opened").outlivesTarget())
+                .relationshipType("HeldBy", r -> r.from("Account").to("Person").inverse("holds"))
+                .build();
+
+        assertThat(definition.relationshipTypes()).extracting(RelationshipTypeDefinition::name,
+                RelationshipTypeDefinition::outlivesTarget).containsExactly(
+                        tuple("OpenedBy", true),
+                        tuple("HeldBy", false));
+    }
+
+    @Test
+    void theConstructorsWithoutTheFlagBuildTypesThatDoNotOutliveTheirTargets() {
+        RelationshipTypeDefinition withChecks = new RelationshipTypeDefinition("Owns", "Party", "Party",
+                Multiplicity.ZERO_OR_MORE, Multiplicity.ZERO_OR_MORE, "ownedBy", List.of(), RelationshipKind.ASSOCIATION,
+                false, Optional.empty(), List.of(), List.of(), false, Optional.empty(), List.of(), List.of());
+        RelationshipTypeDefinition withoutChecks = new RelationshipTypeDefinition("Owns", "Party", "Party",
+                Multiplicity.ZERO_OR_MORE, Multiplicity.ZERO_OR_MORE, "ownedBy", List.of(), RelationshipKind.ASSOCIATION,
+                false, Optional.empty(), List.of(), List.of(), false, Optional.empty(), List.of());
+
+        assertThat(withChecks.outlivesTarget()).isFalse();
+        assertThat(withoutChecks).isEqualTo(withChecks);
     }
 
     @Test

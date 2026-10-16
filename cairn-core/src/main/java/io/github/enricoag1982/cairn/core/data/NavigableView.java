@@ -36,6 +36,10 @@ import java.util.function.Predicate;
  * the index of ends of the {@link Ledger}, in the direction that the name asks for. A name stands for a relationship
  * type if it is the type's name or an alias, and the direction is from source to target; or for the inverse name or an
  * inverse alias, with the direction from target to source. For a symmetric type, both names lead from both ends.
+ *
+ * <p>A relationship whose type outlives its targets (design D4 of {@code add-relationships-that-outlive-their-targets})
+ * may be effective while its target does not exist. Navigation from its source then returns the target's last version,
+ * which {@link #lastVersion} reads, and navigation from the target, which does not exist, finds nothing.
  */
 abstract class NavigableView implements View {
 
@@ -64,6 +68,17 @@ abstract class NavigableView implements View {
      *         period; relationships whose type the schema of this view does not have are left out
      */
     abstract List<RelationshipState> relationshipVersions(Set<TypeId> types, EntityId end, Ledger.Direction direction);
+
+    /**
+     * The version of an entity whose period ends last at or before the view's effective time, as known at this view's
+     * basis: what navigation returns for the target of a relationship that outlives its targets, once the target has
+     * ended. A view that records the reads of a rule records the read of the entity's timeline, because a correction of
+     * any version of it can change the result.
+     *
+     * @param id the entity
+     * @return the version; empty if the entity has no version that ended by then
+     */
+    abstract Optional<EntityState> lastVersion(EntityId id);
 
     /**
      * Called for every navigation from an entity, with the relationship type that the name stands for, before it reads
@@ -191,13 +206,36 @@ abstract class NavigableView implements View {
         for (Match match : matches) {
             navigating(from, match.type(), match.inverse(), false);
         }
+        Boolean fromExists = null;
         for (Led led : leading(from, matches)) {
-            if (led.relationship().period().contains(effectiveAt())) {
-                navigated(led.relationship(), false);
-                entity(led.other()).ifPresent(entity -> links.add(new Link(led.relationship(), entity)));
+            if (!led.relationship().period().contains(effectiveAt())) {
+                continue;
             }
+            navigated(led.relationship(), false);
+            boolean outlives = outlivesTarget(led.relationship());
+            boolean fromSource = led.relationship().source().equals(from);
+            if (outlives && !fromSource) {
+                // The relationship goes on after its target ended, but an entity that does not exist has none.
+                if (fromExists == null) {
+                    fromExists = entity(from).isPresent();
+                }
+                if (!fromExists) {
+                    continue;
+                }
+            }
+            Optional<EntityState> other = entity(led.other());
+            if (other.isEmpty() && outlives && fromSource) {
+                other = lastVersion(led.other());
+            }
+            other.ifPresent(entity -> links.add(new Link(led.relationship(), entity)));
         }
         return List.copyOf(links);
+    }
+
+    /** Tells whether the type of a relationship lets its relationships outlive their targets. */
+    private boolean outlivesTarget(RelationshipState relationship) {
+        return schema().relationshipType(relationship.relationshipType()).map(RelationshipType::outlivesTarget)
+                .orElse(false);
     }
 
     /**

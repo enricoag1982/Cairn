@@ -34,9 +34,10 @@ import java.util.Set;
  *
  * <p>The definitions have the shape of valid ones and use every property: descriptions, examples and range bounds of the
  * attribute's own value type, allowed values, patterns, lengths, rules, checks, aliases, deprecation, abstract types,
- * supertypes, traits, compositions, symmetric types, inverse aliases and all four multiplicities. They are not
- * registered, so they need not be valid in every respect. Strings are chosen to be awkward for YAML and JSON: words that
- * read as numbers, booleans or null, syntax characters, escapes, control characters and non-ASCII text.
+ * supertypes, traits, compositions, symmetric types, types that outlive their targets, inverse aliases and all four
+ * multiplicities. They are not registered, so they need not be valid in every respect. Strings are chosen to be awkward
+ * for YAML and JSON: words that read as numbers, booleans or null, syntax characters, escapes, control characters and
+ * non-ASCII text.
  *
  * <p>Some examples and bounds of long and decimal attributes are numbers of a narrower type, an int on a long or a
  * decimal attribute and a long on a decimal one. A document does not tell them apart from numbers of the attribute's
@@ -150,6 +151,7 @@ final class GeneratedDefinitions {
                 uniqueName(),
                 aliases(),
                 chance(0.25) ? RelationshipKind.COMPOSITION : RelationshipKind.ASSOCIATION,
+                chance(0.2),
                 chance(0.2),
                 chance(0.3) && !earlier.isEmpty() ? Optional.of(pick(earlier)) : Optional.empty(),
                 attributes(),
@@ -390,8 +392,9 @@ final class GeneratedDefinitions {
                         trait.aliases(), trait.deprecated(), trait.description())).toList(),
                 definition.relationshipTypes().stream().map(type -> new RelationshipTypeDefinition(type.name(),
                         type.source(), type.target(), type.targetsPerSource(), type.sourcesPerTarget(), type.inverseName(),
-                        type.inverseAliases(), type.kind(), type.symmetric(), type.supertype(), widened(type.attributes()),
-                        type.aliases(), type.deprecated(), type.description(), type.rules(), type.checks())).toList());
+                        type.inverseAliases(), type.kind(), type.symmetric(), type.outlivesTarget(), type.supertype(),
+                        widened(type.attributes()), type.aliases(), type.deprecated(), type.description(), type.rules(),
+                        type.checks())).toList());
     }
 
     private static List<AttributeDefinition> widened(List<AttributeDefinition> attributes) {

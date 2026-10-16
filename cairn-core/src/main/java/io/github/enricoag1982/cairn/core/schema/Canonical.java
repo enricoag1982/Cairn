@@ -52,7 +52,7 @@ final class Canonical {
     private static RelationshipTypeDefinition of(RelationshipTypeDefinition type) {
         return new RelationshipTypeDefinition(type.name(), type.source(), type.target(), type.targetsPerSource(),
                 type.sourcesPerTarget(), type.inverseName(), sorted(type.inverseAliases()), type.kind(), type.symmetric(),
-                type.supertype(), attributes(type.attributes()), sorted(type.aliases()), type.deprecated(),
+                type.outlivesTarget(), type.supertype(), attributes(type.attributes()), sorted(type.aliases()), type.deprecated(),
                 type.description(), rules(type.rules()), checks(type.checks()));
     }
 

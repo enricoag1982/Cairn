@@ -14,6 +14,10 @@ final class Changes {
             "Declare a derived attribute together with its type: versions that are stored are not derived again until "
                     + "migrations exist.";
 
+    /** The hint for a type that no longer lets its relationships outlive their targets. */
+    static final String KEEP_OUTLIVING_TARGETS =
+            "Keep outlivesTarget while stored relationships may continue after their targets have ended.";
+
     /** The hint for the removal of a type or attribute. */
     static final String DEPRECATE_INSTEAD =
             "Mark it deprecated instead of removing it, or, if it was renamed, keep the old name as an alias.";

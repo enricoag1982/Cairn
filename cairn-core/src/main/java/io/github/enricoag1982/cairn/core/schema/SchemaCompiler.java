@@ -192,8 +192,8 @@ final class SchemaCompiler {
             List<String> supertypes = relationshipSupertypes(type.name());
             compiledRelationships.add(new RelationshipType(typeId(type.name()), type.name(), type.aliases(),
                     canonical(type.source()), canonical(type.target()), type.targetsPerSource(), type.sourcesPerTarget(),
-                    type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.deprecated(),
-                    type.description(), supertypes, relationshipSubtypes(type.name()),
+                    type.inverseName(), type.inverseAliases(), type.kind(), type.symmetric(), type.outlivesTarget(),
+                    type.deprecated(), type.description(), supertypes, relationshipSubtypes(type.name()),
                     relationshipAttributes(type.name()).stream().map(this::attribute).toList(), type.rules(),
                     effectiveRules(type.name(), type.rules(), supertypes,
                             name -> relationshipTypes.get(Names.key(name)).rules()),

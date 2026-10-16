@@ -80,6 +80,19 @@ class CanonicalTest {
     }
 
     @Test
+    void whetherRelationshipsOutliveTheirTargetsMatters() {
+        SchemaDefinition plain = SchemaDefinition.builder()
+                .relationshipType("OpenedBy", r -> r.from("Account").to("Person").inverse("opened")).build();
+        SchemaDefinition outliving = SchemaDefinition.builder()
+                .relationshipType("OpenedBy", r -> r.from("Account").to("Person").inverse("opened").outlivesTarget())
+                .build();
+
+        assertThat(Canonical.equal(plain, plain)).isTrue();
+        assertThat(Canonical.equal(outliving, outliving)).isTrue();
+        assertThat(Canonical.equal(plain, outliving)).isFalse();
+    }
+
+    @Test
     void descriptionsPatternsAndLengthsMatter() {
         SchemaDefinition plain = SchemaDefinition.builder()
                 .entityType("Account", e -> e.attribute("currency", ValueType.STRING)).build();

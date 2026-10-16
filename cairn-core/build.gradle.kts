@@ -15,7 +15,7 @@ rocksdbConformance {
         "$core.RelationshipsScenariosTest", "$core.EntityRulesScenariosTest", "$core.QueriesScenariosTest",
         "$core.PurgeScenariosTest", "$core.ChangeFeedScenariosTest", "$core.data.DurabilityScenariosTest",
         "$core.ChecksScenariosTest", "$core.DerivedAttributesScenariosTest",
-        "$core.DerivedAttributesDurabilityTest",
+        "$core.DerivedAttributesDurabilityTest", "$core.OutlivingTargetsTest",
     )
 }
 
