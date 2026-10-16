@@ -360,8 +360,9 @@ public enum ProblemCode {
     END_NOT_EFFECTIVE("Both ends of a relationship must exist at every point of the relationship's effective period, "
             + "so a write never relates an entity outside its lifetime. The message names the end and the period in "
             + "which it does not exist, and the found details give the relationship's lifetime. The target of a "
-            + "relationship whose type outlives its targets needs to exist only at the start of each stretch of the "
-            + "period. Shorten the relationship's period, or create the entity for the period first."),
+            + "relationship whose type outlives its targets needs to exist only where the relationship starts, and "
+            + "wherever it starts again after a gap. Shorten the relationship's period, or create the entity for the "
+            + "period first."),
     /** An entity ends, or has been shortened, while a relationship to it continues. */
     RELATIONSHIP_OUTLIVES_END("A relationship cannot continue after one of its ends has ended. A transaction that "
             + "ends an entity must end every relationship that has the entity as an end, from the same instant or "

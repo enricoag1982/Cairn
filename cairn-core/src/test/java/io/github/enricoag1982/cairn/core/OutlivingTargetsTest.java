@@ -5,7 +5,9 @@ import static io.github.enricoag1982.cairn.core.ReferenceStore.entity;
 import static io.github.enricoag1982.cairn.core.ReferenceStore.relationship;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.A2;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ACME;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.ALICE;
+import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.HELD_BY_A1;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.from;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
@@ -33,6 +35,7 @@ import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,11 +46,18 @@ import org.junit.jupiter.api.Test;
  * target is corrected, the stretches of a relationship, views at older bases, what a purge removes, and the types that do
  * not declare it. The world is the reference domain with RD-1 and RD-5, and the test-only association {@code OpenedBy}
  * from an account to the person who opened it, with an attribute {@code channel}, and its subtype {@code OpenedByAgent},
- * which does not declare it.
+ * which does not declare it, and the test-only association {@code Neighbour} between addresses, which does, so that a
+ * relationship can have the same entity at both ends.
  */
 class OutlivingTargetsTest {
 
     private static final TemporaryId OPENED = new TemporaryId("opened");
+    private static final TemporaryId HOME = new TemporaryId("home");
+    private static final TemporaryId OFFICE = new TemporaryId("office");
+    private static final TemporaryId HAS_ADDRESS = new TemporaryId("hasAddress");
+    private static final TemporaryId HAS_OFFICE = new TemporaryId("hasOffice");
+    private static final TemporaryId NEXT_TO_ITSELF = new TemporaryId("nextToItself");
+    private static final TemporaryId NEXT_DOOR = new TemporaryId("nextDoor");
 
     private static SchemaDefinition model() {
         return Definitions.plus(ReferenceModel.definition(), SchemaDefinition.builder()
@@ -57,17 +67,21 @@ class OutlivingTargetsTest {
                 .relationshipType("OpenedByAgent", r -> r.supertype("OpenedBy").from("Account").to("Person")
                         .targetsPerSource(Multiplicity.ZERO_OR_ONE).sourcesPerTarget(Multiplicity.ZERO_OR_MORE)
                         .inverse("openedAsAgent"))
+                .relationshipType("Neighbour", r -> r.from("Address").to("Address")
+                        .targetsPerSource(Multiplicity.ZERO_OR_MORE).sourcesPerTarget(Multiplicity.ZERO_OR_MORE)
+                        .outlivesTarget().inverse("neighbouredBy"))
                 .build());
     }
 
     private final ReferenceStore store = ReferenceStore.with(model());
+    private Receipt accounts;
     private EntityId a1;
     private EntityId a2;
     private EntityId alice;
 
     @BeforeEach
     void theWorldOfRd1AndRd5() {
-        Receipt accounts = store.createAccounts();
+        accounts = store.createAccounts();
         a1 = entity(accounts, A1);
         a2 = entity(accounts, A2);
         alice = entity(store.parties, ALICE);
@@ -167,6 +181,65 @@ class OutlivingTargetsTest {
                 tuple(on(7, 1), Value.of("web")));
         assertThat(store.view(on(8, 1)).navigate(a1, "OpenedBy")).singleElement().satisfies(link -> {
             assertThat(link.relationship().values()).containsEntry("channel", Value.of("web"));
+            assertThat(link.entity().period()).isEqualTo(EffectivePeriod.between(on(1, 1), on(6, 1)));
+        });
+    }
+
+    @Test
+    void theSourceOfARelationshipThatOutlivesItsTargetMustExistThroughoutIt() {
+        RelationshipId opened = open(a1, from(1, 1));
+        RelationshipId heldBy = relationship(accounts, HELD_BY_A1);
+        store.recordedOn(on(5, 25));
+
+        List<Problem> problems = store.reject(by().endDate(a1, on(6, 1)).endDate(heldBy, on(6, 1)).build());
+
+        Problem problem = only(problems);
+        assertProblem(problem, ProblemCode.RELATIONSHIP_OUTLIVES_END, opened.value());
+        assertThat(problem.message()).contains("OpenedBy", "source", "does not exist from 2026-06-01T00:00:00Z");
+        assertThat(store.view(on(7, 1)).entity(a1)).as("nothing was ended").isPresent();
+
+        store.recordedOn(on(5, 26));
+        Receipt receipt = store.commit(by().endDate(a1, on(6, 1)).endDate(heldBy, on(6, 1)).endDate(opened, on(6, 1))
+                .build());
+
+        assertThat(receipt.ended()).isEmpty();
+        assertThat(store.view(on(5, 31)).navigate(a1, "OpenedBy")).hasSize(1);
+        assertThat(store.view(on(6, 1)).entity(a1)).isEmpty();
+    }
+
+    private static Map<String, Value> address(String street) {
+        return values("street", street, "city", "Springfield", "country", "US");
+    }
+
+    @Test
+    void aRelationshipFromAndToTheSameEntityEndsWhenACascadeEndsTheEntity() {
+        EntityId acme = entity(store.parties, ACME);
+        Receipt addresses = store.commit(by()
+                .create(HOME, "Address", from(1, 1), address("1 Main St"))
+                .create(OFFICE, "Address", from(1, 1), address("2 High St"))
+                .relate(HAS_ADDRESS, "HasAddress", alice, HOME, from(1, 1), values())
+                .relate(HAS_OFFICE, "HasAddress", acme, OFFICE, from(1, 1), values())
+                .relate(NEXT_TO_ITSELF, "Neighbour", HOME, HOME, from(1, 1), values())
+                .relate(NEXT_DOOR, "Neighbour", OFFICE, HOME, from(1, 1), values())
+                .build());
+        EntityId home = entity(addresses, HOME);
+        EntityId office = entity(addresses, OFFICE);
+        RelationshipId nextToItself = relationship(addresses, NEXT_TO_ITSELF);
+        RelationshipId nextDoor = relationship(addresses, NEXT_DOOR);
+        store.recordedOn(on(5, 25));
+
+        Receipt receipt = store.commit(by().endDate(alice, on(6, 1)).build());
+
+        assertThat(receipt.ended()).as("Alice's address ends with her, and so does what is from and to the address, "
+                + "which cannot outlive itself as its source; what is from the office stays")
+                .containsExactly(relationship(addresses, HAS_ADDRESS), home, nextToItself);
+        assertThat(store.view(on(5, 31)).relationship(nextToItself)).isPresent();
+        assertThat(store.view(on(6, 1)).relationship(nextToItself)).isEmpty();
+        assertThat(store.view(on(6, 1)).entity(home)).isEmpty();
+        assertThat(store.view(on(7, 1)).relationship(nextDoor)).as("the office is next to an address that has ended")
+                .isPresent();
+        assertThat(store.view(on(7, 1)).navigate(office, "Neighbour")).singleElement().satisfies(link -> {
+            assertThat(link.entity().id()).isEqualTo(home);
             assertThat(link.entity().period()).isEqualTo(EffectivePeriod.between(on(1, 1), on(6, 1)));
         });
     }

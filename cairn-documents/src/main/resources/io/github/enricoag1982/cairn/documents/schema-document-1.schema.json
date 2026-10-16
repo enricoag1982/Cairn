@@ -167,7 +167,7 @@
           "default": false
         },
         "outlivesTarget": {
-          "description": "True if the relationships of the type may continue after their target ends, as records of a past fact: the target must exist at the start of each stretch of a relationship's effective period, and navigation then returns the target's last version. Only associations that are not symmetric can declare it, and subtypes do not inherit it.",
+          "description": "True if the relationships of the type may continue after their target ends, as records of a past fact: the target must exist where a relationship starts, and wherever it starts again after a gap in its effective period, and navigation then returns the target's last version. Only associations that are not symmetric can declare it, and subtypes do not inherit it.",
           "type": "boolean",
           "default": false
         },

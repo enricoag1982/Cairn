@@ -695,10 +695,21 @@ class RelationshipsScenariosTest {
                     assertThat(link.entity().id()).isEqualTo(opened.alice);
                     assertThat(link.entity().period().contains(on(5, 31))).as("she exists on 31 May").isTrue();
                 });
-        assertThat(opened.store.view(on(7, 1)).navigate(opened.alice, "opened"))
-                .as("an entity that does not exist has no relationships to navigate").isEmpty();
-        assertThat(opened.store.view(on(5, 31)).navigate(opened.alice, "opened")).singleElement()
-                .satisfies(link -> assertThat(link.entity().id()).isEqualTo(opened.a1));
+    }
+
+    @Test
+    @DisplayName("Scenario: Navigating from an ended target")
+    void navigatingFromAnEndedTarget() {
+        Opened opened = new Opened();
+        opened.aliceEnds();
+
+        List<Link> openedAccounts = opened.store.view(on(7, 1)).navigate(opened.alice, "opened");
+
+        assertThat(openedAccounts).isEmpty();
+        assertThat(opened.store.view(on(7, 1)).relationship(opened.openedBy)).as("the relationship goes on")
+                .isPresent();
+        assertThat(opened.store.view(on(5, 31)).navigate(opened.alice, "opened")).as("before Alice ended")
+                .singleElement().satisfies(link -> assertThat(link.entity().id()).isEqualTo(opened.a1));
     }
 
     @Test

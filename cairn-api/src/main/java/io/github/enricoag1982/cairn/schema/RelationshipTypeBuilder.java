@@ -122,9 +122,9 @@ public final class RelationshipTypeBuilder {
 
     /**
      * Lets the relationships of the type outlive their targets: they may continue after their target ends, as records
-     * of a past fact, and navigation then returns the target's last version. The target must exist at the start of
-     * each stretch of a relationship's effective period. Only associations that are not symmetric may declare it; a
-     * subtype does not inherit it.
+     * of a past fact, and navigation then returns the target's last version. The target must exist where the
+     * relationship starts, and wherever it starts again after a gap in its effective period. Only associations that are
+     * not symmetric may declare it; a subtype does not inherit it.
      *
      * @return this builder
      */
