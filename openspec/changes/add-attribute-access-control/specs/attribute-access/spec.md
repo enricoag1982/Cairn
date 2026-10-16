@@ -1,0 +1,101 @@
+## ADDED Requirements
+
+### Requirement: Classified attributes
+
+An attribute of an entity type, relationship type or trait MAY declare one classification: a name of lowercase letters, digits and hyphens that starts with a letter, such as `pay`. The schema SHALL report each attribute's classification. A derived attribute that reads classified attributes (see the `derived-attributes` capability) MUST have the classification that they have. A classification that is not such a name, or a derived attribute that reads attributes of another classification than its own or of two classifications, SHALL be a problem of the code `INVALID_CLASSIFICATION` at the attribute.
+
+#### Scenario: Classifying a balance
+
+- **WHEN** Account's `balance` declares the classification `finance`, and the definition is validated
+- **THEN** validation succeeds, and the schema reports `finance` as the classification of `balance`
+
+#### Scenario: A derived attribute that would reveal a classified one
+
+- **WHEN** Account's `balance` is classified `finance`, and Account declares the test-only derived attribute `balanceInCents` without a classification
+- **THEN** validation fails with a problem of the code `INVALID_CLASSIFICATION` located at `Account.balanceInCents`
+
+#### Scenario: A malformed classification
+
+- **WHEN** Account's `balance` declares the classification `Finance Data`
+- **THEN** validation fails with a problem of the code `INVALID_CLASSIFICATION` located at `Account.balance`
+
+### Requirement: Views restricted to a clearance
+
+A clearance SHALL be a set of classifications. A view MAY be restricted to a clearance; a view that is not restricted SHALL read every value. A restricted view SHALL withhold the value of every attribute whose classification its clearance does not cover from every entity and relationship state it returns, including timelines, navigation, traversals, the states that a traversal's condition sees, and query rows, and each state SHALL list the attributes it withheld. An attribute without a classification SHALL never be withheld. A view restricted from a restricted view SHALL be restricted to the classifications that both clearances cover. The views of rules SHALL never be restricted.
+
+#### Scenario: A balance withheld
+
+- **WHEN** Account's `balance` is classified `finance`, the transactions of RD-1 and RD-5 are recorded, and A-1 is read through a view restricted to no classification, effective 1 April
+- **THEN** A-1's state has its number and currency but no balance, and lists `balance` as withheld
+
+#### Scenario: A clearance that covers the balance
+
+- **WHEN** A-1 is read as in the previous scenario through a view restricted to the classification `finance`
+- **THEN** A-1's state has its balance, and withholds nothing
+
+#### Scenario: Restricting a restricted view
+
+- **WHEN** a view restricted to `finance` is restricted again to `identity`, and A-1 is read through it
+- **THEN** A-1's state lists `balance` as withheld
+
+#### Scenario: Navigating to a withheld value
+
+- **WHEN** Beta's `holds` is navigated through a view restricted to no classification, effective 1 April
+- **THEN** the result is A-1, whose state lists `balance` as withheld
+
+### Requirement: Queries and keys over withheld attributes
+
+WHEN a query run through a restricted view names an attribute that the view withholds, in a filter, an order, a group, an aggregate, a projection or a traversal condition, THE SYSTEM SHALL reject the query with a problem of the code `ACCESS_DENIED` at that place in the query, and SHALL read nothing. Finding an entity through a restricted view by a unique key of an attribute that the view withholds SHALL fail as finding by a key that the schema does not allow does.
+
+#### Scenario: Filtering on a withheld balance
+
+- **WHEN** Account's `balance` is classified `finance`, and a query for Accounts with a balance above 1,000 runs through a view restricted to no classification
+- **THEN** the query is rejected with a problem of the code `ACCESS_DENIED` at its filter
+
+#### Scenario: Summing withheld balances
+
+- **WHEN** a query sums the balances of Accounts through a view restricted to no classification
+- **THEN** the query is rejected with a problem of the code `ACCESS_DENIED` at its aggregate
+
+#### Scenario: A key of a withheld attribute
+
+- **WHEN** Organization's `lei` is classified `identity`, the transactions of RD-1 and RD-9 are recorded, and a view restricted to no classification finds the Organization with the key `Organization(lei: 5493001KJTIIGC8Y1R12)`
+- **THEN** the call fails
+
+### Requirement: Commits with a clearance
+
+A transaction MAY carry a clearance. WHEN a write of a transaction with a clearance sets or clears an attribute that the clearance does not cover, THE SYSTEM SHALL reject the transaction with a problem of the code `ACCESS_DENIED` at that attribute of the write, in commits and dry runs alike. Values that a write does not touch SHALL carry forward whatever their classification. Rules, checks and derivations SHALL see every value, whatever the transaction's clearance. A transaction without a clearance SHALL write as before.
+
+#### Scenario: Writing a withheld balance
+
+- **WHEN** Account's `balance` is classified `finance`, and a transaction with no classification in its clearance patches A-1's balance to 1,500 from 1 May
+- **THEN** the transaction is rejected with a problem of the code `ACCESS_DENIED` at the write's `balance`
+
+#### Scenario: A patch that leaves a withheld balance
+
+- **WHEN** a transaction with no classification in its clearance patches A-1's currency to `CHF` from 1 May
+- **THEN** the transaction is committed, and A-1's balance on 1 May is still 1,200 as read through a view that is not restricted
+
+#### Scenario: A rule over a withheld value
+
+- **WHEN** Account's `balance` is classified `finance`, A-1's balance is below 1,000, and a transaction with no classification in its clearance relates ACME to Alice with Employs, which the rule `account-a1-funded` checks
+- **THEN** the transaction is rejected by `account-a1-funded/underfunded`, which read A-1's balance
+
+### Requirement: Agents read and write through a clearance
+
+The agent server SHALL take a clearance from the person who starts it, with no classification by default. Every agent tool SHALL read through views restricted to that clearance and SHALL submit every commit and dry run with it, and a payload SHALL NOT widen it. JSON results of states SHALL list the attributes that they withheld. The tool that describes the store SHALL report the clearance and the classification of each attribute. A query or a key that a restricted view refuses SHALL be a problem of the code `ACCESS_DENIED` in the tool's result.
+
+#### Scenario: An agent without a clearance
+
+- **WHEN** Account's `balance` is classified `finance`, the server starts without a clearance, the transactions of RD-1 and RD-5 are recorded, and an agent reads A-1
+- **THEN** the result has A-1's number and currency, no balance, and lists `balance` as withheld
+
+#### Scenario: An agent's query over a withheld attribute
+
+- **WHEN** the agent of the previous scenario runs a query for Accounts with a balance above 1,000
+- **THEN** the result is a problem of the code `ACCESS_DENIED`
+
+#### Scenario: An agent with a clearance
+
+- **WHEN** the server starts with the clearance `finance`, and an agent reads A-1
+- **THEN** the result has A-1's balance, and withholds nothing
