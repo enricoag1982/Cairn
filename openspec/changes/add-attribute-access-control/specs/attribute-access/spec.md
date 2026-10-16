@@ -2,7 +2,7 @@
 
 ### Requirement: Classified attributes
 
-An attribute of an entity type, relationship type or trait MAY declare one classification: a name of lowercase letters, digits and hyphens that starts with a letter, such as `pay`. The schema SHALL report each attribute's classification. A derived attribute that reads classified attributes (see the `derived-attributes` capability) MUST have the classification that they have. A classification that is not such a name, or a derived attribute that reads attributes of another classification than its own or of two classifications, SHALL be a problem of the code `INVALID_CLASSIFICATION` at the attribute.
+An attribute of an entity type, relationship type or trait MAY declare one classification: a name of at most 128 ASCII lowercase letters, digits and hyphens that starts with a letter, such as `pay`. The schema SHALL report each attribute's classification. A derived attribute that reads classified attributes (see the `derived-attributes` capability) MUST have the classification that they have. A classification that is not such a name, or a derived attribute that reads attributes of another classification than its own or of two classifications, SHALL be a problem of the code `INVALID_CLASSIFICATION` at the attribute.
 
 #### Scenario: Classifying a balance
 
@@ -88,7 +88,7 @@ A transaction MAY carry a clearance. WHEN a write of a transaction with a cleara
 
 ### Requirement: Agents read and write through a clearance
 
-The agent server SHALL take a clearance from the person who starts it, with no classification by default. Every agent tool SHALL read through views restricted to that clearance and SHALL submit every commit and dry run with it, and a payload SHALL NOT widen it. JSON results of states SHALL list the attributes that they withheld. The tool that describes the store SHALL report the clearance and the classification of each attribute. A query or a key that a restricted view refuses SHALL be a problem of the code `ACCESS_DENIED` in the tool's result.
+The agent server SHALL take a clearance from the person who starts it, with no classification by default. Every agent tool SHALL read through views restricted to that clearance and SHALL submit every commit and dry run with it, and a payload SHALL NOT widen it. JSON results of states SHALL list the attributes that they withheld. The tool that describes the store SHALL report the clearance and the classification of each attribute. A query or a key that a restricted view refuses SHALL be a problem of the code `ACCESS_DENIED` in the tool's result. A schema plan or registration by an agent SHALL be rejected with a problem of the code `ACCESS_DENIED` at the element concerned when it adds, changes or removes the classification of an attribute, where the classification before or after is one that the clearance does not cover, or when it adds a check or a derived attribute, or changes the expression of one, that reads an attribute whose classification the clearance does not cover; nothing SHALL change.
 
 #### Scenario: An agent without a clearance
 
@@ -104,3 +104,14 @@ The agent server SHALL take a clearance from the person who starts it, with no c
 
 - **WHEN** the server starts with the clearance `finance`, and an agent reads A-1
 - **THEN** the result has A-1's balance, and withholds nothing
+
+#### Scenario: An agent that would declassify the balance
+
+- **WHEN** Account's `balance` is classified `finance`, the server starts without a clearance, and an agent registers a later version of the reference model in which `balance` has no classification
+- **THEN** the registration is rejected with a problem of the code `ACCESS_DENIED` located at `Account.balance`, and `balance` is still classified `finance`
+
+#### Scenario: An agent's check over a withheld balance
+
+- **WHEN** the agent of the previous scenario registers a later version in which Account declares the check `balance-above-1000` with the expression `self.balance > 1000.0`
+- **THEN** the registration is rejected with a problem of the code `ACCESS_DENIED` located at `Account.balance-above-1000`
+

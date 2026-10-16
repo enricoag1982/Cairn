@@ -41,6 +41,7 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 - `Transaction` gains `Optional<Clearance> clearance()`, and its builder `clearance(Clearance)`. A transaction without one writes as today.
 - A write in a transaction with a clearance that sets or clears an attribute that the clearance does not cover is rejected with `ACCESS_DENIED` at that attribute of the write, also in a create. Values that the write does not touch carry forward, whatever their classification; a replace carries forward the withheld values that it does not name, and is rejected only for one that it names, so that it cannot clear a withheld value by leaving it out.
 - A write that names an entity by a unique key of an attribute that the clearance does not cover is rejected with `ACCESS_DENIED` at the reference, before the key is resolved, so that whether an entity has the value is not revealed.
+- The clearance is part of the transaction as submitted: durable stores keep it in a trailing section of data records and keyed transactions, and an idempotency key compares it with the rest, so a retry with another clearance is a key used with different content.
 - Dry runs apply the same. Rules, checks and derivations run as for every commit, with every value. A receipt names IDs only, so it withholds nothing.
 
 ### D5. Agents
@@ -48,6 +49,8 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 - The server takes `--clearance <classification>[,<classification>...]`, empty by default. `AgentTools` takes the clearance; every tool reads through views restricted to it and submits every commit and dry run with it. A payload has no way to give a clearance.
 - JSON results of states list `withheld` when it is not empty. `cairn_describe` reports the clearance and, in the schema, each attribute's classification.
 - Tool errors for a withheld key or attribute are problems `ACCESS_DENIED`, never protocol errors.
+- An approval request keeps the clearance of the adapter that asked, and approving it commits with that clearance, so an approver cannot widen it.
+- An agent's schema plan or registration that adds, changes or removes a classification that the clearance does not cover, before or after, or adds or changes a check or a derived attribute that reads an attribute of such a classification, is rejected with `ACCESS_DENIED` at the element. Otherwise an agent could declassify pay and then read it, or probe it with a check and dry runs.
 
 ### D6. Generated types
 

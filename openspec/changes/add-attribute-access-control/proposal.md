@@ -30,6 +30,10 @@ Every reader of a store reads every value: in the HR example every agent reads p
 
 - `schema-documents`: the `classification` of attributes and its default.
 - `schema-evolution`: classifications are compatible to add, change or remove.
+- `java-types`: generated types read states that withheld values.
+- `entity-versions`: a replace with a clearance keeps the values it may not see.
+- `transactions`: the clearance is part of what an idempotency key compares.
+- `agent-tools`: approval requests keep the clearance of the agent that asked.
 
 ## Impact
 
