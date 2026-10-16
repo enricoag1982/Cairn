@@ -16,13 +16,22 @@ import java.util.stream.Collectors;
 
 /**
  * What every kind of write checks about its periods and values (design D5 of {@code add-entity-versions}): that a
- * period ends after it starts, and that the names of values are attributes of the type, which are converted to the
- * value type of their attribute. Shared by {@link Creations} and {@link Amendments}.
+ * period ends after it starts, and that the names of values are attributes of the type, which are not derived and are
+ * converted to the value type of their attribute (design D4 of {@code add-derived-attributes}). Shared by
+ * {@link Creations} and {@link Amendments}.
  */
 final class WriteChecks {
 
-    /** Values of a write resolved to attributes. */
-    record Resolved(Map<AttributeId, Value> values, List<Attribute> attributes, boolean unresolvedNames) {
+    /**
+     * Values of a write resolved to attributes. The values of derived attributes are left out: a write cannot set them.
+     *
+     * @param values          the values by attribute
+     * @param attributes      the attributes that the write sets
+     * @param unresolvedNames whether a name is no attribute of the type
+     * @param derivedNamed    whether a name is a derived attribute of the type, which was reported
+     */
+    record Resolved(Map<AttributeId, Value> values, List<Attribute> attributes, boolean unresolvedNames,
+            boolean derivedNamed) {
     }
 
     private final ProblemLog problems;
@@ -45,12 +54,14 @@ final class WriteChecks {
     /**
      * Resolves the names of values to attributes of the type, reporting names that are unknown and attributes that are
      * deprecated. A name given twice, or an alias together with the name, keeps the later value. Values are converted
-     * to the value type of their attribute; a value that does not fit is kept as it is, for validation to report.
+     * to the value type of their attribute; a value that does not fit is kept as it is, for validation to report. An
+     * attribute that is derived is reported with {@code DERIVED_ATTRIBUTE_WRITTEN} and its value is dropped.
      */
     Resolved resolveValues(String path, SubjectType type, Map<String, Value> values) {
         Map<AttributeId, Value> resolved = new LinkedHashMap<>();
         List<Attribute> attributes = new ArrayList<>();
         boolean unresolved = false;
+        boolean derivedNamed = false;
         for (Map.Entry<String, Value> entry : values.entrySet()) {
             Optional<Attribute> found = type.attribute(entry.getKey());
             if (found.isEmpty()) {
@@ -59,6 +70,11 @@ final class WriteChecks {
                 continue;
             }
             Attribute attribute = found.get();
+            if (attribute.derived().isPresent()) {
+                derivedAttributeWritten(path, type, attribute);
+                derivedNamed = true;
+                continue;
+            }
             if (attribute.deprecated()) {
                 problems.add(Problems.of(ProblemCode.DEPRECATED_ATTRIBUTE, attributePath(path, attribute),
                         "The attribute " + attribute.name() + " of " + type.name() + " is deprecated, so a write may "
@@ -70,7 +86,16 @@ final class WriteChecks {
                 attributes.add(attribute);
             }
         }
-        return new Resolved(resolved, attributes, unresolved);
+        return new Resolved(resolved, attributes, unresolved, derivedNamed);
+    }
+
+    /** Reports that a write names a derived attribute: the store computes its value, and no write sets or clears it. */
+    void derivedAttributeWritten(String path, SubjectType type, Attribute attribute) {
+        problems.add(Problems.of(ProblemCode.DERIVED_ATTRIBUTE_WRITTEN, attributePath(path, attribute), "The attribute "
+                + attribute.name() + " of " + type.name() + " is derived, so a write cannot set it: the store computes it "
+                + "from the other values of the version when the transaction commits.",
+                "a write that leaves out the attribute " + attribute.name(), "a write that names " + attribute.name(),
+                "Leave " + attribute.name() + " out of the write."));
     }
 
     void unknownAttribute(String path, SubjectType type, String name) {

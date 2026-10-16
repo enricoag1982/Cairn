@@ -19,8 +19,8 @@ import java.util.Optional;
 
 /**
  * An immutable, valid schema with identifiers and the resolved type hierarchy (design D4). Besides the public
- * {@link Schema} view it keeps the definitions behind each element, for compatibility checks, and the checks of its types
- * compiled (design D2 of {@code add-cel-expressions}).
+ * {@link Schema} view it keeps the definitions behind each element, for compatibility checks, and the checks and derived
+ * attributes of its types compiled (design D2 of {@code add-cel-expressions} and D3 of {@code add-derived-attributes}).
  */
 final class CompiledSchema implements CheckedSchema {
 
@@ -33,7 +33,7 @@ final class CompiledSchema implements CheckedSchema {
     }
 
     static final CompiledSchema EMPTY =
-            new CompiledSchema(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of());
+            new CompiledSchema(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of(), Map.of());
 
     private final List<EntityType> entityTypes;
     private final List<Trait> traits;
@@ -47,6 +47,7 @@ final class CompiledSchema implements CheckedSchema {
     private final Map<TypeId, List<Attribute>> effectiveAttributes = new HashMap<>();
     private final Map<TypeId, List<String>> subtypes = new HashMap<>();
     private final Map<TypeId, List<AppliedCheck>> checks;
+    private final Map<TypeId, List<AppliedDerivation>> derivations;
 
     CompiledSchema(
             List<EntityType> entityTypes,
@@ -55,8 +56,10 @@ final class CompiledSchema implements CheckedSchema {
             List<Origin> origins,
             List<TypeEntry> typeEntries,
             List<Declaration> attributeDeclarations,
-            Map<TypeId, List<AppliedCheck>> checks) {
+            Map<TypeId, List<AppliedCheck>> checks,
+            Map<TypeId, List<AppliedDerivation>> derivations) {
         this.checks = Map.copyOf(checks);
+        this.derivations = Map.copyOf(derivations);
         this.entityTypes = entityTypes.stream().sorted(Comparator.comparing(EntityType::name)).toList();
         this.traits = traits.stream().sorted(Comparator.comparing(Trait::name)).toList();
         this.relationshipTypes = relationshipTypes.stream().sorted(Comparator.comparing(RelationshipType::name)).toList();
@@ -142,6 +145,11 @@ final class CompiledSchema implements CheckedSchema {
     @Override
     public List<AppliedCheck> checks(TypeId type) {
         return checks.getOrDefault(type, List.of());
+    }
+
+    @Override
+    public List<AppliedDerivation> derivations(TypeId type) {
+        return derivations.getOrDefault(type, List.of());
     }
 
     @Override

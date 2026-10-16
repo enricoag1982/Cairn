@@ -93,8 +93,7 @@ final class LeaveNotifier implements Flow.Subscriber<Change> {
 
     /** The name of the person that an employment is of. */
     private static String nameOf(View view, EntityId employment) {
-        Person person = Person.from(view.navigate(employment, "EmploymentOf").getFirst().entity());
-        return person.givenName() + " " + person.familyName();
+        return Person.from(view.navigate(employment, "EmploymentOf").getFirst().entity()).fullName();
     }
 
     @Override

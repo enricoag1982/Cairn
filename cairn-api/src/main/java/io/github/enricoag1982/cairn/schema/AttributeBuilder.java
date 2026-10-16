@@ -7,8 +7,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 /**
- * Builds an {@link AttributeDefinition} (capability {@code type-model}). Attributes start optional, not unique and without a
- * range, description, examples or string constraints.
+ * Builds an {@link AttributeDefinition} (capability {@code type-model}). Attributes start optional, not unique, not
+ * derived and without a range, description, examples or string constraints.
  */
 public final class AttributeBuilder {
 
@@ -25,6 +25,7 @@ public final class AttributeBuilder {
     private String pattern;
     private OptionalInt minLength = OptionalInt.empty();
     private OptionalInt maxLength = OptionalInt.empty();
+    private String derived;
 
     AttributeBuilder(String name, ValueType valueType) {
         this.name = Objects.requireNonNull(name, "name");
@@ -150,6 +151,19 @@ public final class AttributeBuilder {
     }
 
     /**
+     * Makes the attribute derived (capability {@code derived-attributes}): its value is computed at commit from the other
+     * values of the same version, by an expression in the Common Expression Language that reads the attributes that are
+     * not derived as {@code self.<name>}. A write cannot set a derived attribute.
+     *
+     * @param expression the expression, for example {@code self.givenName + ' ' + self.familyName}
+     * @return this builder
+     */
+    public AttributeBuilder derived(String expression) {
+        this.derived = Objects.requireNonNull(expression, "expression");
+        return this;
+    }
+
+    /**
      * Builds the definition.
      *
      * @return the attribute definition
@@ -157,6 +171,6 @@ public final class AttributeBuilder {
     public AttributeDefinition build() {
         return new AttributeDefinition(name, valueType, required, unique, Optional.ofNullable(range), aliases, deprecated,
                 Optional.ofNullable(description), examples, allowedValues, Optional.ofNullable(pattern),
-                minLength, maxLength);
+                minLength, maxLength, Optional.ofNullable(derived));
     }
 }

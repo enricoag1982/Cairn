@@ -100,7 +100,8 @@ final class PropertyRules {
             Map.entry("attribute.allowedValues", PropertyRules::allowedValues),
             Map.entry("attribute.pattern", PropertyRules::pattern),
             Map.entry("attribute.minLength", PropertyRules::minLength),
-            Map.entry("attribute.maxLength", PropertyRules::maxLength));
+            Map.entry("attribute.maxLength", PropertyRules::maxLength),
+            Map.entry("attribute.derived", PropertyRules::derived));
 
     private static final Set<String> WIDENINGS = Set.of("INT>LONG", "INT>DECIMAL", "LONG>DECIMAL");
 
@@ -428,6 +429,25 @@ final class PropertyRules {
             }
         }
         return changes;
+    }
+
+    /**
+     * A derived attribute may become plain, and its stored values stay. Making an attribute derived, or changing the
+     * expression of a derived attribute, would leave the versions that are stored without the values the expression gives
+     * (design D5 of {@code add-derived-attributes}).
+     */
+    private static List<SchemaChange> derived(Context context) {
+        Optional<?> oldValue = (Optional<?>) context.oldValue();
+        Optional<?> newValue = (Optional<?>) context.newValue();
+        if (newValue.isEmpty()) {
+            return List.of(Changes.compatible(context.path(), "made the derived attribute plain, keeping its stored values"));
+        }
+        if (oldValue.isEmpty()) {
+            return List.of(Changes.breaking(context.path(), "made the attribute derived, with the expression "
+                    + newValue.get(), Changes.DERIVE_WITH_THE_TYPE));
+        }
+        return List.of(Changes.breaking(context.path(), "changed the expression of the derived attribute from "
+                + oldValue.get() + " to " + newValue.get(), Changes.DERIVE_WITH_THE_TYPE));
     }
 
     // ------------------------------------------------------------------ reflection

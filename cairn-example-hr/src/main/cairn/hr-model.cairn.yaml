@@ -11,6 +11,8 @@ entityTypes:
       givenName: { type: string, required: true }
       familyName: { type: string, required: true }
       birthDate: { type: date }
+      # Computed when a transaction commits (ADR-0031): no write sets it.
+      fullName: { type: string, required: true, derived: "self.givenName + ' ' + self.familyName" }
   LegalEntity:
     attributes:
       name: { type: string, required: true, unique: true }

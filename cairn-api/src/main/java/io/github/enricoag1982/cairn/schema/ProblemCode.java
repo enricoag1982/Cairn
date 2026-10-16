@@ -4,12 +4,13 @@ import java.util.Objects;
 
 /**
  * Stable codes for the reasons a schema definition or registration is rejected (capabilities {@code type-model},
- * {@code checks} and {@code schema-evolution}), for the reasons a schema document (capability
- * {@code schema-documents}) or a transaction payload (capability {@code json-payloads}) cannot be read, for the
- * reasons a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions},
- * {@code entity-rules}, {@code checks} and {@code relationships}), for the reasons a purge is refused (capability
- * {@code purge}), for the reasons a request of an AI agent is refused (capability {@code agent-tools}), and for the
- * reasons a query does not fit the schema of the view that runs it (capability {@code queries}).
+ * {@code checks}, {@code derived-attributes} and {@code schema-evolution}), for the reasons a schema document
+ * (capability {@code schema-documents}) or a transaction payload (capability {@code json-payloads}) cannot be read, for
+ * the reasons a data transaction is rejected (capabilities {@code transactions}, {@code entity-versions},
+ * {@code entity-rules}, {@code checks}, {@code derived-attributes} and {@code relationships}), for the reasons a purge
+ * is refused (capability {@code purge}), for the reasons a request of an AI agent is refused (capability
+ * {@code agent-tools}), and for the reasons a query does not fit the schema of the view that runs it (capability
+ * {@code queries}).
  * Each code has an {@linkplain #explanation() explanation} that can be read at runtime.
  */
 public enum ProblemCode {
@@ -116,12 +117,24 @@ public enum ProblemCode {
             + "and column in the expression, counted from 1, as \"at line L, column C\"; the found details give the "
             + "expression. For a check in a schema document, the problem is also located in the document, at that "
             + "position where the text allows it. Correct the expression."),
-    /** A registry or a store has no expression language, so it cannot compile or run checks. */
-    CHECKS_UNAVAILABLE("A definition declares checks, or a write concerns a type to which checks apply, but there is "
-            + "no expression language to compile or run them. Put the module cairn-cel on the class path, "
-            + "or give the settings an expression language; until then a schema registry rejects definitions that "
-            + "declare checks, and a store rejects every write of an entity or relationship of a type to which a "
-            + "check applies, whatever the write changes."),
+    /** The expression of a derived attribute does not compile, reads an attribute it must not, or has the wrong type. */
+    INVALID_DERIVATION("The expression of a derived attribute must be an expression of the Common Expression Language "
+            + "(CEL) with at most 4,000 characters that compiles, reads the version's attributes only as "
+            + "self.<name> with names the type has and that are not derived, and whose result can be a value of the "
+            + "attribute's type: a string for a string attribute, a bool for a boolean, an int for an int or long, a "
+            + "double for a decimal, a timestamp for an instant or a date. An optional attribute may also give null. "
+            + "The path is the type that declares the attribute and the attribute's name; the message gives the error "
+            + "and, where it is known, the line and column in the expression, counted from 1, as \"at line L, column "
+            + "C\"; the found details give the expression. For an attribute in a schema document, the problem is also "
+            + "located in the document, at the key derived and, where the text allows it, at that position. Correct "
+            + "the expression."),
+    /** A registry or a store has no expression language, so it cannot compile or run checks or derived attributes. */
+    EXPRESSIONS_UNAVAILABLE("A definition declares checks or derived attributes, or a write concerns a type to which "
+            + "checks apply or that has derived attributes, but there is no expression language to compile or run "
+            + "them. Put the module cairn-cel on the class path, or give the settings an expression language; until "
+            + "then a schema registry rejects definitions that declare checks or derived attributes, and a store "
+            + "rejects every write of an entity or relationship of a type to which a check applies or that has a "
+            + "derived attribute, whatever the write changes."),
     /** A schema document or a transaction payload is not valid YAML 1.2, or JSON. */
     DOCUMENT_SYNTAX("The text of a schema document or of a transaction payload is not valid YAML 1.2 or JSON, so it "
             + "cannot be read at all. Reading stops at the first syntax error; fix the syntax at the given line and "
@@ -302,6 +315,23 @@ public enum ProblemCode {
             + "fails. The problem names the check and gives the error. Test optional attributes with has(self.name) in "
             + "the expression, or correct the expression in a new version of the schema, or open the store with an "
             + "expression language that compiles it."),
+    /** A create, relate, patch, replace or clear names a derived attribute. */
+    DERIVED_ATTRIBUTE_WRITTEN("A derived attribute takes no values from writes: a create, relate, patch, replace or "
+            + "clear that names one is rejected, and the derivation does not run for the entity or relationship it "
+            + "names. The path names the attribute, and in a payload the problem is located at the attribute's value. "
+            + "Leave the attribute out of the write: the store computes it from the other values of the version when "
+            + "the transaction commits."),
+    /** The derivation of an attribute gave no value that fits it: an evaluation error, a result that does not fit. */
+    DERIVATION_FAILED("The expression of a derived attribute gave no value that fits it for a version that the "
+            + "transaction writes: its evaluation failed, for example because it reads an attribute that has no value "
+            + "without testing it with has(), or because it exceeded the cost limit of 10,000 evaluation steps; its "
+            + "result does not fit the attribute's value type, for example an integer outside the range of an int, "
+            + "a timestamp that is not at the start of a day in UTC for a date, or a double that is not a number; or "
+            + "it gave no value, null, for a required attribute. It also fails if the store's expression language "
+            + "could not compile the recorded expression when the store was opened; every write to the types that "
+            + "have the attribute then fails. The path names the attribute and the message gives the error. Test "
+            + "optional attributes with has(self.name) in the expression, correct the expression in a new version of "
+            + "the schema, or open the store with an expression language that compiles it."),
     /** A write relates entities with a name that is not a relationship type. */
     UNKNOWN_RELATIONSHIP_TYPE("A write relates two entities with a type name that the schema does not have as a "
             + "relationship type. Type names and aliases are compared without regard to case. Correct the name, which "

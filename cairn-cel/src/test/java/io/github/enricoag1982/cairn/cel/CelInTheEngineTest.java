@@ -6,6 +6,8 @@ import io.github.enricoag1982.cairn.core.SchemaRegistries;
 import io.github.enricoag1982.cairn.core.StoreSettings;
 import io.github.enricoag1982.cairn.core.Stores;
 import io.github.enricoag1982.cairn.data.CommitResult;
+import io.github.enricoag1982.cairn.data.Coordinates;
+import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
@@ -15,12 +17,17 @@ import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Problem;
 import io.github.enricoag1982.cairn.schema.ProblemCode;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
+import io.github.enricoag1982.cairn.schema.Value;
+import io.github.enricoag1982.cairn.schema.ValueType;
 import java.time.InstantSource;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** The language in the engine: it is found without being named, and the engine compiles and runs its checks. */
+/**
+ * The language in the engine: it is found without being named, and the engine compiles and runs its checks and derived
+ * attributes.
+ */
 class CelInTheEngineTest {
 
     @Test
@@ -65,5 +72,26 @@ class CelInTheEngineTest {
             assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_CHECK);
             assertThat(problem.message()).contains("at line 1, column 16");
         });
+    }
+
+    @Test
+    @DisplayName("A store computes a derived attribute and reads it back")
+    void aStoreComputesADerivedAttributeAndReadsItBack() {
+        Store store = Stores.inMemory(StoreSettings.builder().rules(ReferenceModel.executableRules())
+                .declaredRules(ReferenceModel.declaredRules()).build());
+        RegistrationResult registered = store.schema().register(ReferenceModel.origin("1.0.0"),
+                Definitions.withDerivedAttribute(ReferenceModel.definition(), "Organization", "shout",
+                        ValueType.STRING, true, "self.name + '!'"));
+        assertThat(registered).isInstanceOf(RegistrationResult.Applied.class);
+
+        CommitResult result = store.commit(Transaction.by("importer")
+                .create(ReferenceStories.ACME, "Organization", ReferenceStories.from(1, 1),
+                        ReferenceStories.values("name", "ACME"))
+                .build());
+
+        assertThat(result).isInstanceOf(CommitResult.Committed.class);
+        EntityId acme = (EntityId) ((CommitResult.Committed) result).receipt().temporaryIds().get(ReferenceStories.ACME);
+        assertThat(store.view(Coordinates.effectiveAt(ReferenceStories.on(3, 1))).entity(acme).orElseThrow().values())
+                .containsEntry("shout", Value.of("ACME!"));
     }
 }

@@ -39,13 +39,18 @@ final class PayloadFixtures {
         final Store store;
 
         ReferenceDomainStore() {
+            this(ReferenceModel.definition());
+        }
+
+        /** A store with another schema than the reference model registered, under the name of the reference model. */
+        ReferenceDomainStore(SchemaDefinition definition) {
             store = Stores.inMemory(StoreSettings.builder()
                     .clock(clock)
                     .idGenerator(IdGenerators.deterministic())
                     .rules(ReferenceModel.executableRules())
                     .declaredRules(ReferenceModel.declaredRules())
                     .build());
-            assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition()))
+            assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), definition))
                     .isInstanceOf(RegistrationResult.Applied.class);
         }
 

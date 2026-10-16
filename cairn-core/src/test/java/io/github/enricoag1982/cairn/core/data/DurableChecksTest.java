@@ -21,8 +21,9 @@ import io.github.enricoag1982.cairn.data.DurableStore;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.Transaction;
-import io.github.enricoag1982.cairn.expressions.CheckCompilationException;
 import io.github.enricoag1982.cairn.expressions.CompiledCheck;
+import io.github.enricoag1982.cairn.expressions.CompiledDerivation;
+import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
 import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
@@ -35,6 +36,7 @@ import io.github.enricoag1982.cairn.schema.ValueType;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -149,9 +151,9 @@ class DurableChecksTest {
                 .create(A1, "Account", from(1, 1), values("number", "A-9", "currency", "EUR", "balance", 1))
                 .create(A2, "Account", from(1, 1), values("number", "A-8", "currency", "EUR", "balance", 1)).build();
         List<Problem> problems = ((CommitResult.Rejected) reopened.commit(twoAccounts)).problems().stream()
-                .filter(problem -> problem.code() == ProblemCode.CHECKS_UNAVAILABLE).toList();
-        assertThat(problems).extracting(Problem::code).containsExactly(ProblemCode.CHECKS_UNAVAILABLE,
-                ProblemCode.CHECKS_UNAVAILABLE);
+                .filter(problem -> problem.code() == ProblemCode.EXPRESSIONS_UNAVAILABLE).toList();
+        assertThat(problems).extracting(Problem::code).containsExactly(ProblemCode.EXPRESSIONS_UNAVAILABLE,
+                ProblemCode.EXPRESSIONS_UNAVAILABLE);
         assertThat(problems).extracting(Problem::path).containsExactly("$a1", "$a2");
         assertThat(problems.getFirst().message()).contains("balance-not-negative").contains("has-currency")
                 .contains("Account");
@@ -162,7 +164,7 @@ class DurableChecksTest {
                 .patch(told.a1(), from(1, 1), values("currency", "EUR")).build();
         assertThat(((CommitResult.Rejected) reopened.commit(nothingChanges)).problems())
                 .as("whatever the write changes").singleElement()
-                .satisfies(problem -> assertThat(problem.code()).isEqualTo(ProblemCode.CHECKS_UNAVAILABLE));
+                .satisfies(problem -> assertThat(problem.code()).isEqualTo(ProblemCode.EXPRESSIONS_UNAVAILABLE));
     }
 
     @Test
@@ -196,7 +198,7 @@ class DurableChecksTest {
         assertThat(again).as("the origin that declares them cannot be registered").isInstanceOf(
                 RegistrationResult.Rejected.class);
         assertThat(((RegistrationResult.Rejected) again).problems()).extracting(Problem::code)
-                .containsOnly(ProblemCode.CHECKS_UNAVAILABLE);
+                .containsOnly(ProblemCode.EXPRESSIONS_UNAVAILABLE);
     }
 
     // ------------------------------------------------------------------ a language that cannot compile them
@@ -214,11 +216,17 @@ class DurableChecksTest {
 
             @Override
             public CompiledCheck compile(String expression, Map<String, ValueType> attributes)
-                    throws CheckCompilationException {
+                    throws ExpressionCompilationException {
                 if (expression.contains("balance")) {
-                    throw new CheckCompilationException("This version no longer reads balances.", 1, 1);
+                    throw new ExpressionCompilationException("This version no longer reads balances.", 1, 1);
                 }
                 return values -> true;
+            }
+
+            @Override
+            public CompiledDerivation compileDerivation(String expression, Map<String, ValueType> attributes,
+                    ValueType result) {
+                return values -> Optional.empty();
             }
         };
 

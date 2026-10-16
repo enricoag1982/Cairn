@@ -3,8 +3,8 @@ package io.github.enricoag1982.cairn.core.data;
 import io.github.enricoag1982.cairn.core.schema.AppliedCheck;
 import io.github.enricoag1982.cairn.core.schema.Problems;
 import io.github.enricoag1982.cairn.core.schema.Values;
-import io.github.enricoag1982.cairn.expressions.CheckEvaluationException;
 import io.github.enricoag1982.cairn.expressions.CompiledCheck;
+import io.github.enricoag1982.cairn.expressions.ExpressionEvaluationException;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EffectiveCheck;
@@ -24,11 +24,13 @@ import java.util.stream.Collectors;
  * is false is a {@code CHECK_VIOLATED}, and one that gives no result a {@code CHECK_FAILED}.
  *
  * <p>The checks read nothing but the segment they check, so they cause no re-checks. A store that has no expression
- * language for the checks of a type it writes to rejects the write with one {@code CHECKS_UNAVAILABLE}, whatever the
+ * language for the checks of a type it writes to rejects the write with one {@code EXPRESSIONS_UNAVAILABLE}, whatever the
  * write changes, as a rule without code does (ADR-0018).
  *
  * <p>A segment with a value that does not fit its attribute's value type is not checked: the value has its own problem,
- * and an expression cannot be asked about values it was not compiled for.
+ * and an expression cannot be asked about values it was not compiled for. Nor is a subject whose derived values could not
+ * be computed (see {@link DerivationRunner}): the derivation has its own problem, and the checks may read the values it
+ * should have given.
  *
  * <p>Used by one {@link Preparation}, in the thread that holds the store's writer lock.
  */
@@ -46,7 +48,7 @@ final class CheckRunner {
     void run(Working subject) {
         SubjectType type = subject.type();
         List<EffectiveCheck> effective = type.effectiveChecks();
-        if (effective.isEmpty()) {
+        if (effective.isEmpty() || subject.derivedUnresolved) {
             return;
         }
         List<AppliedCheck> applied = workspace.index().checks(type.id());
@@ -77,7 +79,7 @@ final class CheckRunner {
                 if (!compiled.evaluate(values.get())) {
                     problems.add(violated(subject, check, version));
                 }
-            } catch (CheckEvaluationException | RuntimeException | StackOverflowError e) {
+            } catch (ExpressionEvaluationException | RuntimeException | StackOverflowError e) {
                 problems.add(failed(subject, check, version, e));
             }
         }
@@ -127,7 +129,7 @@ final class CheckRunner {
 
     private static Problem unavailable(Working subject, SubjectType type, List<EffectiveCheck> effective) {
         String names = effective.stream().map(check -> check.check().name()).collect(Collectors.joining(", "));
-        return Problems.of(ProblemCode.CHECKS_UNAVAILABLE, subject.path, "The " + subject.kind() + " is of type "
+        return Problems.of(ProblemCode.EXPRESSIONS_UNAVAILABLE, subject.path, "The " + subject.kind() + " is of type "
                 + type.name() + ", to which the checks " + names + " apply, but the store has no expression language "
                 + "to run them, so it cannot be written.", "a store with an expression language",
                 "no expression language", "Put the module cairn-cel on the class path, or create the "

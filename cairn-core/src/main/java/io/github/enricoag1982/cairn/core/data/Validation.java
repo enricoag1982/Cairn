@@ -54,7 +54,8 @@ final class Validation {
                 }
             }
             problems.addAll(valueProblems);
-            if (attribute.required() && !subject.namesUnresolved) {
+            boolean derivedUnresolved = attribute.derived().isPresent() && subject.derivedUnresolved;
+            if (attribute.required() && !subject.namesUnresolved && !derivedUnresolved) {
                 reportMissing(subject, attribute, path);
             }
         }

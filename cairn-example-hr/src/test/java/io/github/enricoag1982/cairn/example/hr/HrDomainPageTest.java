@@ -49,9 +49,10 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The comparison reads the page by the headers of its tables and the words of its cells, so that it does not
  * depend on column widths, the order of rows, or the Markdown around a name. It is strict on what the page says: the
- * names, the attributes with whether they are required and unique, their allowed values and patterns, the kind,
- * source, target, multiplicities and inverse name of each relationship type, the version, type, description and
- * codes of each rule, and the type, expression and message of each check.
+ * names, the attributes with whether they are required and unique, their allowed values and patterns, the expression
+ * of those that are derived ({@code derived from} and the expression in a code span, among the details of the attribute),
+ * the kind, source, target, multiplicities and inverse name of each relationship type, the version, type, description
+ * and codes of each rule, and the type, expression and message of each check.
  */
 class HrDomainPageTest {
 
@@ -60,6 +61,7 @@ class HrDomainPageTest {
     private static final Pattern QUOTED = Pattern.compile("`([^`]+)`");
     private static final Pattern PATTERN_OF_LETTERS = Pattern.compile("(two|three) capital letters");
     private static final Pattern PATTERN_OF_DIGITS = Pattern.compile("`([^`]+)` and (two|three|four) digits");
+    private static final Pattern DERIVED = Pattern.compile("derived from `([^`]+)`");
     private static final Pattern POSITION = Pattern.compile("(P-\\d+), (.+) \\(([A-Z]+)\\)");
     private static final Pattern SALARY = Pattern.compile("(\\d[\\d,]*) ([A-Z]{3})");
     private static final Map<String, Integer> COUNTS = Map.of("two", 2, "three", 3, "four", 4);
@@ -138,6 +140,20 @@ class HrDomainPageTest {
         return spans;
     }
 
+    /** The index of the first character that is outside code spans, or -1. */
+    private static int indexOutsideCode(String text, char wanted) {
+        boolean code = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '`') {
+                code = !code;
+            } else if (!code && c == wanted) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /** Splits at a separator that is outside parentheses and code spans. */
     private static List<String> split(String text, char separator) {
         List<String> parts = new ArrayList<>();
@@ -165,13 +181,14 @@ class HrDomainPageTest {
 
     /** What the page says about an attribute; a type or a pattern it does not mention is null. */
     private record PageAttribute(ValueType type, boolean required, boolean unique, Set<String> allowedValues,
-            String pattern) {
+            String pattern, String derived) {
     }
 
     /**
      * Reads the attributes cell: segments separated by commas, each with the code spans before its parenthesis as
      * the attribute names (&quot;{@code a} and {@code b}&quot; are two) and, in the parenthesis, flags separated by
-     * commas: required, unique, a type word, a pattern in words, or a colon and the allowed values.
+     * commas: required, unique, a type word, a pattern in words, {@code derived from} and the expression in a code
+     * span, or a colon and the allowed values.
      */
     private static Map<String, PageAttribute> attributes(String cell) {
         Map<String, PageAttribute> attributes = new TreeMap<>();
@@ -180,7 +197,7 @@ class HrDomainPageTest {
             List<String> names = quoted(open < 0 ? segment : segment.substring(0, open));
             assertThat(names).as("the attribute names in '%s'", segment.trim()).isNotEmpty();
             String qualifier = open < 0 ? "" : segment.substring(open + 1, segment.lastIndexOf(')'));
-            int colon = qualifier.indexOf(':');
+            int colon = indexOutsideCode(qualifier, ':');
             String flags = colon < 0 ? qualifier : qualifier.substring(0, colon);
             Set<String> allowed = colon < 0 ? Set.of()
                     : new LinkedHashSet<>(quoted(qualifier.substring(colon + 1)));
@@ -188,12 +205,16 @@ class HrDomainPageTest {
             boolean unique = false;
             ValueType type = null;
             String pattern = null;
+            String derived = null;
             for (String flag : split(flags, ',')) {
                 String words = plain(flag).toLowerCase(Locale.ROOT);
                 Matcher letters = PATTERN_OF_LETTERS.matcher(words);
                 Matcher digits = PATTERN_OF_DIGITS.matcher(flag.trim());
+                Matcher derivation = DERIVED.matcher(flag.trim());
                 if (words.isEmpty()) {
                     continue;
+                } else if (derivation.matches()) {
+                    derived = derivation.group(1);
                 } else if (words.equals("required")) {
                     required = true;
                 } else if (words.equals("unique")) {
@@ -210,7 +231,7 @@ class HrDomainPageTest {
                 }
             }
             for (String name : names) {
-                assertThat(attributes.put(name, new PageAttribute(type, required, unique, allowed, pattern)))
+                assertThat(attributes.put(name, new PageAttribute(type, required, unique, allowed, pattern, derived)))
                         .as("attribute %s listed once", name).isNull();
             }
         }
@@ -245,6 +266,8 @@ class HrDomainPageTest {
                 assertThat(Set.copyOf(actual.allowedValues())).as("%s allowed values", where)
                         .isEqualTo(expected.allowedValues());
                 assertThat(actual.pattern()).as("%s pattern", where).isEqualTo(Optional.ofNullable(expected.pattern()));
+                assertThat(actual.derived().map(expression -> expression.replaceAll("\\s+", " ").trim()))
+                        .as("%s derived from", where).isEqualTo(Optional.ofNullable(expected.derived()));
                 if (expected.type() != null) {
                     assertThat(actual.valueType()).as("%s type", where).isEqualTo(expected.type());
                 }

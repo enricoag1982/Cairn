@@ -76,7 +76,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
 
     private final CommitSequence sequence;
     private final List<RuleDescriptor> rules;
-    private final CheckCompiler checkCompiler;
+    private final ExpressionCompiler expressionCompiler;
     private volatile State state = new State(CompiledSchema.EMPTY, Map.of(), List.of(), List.of(), 1);
     /** Where applied registrations are written before they are published; null if the registry is not durable. */
     private volatile Journal journal;
@@ -103,12 +103,12 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     }
 
     /**
-     * Creates an empty stand-alone registry, with a commit sequence of its own, that compiles checks.
+     * Creates an empty stand-alone registry, with a commit sequence of its own, that compiles checks and derived attributes.
      *
      * @param clock    the source of transaction times
      * @param rules    the rules that types may name
-     * @param language the expression language that compiles the checks of types; without one the registry rejects
-     *                 definitions that declare checks
+     * @param language the expression language that compiles the checks of types and the derived attributes; without one
+     *                 the registry rejects definitions that declare checks or derived attributes
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two
      *                                  rules have the same name and version
      */
@@ -130,18 +130,18 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
     }
 
     /**
-     * Creates an empty registry on a commit sequence, which other writers may share, that compiles checks.
+     * Creates an empty registry on a commit sequence, which other writers may share, that compiles checks and derived attributes.
      *
      * @param sequence the sequence that supplies bases and transaction times, and the writer lock
      * @param rules    the rules that types may name
-     * @param language the expression language that compiles the checks of types; without one the registry rejects
-     *                 definitions that declare checks
+     * @param language the expression language that compiles the checks of types and the derived attributes; without one
+     *                 the registry rejects definitions that declare checks or derived attributes
      * @throws IllegalArgumentException if a rule's name or version breaks the rules for rule references, or if two
      *                                  rules have the same name and version
      */
     public InMemorySchemaRegistry(CommitSequence sequence, Collection<RuleDescriptor> rules,
             Optional<ExpressionLanguage> language) {
-        this.checkCompiler = new CheckCompiler(Objects.requireNonNull(language, "language"));
+        this.expressionCompiler = new ExpressionCompiler(Objects.requireNonNull(language, "language"));
         this.sequence = Objects.requireNonNull(sequence, "sequence");
         List<RuleDescriptor> sorted = Objects.requireNonNull(rules, "rules").stream()
                 .map(rule -> Objects.requireNonNull(rule, "rule"))
@@ -276,7 +276,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                 .forEach(name -> originOfType.put(name, origin.origin())));
         List<Origin> list = origins.values().stream().map(OriginState::origin).toList();
         SchemaCompiler.Result compiled = SchemaCompiler.restore(combined(origins),
-                name -> originOfType.get(Names.key(name)), list, record.identifiers(), checkCompiler);
+                name -> originOfType.get(Names.key(name)), list, record.identifiers(), expressionCompiler);
         state = next(current, origins, compiled, record);
     }
 
@@ -395,7 +395,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         }
         Map<String, OriginState> origins = new HashMap<>(current.origins());
         origins.put(origin.name(), new OriginState(origin, definition));
-        for (Problem problem : SchemaValidator.validate(combined(origins), rules, checkCompiler, ownTypeKeys(definition))) {
+        for (Problem problem : SchemaValidator.validate(combined(origins), rules, expressionCompiler, ownTypeKeys(definition))) {
             if (!(problem.code() == ProblemCode.DUPLICATE_NAME && conflicts.contains(Names.key(problem.path())))) {
                 problems.add(problem);
             }
@@ -443,7 +443,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                 .forEach(name -> originOfType.put(name, state.origin())));
         List<Origin> list = origins.values().stream().map(OriginState::origin).toList();
         return SchemaCompiler.compile(combined(origins), name -> originOfType.get(Names.key(name)), list, previous, nextId,
-                checkCompiler);
+                expressionCompiler);
     }
 
     private static SchemaDefinition combined(Map<String, OriginState> origins) {
@@ -467,10 +467,14 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
         return names;
     }
 
-    /** The keys of the names of the entity types and relationship types a definition declares: only they have checks. */
+    /**
+     * The keys of the names of the entity types, traits and relationship types a definition declares: only they have
+     * checks or derived attributes, so a registry without an expression language reports only these.
+     */
     private static Set<String> ownTypeKeys(SchemaDefinition definition) {
         Set<String> keys = new HashSet<>();
         definition.entityTypes().forEach(type -> keys.add(Names.key(type.name())));
+        definition.traits().forEach(trait -> keys.add(Names.key(trait.name())));
         definition.relationshipTypes().forEach(type -> keys.add(Names.key(type.name())));
         return keys;
     }

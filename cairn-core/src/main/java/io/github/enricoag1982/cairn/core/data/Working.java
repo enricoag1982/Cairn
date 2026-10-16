@@ -44,6 +44,12 @@ final class Working {
      * A write that would relate the entity failed, so a relationship that it needs may be missing for that reason.
      */
     boolean linksUnresolved;
+    /**
+     * Its derived values could not be computed: a write named a derived attribute, a value does not fit its attribute, a
+     * derivation failed, or the store has no expression language for it. A required derived attribute may be missing for
+     * that reason, and the checks cannot be run on values that lack the derived ones.
+     */
+    boolean derivedUnresolved;
 
     private Working(Id id, String path, EntityType entityType, RelationshipType relationshipType, EntityId source,
             EntityId target, boolean created, Held stored, Timeline before, Timeline timeline) {

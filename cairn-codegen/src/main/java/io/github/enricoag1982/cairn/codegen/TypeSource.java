@@ -13,7 +13,9 @@ import java.util.stream.Collectors;
  * Writes the Java source of a trait, an entity type or a relationship type (design D3 of
  * {@code add-java-type-generation}): the interface with its accessors, and, for entity types and relationship types,
  * {@code from}, the snapshot record and the builders; for entity types also a {@code by<Attribute>} method for each unique
- * attribute, which makes a unique key (design D7 of {@code add-unique-key-references}).
+ * attribute, which makes a unique key (design D7 of {@code add-unique-key-references}). The accessors, the snapshot record
+ * and the typed references include the derived attributes, which say that they are derived and give their expression; the
+ * builders of writes have no setter for them (design D7 of {@code add-derived-attributes}).
  */
 final class TypeSource {
 
@@ -231,6 +233,7 @@ final class TypeSource {
                 + "<code>" + name + ".of(\"x\")</code> is the attribute of the binding <code>x</code>.");
         attribute.description().filter(text -> !text.isBlank())
                 .ifPresent(text -> paragraphs.add("<p>" + Docs.text(text)));
+        paragraphs.addAll(Docs.derived(attribute));
         List<String> tags = new ArrayList<>();
         if (attribute.deprecated()) {
             tags.add("@deprecated The attribute " + Docs.code(attribute.name())
@@ -498,7 +501,9 @@ final class TypeSource {
         lines.add("");
         lines.add("@param " + stateMethod() + " the generic state that this record was read from");
         for (Attribute attribute : element.attributes()) {
-            lines.add("@param " + attribute(attribute) + " the value of " + Docs.code(attribute.name()));
+            lines.add("@param " + attribute(attribute) + " the value of " + Docs.code(attribute.name())
+                    + (attribute.derived().isPresent() ? ", which is derived from " + Docs.code(attribute.derived().get())
+                            : ""));
         }
         out.javadoc(lines);
         List<String> components = new ArrayList<>();
@@ -537,6 +542,14 @@ final class TypeSource {
     }
 
     // ------------------------------------------------------------------ builders
+
+    /**
+     * The attributes that the builders of writes have setters for: all but the derived ones, which the store computes and
+     * a write cannot set (design D7 of {@code add-derived-attributes}).
+     */
+    private List<Attribute> settable() {
+        return element.attributes().stream().filter(attribute -> attribute.derived().isEmpty()).toList();
+    }
 
     /** What the three kinds of builder have in common: the values they set and how they set them. */
     private void setter(String builder, Attribute attribute, boolean patch) {
@@ -642,7 +655,7 @@ final class TypeSource {
         out.line("this.id = " + ref(Library.OPTIONAL) + ".of(id);");
         out.line("return this;");
         out.close("}");
-        element.attributes().forEach(attribute -> setter(builder, attribute, false));
+        settable().forEach(attribute -> setter(builder, attribute, false));
         terminals(ref(Library.WRITE) + ".Create",
                 "new " + ref(Library.WRITE) + ".Create(temporaryId, id, TYPE, period, values)");
         out.close("}");
@@ -684,7 +697,7 @@ final class TypeSource {
         out.line("this.id = " + ref(Library.OPTIONAL) + ".of(id);");
         out.line("return this;");
         out.close("}");
-        element.attributes().forEach(attribute -> setter(builder, attribute, false));
+        settable().forEach(attribute -> setter(builder, attribute, false));
         terminals(ref(Library.WRITE) + ".Relate",
                 "new " + ref(Library.WRITE) + ".Relate(temporaryId, id, TYPE, source, target, period, values)");
         out.close("}");
@@ -710,7 +723,7 @@ final class TypeSource {
         out.open("private " + builder + "(" + refType + " target) {");
         out.line("this.target = target;");
         out.close("}");
-        for (Attribute attribute : element.attributes()) {
+        for (Attribute attribute : settable()) {
             setter(builder, attribute, true);
             if (!attribute.required()) {
                 clearer(builder, attribute);
@@ -736,7 +749,7 @@ final class TypeSource {
         out.open("private " + builder + "(" + refType + " target) {");
         out.line("this.target = target;");
         out.close("}");
-        element.attributes().forEach(attribute -> setter(builder, attribute, false));
+        settable().forEach(attribute -> setter(builder, attribute, false));
         checker(builder);
         terminals(ref(Library.WRITE) + ".Replace",
                 "new " + ref(Library.WRITE) + ".Replace(target, period, values, check)");

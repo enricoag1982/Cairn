@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-15
+last-reviewed: 2026-10-16
 owner: ""
 ---
 
@@ -60,7 +60,7 @@ cairn {
 
 dependencies {
     cairnCodegen("io.github.enricoag1982.cairn:cairn-codegen:0.1.0-SNAPSHOT")    // the generator
-    cairnCodegen("io.github.enricoag1982.cairn:cairn-cel:0.1.0-SNAPSHOT")        // only if your documents declare checks
+    cairnCodegen("io.github.enricoag1982.cairn:cairn-cel:0.1.0-SNAPSHOT")        // only if your documents declare checks or derived attributes
     implementation("io.github.enricoag1982.cairn:cairn-api:0.1.0-SNAPSHOT")      // what the generated code uses
 }
 ```
@@ -95,7 +95,7 @@ Reading a state of a known type that is not the asked type or one of its subtype
 
 ## Write
 
-Builders produce the writes of a transaction. They do not check values; the transaction checks them at commit and reports problems as usual.
+Builders produce the writes of a transaction. They do not check values; the transaction checks them at commit and reports problems as usual. Builders have no setter for a [derived attribute](derive-attributes.md), which the store computes; snapshot records read it.
 
 ```java
 Transaction transaction = Transaction.by("alice@example.com")

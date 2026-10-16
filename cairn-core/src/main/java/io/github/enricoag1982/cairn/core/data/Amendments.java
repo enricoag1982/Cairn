@@ -65,16 +65,21 @@ final class Amendments {
         Set<AttributeId> cleared = new LinkedHashSet<>();
         List<Attribute> affected = new ArrayList<>(set.attributes());
         boolean unresolved = set.unresolvedNames();
+        boolean derivedNamed = set.derivedNamed();
         for (String name : write.clear()) {
             Optional<Attribute> attribute = type.attribute(name);
             if (attribute.isEmpty()) {
                 checks.unknownAttribute(path, type, name);
                 unresolved = true;
+            } else if (attribute.get().derived().isPresent()) {
+                checks.derivedAttributeWritten(path, type, attribute.get());
+                derivedNamed = true;
             } else if (cleared.add(attribute.get().id()) && !affected.contains(attribute.get())) {
                 affected.add(attribute.get());
             }
         }
         target.namesUnresolved |= unresolved;
+        target.derivedUnresolved |= derivedNamed;
         checkConflict(write.check(), target, path, affected);
         if (validPeriod && isEffective(target, path, write.period())) {
             target.timeline = target.timeline.update(write.period().from(), Segment.endOf(write.period()), old -> {
@@ -96,6 +101,7 @@ final class Amendments {
         }
         WriteChecks.Resolved values = checks.resolveValues(path, target.type(), write.values());
         target.namesUnresolved |= values.unresolvedNames();
+        target.derivedUnresolved |= values.derivedNamed();
         checkConflict(write.check(), target, path, null);
         if (validPeriod && isEffective(target, path, write.period())) {
             target.timeline = target.timeline.update(write.period().from(), Segment.endOf(write.period()),

@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.fixtures;
 
+import io.github.enricoag1982.cairn.schema.AttributeBuilder;
 import io.github.enricoag1982.cairn.schema.AttributeDefinition;
 import io.github.enricoag1982.cairn.schema.Check;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
@@ -8,6 +9,7 @@ import io.github.enricoag1982.cairn.schema.RuleDescriptor;
 import io.github.enricoag1982.cairn.schema.RuleReference;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.TraitDefinition;
+import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -124,6 +126,43 @@ public final class Definitions {
     }
 
     /**
+     * Adds a derived attribute to an entity type or relationship type: the attribute is added to the attributes the type
+     * declares.
+     *
+     * @param definition the definition to change
+     * @param type       the name of the entity type or relationship type that declares the attribute
+     * @param name       the attribute's name
+     * @param valueType  the attribute's value type
+     * @param required   whether the attribute is required
+     * @param expression the attribute's expression
+     * @return the changed definition
+     */
+    public static SchemaDefinition withDerivedAttribute(SchemaDefinition definition, String type, String name,
+            ValueType valueType, boolean required, String expression) {
+        AttributeBuilder builder = AttributeDefinition.builder(name, valueType).derived(expression);
+        if (required) {
+            builder.required();
+        }
+        AttributeDefinition attribute = builder.build();
+        if (definition.entityTypes().stream().anyMatch(candidate -> candidate.name().equals(type))) {
+            return changeEntityType(definition, type, entity -> {
+                List<AttributeDefinition> attributes = new ArrayList<>(entity.attributes());
+                attributes.add(attribute);
+                return withAttributes(entity, attributes);
+            });
+        }
+        return changeRelationshipType(definition, type, relationship -> {
+            List<AttributeDefinition> attributes = new ArrayList<>(relationship.attributes());
+            attributes.add(attribute);
+            return new RelationshipTypeDefinition(relationship.name(), relationship.source(), relationship.target(),
+                    relationship.targetsPerSource(), relationship.sourcesPerTarget(), relationship.inverseName(),
+                    relationship.inverseAliases(), relationship.kind(), relationship.symmetric(),
+                    relationship.supertype(), attributes, relationship.aliases(), relationship.deprecated(),
+                    relationship.description(), relationship.rules(), relationship.checks());
+        });
+    }
+
+    /**
      * Removes an entity type.
      *
      * @param definition the definition to change
@@ -188,7 +227,7 @@ public final class Definitions {
         return new AttributeDefinition(name, attribute.valueType(), attribute.required(), attribute.unique(),
                 attribute.range(), List.of(aliases), attribute.deprecated(), attribute.description(),
                 attribute.examples(), attribute.allowedValues(), attribute.pattern(), attribute.minLength(),
-                attribute.maxLength());
+                attribute.maxLength(), attribute.derived());
     }
 
     private static <T> List<T> replace(

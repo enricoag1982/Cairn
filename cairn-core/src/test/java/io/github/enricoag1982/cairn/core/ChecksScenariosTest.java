@@ -188,7 +188,7 @@ class ChecksScenariosTest {
         List<Problem> problems = rejected(registry.register(ReferenceModel.origin("1.0.0"), accountChecked(null)));
 
         Problem problem = only(problems);
-        assertThat(problem.code()).isEqualTo(ProblemCode.CHECKS_UNAVAILABLE);
+        assertThat(problem.code()).isEqualTo(ProblemCode.EXPRESSIONS_UNAVAILABLE);
         assertThat(problem.path()).isEqualTo("Account.balance-not-negative");
         assertThat(problem.hint()).hasValueSatisfying(hint -> assertThat(hint).contains("cairn-cel"));
         assertThat(registry.current().isEmpty()).as("nothing is registered").isTrue();
@@ -282,7 +282,7 @@ class ChecksScenariosTest {
 
         assertThat(setsBalance).isInstanceOf(CommitResult.Rejected.class);
         Problem problem = only(((CommitResult.Rejected) setsBalance).problems());
-        assertThat(problem.code()).isEqualTo(ProblemCode.CHECKS_UNAVAILABLE);
+        assertThat(problem.code()).isEqualTo(ProblemCode.EXPRESSIONS_UNAVAILABLE);
         assertThat(problem.path()).isEqualTo(a1.value());
         assertThat(renames).isInstanceOf(CommitResult.Committed.class);
         assertThat(reopened.schema().current().entityType("Account").orElseThrow().checks())

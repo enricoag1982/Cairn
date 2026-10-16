@@ -30,6 +30,11 @@ import java.util.TreeSet;
  *
  * <p>The type of a {@code patch} or {@code replace} is known only to the store, so their values are checked by name
  * only: against the union of the names and aliases of the attributes of all types.
+ *
+ * <p>A write cannot set a derived attribute (capability {@code derived-attributes}), so derived attributes are left out of
+ * the values of a {@code create} or {@code relate}, which then do not require them, and out of the names that a
+ * {@code patch} or {@code replace} may set or clear, unless another type has an attribute of that name that is not
+ * derived.
  */
 final class TransactionSchema {
 
@@ -259,7 +264,7 @@ final class TransactionSchema {
      */
     private static Mapping branch(
             String title, String key, List<String> names, String valuesDefinition, List<Attribute> attributes) {
-        boolean valuesRequired = attributes.stream().anyMatch(Attribute::required);
+        boolean valuesRequired = attributes.stream().anyMatch(attribute -> attribute.required() && attribute.derived().isEmpty());
         return new Mapping()
                 .put("title", title)
                 .put("required", valuesRequired ? strings(key, "values") : strings(key))
@@ -413,10 +418,13 @@ final class TransactionSchema {
         return names;
     }
 
+    /** Adds the names of the attributes that a write may set: derived attributes are computed, so they are left out. */
     private static void addNames(Set<String> names, List<Attribute> attributes) {
         for (Attribute attribute : attributes) {
-            names.add(attribute.name());
-            names.addAll(attribute.aliases());
+            if (attribute.derived().isEmpty()) {
+                names.add(attribute.name());
+                names.addAll(attribute.aliases());
+            }
         }
     }
 }

@@ -87,6 +87,26 @@ class SchemaDocumentScenariosTest {
     }
 
     @Test
+    @DisplayName("Scenario: Reading a derived attribute")
+    void readingADerivedAttribute() {
+        SchemaDocument document = valid(document(
+                "entityTypes:",
+                "  Account:",
+                "    attributes:",
+                "      number: { type: string, required: true }",
+                "      currency: { type: string, required: true }",
+                "      label: { type: string, required: true, derived: \"self.number + ' ' + self.currency\" }"));
+
+        assertThat(document.definition().entityTypes()).singleElement().satisfies(account ->
+                assertThat(account.attributes()).filteredOn(attribute -> attribute.name().equals("label"))
+                        .singleElement().satisfies(label -> {
+                            assertThat(label.derived()).hasValue("self.number + ' ' + self.currency");
+                            assertThat(label.valueType()).isEqualTo(ValueType.STRING);
+                            assertThat(label.required()).isTrue();
+                        }));
+    }
+
+    @Test
     @DisplayName("Scenario: Range bounds")
     void rangeBounds() {
         SchemaDocument document = valid(document(

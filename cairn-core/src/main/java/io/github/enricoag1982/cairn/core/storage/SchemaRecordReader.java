@@ -32,6 +32,7 @@ final class SchemaRecordReader {
                         new AttributeId(decoder.readLong())));
         long nextId = in.readLong();
         definition = DefinitionCodec.readChecks(in, definition);
+        definition = DefinitionCodec.readDerivations(in, definition);
         return new SchemaRecord(basis, transactionTime, new Submission(principal, onBehalfOf, reason), origin,
                 definition, new SchemaIdentifiers(types, attributes, nextId));
     }

@@ -134,6 +134,7 @@ final class DocumentWriter {
         Mapping mapping = new Mapping().put("type", attribute.valueType().name().toLowerCase(Locale.ROOT));
         flag(mapping, "required", attribute.required());
         flag(mapping, "unique", attribute.unique());
+        attribute.derived().ifPresent(expression -> mapping.put("derived", expression));
         attribute.range().ifPresent(range -> mapping.put("range", range(range)));
         strings(mapping, "aliases", attribute.aliases());
         flag(mapping, "deprecated", attribute.deprecated());

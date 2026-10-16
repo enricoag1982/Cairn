@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-15
+last-reviewed: 2026-10-16
 owner: ""
 ---
 
@@ -26,7 +26,7 @@ try (DurableStore store = Stores.durable(Path.of("/var/lib/my-app/cairn"), setti
 Closing writes a *snapshot file* and releases the directory. A closed store refuses every call but `close`, which does nothing then.
 One open store holds a directory at a time, in any process: opening a second one on the same directory throws `IllegalStateException`.
 
-The settings are those of an in-memory store. Keep an ID generator of the same format: opening a store with a generator that does not accept the IDs it holds fails ([ADR-0019](../decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md)). A store whose schema declares *checks* needs the module `cairn-cel` when it is opened, or it rejects writes to the types they apply to ([Write checks](write-checks.md)). A store can be opened with other rules than it was written with: recovery does not run rules, and a rule that the schema names but the store has no code for makes writes to the affected types fail, as for any store ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
+The settings are those of an in-memory store. Keep an ID generator of the same format: opening a store with a generator that does not accept the IDs it holds fails ([ADR-0019](../decisions/0019-identify-entities-by-opaque-ids-from-one-generator-per-store.md)). A store whose schema declares *checks* or *derived attributes* needs the module `cairn-cel` when it is opened, or it rejects writes to the types they apply to ([Write checks](write-checks.md), [Derive attributes](derive-attributes.md)); derived values are recovered as stored. A store can be opened with other rules than it was written with: recovery does not run rules, and a rule that the schema names but the store has no code for makes writes to the affected types fail, as for any store ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)).
 After recovery, the store runs each rule it has code for once over the data, without judging the results, to learn what the rules read, so that a later change to that data runs them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)). A store without a rule's code cannot learn what it reads, so writes to other types can break that rule unnoticed. Data that breaks a rule, for example because the rule's code changed, is not reported when the store opens; it rejects the later writes that change what the rule read for it, until it is corrected.
 
 ## What a commit guarantees

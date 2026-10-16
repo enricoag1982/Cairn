@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-15
+last-reviewed: 2026-10-16
 owner: ""
 ---
 
@@ -80,6 +80,13 @@ Scenarios of the `checks`, `schema-documents` and `schema-evolution` specs also 
 - `name-not-empty` on Party: `size(self.name) > 0`.
 - `born-before-2026` on Person: `self.birthDate < timestamp('2026-01-01T00:00:00Z')`, and with `!has(self.birthDate) ||` in front.
 - `title-not-blank` on Employs: `!has(self.title) || size(self.title) > 0`.
+
+Scenarios of the `derived-attributes`, `schema-documents` and `schema-evolution` specs declare test-only *derived attributes* ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)):
+
+- `label` (string) on Account: `self.number + ' ' + self.currency`.
+- `balanceInCents` (long) on Account: `int(self.balance * 100.0)`.
+- `balanceInBillions` (int) on Account: `int(self.balance) * 10000000`, which does not fit an `int` for a balance of 1,000.
+- `birthYear` (int, optional) on Person: `has(self.birthDate) ? dyn(self.birthDate.getFullYear()) : null`.
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 

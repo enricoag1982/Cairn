@@ -26,10 +26,11 @@ import java.util.ServiceLoader;
  * {@code RULE_UNAVAILABLE}, whatever the write changes.
  *
  * <p>The settings can also hold an {@linkplain #expressionLanguage() expression language}, which compiles and runs the
- * checks that types declare (capability {@code checks}, ADR-0030). The {@linkplain #builder() builder} takes the one that
- * is given to it, and otherwise looks for one with Java's {@link ServiceLoader}, which finds the module {@code cairn-cel}
- * if it is on the class path. A store without an expression language rejects schema definitions that
- * declare checks, and, if its schema declares checks, writes to the types they apply to.
+ * checks that types declare (capability {@code checks}, ADR-0030) and computes their derived attributes (capability
+ * {@code derived-attributes}, ADR-0031). The {@linkplain #builder() builder} takes the one that is given to it, and
+ * otherwise looks for one with Java's {@link ServiceLoader}, which finds the module {@code cairn-cel} if it is on the
+ * class path. A store without an expression language rejects schema definitions that declare checks or derived
+ * attributes, and, if its schema declares them, writes to the types they apply to or that have them.
  *
  * <p>The settings are plain data and can be used for several stores. A store takes a {@linkplain IdGenerator#copy()
  * copy} of the generator, so stores made from the same settings do not share its state: two stores with a
@@ -45,7 +46,8 @@ import java.util.ServiceLoader;
  * @param declaredRules      the descriptions of rules that the store declares without having their code: types of the
  *                           store's schema may name them, but a transaction that writes an entity or a relationship
  *                           whose type names one is rejected
- * @param expressionLanguage the language that compiles and runs the checks of the store's schema; empty if the store
+ * @param expressionLanguage the language that compiles and runs the checks and the derived attributes of the store's
+ *                           schema; empty if the store
  *                           has none. The constructors that leave it out give none, and so does the builder if it is
  *                           told so.
  */
@@ -206,8 +208,8 @@ public record StoreSettings(
         }
 
         /**
-         * Sets the expression language that compiles and runs the checks of the store's schema (capability
-         * {@code checks}), instead of looking for one.
+         * Sets the expression language that compiles and runs the checks and the derived attributes of the store's schema
+         * (capabilities {@code checks} and {@code derived-attributes}), instead of looking for one.
          *
          * @param language the language
          * @return this builder
@@ -220,7 +222,8 @@ public record StoreSettings(
 
         /**
          * Makes the store have no expression language, although one can be found: the store then rejects schema
-         * definitions that declare checks, and writes to types that checks apply to.
+         * definitions that declare checks or derived attributes, and writes to types that checks apply to or that have
+         * derived attributes.
          *
          * @return this builder
          */

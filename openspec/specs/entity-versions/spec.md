@@ -87,7 +87,7 @@ A patch SHALL set some attributes of an entity for an effective period and leave
 
 ### Requirement: Replacing entity state
 
-A replace SHALL set the complete state of an entity for an effective period: attributes it does not mention SHALL have no value in that period.
+A replace SHALL set the complete state of an entity for an effective period: attributes it does not mention SHALL have no value in that period, except derived attributes, which are computed (see the `derived-attributes` capability).
 
 #### Scenario: Replacing a person's state
 

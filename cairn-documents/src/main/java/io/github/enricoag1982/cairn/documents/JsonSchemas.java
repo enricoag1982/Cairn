@@ -30,7 +30,9 @@ public final class JsonSchemas {
      * the attribute; a {@code number} for a decimal, within its range; a {@code boolean}; a {@code string} with the
      * {@code format} {@code date} or {@code date-time}, and a {@code pattern} as well, because validators need not check
      * formats. The description and the examples of the attribute are copied. JSON Schema cannot order dates, so the
-     * range of a date or instant attribute is only said in its description.
+     * range of a date or instant attribute is only said in its description. A derived attribute (capability
+     * {@code derived-attributes}) is listed, as {@code readOnly}, with its expression in the description: the values of a
+     * state have it, but a write cannot set it, so the schema of transaction payloads leaves it out.
      *
      * @param schema   the schema that has the type
      * @param typeName the name or an alias of an entity type or relationship type, compared without regard to case
@@ -63,11 +65,12 @@ public final class JsonSchemas {
      * {@code relate} write are checked against the values of the entity type or relationship type that it names, as
      * {@link #values(Schema, String)} describes them: a {@code oneOf} with a branch for each concrete entity type or
      * relationship type, which matches its name and aliases as the schema spells them, and requires {@code values} if
-     * the type has required attributes. The engine also accepts other capitalizations of type names and attribute
-     * names, which the schema does not. The instants of the writes, {@code from} and {@code until}, are checked by
+     * the type has required attributes that are not derived, and which leaves out the derived attributes, which a write
+     * cannot set. The engine also accepts other capitalizations of type names and attribute names, which the schema
+     * does not. The instants of the writes, {@code from} and {@code until}, are checked by
      * pattern as well as by format; one with an offset other than {@code Z} is valid, and the reader converts it to
      * UTC. The type of a {@code patch} or {@code replace} is known only to the store, so their values are checked by
-     * name only, against the names and aliases of the attributes of all types.
+     * name only, against the names and aliases of the attributes of all types that are not derived there.
      *
      * <p>Every payload that {@code Payloads.readTransaction} reads and the store commits without value problems, and that
      * spells the names of types and attributes as the schema does, is valid against the schema, with one exception: the

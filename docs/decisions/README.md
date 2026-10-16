@@ -45,5 +45,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0028](0028-keep-a-store-in-rocksdb-with-its-metadata-as-keys-and-its-write-ahead-log-as-the-commit-log.md) | Keep a store in RocksDB with its metadata as keys and its write-ahead log as the commit log | accepted | 2026-10-15 |
 | [ADR-0029](0029-feed-changes-from-an-index-of-what-each-basis-changed-read-from-a-basis.md) | Feed changes from an index of what each basis changed, read from a basis | accepted | 2026-10-15 |
 | [ADR-0030](0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md) | Write checks within one version in CEL, evaluated by an optional module | accepted | 2026-10-15 |
+| [ADR-0031](0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md) | Derive attributes from a version's own values in CEL, computed at commit and stored | accepted | 2026-10-15 |
 
 <!-- decision-log:end -->

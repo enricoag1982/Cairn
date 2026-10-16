@@ -145,7 +145,11 @@ final class CompatibilityChecker {
             Attribute attribute = newSchema.declarations().get(id).attribute();
             String path = Names.path(attribute.declaredBy(), attribute.name());
             boolean existed = oldSchema.declarations().containsKey(id);
-            if (existed && (attribute.required() || attribute.unique())) {
+            if (attribute.derived().isPresent()) {
+                changes.add(Changes.breaking(path, (existed ? "the derived attribute " + attribute.name()
+                        + " now also applies to the existing types " : "added the derived attribute " + attribute.name()
+                        + " to the existing types ") + types, Changes.DERIVE_WITH_THE_TYPE));
+            } else if (existed && (attribute.required() || attribute.unique())) {
                 changes.add(Changes.breaking(path, "the " + (attribute.required() ? "required" : "unique")
                         + " attribute " + attribute.name() + " now also applies to the existing types " + types,
                         Changes.KEEP_UNCONSTRAINED));

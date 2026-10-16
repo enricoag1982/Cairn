@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-15
+last-reviewed: 2026-10-16
 owner: ""
 ---
 
@@ -31,7 +31,7 @@ try (DurableStore store = RocksDbStores.open(Path.of("/var/lib/my-app/cairn"), s
 ```
 
 `RocksDbStores.open` creates the directory if it does not exist, and otherwise opens the store that is in it.
-The returned `DurableStore` is the same interface as that of [a durable store kept in a directory](run-a-durable-store.md), and the settings are those of an in-memory store, with the same rules about ID generators, rules without code, and *checks*, which need the module `cairn-cel` ([Write checks](write-checks.md)).
+The returned `DurableStore` is the same interface as that of [a durable store kept in a directory](run-a-durable-store.md), and the settings are those of an in-memory store, with the same rules about ID generators, rules without code, and *checks* and *derived attributes*, which need the module `cairn-cel` ([Write checks](write-checks.md), [Derive attributes](derive-attributes.md)).
 Closing writes what RocksDB holds in memory to its files and releases the directory. A closed store refuses every call but `close`, which does nothing then. One open store holds a directory at a time, in any process: opening a second one on the same directory throws `IllegalStateException`.
 
 Opening replays nothing: RocksDB replays its own write-ahead log, and the store then reads what it records beside the data (the schema and its history, transaction records, the receipts of idempotency keys and purge records) into memory.

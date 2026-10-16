@@ -213,6 +213,12 @@
           "type": "boolean",
           "default": false
         },
+        "derived": {
+          "description": "A CEL expression that computes the attribute's value from the other values of the same version when a transaction commits, at most 4,000 characters. Read an attribute that is not derived as self.name, and test an optional one with has(self.name) before reading it; a derived attribute cannot read another derived attribute. The result must fit the value type: a string for string, a bool for boolean, an int for int and long, a double for decimal, a timestamp for instant, and a timestamp at the start of a day in UTC for date; an optional attribute has no value if the expression gives null. A write cannot set a derived attribute. For example: self.givenName + ' ' + self.familyName.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
         "range": {
           "description": "The interval that values must lie in.",
           "$ref": "#/$defs/range"

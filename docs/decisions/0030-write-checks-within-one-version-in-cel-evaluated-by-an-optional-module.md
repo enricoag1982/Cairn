@@ -84,3 +84,4 @@ Chosen option: "CEL checks over one version's values, compiled at registration a
   - A check name must not be the name of an attribute or a rule of its type, because problems name all three by `Type.name`.
   - Schema records of the commit log and snapshot files keep checks in an optional trailing section of format version 1, as receipts keep unique keys, so records without checks read as before; nothing released reads version 1 without it.
 - Common Expression Language: <https://cel.dev/>. CEL for Java: <https://github.com/google/cel-java>. Kubernetes validation rules in CEL, which read `self` the same way: <https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules>.
+- [ADR-0031](0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md) derives attributes from a version's own values with the same expressions, computed at commit and stored.

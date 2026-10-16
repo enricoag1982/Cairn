@@ -7,13 +7,13 @@ owner: ""
 
 How to declare *checks*, short expressions in the schema document that every version of a type's values must satisfy, such as "the last day of a leave is not before the first".
 Checks are the third level of validation, between declarative constraints and Java rules ([ADR-0018](../decisions/0018-validate-with-declarative-constraints-and-named-java-rules.md)): people and agents write them at runtime, without deploying code.
-They are written in the [Common Expression Language](https://cel.dev/) (CEL). Why they work this way is in [ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md); what they guarantee is in the `checks` spec.
+They are written in the [Common Expression Language](https://cel.dev/) (CEL). Why they work this way is in [ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md); what they guarantee is in the `checks` spec. The same expressions also compute [derived attributes](derive-attributes.md).
 
 ## Add the module
 
 Checks run in the module `cairn-cel`, which uses Google's CEL for Java and brings about 8 MB of dependencies: Guava, protobuf-java, the ANTLR runtime and a few smaller ones.
 Put it on the class path of the application: CEL's jars cannot be named modules, but Cairn's modules on the module path still find it through `ServiceLoader`. `StoreSettings.builder().expressionLanguage(...)` sets a language explicitly, and `noExpressionLanguage()` none.
-Without it, a registry rejects definitions that declare checks (`CHECKS_UNAVAILABLE`), and a store whose schema has checks rejects writes to the types they apply to.
+Without it, a registry rejects definitions that declare checks (`EXPRESSIONS_UNAVAILABLE`), and a store whose schema has checks rejects writes to the types they apply to.
 The agent server includes it. The code generator validates documents, so a build whose documents declare checks adds it to the generator's class path too, with `cairnCodegen("io.github.enricoag1982.cairn:cairn-cel:0.1.0-SNAPSHOT")` next to the generator ([Generate Java types](generate-java-types.md)).
 On Java 25, protobuf-java prints a warning about `sun.misc.Unsafe` when it loads; it does no harm.
 

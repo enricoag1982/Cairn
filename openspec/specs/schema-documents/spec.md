@@ -9,7 +9,7 @@ Defines the schema document format (YAML 1.2, which includes JSON): strict readi
 
 THE SYSTEM SHALL read a schema document written in YAML 1.2 into an origin and a schema definition. Because JSON is valid YAML 1.2, a document written as JSON SHALL be read the same way.
 A document SHALL be a mapping with the key `cairn`, whose value is the format version 1, and the key `origin`, holding the origin's name and version. It MAY have the keys `traits`, `entityTypes` and `relationshipTypes`, each a mapping from type names to type definitions, and the key `$schema`, which names the published JSON Schema for editors and is otherwise ignored.
-A type definition SHALL use the names of the schema definition's properties, except `abstract` for whether an entity type is abstract and `type` for an attribute's value type. A property that is left out SHALL take its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, attributes, aliases, inverse aliases, constraints, examples, description, rules or checks. The `checks` of a type SHALL be a mapping from check names to a mapping with the key `expression` and, optionally, `message`. A relationship type MUST state its source, target, inverse name and both multiplicities; an attribute MUST state its value type; a rule reference MUST state its name and version; a check MUST state its expression. A multiplicity SHALL be written as `0..1`, `1..1`, `0..*` or `1..*`.
+A type definition SHALL use the names of the schema definition's properties, except `abstract` for whether an entity type is abstract and `type` for an attribute's value type. A property that is left out SHALL take its default: not required, not unique, not abstract, an association, not symmetric, not deprecated, and no supertype, traits, attributes, aliases, inverse aliases, constraints, examples, description, rules or checks. The `checks` of a type SHALL be a mapping from check names to a mapping with the key `expression` and, optionally, `message`. An attribute that is derived SHALL state its expression as the string `derived`. A relationship type MUST state its source, target, inverse name and both multiplicities; an attribute MUST state its value type; a rule reference MUST state its name and version; a check MUST state its expression. A multiplicity SHALL be written as `0..1`, `1..1`, `0..*` or `1..*`.
 Numbers SHALL be written as JSON numbers: forms that only YAML knows, such as `0x10`, `0o17` or `+1`, are values of the wrong kind. Literals SHALL be written as numbers for int, long and decimal values, as `true` or `false` for boolean values, and as strings for string, date (ISO 8601 date) and instant (ISO 8601 instant, whose offset, if not UTC, is converted to UTC) values. A range SHALL be written as a mapping with at most one of `atLeast` and `greaterThan`, and at most one of `atMost` and `lessThan`.
 
 #### Scenario: Reading the reference model
@@ -36,6 +36,11 @@ Numbers SHALL be written as JSON numbers: forms that only YAML knows, such as `0
 
 - **WHEN** a document declares on Account `checks: { balance-not-negative: { expression: "self.balance >= 0.0", message: "A balance cannot be negative." } }` and is read
 - **THEN** the definition of Account has the check `balance-not-negative` with that expression and message
+
+#### Scenario: Reading a derived attribute
+
+- **WHEN** a document declares on Account the attribute `label: { type: string, required: true, derived: "self.number + ' ' + self.currency" }` and is read
+- **THEN** the definition of Account has the derived attribute `label` with that expression
 
 ### Requirement: Strict reading
 
@@ -65,7 +70,7 @@ A YAML syntax error, and a format version other than 1, SHALL stop reading and S
 
 ### Requirement: Problems are located in the document
 
-Every problem about a document SHALL carry its location in the document: a JSON Pointer, a line and a column, both counted from 1. Its path SHALL be the path of the element it is in, `@origin` inside the origin, or `@document` outside every element. For a document that was read, THE SYSTEM SHALL locate the problems that validating, planning or registering its definition reports: a problem about a type, attribute, inverse name or rule SHALL be located at that element, a problem about a check's expression at the check's key `expression`, with the line and column in the document of the position in the expression where it is known, a problem about the origin at the key `origin`, a problem about an element that the document does not have, such as an attribute that a new version removes, at the closest enclosing element that the document has, and a problem whose path names no element of the document at the document's root.
+Every problem about a document SHALL carry its location in the document: a JSON Pointer, a line and a column, both counted from 1. Its path SHALL be the path of the element it is in, `@origin` inside the origin, or `@document` outside every element. For a document that was read, THE SYSTEM SHALL locate the problems that validating, planning or registering its definition reports: a problem about a type, attribute, inverse name or rule SHALL be located at that element, a problem about a check's expression at the check's key `expression`, a problem about a derived attribute's expression at the attribute's key `derived`, with the line and column in the document of the position in the expression where it is known, a problem about the origin at the key `origin`, a problem about an element that the document does not have, such as an attribute that a new version removes, at the closest enclosing element that the document has, and a problem whose path names no element of the document at the document's root.
 
 #### Scenario: Locating a registration problem
 

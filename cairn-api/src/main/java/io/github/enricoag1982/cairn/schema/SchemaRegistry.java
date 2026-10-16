@@ -11,8 +11,9 @@ import java.util.Optional;
  * <p>A registry is created with the rules that are available to it (capability {@code type-model}); types may name
  * only those. Types may also declare {@linkplain Check checks} (capability {@code checks}), which the registry compiles
  * with an {@linkplain io.github.enricoag1982.cairn.expressions.ExpressionLanguage expression language} when it
- * validates, plans or registers a definition. A registry that has none rejects every definition that declares checks,
- * with the problem {@code CHECKS_UNAVAILABLE}.
+ * validates, plans or registers a definition, and so it does the expressions of derived attributes (capability
+ * {@code derived-attributes}). A registry that has none rejects every definition that declares checks or derived
+ * attributes, with the problem {@code EXPRESSIONS_UNAVAILABLE}.
  */
 public interface SchemaRegistry {
 
