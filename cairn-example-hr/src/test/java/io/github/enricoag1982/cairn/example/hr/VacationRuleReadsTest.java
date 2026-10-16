@@ -16,6 +16,7 @@ import io.github.enricoag1982.cairn.data.Transaction;
 import io.github.enricoag1982.cairn.documents.SchemaDocument;
 import io.github.enricoag1982.cairn.example.hr.model.Employment;
 import io.github.enricoag1982.cairn.example.hr.rules.DecidedByManager;
+import io.github.enricoag1982.cairn.example.hr.rules.DecidedRequestsStay;
 import io.github.enricoag1982.cairn.example.hr.rules.NoUnitCycles;
 import io.github.enricoag1982.cairn.example.hr.rules.VacationWithinEntitlement;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
@@ -77,7 +78,7 @@ class VacationRuleReadsTest {
     /** A store with the rules of the example, HR-1 and HR-2, and Dev's approved vacation of HR-5. */
     private void startWithDevsApprovedVacation() {
         store = Stores.inMemory(StoreSettings.builder().clock(clock).idGenerator(IdGenerators.deterministic())
-                .rules(new NoUnitCycles(), new DecidedByManager(), vacation).build());
+                .rules(new NoUnitCycles(), new DecidedByManager(), new DecidedRequestsStay(), vacation).build());
         clock.moveTo(on(1, 2));
         SchemaDocument document = Brightwater.schemaDocument();
         assertThat(store.schema().register(document.origin(), document.definition(),

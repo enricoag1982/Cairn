@@ -8,7 +8,7 @@ A rule sees the version it checks and reads the state the transaction would prod
 
 - `RuleContext` gains `before()` and `beforeAt(Instant)`: read-only views of the store as committed before the transaction, at the start of the checked version's period or at another effective time, with the coordinates of the latest committed basis. A rule reads its own entity's previous version with `context.before().entity(version.id())`.
 - Reads through those views are recorded like other reads (ADR-0025). In a re-check, "before" is the state before the transaction that runs the check again.
-- Generated rule base classes gain `previous(version, context)`, the checked entity or relationship as committed before the transaction at the start of the version's period, as its generated type.
+- Generated rule base classes gain `previous(version, context)`: the versions of the checked entity or relationship that the store held before the transaction during the version's period, as its generated type, so that a rule compares with each of them.
 - The HR example adds the rule `decided-requests-stay` and the story HR-16: a decided leave request keeps its dates and kind.
 
 ### Non-goals

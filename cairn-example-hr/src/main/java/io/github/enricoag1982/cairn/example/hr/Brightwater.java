@@ -331,6 +331,23 @@ public final class Brightwater {
                 .build());
     }
 
+    /**
+     * HR-16. Recorded 9 March: Dev asks to move his approved vacation of HR-5 to 23 to 27 March, the same 5 days a week
+     * later. The change is effective from the day it is recorded, and the request keeps its kind, its days and its
+     * status. The commit is rejected by the rule {@code decided-requests-stay}: the request was approved before the
+     * transaction.
+     *
+     * @param ids the IDs of HR-1, HR-2 and the request
+     * @return the recording
+     */
+    public static Recording hr16DevMovesApprovedVacation(Ids ids) {
+        Instant recorded = on(3, 9);
+        return new Recording(recorded, Transaction.by(HR_ADMIN).reason("Dev moves his vacation to 23 to 27 March")
+                .write(LeaveRequest.patch(ids.entity("devVacation")).firstDay(LocalDate.of(2026, 3, 23))
+                        .lastDay(LocalDate.of(2026, 3, 27)).effectiveFrom(recorded))
+                .build());
+    }
+
     // ------------------------------------------------------------------ HR-11 and HR-12: sick leave, leaving, erasure
 
     /**

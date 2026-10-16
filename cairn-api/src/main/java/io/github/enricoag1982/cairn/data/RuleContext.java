@@ -7,19 +7,31 @@ import java.time.Instant;
  * (ADR-0018, capability {@code entity-rules}). It can read, and it cannot write: there is no way to change data from
  * here.
  *
- * <p>The views give the state that the transaction would produce, with the rest of the store as committed. They are
- * valid only while the rule runs. In particular their {@linkplain View#basis() basis} is the one the transaction would
- * get; in a dry run, or if the transaction is rejected, that basis later names another commit, so a rule must not keep
- * it or a view.
+ * <p>The views of {@link #view()} and {@link #viewAt(Instant)} give the state that the transaction would produce, with
+ * the rest of the store as committed. They are valid only while the rule runs. In particular their
+ * {@linkplain View#basis() basis} is the one the transaction would get; in a dry run, or if the transaction is
+ * rejected, that basis later names another commit, so a rule must not keep it or a view.
+ *
+ * <p>The views of {@link #before()} and {@link #beforeAt(Instant)} give the store as it was committed before the
+ * transaction, at the latest basis the store had published when the transaction was prepared, so that a rule can say
+ * that something must not change once it holds: it compares the version it checks with what the store held. They
+ * differ from the views above only in the transaction's own writes, which they do not show. Their basis is that latest
+ * committed basis, and their schema is the schema of that basis: a rule runs while the transaction registers no
+ * schema, so it is the schema the other views have. In a commit, in a dry run and in a re-check the committed state is
+ * the state before the transaction that runs the rule; in particular a rule that is run again because a transaction
+ * changed what it read sees, as "before", the state before that transaction, not the state before the transaction that
+ * wrote the version. When a store learns what its rules read after recovery, there is no transaction, and both kinds
+ * of view show the committed state.
  *
  * <p>The store records what a rule reads through its context (ADR-0025), and runs the rule again when a transaction
- * changes it. Every read through {@link #view()} and {@link #viewAt(Instant)} counts: an entity or a relationship, with
- * every state that a read returns, what navigation or a traversal finds from an entity by a relationship name, and the
+ * changes it. Every read through {@link #view()}, {@link #viewAt(Instant)}, {@link #before()} and
+ * {@link #beforeAt(Instant)} counts, in the same way and with the same keys: an entity or a relationship, with every
+ * state that a read returns, what navigation or a traversal finds from an entity by a relationship name, and the
  * entities of an entity type that a read, the start of a query that gives no IDs or
- * {@linkplain View#entity(UniqueKey) finding an entity by a unique key} lists, each at the effective time of the view, or across effective time for timelines. A change to any
- * of these at an effective time that the rule read, in the values or in the existence of what was read, runs the rule
- * again for the version whose check read it. So a rule has to read only through its context: what it reads anywhere
- * else, the store cannot see.
+ * {@linkplain View#entity(UniqueKey) finding an entity by a unique key} lists, each at the effective time of the view,
+ * or across effective time for timelines. A change to any of these at an effective time that the rule read, in the
+ * values or in the existence of what was read, runs the rule again for the version whose check read it. So a rule has
+ * to read only through its context: what it reads anywhere else, the store cannot see.
  *
  * <p>Prefer navigating from what the rule checks to listing the entities of a type or reading timelines. A rule that
  * lists a type, or reads a timeline, is reached by every change to any of those entities, at any time, and is run
@@ -51,6 +63,27 @@ public interface RuleContext {
      * @return the view, read-only
      */
     View viewAt(Instant effectiveAt);
+
+    /**
+     * A view of the store as it was committed before the transaction, effective at the start of the checked version's
+     * effective period: what the store held then, without the transaction's writes. A rule reads the checked entity's
+     * previous version with {@code context.before().entity(version.id())}, which is empty if the store held no such
+     * entity, for example because the transaction creates it. The view is read-only, and its
+     * {@linkplain View#basis() basis} is the latest committed basis. What the rule reads through it is recorded as for
+     * {@link #view()}. Other data may change inside the period: a rule whose verdict depends on it reads the committed
+     * state at the other instants with {@link #beforeAt(Instant)}.
+     *
+     * @return the view of the committed state, read-only
+     */
+    View before();
+
+    /**
+     * A view of the same committed state at any other effective time. The time need not lie in the version's period.
+     *
+     * @param effectiveAt the effective time; truncated to microseconds
+     * @return the view of the committed state, read-only
+     */
+    View beforeAt(Instant effectiveAt);
 
     /**
      * Reports a problem about an attribute of the checked entity or relationship.

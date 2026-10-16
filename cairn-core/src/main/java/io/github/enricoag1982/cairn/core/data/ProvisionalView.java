@@ -23,7 +23,9 @@ import java.util.TreeMap;
  * The view that rules read through (design D3 of {@code add-entity-rules}): the state a transaction would produce. It
  * takes the latest committed timelines of the store's {@link Ledger}, of entities and of relationships, and overlays the
  * working timelines of the transaction, with the schema the transaction would produce. Its basis is the prospective basis of
- * the transaction, and the working segments carry it as their recorded basis.
+ * the transaction, and the working segments carry it as their recorded basis. A source with nothing overlaid, made by
+ * {@link Source#committed}, is the state before the transaction, which rules read through {@code before()} (design D2 of
+ * {@code add-previous-state-to-rules}); its basis is the latest committed one.
  *
  * <p>The view is read-only and valid only while the rules of the transaction run: in a dry run, or if the commit is
  * rejected, the prospective basis later names another commit. The transaction holds the store's writer lock, so the
@@ -71,6 +73,18 @@ final class ProvisionalView extends NavigableView {
      */
     record Source(Basis basis, SchemaIndex index, Ledger ledger, Map<EntityId, Overlaid> overlay,
             Map<RelationshipId, OverlaidRelationship> relationshipOverlay) {
+
+        /**
+         * The source of the store as committed before the transaction (design D2 of {@code add-previous-state-to-rules}):
+         * the same schema and ledger, with none of the transaction's timelines laid over it, at the latest committed
+         * basis. The ledger holds the committed state until the transaction's changes are written to it, after the
+         * rules have run.
+         *
+         * @param latest the basis of the latest published commit
+         */
+        Source committed(Basis latest) {
+            return new Source(latest, index, ledger, Map.of(), Map.of());
+        }
 
         /** The view of the transaction's state at an effective time. It records no reads. */
         ProvisionalView at(Instant effectiveAt) {

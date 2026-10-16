@@ -76,7 +76,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The stories HR-1 to HR-15 of the HR domain ({@code docs/reference/hr-domain.md}), one test each: a replay of
+ * The stories HR-1 to HR-16 of the HR domain ({@code docs/reference/hr-domain.md}), one test each: a replay of
  * Brightwater's year on one store, with a clock that moves to the recording date of each story. The store is created
  * with its rules found through the service loader, as an application's would be. The main code of the example uses
  * Cairn's public API only; the tests use it too, and also the {@code cairn-api} test fixture {@code TestClock}, a
@@ -84,10 +84,10 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p>The stories replay in the order of their recording dates, not of their numbers, as the stories of the reference
  * domain do, so that the transaction time of each is its recording date: HR-1 and HR-2 (2 January), HR-5 to HR-8
- * (1 to 5 March), HR-3 (10 March), HR-9 and HR-10 (queries effective 31 March, read at this point of the replay),
- * HR-4 (15 April), HR-11 (20 May and 20 June), HR-13 (1 August) and HR-12 (1 October). HR-9 must read before the
- * purge of HR-12, which takes Gus out of the headcount. A store's transaction times strictly increase, so the second
- * transaction of a day gets the next microsecond after the first; HR-1 and HR-2 are asserted by their day.
+ * (1 to 5 March), HR-16 (9 March), HR-3 (10 March), HR-9 and HR-10 (queries effective 31 March, read at this point of
+ * the replay), HR-4 (15 April), HR-11 (20 May and 20 June), HR-13 (1 August) and HR-12 (1 October). HR-9 must read
+ * before the purge of HR-12, which takes Gus out of the headcount. A store's transaction times strictly increase, so
+ * the second transaction of a day gets the next microsecond after the first; HR-1 and HR-2 are asserted by their day.
  *
  * <p>HR-15 (1 March) tells HR-5's request again, on a store of its own with HR-1 and HR-2, because a notifier must
  * subscribe before the request is committed, and the store that HR-5 filled holds it already. It runs right after HR-5,
@@ -210,7 +210,7 @@ class HrStoriesTest {
         assertThat(registration).isInstanceOf(RegistrationResult.Applied.class);
         assertRecordedOn(((RegistrationResult.Applied) registration).transactionTime(), on(1, 2));
         assertThat(store.schema().availableRules()).extracting(RuleDescriptor::name).containsExactlyInAnyOrder(
-                "decided-by-manager", "no-unit-cycles", "vacation-within-entitlement");
+                "decided-by-manager", "decided-requests-stay", "no-unit-cycles", "vacation-within-entitlement");
         assertThat(store.declaredRules()).as("every rule of the model has its code").isEmpty();
 
         Receipt structure = commit(Brightwater.hr1Structure(store.schema().current()));
@@ -500,10 +500,45 @@ class HrStoriesTest {
         assertThat(linked(view(on(3, 5)), ids.entity("bw"), "PartOf")).as("Brightwater is still the root").isEmpty();
     }
 
-    // ------------------------------------------------------------------ HR-3, recorded 10 March
+    // ------------------------------------------------------------------ HR-16, recorded 9 March
 
     @Test
     @Order(8)
+    @DisplayName("HR-16: Dev cannot move his approved vacation")
+    void hr16ADecidedRequestStays() {
+        EntityId request = ids.entity("devVacation");
+
+        Problem problem = only(reject(Brightwater.hr16DevMovesApprovedVacation(ids)));
+
+        assertThat(problem.code()).isEqualTo(ProblemCode.RULE_VIOLATION);
+        assertThat(problem.ruleCode()).contains("decided-requests-stay/decided");
+        assertThat(problem.path()).as("Dev's request, which the transaction names").isEqualTo(request.value());
+        assertThat(problem.message()).contains("was approved before the transaction")
+                .contains("the transaction changes firstDay, lastDay.");
+        LeaveRequest kept = LeaveRequest.from(view(on(3, 10)).entity(request).orElseThrow());
+        assertThat(kept.firstDay()).as("the request is still 16 to 20 March").isEqualTo("2026-03-16");
+        assertThat(kept.lastDay()).isEqualTo("2026-03-20");
+        assertThat(kept.status()).isEqualTo("approved");
+
+        // A decided request can be cancelled, as it is; nothing else of it changes, and no status but cancelled.
+        Instant recorded = on(3, 9);
+        assertThat(store.dryRun(Transaction.by(Brightwater.HR_ADMIN).write(LeaveRequest.patch(request)
+                .status("cancelled").effectiveFrom(recorded)).build())).as("cancelled")
+                .isInstanceOf(DryRunResult.WouldCommit.class);
+        Problem reopened = only(dryRunProblems(Transaction.by(Brightwater.HR_ADMIN).write(LeaveRequest.patch(request)
+                .status("requested").effectiveFrom(recorded)).build()));
+        assertThat(reopened.ruleCode()).as("requested again").contains("decided-requests-stay/decided");
+        assertThat(reopened.message()).contains("the transaction changes status.");
+        Problem longer = only(dryRunProblems(Transaction.by(Brightwater.HR_ADMIN).write(LeaveRequest.patch(request)
+                .days(new BigDecimal("6")).effectiveFrom(recorded)).build()));
+        assertThat(longer.ruleCode()).as("one more day").contains("decided-requests-stay/decided");
+        assertThat(longer.message()).contains("the transaction changes days.");
+    }
+
+    // ------------------------------------------------------------------ HR-3, recorded 10 March
+
+    @Test
+    @Order(9)
     @DisplayName("HR-3: Eli moves to Milan and to Brightwater S.r.l. from 1 July")
     void hr3EliMoves() {
         assertRecordedAt(commit(Brightwater.hr3EliMoves(ids)).transactionTime(), on(3, 10));
@@ -522,7 +557,7 @@ class HrStoriesTest {
     // ------------------------------------------------------------------ HR-9 and HR-10, queries effective 31 March
 
     @Test
-    @Order(9)
+    @Order(10)
     @DisplayName("HR-9: the headcount of each unit with the units below it, as a query and as JSON")
     void hr9Headcount() {
         assertThat(store.purges()).as("read before the purge of HR-12").isEmpty();
@@ -541,7 +576,7 @@ class HrStoriesTest {
     }
 
     @Test
-    @Order(10)
+    @Order(11)
     @DisplayName("HR-10: Dev's managers, from the nearest up, are Cleo, Ben and Ana")
     void hr10ManagersOfDev() {
         QueryResult.Rows managers = rows(view(MARCH_31).query(Reports.managersOf("E-004")));
@@ -555,7 +590,7 @@ class HrStoriesTest {
     // ------------------------------------------------------------------ HR-4, recorded 15 April
 
     @Test
-    @Order(11)
+    @Order(12)
     @DisplayName("HR-4: a correction of Dev's salary reads differently as known on 1 April and now")
     void hr4DevSalaryCorrection() {
         assertRecordedAt(commit(Brightwater.hr4DevSalaryCorrection(ids)).transactionTime(), on(4, 15));
@@ -572,7 +607,7 @@ class HrStoriesTest {
     // ------------------------------------------------------------------ HR-11, recorded 20 May and 20 June
 
     @Test
-    @Order(12)
+    @Order(13)
     @DisplayName("HR-11: Gus's sick leave, Gus leaves, and P-301 is the only vacant position")
     void hr11GusLeavesAndPositionIsVacant() {
         Receipt sickLeave = commit(Brightwater.hr11GusWasSick(ids));
@@ -611,7 +646,7 @@ class HrStoriesTest {
     // ------------------------------------------------------------------ HR-13, recorded 1 August
 
     @Test
-    @Order(13)
+    @Order(14)
     @DisplayName("HR-13: an agent hires Hana Kim, and the commit waits for a person's approval")
     void hr13AgentHiresHana() {
         clock.moveTo(on(8, 1));
@@ -727,7 +762,7 @@ class HrStoriesTest {
     // ------------------------------------------------------------------ HR-12, recorded 1 October
 
     @Test
-    @Order(14)
+    @Order(15)
     @DisplayName("HR-12: the data protection officer erases Gus's personal data")
     void hr12ErasureOfGus() {
         clock.moveTo(on(10, 1));
@@ -781,7 +816,7 @@ class HrStoriesTest {
     // ------------------------------------------------------------------ HR-14, a company of its own
 
     @Test
-    @Order(15)
+    @Order(16)
     @DisplayName("HR-14: a generated company reads the same from a reopened durable store as from memory")
     void hr14GeneratedCompany(@TempDir Path directory) {
         CompanyGenerator.Company company = CompanyGenerator.generate(CompanyGenerator.SEED);

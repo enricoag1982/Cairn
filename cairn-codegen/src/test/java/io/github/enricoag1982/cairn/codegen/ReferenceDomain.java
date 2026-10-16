@@ -50,8 +50,13 @@ final class ReferenceDomain {
 
     /** A store that runs the given rules. */
     ReferenceDomain(List<Rule> rules) {
+        this(DOCUMENT, rules);
+    }
+
+    /** A store that runs the given rules, with the schema document registered that the file holds. */
+    ReferenceDomain(Path file, List<Rule> rules) {
         store = Stores.inMemory(StoreSettings.builder().clock(clock).rules(rules).build());
-        SchemaDocument document = read(DOCUMENT);
+        SchemaDocument document = read(file);
         assertThat(store.schema().register(document.origin(), document.definition()))
                 .isInstanceOf(RegistrationResult.Applied.class);
     }

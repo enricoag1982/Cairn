@@ -36,6 +36,7 @@ The base class of a rule gains `protected List<T> previous(T version, RuleContex
 - It returns the versions of the entity or relationship with the version's ID that the store held before the transaction during the checked version's period, in order, read as `T`. It reads them from `context.before()`'s timeline, which is recorded as a timeline read.
 - It returns an empty list when the store held nothing in that period, for example when the transaction creates it.
 - A rule's verdict must hold at each instant of the version's period (`entity-rules`), so a rule compares with every previous version, not only with the one at the start.
+- Reading the timeline costs re-checks: every later change to the entity's timeline runs the rule again for its other versions that read it. A re-check reads "before" as the state before the re-checking transaction, which gives the same verdict for versions that transaction does not change, so it costs time, not correctness.
 
 ### D4. The test-only rule and the HR example
 
