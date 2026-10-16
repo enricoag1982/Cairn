@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-15
+last-reviewed: 2026-10-16
 owner: ""
 ---
 
@@ -41,12 +41,16 @@ Query query = Query.from("Account", "a")
 QueryResult result = store.view(Coordinates.effectiveAt(march31)).query(query);
 switch (result) {
     case QueryResult.Rows rows -> rows.rows().forEach(row ->
-            System.out.println(row.entity("party").orElseThrow().values().get("name") + ": " + row.value("total").orElseThrow()));
+            System.out.println(row.entity("party").orElseThrow().values().get("name") + ": " + row.decimal("total").orElseThrow()));
     case QueryResult.Invalid invalid -> invalid.problems().forEach(System.out::println);
 }
 ```
 
 A query for a type includes its subtypes; `exactType()` after `from` leaves them out.
+
+- **From given entities.** `Query.from("Account", "a").ids(a1, a2)` starts from those entities only, when they are of the type and effective; others are left out, and an empty list gives no rows. A rule that queries this way reads only those entities, so a change to another account does not run it again.
+- **Traversals.** `Traversal.of("unit", "subunits", "below").minDepth(0).depth("level")` names the options of a traversal step, for `.traverse(traversal)`; without `maxDepth` it goes to the end, visiting each entity once, so cycles end it. In views, `view.traverse(from, name)` follows every relationship to the end.
+- **Typed rows.** `row.string`, `bool`, `intValue`, `longValue`, `decimal`, `date` and `instant` read a value as its Java type, `row.number` any numeric value as a `BigDecimal`, and `row.entity("party", Organization::from)` a binding as a [generated type](generate-java-types.md); a cell of another kind throws an exception that names the column.
 To read one entity by a unique attribute, such as an account by its number, use `view.entity(UniqueKey)` rather than a query ([ADR-0026](../decisions/0026-refer-to-entities-by-unique-keys-resolved-at-commit.md)).
 Without `select`, a query returns its bindings, or its group keys and aggregates when it groups. `orderBy` and `limit` come last.
 
@@ -85,6 +89,8 @@ Conditions compare operands, such as `{ "compare": { "left": { "attribute": "bal
 The JSON Schema of the form is published with `cairn-documents` (`Queries.jsonSchema()`), and `cairn_json_schema` returns it for the kind `query`.
 `Queries.toJson` writes a result as `{ effectiveAt, basis, columns, rows }`, each row a list of cells in the JSON result forms of the `json-payloads` spec (entity and relationship states, values), or `null` for an empty cell; `cairn_query` returns `{ effectiveAt, basis, result: { columns, rows } }`, like the other reads.
 
+In JSON, `from` also takes `ids`, an array of ID strings, and a traversal without `maxDepth` goes to the end.
+
 ## What to expect
 
 - **Missing values never match a comparison.** `balance > 0` is false for an account without a balance; test for a value with `hasValue` and `not`.
@@ -96,4 +102,4 @@ The JSON Schema of the form is published with `cairn-documents` (`Queries.jsonSc
 
 ## Limits
 
-Queries read every entity of their start type at the view's coordinates and filter them in memory; there are no indexes of attribute values yet. Each query reads one view: a value's history over time is read with timelines, not queries. There is no text query language yet.
+Queries read every entity of their start type at the view's coordinates, unless they start from given entities, and filter them in memory; there are no indexes of attribute values yet. Each query reads one view: a value's history over time is read with timelines, not queries. There is no text query language yet.

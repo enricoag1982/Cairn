@@ -35,15 +35,16 @@ The existing method stays, and a maximum depth of `Integer.MAX_VALUE` means no l
 
 ### D3. Queries from given entities
 
-- `Start` gains `List<EntityId> ids`.
-  - Empty means every entity of the type, as today.
+- `Start` gains `Optional<List<EntityId>> ids`.
+  - Empty means every entity of the type, as today; a list, even an empty one, means only those entities, so that IDs computed from data that finds none give no rows instead of every entity.
   - A constructor without it stays.
 - `Query.from(entityType, binding)` stays. `Query.Builder.ids(EntityId...)` and `ids(Collection<EntityId>)` set the IDs.
 - With IDs, the start binds the entities with those IDs that are of the start type (or its subtypes, unless the exact type is asked for) and effective at the view's effective time, each once.
   - IDs of other types, unknown IDs and entities that are not effective are left out without a problem, as a filter would leave them.
   - Rows are ordered as the results requirement says, so the order of the given IDs does not matter.
 - In a rule's view, such a start reads each given entity (key E of ADR-0025), not the type (key T). A change to another entity of the type no longer runs the rule again.
-- In JSON, `start` gains `ids`, an array of ID strings, and the JSON Schema follows. An ID that is not a valid ID string is a problem located at it.
+- In JSON, the start (`from`) gains `ids`, an array of ID strings, and the JSON Schema follows; `ids: []` gives no rows. An ID that is not a non-blank string is a problem located at it; the format of IDs belongs to the store's generator, so an ID it never made is left out at run time.
+- `Query.Builder.ids(...)` replaces the IDs it was given before, and `Traversal.of` defaults to a minimum depth of 1 while the JSON form keeps its default of 0.
 
 ### D4. Typed row accessors
 

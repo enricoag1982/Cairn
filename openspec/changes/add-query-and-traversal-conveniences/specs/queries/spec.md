@@ -2,7 +2,7 @@
 
 ### Requirement: Queries
 
-THE SYSTEM SHALL run a query against a view and return rows that reflect exactly the view's coordinates. A query SHALL start from an entity type, binding each entity of the type that is effective at the view's effective time to a name; it SHALL include the entities of the type's subtypes unless it asks for the exact type. A query MAY start from given entities instead: it SHALL then bind only the entities with the given IDs that are of the type and effective at the view's effective time, each once, and leave out the others without a problem; run in a rule's view, it SHALL read those entities and not every entity of the type. Its steps SHALL then apply in order, each to the rows that the steps before it produced. A query SHALL be an immutable value that can be built in Java, written as JSON, and run again at other coordinates.
+THE SYSTEM SHALL run a query against a view and return rows that reflect exactly the view's coordinates. A query SHALL start from an entity type, binding each entity of the type that is effective at the view's effective time to a name; it SHALL include the entities of the type's subtypes unless it asks for the exact type. A query MAY start from given entities instead: it SHALL then bind only the entities with the given IDs that are of the type and effective at the view's effective time, each once, and leave out the others without a problem, so that an empty list of IDs gives no rows; run in a rule's view, it SHALL read those entities and not every entity of the type. Its steps SHALL then apply in order, each to the rows that the steps before it produced. A query SHALL be an immutable value that can be built in Java, written as JSON, and run again at other coordinates.
 
 #### Scenario: Parties and organizations
 
@@ -16,7 +16,7 @@ THE SYSTEM SHALL run a query against a view and return rows that reflect exactly
 
 #### Scenario: A query that starts from given entities
 
-- **WHEN** the transactions of RD-1 are recorded, and a query for Party starts from the IDs of ACME and Alice and of the account A-1, effective 31 March
+- **WHEN** the transactions of RD-1 and RD-5 are recorded, and a query for Party starts from the IDs of ACME and Alice and of the account A-1, effective 31 March
 - **THEN** it returns ACME and Alice, and leaves out A-1, which is not a Party
 
 #### Scenario: A rule that queries from one entity

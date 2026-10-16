@@ -30,6 +30,7 @@ None.
 - `relationships`: traversals without a condition or a maximum depth.
 - `queries`: queries from given entities, traversals to the end, typed row accessors, and their JSON form.
 - `java-types`: the `INVERSE` constant.
+- `agent-tools`: `cairn_traverse` without a maximum depth.
 
 ## Impact
 
