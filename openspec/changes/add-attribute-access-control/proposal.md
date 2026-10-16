@@ -12,13 +12,15 @@ Every reader of a store reads every value: in the HR example every agent reads p
 - A transaction MAY carry a clearance; a write in it that sets or clears a withheld attribute is rejected with `ACCESS_DENIED`. Rules, checks and derivations still see every value.
 - The agent server takes a clearance from its operator, empty by default; every tool reads and commits through it, and its results list what was withheld.
 - Generated Java types refuse to read a withheld attribute.
+- An agent's schema plans and registrations may not change classifications, or expressions over attributes, that its clearance does not cover; an approval request keeps the agent's clearance, and its status is given only to the agent that asked.
+- A transaction with a clearance that is refused runs nothing else, is refused before its idempotency key is compared, and gets problems that carry no withheld value.
 - The HR example classifies pay: the hiring agent of HR-13 has the clearance `pay`, and a new story, HR-18, serves an org-chart agent without it.
 
 ### Non-goals
 
 - Authentication, roles or principals kept in the store.
 - Hiding whole types, entities or relationships, or their existence.
-- Restricting purges, schema registrations or the change feed, which hold no values.
+- Restricting purges or the change feed, which hold no values, or schema registrations by callers without a clearance.
 
 ## Capabilities
 

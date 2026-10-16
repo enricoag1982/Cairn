@@ -2,7 +2,7 @@
 
 ### Requirement: Approval policy
 
-An adapter that serves a store to agents SHALL have an approval policy that says, for schema registrations and for data commits, whether an agent's request is allowed, needs a person's approval, or is denied. By default both are allowed. WHEN a request needs approval, THE SYSTEM SHALL keep it as an approval request, with an ID, the request, who asked, for whom, why, when, and the clearance of the adapter that asked (see the `attribute-access` capability), and SHALL return the request instead of applying it. A request that would be rejected at the time it is made, and a registration that would change nothing, SHALL be answered at once instead of being kept. People SHALL list, approve and reject approval requests through the Java API; approving SHALL apply the request then, with that clearance and no other, as if submitted at that moment, and record who approved it; rejecting SHALL apply nothing and record who rejected it and why. `cairn_approval_status` SHALL return a request's status and, once decided, its outcome. A denied request SHALL be rejected with a problem.
+An adapter that serves a store to agents SHALL have an approval policy that says, for schema registrations and for data commits, whether an agent's request is allowed, needs a person's approval, or is denied. By default both are allowed. WHEN a request needs approval, THE SYSTEM SHALL keep it as an approval request, with an ID, the request, who asked, for whom, why, when, and the clearance of the adapter that asked (see the `attribute-access` capability), and SHALL return the request instead of applying it. A request that would be rejected at the time it is made, and a registration that would change nothing, SHALL be answered at once instead of being kept. People SHALL list, approve and reject approval requests through the Java API; approving SHALL apply the request then, with that clearance and no other, as if submitted at that moment, and record who approved it; rejecting SHALL apply nothing and record who rejected it and why. `cairn_approval_status` SHALL return a request's status and, once decided, its outcome, only to an adapter with the principal and the clearance that made the request; to any other adapter it SHALL answer as for an ID that no request has. A denied request SHALL be rejected with a problem.
 
 #### Scenario: A commit waiting for approval
 
@@ -19,3 +19,9 @@ An adapter that serves a store to agents SHALL have an approval policy that says
 
 - **WHEN** Account's `balance` is classified `finance`, the policy requires approval for data commits, and an agent without a clearance commits a payload that patches A-1's currency
 - **THEN** the approval request reports no classification as its clearance, and approving it commits the patch with that clearance
+
+#### Scenario: The status of another agent's request
+
+- **WHEN** the policy requires approval for data commits, an agent acting as `agent:a` commits a payload that waits for approval, and an adapter acting as `agent:b` asks for the request's status
+- **THEN** the answer is the problem for an approval request that does not exist
+
