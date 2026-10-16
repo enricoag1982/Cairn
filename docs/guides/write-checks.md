@@ -1,5 +1,5 @@
 ---
-last-reviewed: 2026-10-15
+last-reviewed: 2026-10-16
 owner: ""
 ---
 
@@ -54,6 +54,18 @@ One variable, `self`: the values of the version being checked, by attribute name
 
 A check sees only that version: not other versions, other entities, or the ends of a relationship. Checks that need more are Java rules.
 Decimals become doubles, which are not exact: keep exact decimal comparisons, such as shares that must add up, in Java rules.
+
+## Functions of Cairn's
+
+Besides CEL's standard functions, expressions can call functions of Cairn's own, named `cairn.<name>` ([ADR-0035](../decisions/0035-give-expressions-functions-of-cairn-s-own-over-a-version-s-values-starting-with-counts-of-days.md)). They read nothing but their arguments, so checks and derivations that call them still depend only on their version.
+
+| Function | Gives |
+| --- | --- |
+| `cairn.calendarDays(first, last)` | The number of days from the date of `first` to the date of `last`, both included, as an int; 0 if `last` is before `first` |
+| `cairn.workingDays(first, last)` | The same, counting only Mondays to Fridays |
+
+Both take timestamps, such as dates, and count by their dates in UTC, so the result is the same on every machine. `cairn.workingDays(self.firstDay, self.lastDay)` is 5 for a leave from Monday to Friday. Public holidays are not counted out: they need calendar data, which a version's values do not hold.
+A call with arguments of other types is a problem `INVALID_CHECK`, or `INVALID_DERIVATION` in a derivation.
 
 ## When checks run
 
