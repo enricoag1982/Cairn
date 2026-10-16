@@ -34,7 +34,7 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 ### D3. Queries and keys
 
 - The query checker, given the view's clearance, reports a problem `ACCESS_DENIED` at each place where a query names a withheld attribute: a filter, an order, a group key, an aggregate, a projection or a traversal condition. The query reads nothing.
-- `View.entity(UniqueKey)` through a restricted view, for a key of a withheld attribute, throws `IllegalArgumentException`, as a key that the schema does not allow does; agent tools report it as `ACCESS_DENIED`.
+- `View.entity(UniqueKey)` through a restricted view, for a key of a withheld attribute, throws `WithheldKeyException`, an `IllegalArgumentException`, as a key that the schema does not allow does; agent tools report it as `ACCESS_DENIED`.
 - A query result's rows hold restricted states, which list what they withheld.
 
 ### D4. Commits
@@ -54,6 +54,7 @@ Views (`View`) are immutable and read at their coordinates; `NavigableView` and 
 - Tool errors for a withheld key or attribute are problems `ACCESS_DENIED`, never protocol errors.
 - `cairn_approval_status` answers only for requests that an adapter with the same principal and clearance made, so that adapters sharing a queue cannot read each other's requests.
 - An approval request keeps the clearance of the adapter that asked, and approving it commits with that clearance, so an approver cannot widen it.
+- `SchemaRegistry` gains `plan` and `register` overloads that take a clearance; `AccessGuard` compares the schemas before and after, under the registry's writer lock, and the agent tools and approval requests use them. For a change that is breaking too, such as a check added to an existing type, `ACCESS_DENIED` comes with `BREAKING_CHANGE`.
 - An agent's schema plan or registration that adds, changes or removes a classification that the clearance does not cover, before or after, or adds or changes a check or a derived attribute that reads an attribute of such a classification, is rejected with `ACCESS_DENIED` at the element. Otherwise an agent could declassify pay and then read it, or probe it with a check and dry runs.
 
 ### D6. Generated types
