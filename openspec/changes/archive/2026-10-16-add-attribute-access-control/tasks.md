@@ -28,4 +28,4 @@
 ## 6. Documentation
 
 - [x] 6.1 Update the glossary, the agent server, query and codegen guides, the HR domain page (types, HR-13, HR-18, gaps), the reference domain page and the architecture page; bump `last-reviewed`
-- [ ] 6.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 6.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
