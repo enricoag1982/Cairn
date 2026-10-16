@@ -42,8 +42,11 @@ import java.util.stream.Collectors;
  *
  * <p>The options are {@code --schema <file>}, repeatable, a schema document to register at start;
  * {@code --principal <name>}, required, who the agent acts as; {@code --on-behalf-of <name>}; and
- * {@code --policy schema=<allow|approve|deny>,data=<allow|approve|deny>}, which defaults to allowing both. The server
- * runs until its input closes. Standard output carries the protocol and nothing else; messages for the person who
+ * {@code --policy schema=<allow|approve|deny>,data=<allow|approve|deny>}, which defaults to allowing both; and
+ * {@code --clearance <classification>[,<classification>...]}, the classifications of attributes that the agent may read
+ * and write, which defaults to none (ADR-0036): the agent reads no value of a classified attribute, its queries and keys
+ * over one are refused, and its commits cannot set one, unless the person who starts the server names the classification.
+ * The server runs until its input closes. Standard output carries the protocol and nothing else; messages for the person who
  * started the server go to standard error.
  *
  * <p>A client must keep the input open until it has the responses it waits for: the SDK's transport for standard
@@ -57,7 +60,7 @@ import java.util.stream.Collectors;
  * supertype of, every type that names it (or else the first of them), and the file. The documents can then be
  * registered, but every write of an entity or relationship whose type names the rule is rejected with
  * {@code RULE_UNAVAILABLE}; the start message on standard error lists these rules. The server is for trusted, local
- * use: there is no authentication, and an agent can read everything the store holds.
+ * use: there is no authentication, and an agent can read everything the store holds that its clearance covers.
  */
 public final class CairnAgentServer {
 
@@ -112,7 +115,8 @@ public final class CairnAgentServer {
             return 1;
         }
         ApprovalQueue queue = new ApprovalQueue(store);
-        AgentTools tools = new AgentTools(store, options.policy(), queue, options.principal(), options.onBehalfOf());
+        AgentTools tools = new AgentTools(store, options.policy(), queue, options.principal(), options.onBehalfOf(),
+                options.clearance());
         EndOfInput input = new EndOfInput(in);
         McpSyncServer server = McpAdapter.serve(tools,
                 new StdioServerTransportProvider(McpJsonDefaults.getMapper(), input, out));
@@ -124,7 +128,10 @@ public final class CairnAgentServer {
                     + ".");
         }
         err.println("Cairn agent server ready: acting as " + options.principal() + ", serving "
-                + store.schema().current().origins().size() + " origin(s) over standard input and output.");
+                + store.schema().current().origins().size() + " origin(s) over standard input and output, "
+                + (options.clearance().classifications().isEmpty() ? "with no clearance: values of classified "
+                        + "attributes are withheld."
+                        : "with the clearance " + String.join(", ", options.clearance().classifications()) + "."));
         try {
             input.closed.await();
         } catch (InterruptedException e) {

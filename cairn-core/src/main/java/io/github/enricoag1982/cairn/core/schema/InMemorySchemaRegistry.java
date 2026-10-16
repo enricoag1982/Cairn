@@ -4,6 +4,7 @@ import io.github.enricoag1982.cairn.core.commit.CommitSequence;
 import io.github.enricoag1982.cairn.core.storage.Journal;
 import io.github.enricoag1982.cairn.core.storage.SchemaIdentifiers;
 import io.github.enricoag1982.cairn.core.storage.SchemaRecord;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
 import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.EntityTypeDefinition;
@@ -170,6 +171,17 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
 
     @Override
     public RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission) {
+        return register(origin, definition, submission, Optional.empty());
+    }
+
+    @Override
+    public RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission,
+            Clearance clearance) {
+        return register(origin, definition, submission, Optional.of(Objects.requireNonNull(clearance, "clearance")));
+    }
+
+    private RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission,
+            Optional<Clearance> clearance) {
         Objects.requireNonNull(origin, "origin");
         Objects.requireNonNull(definition, "definition");
         Objects.requireNonNull(submission, "submission");
@@ -179,7 +191,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                 written.requireWritable();
             }
             State current = state;
-            Planned planned = plan(current, origin, definition);
+            Planned planned = plan(current, origin, definition, clearance);
             return switch (planned.plan().outcome()) {
                 case REJECT -> new RegistrationResult.Rejected(planned.plan().problems());
                 case UNCHANGED -> new RegistrationResult.Unchanged(current.schema());
@@ -190,8 +202,14 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
 
     @Override
     public SchemaPlan plan(Origin origin, SchemaDefinition definition) {
-        return plan(state, Objects.requireNonNull(origin, "origin"), Objects.requireNonNull(definition, "definition"))
-                .plan();
+        return plan(state, Objects.requireNonNull(origin, "origin"), Objects.requireNonNull(definition, "definition"),
+                Optional.empty()).plan();
+    }
+
+    @Override
+    public SchemaPlan plan(Origin origin, SchemaDefinition definition, Clearance clearance) {
+        return plan(state, Objects.requireNonNull(origin, "origin"), Objects.requireNonNull(definition, "definition"),
+                Optional.of(Objects.requireNonNull(clearance, "clearance"))).plan();
     }
 
     /**
@@ -343,7 +361,7 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
      * Finds out what registering would do: validation, then the comparison with the stored definition of the origin.
      * Nothing is recorded.
      */
-    private Planned plan(State current, Origin origin, SchemaDefinition definition) {
+    private Planned plan(State current, Origin origin, SchemaDefinition definition, Optional<Clearance> clearance) {
         List<Problem> problems = check(current, origin, definition);
         if (!problems.isEmpty()) {
             return Planned.of(new SchemaPlan(SchemaPlan.Outcome.REJECT, List.of(), problems));
@@ -369,9 +387,12 @@ public final class InMemorySchemaRegistry implements SchemaRegistry {
                     + origin.version() + " is already registered with a different definition; a changed definition "
                     + "needs a higher version."))));
         }
-        List<Problem> breaking = breaking(changes, true);
-        if (!breaking.isEmpty()) {
-            return Planned.of(new SchemaPlan(SchemaPlan.Outcome.REJECT, changes, breaking));
+        List<Problem> refused = new ArrayList<>();
+        clearance.ifPresent(cleared -> refused.addAll(AccessGuard.problems(current.schema(), compiled.schema(),
+                cleared, expressionCompiler)));
+        refused.addAll(breaking(changes, true));
+        if (!refused.isEmpty()) {
+            return Planned.of(new SchemaPlan(SchemaPlan.Outcome.REJECT, changes, refused));
         }
         return new Planned(new SchemaPlan(SchemaPlan.Outcome.APPLY, changes, List.of()), origins, compiled);
     }

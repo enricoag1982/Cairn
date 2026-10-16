@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class CanonicalTest {
@@ -41,6 +42,44 @@ class CanonicalTest {
                 SchemaDefinition.builder().entityType("Organization", e -> e.rule("a", 1)).build(),
                 SchemaDefinition.builder().entityType("Organization", e -> e.rule("a", 2)).build()))
                 .isFalse();
+    }
+
+    private static SchemaDefinition balance(String classification) {
+        return SchemaDefinition.builder()
+                .entityType("Account", e -> e.attribute("balance", ValueType.DECIMAL, a -> {
+                    if (classification != null) {
+                        a.classification(classification);
+                    }
+                })).build();
+    }
+
+    @Test
+    void classificationsAreCompared() {
+        assertThat(Canonical.equal(balance("finance"), balance("finance"))).isTrue();
+        assertThat(Canonical.equal(balance(null), balance(null))).isTrue();
+        assertThat(Canonical.equal(balance("finance"), balance("pay"))).isFalse();
+        assertThat(Canonical.equal(balance("finance"), balance(null))).isFalse();
+        assertThat(Canonical.equal(balance(null), balance("finance"))).isFalse();
+    }
+
+    @Test
+    void theCanonicalFormKeepsTheClassificationsOfTraitsEntityTypesAndRelationshipTypes() {
+        SchemaDefinition definition = SchemaDefinition.builder()
+                .trait("Named", t -> t.attribute("name", ValueType.STRING, a -> a.classification("names")))
+                .entityType("Party", e -> e.includes("Named").attribute("lei", ValueType.STRING,
+                        a -> a.classification("identity")))
+                .relationshipType("Owns", r -> r.from("Party").to("Party").inverse("ownedBy")
+                        .attribute("share", ValueType.DECIMAL, a -> a.classification("ownership")))
+                .build();
+
+        SchemaDefinition canonical = Canonical.of(definition);
+
+        assertThat(canonical.traits().getFirst().attributes()).extracting(attribute -> attribute.classification())
+                .containsExactly(Optional.of("names"));
+        assertThat(canonical.entityTypes().getFirst().attributes()).extracting(attribute -> attribute.classification())
+                .containsExactly(Optional.of("identity"));
+        assertThat(canonical.relationshipTypes().getFirst().attributes())
+                .extracting(attribute -> attribute.classification()).containsExactly(Optional.of("ownership"));
     }
 
     private static SchemaDefinition currencyExamples(Value... examples) {

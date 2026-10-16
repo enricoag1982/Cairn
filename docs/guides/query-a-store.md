@@ -66,6 +66,17 @@ List<Account> accounts = ((QueryResult.Rows) view.query(rich)).rows().stream()
         .toList();
 ```
 
+### For a user
+
+A view or a transaction without a *clearance* reads and writes every value, so a replace written without one, after reading through a restricted view, clears the values that the view withheld. Code that acts for a user passes the user's clearance to both ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)):
+
+```java
+View forAlice = store.view(coordinates).restrictedTo(Clearance.of("finance"));
+Transaction patch = Transaction.by("alice").clearance(Clearance.of("finance"))
+        .write(Account.patch(Account.byNumber("A-1")).currency("CHF").effectiveFrom(may1))
+        .build();
+```
+
 ## As JSON
 
 The same RD-6 query, as agents send it to `cairn_query` and as `Queries.read` in `cairn-documents` reads it (YAML 1.2 works too):
@@ -99,6 +110,7 @@ In JSON, `from` also takes `ids`, an array of ID strings, and a traversal withou
 - **Rows multiply along relationships.** A traversal without a condition reaches every owner, so a party with two owners that nobody owns counts in both of their groups. A condition on the relationships followed, such as RD-6's share above 50, keeps one chain where the data has one.
 - **A traversal with a maximum depth stops there.** A chain longer than that is cut, so the last party reached may still have an owner; leave `maxDepth` out to go to the end, where each entity is visited once.
 - **A target that a relationship outlives may have ended.** Following, or traversing, a relationship whose type outlives its targets binds the target's last version once the target has ended ([ADR-0034](../decisions/0034-let-relationships-of-a-type-outlive-their-targets-as-records-of-past-facts.md)); its period, which ends at or before the view's effective time, tells it.
+- **A restricted view refuses withheld attributes.** Through a view restricted to a *clearance*, a query that names an attribute whose *classification* the clearance does not cover is a problem `ACCESS_DENIED`, and reads nothing; the rows it returns list their *withheld values* (the `attribute-access` spec).
 - **The order is stable.** Rows come in the order you ask for, then by the IDs of their bindings, so the same query on the same data gives the same rows in the same order, whatever stores them.
 - **Mistakes come back as problems**, before anything is read: an unknown type, binding, attribute or relationship name, with the closest valid name as a hint, or values that cannot be compared or summed.
 

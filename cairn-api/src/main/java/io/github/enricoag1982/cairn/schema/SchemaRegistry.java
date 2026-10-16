@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.schema;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +54,29 @@ public interface SchemaRegistry {
     RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission);
 
     /**
+     * Registers the complete set of types of an origin for a caller whose clearance limits what it may change (capability
+     * {@code attribute-access}, ADR-0036): as {@link #register(Origin, SchemaDefinition, Submission)} does, but a
+     * registration that the caller's clearance does not allow is rejected with a problem of the code
+     * {@code ACCESS_DENIED}, and nothing changes. It does not allow a registration that adds, changes or removes the
+     * classification of an attribute, where the classification before or after is one that the clearance does not cover,
+     * nor one that adds a check or a derived attribute, or changes the expression of one, that reads an attribute whose
+     * classification the clearance does not cover: otherwise the caller could declassify an attribute and read it, or
+     * probe it with a check. The problem is located at the attribute, the check or the derived attribute, as {@code
+     * Account.balance} or {@code Account.balance-above-1000}. The check and the registration are one step under the
+     * registry's lock, so no other registration comes between them.
+     *
+     * @param origin     the origin, with its version
+     * @param definition all types of the origin
+     * @param submission who submits the registration, for whom and why
+     * @param clearance  the clearance of the caller
+     * @return the outcome
+     * @throws IllegalStateException if the registry is the registry of a store, and a rule of that store calls this
+     *                               while the store runs rules: a rule must not write
+     */
+    RegistrationResult register(Origin origin, SchemaDefinition definition, Submission submission,
+            Clearance clearance);
+
+    /**
      * Finds out what {@link #register(Origin, SchemaDefinition, Submission)} would do with the same arguments, without
      * doing it.
      *
@@ -68,6 +92,19 @@ public interface SchemaRegistry {
      * @return the plan
      */
     SchemaPlan plan(Origin origin, SchemaDefinition definition);
+
+    /**
+     * Finds out what {@link #register(Origin, SchemaDefinition, Submission, Clearance)} would do with the same
+     * arguments, without doing it: the plan of a registration for a caller whose clearance limits what it may change.
+     * A change that the clearance does not allow is a problem of the code {@code ACCESS_DENIED}, and the outcome is a
+     * rejection.
+     *
+     * @param origin     the origin, with its version
+     * @param definition all types of the origin
+     * @param clearance  the clearance of the caller
+     * @return the plan
+     */
+    SchemaPlan plan(Origin origin, SchemaDefinition definition, Clearance clearance);
 
     /**
      * Validates a definition as {@link #register(Origin, SchemaDefinition, Submission)} would, without checking compatibility

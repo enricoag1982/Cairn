@@ -143,7 +143,7 @@ public final class CelLanguage implements ExpressionLanguage {
                 throw resultNotBoolean(ast);
             }
             CelRuntime.Program program = cel.createProgram(ast);
-            return new CelCheck(program, types);
+            return new CelCheck(program, types, SelfReads.of(ast.getExpr(), types.keySet()));
         } catch (CelValidationException | CelEvaluationException e) {
             throw new ExpressionCompilationException(e.getMessage());
         }
@@ -162,7 +162,9 @@ public final class CelLanguage implements ExpressionLanguage {
             throw firstError(validation);
         }
         try {
-            return new CelDerivation(cel.createProgram(validation.getAst()), types, result);
+            CelAbstractSyntaxTree ast = validation.getAst();
+            return new CelDerivation(cel.createProgram(ast), types, result,
+                    SelfReads.of(ast.getExpr(), types.keySet()));
         } catch (CelValidationException | CelEvaluationException e) {
             throw new ExpressionCompilationException(e.getMessage());
         }

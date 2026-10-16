@@ -8,7 +8,7 @@ import java.util.OptionalInt;
 
 /**
  * Builds an {@link AttributeDefinition} (capability {@code type-model}). Attributes start optional, not unique, not
- * derived and without a range, description, examples or string constraints.
+ * derived and without a classification, range, description, examples or string constraints.
  */
 public final class AttributeBuilder {
 
@@ -26,6 +26,7 @@ public final class AttributeBuilder {
     private OptionalInt minLength = OptionalInt.empty();
     private OptionalInt maxLength = OptionalInt.empty();
     private String derived;
+    private String classification;
 
     AttributeBuilder(String name, ValueType valueType) {
         this.name = Objects.requireNonNull(name, "name");
@@ -164,6 +165,20 @@ public final class AttributeBuilder {
     }
 
     /**
+     * Classifies the attribute (capability {@code attribute-access}, ADR-0036): a view or a transaction reads or writes
+     * its values only with a clearance that covers the classification. A classification is written like a rule name:
+     * lowercase letters, digits and hyphens, starting with a letter; a registry reports another name. A derived attribute
+     * that reads classified attributes must have the classification that they have.
+     *
+     * @param classification the classification, for example {@code pay}
+     * @return this builder
+     */
+    public AttributeBuilder classification(String classification) {
+        this.classification = Objects.requireNonNull(classification, "classification");
+        return this;
+    }
+
+    /**
      * Builds the definition.
      *
      * @return the attribute definition
@@ -171,6 +186,6 @@ public final class AttributeBuilder {
     public AttributeDefinition build() {
         return new AttributeDefinition(name, valueType, required, unique, Optional.ofNullable(range), aliases, deprecated,
                 Optional.ofNullable(description), examples, allowedValues, Optional.ofNullable(pattern),
-                minLength, maxLength, Optional.ofNullable(derived));
+                minLength, maxLength, Optional.ofNullable(derived), Optional.ofNullable(classification));
     }
 }

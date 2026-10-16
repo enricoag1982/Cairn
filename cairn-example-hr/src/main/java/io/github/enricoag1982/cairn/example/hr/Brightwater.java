@@ -62,6 +62,12 @@ public final class Brightwater {
     /** The principal of the agent that hires Hana Kim in the story HR-13. */
     public static final String HR_ASSISTANT = "agent:hr-assistant";
 
+    /** The principal of the agent that lists the employments of Platform without their pay in the story HR-18. */
+    public static final String ORG_CHART = "agent:org-chart";
+
+    /** The classification of the pay of an employment: its salary and its currency (ADR-0036). */
+    public static final String PAY = "pay";
+
     /** Where the company's year begins: 1 January. */
     public static final Instant JANUARY_1 = on(1, 1);
 
@@ -433,7 +439,9 @@ public final class Brightwater {
      * Software Engineer, employment E-008 at 72,000 EUR, in a new position P-213 in Platform, in Berlin, employed by
      * Brightwater GmbH. The agent names the existing unit, job, location and employer by the unique keys that it knows,
      * the code of the unit and of the job and the names of the location and of the employer, and so needs no query to
-     * find their IDs (ADR-0026): the store resolves each key when it commits.
+     * find their IDs (ADR-0026): the store resolves each key when it commits. The salary and the currency are
+     * classified {@value #PAY}, so the commit carries the clearance of the agent, {@code pay}, which the person who
+     * serves the agent gave it (ADR-0036); without it the store rejects the payload with {@code ACCESS_DENIED}.
      *
      * @return the payload as JSON text
      */
@@ -494,6 +502,49 @@ public final class Brightwater {
                 .endDate(ids.relationship("fills003"), december1)
                 .endDate(ids.relationship("managedByPLT"), december1)
                 .build());
+    }
+
+    // ------------------------------------------------------------------ HR-18: an agent without a clearance
+
+    /**
+     * HR-18. The query that the agent {@code agent:org-chart} sends to {@code cairn_query}: the employments of Platform
+     * ({@code PLT}) with their units. The agent has no clearance, so each employment lists its salary and its currency
+     * as withheld instead of their values (the classification is {@value #PAY}); the employee number, which is not
+     * classified, is read.
+     *
+     * @return the query as JSON text, in the form that {@code Queries.read} reads
+     */
+    public static String hr18PlatformEmploymentsQuery() {
+        return """
+                {
+                  "from": { "type": "OrgUnit", "as": "unit" },
+                  "steps": [
+                    { "where": { "compare": { "left": { "attribute": "code", "of": "unit" },
+                                              "op": "eq", "right": { "value": "PLT" } } } },
+                    { "follow": { "from": "unit", "name": "positions", "as": "position" } },
+                    { "follow": { "from": "position", "name": "filledBy", "as": "employment" } }
+                  ],
+                  "columns": [ { "binding": "employment" }, { "attribute": "code", "of": "unit", "as": "unit" } ],
+                  "order": [ { "attribute": "employeeNumber", "of": "employment" } ]
+                }
+                """;
+    }
+
+    /**
+     * HR-18. The query of the average salary that the agent {@code agent:org-chart} sends to {@code cairn_query}. The
+     * attribute {@code annualSalary} is classified {@value #PAY}, which the agent's clearance does not cover, so the
+     * store rejects the query with {@code ACCESS_DENIED}: an aggregate over a withheld attribute would reveal it.
+     *
+     * @return the query as JSON text, in the form that {@code Queries.read} reads
+     */
+    public static String hr18AverageSalaryQuery() {
+        return """
+                {
+                  "from": { "type": "Employment", "as": "employment" },
+                  "aggregates": [ { "function": "avg", "attribute": "annualSalary", "of": "employment",
+                                    "as": "average" } ]
+                }
+                """;
     }
 
     // ------------------------------------------------------------------ dates

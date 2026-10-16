@@ -5,6 +5,7 @@ import io.github.enricoag1982.cairn.expressions.CompiledDerivation;
 import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
 import io.github.enricoag1982.cairn.expressions.ExpressionEvaluationException;
 import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
+import io.github.enricoag1982.cairn.fixtures.Derivations;
 import io.github.enricoag1982.cairn.schema.Value;
 import io.github.enricoag1982.cairn.schema.ValueType;
 import java.util.List;
@@ -90,23 +91,23 @@ public final class StubLanguage implements ExpressionLanguage {
             case "rejected without position" -> throw new ExpressionCompilationException("The stub rejects this too.");
             case "crash when compiled" -> throw new IllegalStateException("The stub crashed.");
             case "nothing" -> null;
-            case "evaluation error" -> values -> {
+            case "evaluation error" -> Derivations.of(values -> {
                 evaluations.incrementAndGet();
                 throw new ExpressionEvaluationException("The stub cannot evaluate this.");
-            };
-            case "crash when evaluated" -> values -> {
+            });
+            case "crash when evaluated" -> Derivations.of(values -> {
                 evaluations.incrementAndGet();
                 throw new IllegalStateException("The stub crashed while evaluating.");
-            };
-            case "no value" -> values -> {
+            });
+            case "no value" -> Derivations.of(values -> {
                 evaluations.incrementAndGet();
                 return Optional.empty();
-            };
-            case "wrong type" -> values -> {
+            });
+            case "wrong type" -> Derivations.of(values -> {
                 evaluations.incrementAndGet();
                 return Optional.of(result == ValueType.BOOLEAN ? Value.of("not a boolean") : Value.of(true));
-            };
-            default -> values -> {
+            });
+            default -> Derivations.of(values -> {
                 evaluations.incrementAndGet();
                 return Optional.of(switch (result) {
                     case STRING -> Value.of("stub");
@@ -117,7 +118,7 @@ public final class StubLanguage implements ExpressionLanguage {
                     case DATE -> Value.of(java.time.LocalDate.parse("2026-01-01"));
                     case INSTANT -> Value.of(java.time.Instant.parse("2026-01-01T00:00:00Z"));
                 });
-            };
+            });
         };
     }
 

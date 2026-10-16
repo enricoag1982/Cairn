@@ -94,6 +94,7 @@ Each unique attribute gets a method that makes a *unique key*, so `view.entity(A
 The interfaces are not sealed, so a switch needs a default branch: a document or an agent can add subtypes later.
 A state of a type that the generated code does not know, such as a subtype registered after generation, reads as the type you asked for; its other attributes are in `entityState()`.
 Reading a state of a known type that is not the asked type or one of its subtypes throws `IllegalArgumentException`.
+A state read through a view restricted to a *clearance* may have *withheld values* ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)): `from` reads it, also when a withheld attribute is required, and the accessor of a withheld attribute throws `IllegalStateException`, which names it. Check `entityState().withheld()` before reading a classified attribute.
 
 ## Write
 

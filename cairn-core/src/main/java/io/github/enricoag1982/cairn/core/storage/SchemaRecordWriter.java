@@ -5,8 +5,9 @@ package io.github.enricoag1982.cairn.core.storage;
  * definition field by field, and the identifiers that the registration assigned. If any type declares checks, they
  * follow, and if any attribute is derived, so do the expressions of the derived attributes, after the checks (an empty
  * section of checks if no type declares one). If any relationship type lets its relationships outlive their targets,
- * their names follow as the last of the record, after the sections before it, which are empty if there is nothing in
- * them.
+ * their names follow after the sections before it, which are empty if there is nothing in them. If any attribute has a
+ * classification, the classifications follow as the last of the record, after the sections before it, which are empty
+ * as well.
  */
 final class SchemaRecordWriter {
 
@@ -34,10 +35,12 @@ final class SchemaRecordWriter {
             encoder.writeLong(attribute.id().value());
         });
         out.writeLong(identifiers.nextId());
-        boolean outliving = DefinitionCodec.hasOutliving(record.definition());
+        boolean classified = DefinitionCodec.hasClassified(record.definition());
+        boolean outliving = DefinitionCodec.hasOutliving(record.definition()) || classified;
         DefinitionCodec.writeChecks(out, record.definition(),
                 DefinitionCodec.hasDerived(record.definition()) || outliving);
         DefinitionCodec.writeDerivations(out, record.definition(), outliving);
-        DefinitionCodec.writeOutliving(out, record.definition());
+        DefinitionCodec.writeOutliving(out, record.definition(), classified);
+        DefinitionCodec.writeClassifications(out, record.definition());
     }
 }

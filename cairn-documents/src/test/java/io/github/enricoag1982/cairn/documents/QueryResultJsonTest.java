@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /** The results of queries as JSON (design D4 of {@code add-queries-and-aggregation}). */
@@ -94,6 +95,26 @@ class QueryResultJsonTest {
                 Payloads.toJson(account()))));
         assertThat(DocumentTrees.toJson(cells.get(1))).isEqualTo(DocumentTrees.toJson(DocumentTrees.load(
                 Payloads.toJson(heldBy()))));
+    }
+
+    @Test
+    void theStatesOfRowsListWhatTheyWithheld() {
+        EntityState restricted = new EntityState(new EntityId("e-1"), "Account", Map.of("number", Value.of("A-1")),
+                EffectivePeriod.from(Instant.parse("2026-01-01T00:00:00Z")), RECORDED, new Basis(2),
+                Set.of("balance"));
+        RelationshipState share = new RelationshipState(new RelationshipId("r-1"), "Owns", new EntityId("e-1"),
+                new EntityId("e-2"), Map.of(), EffectivePeriod.from(Instant.parse("2026-01-01T00:00:00Z")), RECORDED,
+                new Basis(2), Set.of("share"));
+        QueryResult.Rows result = new QueryResult.Rows(MARCH_31, new Basis(7), List.of("a", "held", "other"),
+                List.of(row("a", new Cell.EntityCell(restricted), "held", new Cell.RelationshipCell(share),
+                        "other", new Cell.EntityCell(account()))));
+
+        Object tree = DocumentTrees.load(Queries.toJson(result));
+        List<Object> cells = DocumentTrees.listOf(DocumentTrees.listAt(tree, "rows").getFirst());
+
+        assertThat(DocumentTrees.at(cells.get(0), "withheld")).isEqualTo(List.of("balance"));
+        assertThat(DocumentTrees.at(cells.get(1), "withheld")).isEqualTo(List.of("share"));
+        assertThat(DocumentTrees.keysOf(cells.get(2))).doesNotContain("withheld");
     }
 
     @Test

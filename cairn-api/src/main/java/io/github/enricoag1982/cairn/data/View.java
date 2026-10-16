@@ -16,6 +16,10 @@ import java.util.function.Predicate;
  *
  * <p>Values, of entities and of relationships, are reported under the attribute names of the view's
  * {@linkplain #schema() schema}, in the order of its attributes, and in the attribute's value type in that schema.
+ *
+ * <p>A view reads every value unless it was {@linkplain #restrictedTo restricted to a clearance} (ADR-0036, capability
+ * {@code attribute-access}); a restricted view withholds the values of the attributes whose classification the clearance
+ * does not cover, in every state it returns. Callers that act for a user or an agent restrict the views they hand out.
  */
 public interface View {
 
@@ -42,6 +46,34 @@ public interface View {
     Schema schema();
 
     /**
+     * Restricts this view to a clearance (ADR-0036, capability {@code attribute-access}): the view that results has the
+     * same coordinates and schema, but withholds the value of every attribute whose classification the clearance does not
+     * cover from every {@link EntityState} and {@link RelationshipState} it returns, entities and their timelines,
+     * relationships and their timelines, navigation, traversals (whose conditions see the restricted states) and query
+     * rows. Each state lists the attributes it withheld. An attribute without a classification is never withheld.
+     *
+     * <p>A view withholds an attribute unless the clearance covers the attribute's classification both in this view's
+     * schema and in the store's latest schema, matched by the attribute's identifier, so that a view at an older basis
+     * withholds what has been classified since; an attribute that has no classification in either is never withheld.
+     *
+     * <p>A query through the restricted view that names a withheld attribute is rejected with a problem
+     * {@code ACCESS_DENIED}, and {@link #entity(UniqueKey)} fails for a key of a withheld attribute. Restricting a view
+     * that is restricted already restricts it to the classifications that both clearances cover. This view is not
+     * changed.
+     *
+     * @param clearance the classifications that the restricted view may read
+     * @return the restricted view
+     */
+    View restrictedTo(Clearance clearance);
+
+    /**
+     * The clearance this view is restricted to.
+     *
+     * @return the clearance; empty for a view that is not restricted, which reads every value
+     */
+    Optional<Clearance> clearance();
+
+    /**
      * Reads an entity at the view's effective time, as known at its basis.
      *
      * @param id the entity's ID
@@ -61,7 +93,9 @@ public interface View {
      * @return the entity's state, as {@link #entity(EntityId)} reads it; empty if no entity has the value at the
      *         effective time
      * @throws IllegalArgumentException if the view's schema has no entity type of that name, the type has no attribute of
-     *                                  that name, the attribute is not unique, or the value does not fit its value type
+     *                                  that name, the attribute is not unique, the value does not fit its value type, or
+     *                                  the view is restricted to a clearance that does not cover the attribute, in which
+     *                                  case it is a {@link WithheldKeyException}
      */
     Optional<EntityState> entity(UniqueKey key);
 
@@ -198,8 +232,9 @@ public interface View {
      * Runs a query against this view (ADR-0023, capability {@code queries}). The rows reflect exactly this view's
      * coordinates: the entities and relationships that are effective at its effective time, as known at its basis. The
      * query is checked against the view's {@linkplain #schema() schema} first; one that names a type, attribute,
-     * relationship name or binding that does not exist, binds a name twice, compares values that cannot be compared, or
-     * aggregates values that cannot be aggregated returns every problem found, and nothing is read.
+     * relationship name or binding that does not exist, binds a name twice, compares values that cannot be compared,
+     * aggregates values that cannot be aggregated, or, through a view restricted to a clearance, names an attribute that
+     * the clearance does not cover, returns every problem found, and nothing is read.
      *
      * <p>The same query on the same data returns the same rows in the same order, whatever stores them.
      *

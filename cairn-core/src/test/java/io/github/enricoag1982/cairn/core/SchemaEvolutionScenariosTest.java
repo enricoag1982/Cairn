@@ -14,6 +14,7 @@ import static io.github.enricoag1982.cairn.fixtures.Definitions.plus;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.renamed;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withAttributes;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withCheck;
+import static io.github.enricoag1982.cairn.fixtures.Definitions.withClassification;
 import static io.github.enricoag1982.cairn.fixtures.Definitions.withDerivedAttribute;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -451,6 +452,74 @@ class SchemaEvolutionScenariosTest {
         assertThat(registry.storedDefinition(ReferenceModel.origin("1.1.0").name()).orElseThrow().definition()
                 .relationshipTypes()).filteredOn(type -> type.name().equals("OpenedBy")).singleElement()
                 .satisfies(type -> assertThat(type.outlivesTarget()).isTrue());
+    }
+
+    @Test
+    @DisplayName("Scenario: Classifying an existing attribute")
+    void classifyingAnExistingAttribute() {
+        Schema first = applied(register("1.0.0", ReferenceModel.definition())).schema();
+        SchemaDefinition classified = withClassification(ReferenceModel.definition(), "Account", "balance", "finance");
+
+        RegistrationResult.Applied result = applied(register("1.1.0", classified));
+
+        Attribute before = first.entityType("Account").orElseThrow().attribute("balance").orElseThrow();
+        Attribute after = result.schema().entityType("Account").orElseThrow().attribute("balance").orElseThrow();
+        assertThat(before.classification()).isEmpty();
+        assertThat(after.classification()).hasValue("finance");
+        assertThat(after.id()).as("the attribute keeps its identifier, and so its stored values").isEqualTo(before.id());
+        assertThat(registry.storedDefinition(ReferenceModel.origin("1.1.0").name()).orElseThrow().definition()
+                .entityTypes()).filteredOn(type -> type.name().equals("Account")).singleElement()
+                .satisfies(type -> assertThat(type.attributes()).filteredOn(attribute ->
+                        attribute.name().equals("balance")).singleElement()
+                        .satisfies(attribute -> assertThat(attribute.classification()).hasValue("finance")));
+    }
+
+    @Test
+    void changingAndRemovingAClassificationAreCompatibleToo() {
+        applied(register("1.0.0", withClassification(ReferenceModel.definition(), "Account", "balance", "finance")));
+
+        Schema changed = applied(register("1.1.0", withClassification(ReferenceModel.definition(), "Account", "balance",
+                "accounts"))).schema();
+        Schema removed = applied(register("1.2.0", ReferenceModel.definition())).schema();
+
+        assertThat(changed.entityType("Account").orElseThrow().attribute("balance").orElseThrow().classification())
+                .hasValue("accounts");
+        assertThat(removed.entityType("Account").orElseThrow().attribute("balance").orElseThrow().classification())
+                .isEmpty();
+    }
+
+    @Test
+    void aPlanListsAChangedClassificationAsACompatibleChangeAtTheAttribute() {
+        applied(register("1.0.0", ReferenceModel.definition()));
+
+        SchemaPlan plan = registry.plan(ReferenceModel.origin("1.1.0"),
+                withClassification(ReferenceModel.definition(), "Account", "balance", "finance"));
+
+        assertThat(plan.changes()).singleElement().satisfies(change -> {
+            assertThat(change.path()).isEqualTo("Account.balance");
+            assertThat(change.compatible()).isTrue();
+            assertThat(change.description()).contains("finance");
+        });
+    }
+
+    @Test
+    void aDerivedAttributeThatReadsAClassifiedAttributeCannotBeRegisteredWithoutItsClassification() {
+        SchemaRegistry withLanguage = SchemaRegistries.inMemory(clock, ReferenceModel.rules(),
+                Optional.of(ExpressionLanguages.discovered().orElseThrow()));
+        SchemaDefinition cents = withDerivedAttribute(ReferenceModel.definition(), "Account", "balanceInCents",
+                ValueType.LONG, false, "int(self.balance * 100.0)");
+        assertThat(withLanguage.register(ReferenceModel.origin("1.0.0"), cents))
+                .isInstanceOf(RegistrationResult.Applied.class);
+
+        RegistrationResult result = withLanguage.register(ReferenceModel.origin("1.1.0"),
+                withClassification(cents, "Account", "balance", "finance"));
+
+        assertThat(rejected(result)).singleElement().satisfies(problem -> {
+            assertThat(problem.code()).isEqualTo(ProblemCode.INVALID_CLASSIFICATION);
+            assertThat(problem.path()).isEqualTo("Account.balanceInCents");
+        });
+        assertThat(withLanguage.current().entityType("Account").orElseThrow().attribute("balance").orElseThrow()
+                .classification()).isEmpty();
     }
 
     @Test

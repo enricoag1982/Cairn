@@ -16,6 +16,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.on;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -266,6 +267,29 @@ class TransactionsScenariosTest {
         assertThat(store.latestBasis()).isEqualTo(first.basis());
         assertThat(reference.view(on(2, 1)).entities("Organization")).hasSize(1);
         assertThat(first.idempotencyKey()).contains("onboard-acme");
+    }
+
+    @Test
+    @DisplayName("Scenario: A retry with another clearance")
+    void aRetryWithAnotherClearance() {
+        EntityId a1 = entity(reference.createAccounts(), ReferenceStories.A1);
+        reference.recordedOn(on(5, 2));
+        Transaction fund = Transaction.by("agent:funding").idempotencyKey("fund-a1").clearance(Clearance.of("finance"))
+                .patch(a1, from(5, 1), values("balance", money("1500"))).build();
+        Transaction retry = Transaction.by("agent:funding").idempotencyKey("fund-a1")
+                .patch(a1, from(5, 1), values("balance", money("1500"))).build();
+        Receipt first = reference.commit(fund);
+
+        List<Problem> problems = reference.reject(retry);
+
+        assertThat(problems).singleElement().satisfies(problem -> {
+            assertProblem(problem, ProblemCode.IDEMPOTENCY_KEY_REUSED, "@transaction");
+            assertThat(problem.message()).contains("clearance");
+        });
+        assertThat(store.dryRun(retry)).isInstanceOf(DryRunResult.Rejected.class);
+        assertThat(store.commit(fund)).as("the same transaction, with its clearance, is the retry it was")
+                .isEqualTo(new CommitResult.Committed(first));
+        assertThat(store.transactions()).hasSize(3);
     }
 
     @Test

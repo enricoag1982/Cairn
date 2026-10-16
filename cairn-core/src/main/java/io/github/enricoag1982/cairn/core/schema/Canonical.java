@@ -84,7 +84,8 @@ final class Canonical {
                         sorted(attribute.aliases()), attribute.deprecated(), attribute.description(),
                         examples(attribute.examples()),
                         attribute.allowedValues().stream().distinct().sorted().toList(),
-                        attribute.pattern(), attribute.minLength(), attribute.maxLength(), attribute.derived()))
+                        attribute.pattern(), attribute.minLength(), attribute.maxLength(), attribute.derived(),
+                        attribute.classification()))
                 .sorted(Comparator.comparing(AttributeDefinition::name))
                 .toList();
     }

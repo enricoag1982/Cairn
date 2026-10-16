@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:cairn:schema-document:1",
   "title": "Cairn schema document, format version 1",
-  "description": "A Cairn schema document defines the traits, entity types and relationship types of one origin. Write it as YAML 1.2 or as JSON. The same keys are used in both. A key that is left out takes its default: not required, not unique, not abstract, an association, not symmetric, not outliving its targets, not deprecated, and no supertype, traits, aliases, inverse aliases, constraints, examples, description, rules or checks. Anchors, aliases, explicit tags, merge keys, duplicate keys and several documents in one stream are not part of the format.",
+  "description": "A Cairn schema document defines the traits, entity types and relationship types of one origin. Write it as YAML 1.2 or as JSON. The same keys are used in both. A key that is left out takes its default: not required, not unique, not abstract, an association, not symmetric, not outliving its targets, not deprecated, no classification, and no supertype, traits, aliases, inverse aliases, constraints, examples, description, rules or checks. Anchors, aliases, explicit tags, merge keys, duplicate keys and several documents in one stream are not part of the format.",
   "type": "object",
   "additionalProperties": false,
   "required": ["cairn", "origin"],
@@ -236,6 +236,10 @@
           "description": "True if the attribute should no longer be used.",
           "type": "boolean",
           "default": false
+        },
+        "classification": {
+          "description": "The classification of the attribute, such as pay: lowercase ASCII letters, digits and hyphens, starting with a letter, at most 128 characters. A reader or writer sees or sets the attribute's values only with a clearance that covers the classification; the attribute has no classification if the key is left out, and everyone reads it. A derived attribute that reads classified attributes must have the classification that they have.",
+          "type": "string"
         },
         "description": {
           "description": "What the attribute means.",

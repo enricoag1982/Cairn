@@ -116,22 +116,27 @@ final class DerivationRunner {
             problems.add(notCompiled(path, attribute, applied.failure().orElse("it was not compiled")));
             return null;
         }
+        // What the evaluation says can quote the values it read or the value it gave (ADR-0036): if the derived attribute
+        // is one that the clearance of the transaction does not cover, or the expression reads one, a problem says only
+        // that the derivation gave no value that fits.
+        boolean redact = workspace.withheld(attribute) || workspace.readsWithheld(subject.type(), applied.reads());
         Optional<Value> value;
         try {
             value = applied.compiled().get().evaluate(inputs);
         } catch (ExpressionEvaluationException | RuntimeException | StackOverflowError e) {
-            problems.add(failed(path, attribute, version, e.getMessage() != null ? e.getMessage() : e.toString()));
+            problems.add(failed(path, attribute, version, redact ? null
+                    : e.getMessage() != null ? e.getMessage() : e.toString()));
             return null;
         }
         if (value.isPresent() && !Values.fits(value.get(), attribute.valueType())) {
-            problems.add(failed(path, attribute, version, "The result " + Values.describe(value.get()) + " is "
-                    + ValueChecks.withArticle(value.get().valueType()) + ", which does not fit the "
+            problems.add(failed(path, attribute, version, redact ? null : "The result " + Values.describe(value.get())
+                    + " is " + ValueChecks.withArticle(value.get().valueType()) + ", which does not fit the "
                     + Values.typeName(attribute.valueType()) + " attribute."));
             return null;
         }
         if (value.isEmpty() && attribute.required()) {
-            problems.add(failed(path, attribute, version, "The expression gave no value, but the attribute is "
-                    + "required."));
+            problems.add(failed(path, attribute, version, redact ? null : "The expression gave no value, but the "
+                    + "attribute is required."));
             return null;
         }
         return value;
@@ -158,9 +163,15 @@ final class DerivationRunner {
 
     // ------------------------------------------------------------------ problems
 
+    /**
+     * The problem of a derivation that gave no value that fits.
+     *
+     * @param reason what the evaluation said; null for a derivation over attributes that the clearance of the
+     *               transaction does not cover, which says nothing of it
+     */
     private static Problem failed(String path, Attribute attribute, String version, String reason) {
         return Problems.of(ProblemCode.DERIVATION_FAILED, path, "The derivation of the attribute " + attribute.name()
-                + " gave no value that fits it" + version + ": " + reason,
+                + " gave no value that fits it" + version + (reason == null ? "." : ": " + reason),
                 "a value that fits the " + Values.typeName(attribute.valueType()) + " attribute " + attribute.name()
                         + (attribute.required() ? "" : ", or none"), reason,
                 "Test an optional attribute with has(self.<name>) before reading it, or correct the expression in a "

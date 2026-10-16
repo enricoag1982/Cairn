@@ -76,15 +76,17 @@ Scenarios that validate or register the reference model assume a registry with t
 
 `employer-holds-account`, `controlling-owner-has-lei`, `account-a1-funded` and `account-a1-queried` read other entities and relationships, so writes to those run them again ([ADR-0025](../decisions/0025-run-a-rule-again-when-the-data-it-read-changes.md)); `lei-kept` reads its organization's timeline as it was before the transaction ([ADR-0032](../decisions/0032-let-rules-read-the-store-as-committed-before-the-transaction.md)), so later changes to that timeline run it again.
 
-Scenarios of the `checks`, `schema-documents` and `schema-evolution` specs also declare test-only *checks*, which the reference model does not declare ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)):
+Scenarios of the `checks`, `attribute-access`, `schema-documents` and `schema-evolution` specs also declare test-only *checks*, which the reference model does not declare ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)):
 
 - `balance-not-negative` on Account: `self.balance >= 0.0`.
 - `name-not-empty` on Party: `size(self.name) > 0`.
 - `born-before-2026` on Person: `self.birthDate < timestamp('2026-01-01T00:00:00Z')`, and with `!has(self.birthDate) ||` in front.
 - `title-not-blank` on Employs: `!has(self.title) || size(self.title) > 0`.
+- `lei-numeric` on Organization: `self.name != 'Probe' || int(self.lei) > 0`.
+- `balance-above-1000` on Account: `self.balance > 1000.0`, and `probe` with the same expression on a test-only abstract subtype of Account.
 - `born-on-a-weekday` on Person: `!has(self.birthDate) || cairn.workingDays(self.birthDate, self.birthDate) == 1`, which calls a *function of Cairn's own*.
 
-Scenarios of the `derived-attributes`, `checks`, `schema-documents` and `schema-evolution` specs declare test-only *derived attributes* ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)):
+Scenarios of the `derived-attributes`, `checks`, `attribute-access`, `schema-documents` and `schema-evolution` specs declare test-only *derived attributes* ([ADR-0031](../decisions/0031-derive-attributes-from-a-version-s-own-values-in-cel-computed-at-commit-and-stored.md)):
 
 - `label` (string) on Account: `self.number + ' ' + self.currency`.
 - `balanceInCents` (long) on Account: `int(self.balance * 100.0)`.
@@ -96,6 +98,11 @@ Scenarios of the `relationships`, `type-model`, `schema-evolution` and `schema-d
 
 - `MailedTo` from Account to Address, with 0..1 targets per source and 0..* sources per target: where an account's statements are mailed. Scenarios of composition cascades vary its multiplicity, and whether it outlives its targets.
 - `OpenedBy` from Account to Person, with 0..1 targets per source and 0..* sources per target and the inverse name `opened`, whose relationships outlive their targets ([ADR-0034](../decisions/0034-let-relationships-of-a-type-outlive-their-targets-as-records-of-past-facts.md)): who opened an account, which stays recorded after that person has ended.
+
+Scenarios of the `attribute-access`, `schema-documents`, `schema-evolution`, `java-types`, `entity-versions`, `transactions` and `agent-tools` specs classify attributes of the reference model, which classifies none ([ADR-0036](../decisions/0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md)); each scenario that needs one names it:
+
+- `balance` on Account, classified `finance`.
+- `lei` on Organization, classified `identity`.
 
 The **ultimate parent** of a party is found by following `ownedBy` while the share is above 50%, until no owner remains.
 

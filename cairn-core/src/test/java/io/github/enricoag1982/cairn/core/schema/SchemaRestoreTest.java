@@ -130,6 +130,28 @@ class SchemaRestoreTest {
     }
 
     @Test
+    void aRestoredRegistryKeepsTheClassificationsOfTheDefinitionAndOfTheSchema() {
+        InMemorySchemaRegistry original = registry();
+        Recording recording = new Recording();
+        original.attach(recording);
+        SchemaDefinition classified = Definitions.withClassification(Definitions.withClassification(
+                ReferenceModel.definition(), "Account", "balance", "finance"), "Owns", "share", "ownership");
+        assertThat(original.register(ReferenceModel.origin("1.0.0"), classified, Submission.by("agent:modeler")))
+                .isInstanceOf(RegistrationResult.Applied.class);
+
+        InMemorySchemaRegistry restored = registry();
+        recording.records.forEach(restored::restore);
+
+        assertThat(restored.storedDefinition("reference-model").orElseThrow().definition()).isEqualTo(classified);
+        assertThat(restored.current().entityType("Account").orElseThrow().attribute("balance").orElseThrow()
+                .classification()).hasValue("finance");
+        assertThat(restored.current().relationshipType("Owns").orElseThrow().attribute("share").orElseThrow()
+                .classification()).hasValue("ownership");
+        assertThat(restored.current().entityType("Account").orElseThrow().attribute("number").orElseThrow()
+                .classification()).isEmpty();
+    }
+
+    @Test
     void theRegistrationThatFollowsARestoredOneNumbersFromTheLoggedNextIdentifier() {
         InMemorySchemaRegistry original = registry();
         Recording recording = registerTwoVersions(original);

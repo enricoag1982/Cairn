@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.schema.ClosestName;
 import io.github.enricoag1982.cairn.core.schema.Problems;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import io.github.enricoag1982.cairn.schema.AttributeId;
@@ -12,13 +13,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * What every kind of write checks about its periods and values (design D5 of {@code add-entity-versions}): that a
  * period ends after it starts, and that the names of values are attributes of the type, which are not derived and are
- * converted to the value type of their attribute (design D4 of {@code add-derived-attributes}). Shared by
- * {@link Creations} and {@link Amendments}.
+ * converted to the value type of their attribute (design D4 of {@code add-derived-attributes}); and, for a transaction
+ * with a clearance, that no write sets or clears an attribute that the clearance does not cover (ADR-0036, design D4 of
+ * {@code add-attribute-access-control}). Shared by {@link Creations} and {@link Amendments}.
  */
 final class WriteChecks {
 
@@ -35,9 +38,44 @@ final class WriteChecks {
     }
 
     private final ProblemLog problems;
+    private final Optional<Clearance> clearance;
 
-    WriteChecks(ProblemLog problems) {
+    /**
+     * Creates the checks of a transaction's writes.
+     *
+     * @param problems  where the problems go
+     * @param clearance the clearance of the transaction, if it has one
+     */
+    WriteChecks(ProblemLog problems, Optional<Clearance> clearance) {
         this.problems = problems;
+        this.clearance = clearance;
+    }
+
+    /** Tells whether the transaction's clearance does not cover an attribute, so that no write may set or clear it. */
+    boolean denies(Attribute attribute) {
+        return clearance.isPresent() && !clearance.get().covers(attribute);
+    }
+
+    /**
+     * Reports a write that sets or clears an attribute that the transaction's clearance does not cover, at the attribute
+     * of the write.
+     *
+     * @param path      the path of the thing written
+     * @param type      its type
+     * @param attribute the attribute
+     * @param verb      what the write does with it: {@code set} or {@code clear}
+     */
+    void accessDenied(String path, SubjectType type, Attribute attribute, String verb) {
+        String classification = attribute.classification().orElseThrow();
+        Set<String> covered = clearance.orElseThrow().classifications();
+        problems.add(Problems.of(ProblemCode.ACCESS_DENIED, attributePath(path, attribute), "The attribute "
+                + attribute.name() + " of " + type.name() + " is classified " + classification + ", but the clearance of "
+                + "the transaction does not cover " + classification + ", so a write cannot " + verb + " it.",
+                "a transaction whose clearance covers " + classification,
+                covered.isEmpty() ? "a clearance that covers no classification"
+                        : "a clearance that covers " + String.join(", ", covered),
+                "Leave the attribute " + attribute.name() + " out of the write, or submit the transaction with a "
+                + "clearance that covers " + classification + "."));
     }
 
     /** Reports a period that does not end after it starts; tells whether the period is valid. */
@@ -55,7 +93,10 @@ final class WriteChecks {
      * Resolves the names of values to attributes of the type, reporting names that are unknown and attributes that are
      * deprecated. A name given twice, or an alias together with the name, keeps the later value. Values are converted
      * to the value type of their attribute; a value that does not fit is kept as it is, for validation to report. An
-     * attribute that is derived is reported with {@code DERIVED_ATTRIBUTE_WRITTEN} and its value is dropped.
+     * attribute that is derived is reported with {@code DERIVED_ATTRIBUTE_WRITTEN} and its value is dropped. An attribute
+     * that the transaction's clearance does not cover is reported with {@code ACCESS_DENIED}, and the transaction ends,
+     * after its writes are applied, with only the problems of that code ({@link Preparation#run()}): nothing is
+     * validated for it.
      */
     Resolved resolveValues(String path, SubjectType type, Map<String, Value> values) {
         Map<AttributeId, Value> resolved = new LinkedHashMap<>();
@@ -74,6 +115,9 @@ final class WriteChecks {
                 derivedAttributeWritten(path, type, attribute);
                 derivedNamed = true;
                 continue;
+            }
+            if (denies(attribute)) {
+                accessDenied(path, type, attribute, "set");
             }
             if (attribute.deprecated()) {
                 problems.add(Problems.of(ProblemCode.DEPRECATED_ATTRIBUTE, attributePath(path, attribute),

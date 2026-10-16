@@ -13,13 +13,17 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EffectivePeriod;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
 import io.github.enricoag1982.cairn.data.Transaction;
+import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.Write;
 import io.github.enricoag1982.cairn.documents.PayloadFixtures.ReferenceDomainStore;
+import io.github.enricoag1982.cairn.fixtures.Definitions;
+import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
@@ -127,5 +131,30 @@ class IdLookupTest {
         assertThatNullPointerException().isThrownBy(() -> new IdLookup.Known(null, "Person"));
         assertThatNullPointerException().isThrownBy(() -> new IdLookup.Known(IdLookup.Kind.ENTITY, null));
         assertThatNullPointerException().isThrownBy(() -> IdLookup.from(null));
+    }
+
+    @Test
+    void aLookupWithAClearanceFindsNoEntityByAKeyOfAnAttributeItDoesNotCoverWhetherOrNotOneHasTheValue() {
+        ReferenceDomainStore classified = new ReferenceDomainStore(Definitions.withClassification(
+                ReferenceModel.definition(), "Organization", "lei", "identity"));
+        Receipt parties = classified.replay(ReferenceStories.rd1Parties());
+        classified.replay(ReferenceStories.rd9AcmeLei(parties.temporaryIds().get(ACME)));
+        UniqueKey held = new UniqueKey("Organization", "lei", Value.of(ReferenceStories.LEI));
+        UniqueKey absent = new UniqueKey("Organization", "lei", Value.of("5493001KJTIIGC8Y1R13"));
+        UniqueKey byName = new UniqueKey("Organization", "name", Value.of("ACME"));
+
+        IdLookup none = IdLookup.fromStore(classified.store, Clearance.none());
+        IdLookup identity = IdLookup.fromStore(classified.store, Clearance.of("identity"));
+
+        assertThat(IdLookup.fromStore(classified.store).find(held, on(3, 1))).as("without a clearance").isPresent();
+        assertThat(none.find(held, on(3, 1))).isEmpty();
+        assertThat(none.find(absent, on(3, 1))).isEmpty();
+        assertThat(identity.find(held, on(3, 1))).map(IdLookup.Named::id)
+                .contains(parties.temporaryIds().get(ACME).value());
+        assertThat(identity.find(absent, on(3, 1))).isEmpty();
+        assertThat(none.find(parties.temporaryIds().get(ACME).value())).as("IDs are not withheld")
+                .contains(entity("Organization"));
+        assertThat(none.find(byName, on(3, 1))).as("name is not a unique attribute, so the key is invalid").isEmpty();
+        assertThatNullPointerException().isThrownBy(() -> IdLookup.fromStore(classified.store, null));
     }
 }

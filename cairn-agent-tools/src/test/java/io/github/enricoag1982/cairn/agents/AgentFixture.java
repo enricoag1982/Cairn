@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.enricoag1982.cairn.core.IdGenerators;
 import io.github.enricoag1982.cairn.core.StoreSettings;
 import io.github.enricoag1982.cairn.core.Stores;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.Receipt;
 import io.github.enricoag1982.cairn.data.RelationshipId;
@@ -16,6 +17,7 @@ import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.fixtures.TestClock;
 import io.github.enricoag1982.cairn.schema.RegistrationResult;
+import io.github.enricoag1982.cairn.schema.SchemaDefinition;
 import io.github.enricoag1982.cairn.schema.Submission;
 import java.util.List;
 import java.util.Optional;
@@ -58,6 +60,23 @@ final class AgentFixture {
      *                      them
      */
     AgentFixture(AgentPolicy policy, boolean withReferenceModel, boolean rulesHaveCode) {
+        this(policy, withReferenceModel ? Optional.of(ReferenceModel.definition()) : Optional.empty(), rulesHaveCode,
+                Clearance.none());
+    }
+
+    /**
+     * Tools with a clearance, over a store with another schema than the reference model registered, under the name of
+     * the reference model (ADR-0036): the way a server started with {@code --clearance} serves its store.
+     *
+     * @param definition the schema to register
+     * @param clearance  the clearance of the tools
+     */
+    AgentFixture(SchemaDefinition definition, Clearance clearance) {
+        this(AgentPolicy.defaults(), Optional.of(definition), true, clearance);
+    }
+
+    private AgentFixture(AgentPolicy policy, Optional<SchemaDefinition> definition, boolean rulesHaveCode,
+            Clearance clearance) {
         StoreSettings.Builder settings = StoreSettings.builder().clock(clock)
                 .idGenerator(IdGenerators.deterministic());
         if (rulesHaveCode) {
@@ -66,12 +85,12 @@ final class AgentFixture {
             settings.declaredRules(ReferenceModel.rules());
         }
         store = Stores.inMemory(settings.build());
-        if (withReferenceModel) {
-            assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), ReferenceModel.definition(),
+        if (definition.isPresent()) {
+            assertThat(store.schema().register(ReferenceModel.origin("1.0.0"), definition.get(),
                     Submission.by("importer"))).isInstanceOf(RegistrationResult.Applied.class);
         }
         queue = new ApprovalQueue(store, clock);
-        tools = new AgentTools(store, policy, queue, PRINCIPAL, Optional.empty());
+        tools = new AgentTools(store, policy, queue, PRINCIPAL, Optional.empty(), clearance);
     }
 
     // ------------------------------------------------------------------ calling tools

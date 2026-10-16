@@ -25,6 +25,7 @@ import io.github.enricoag1982.cairn.expressions.CompiledCheck;
 import io.github.enricoag1982.cairn.expressions.CompiledDerivation;
 import io.github.enricoag1982.cairn.expressions.ExpressionCompilationException;
 import io.github.enricoag1982.cairn.expressions.ExpressionLanguage;
+import io.github.enricoag1982.cairn.fixtures.Derivations;
 import io.github.enricoag1982.cairn.fixtures.ReferenceModel;
 import io.github.enricoag1982.cairn.fixtures.ReferenceStories;
 import io.github.enricoag1982.cairn.schema.Origin;
@@ -226,7 +227,7 @@ class DurableChecksTest {
             @Override
             public CompiledDerivation compileDerivation(String expression, Map<String, ValueType> attributes,
                     ValueType result) {
-                return values -> Optional.empty();
+                return Derivations.of(values -> Optional.empty());
             }
         };
 

@@ -3,6 +3,7 @@ package io.github.enricoag1982.cairn.expressions;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The expression of a derived attribute, compiled by an {@link ExpressionLanguage} for the attributes of one type and
@@ -12,6 +13,18 @@ import java.util.Optional;
  * no side effects.
  */
 public interface CompiledDerivation {
+
+    /**
+     * The attributes that the expression reads from {@code self}, by name, as far as the language can tell without
+     * evaluating it: every attribute that it selects or tests for a value. The engine compares their classifications
+     * with the derived attribute's own (capability {@code attribute-access}, ADR-0036), so that a derived attribute
+     * cannot reveal a classified attribute. A language must not leave out an attribute that an evaluation can read; one
+     * that cannot tell what an expression reads must report every attribute it was compiled for.
+     *
+     * @return the names of the attributes that the expression reads, as the attributes of the type are named, never
+     *         null; empty if it reads none
+     */
+    Set<String> attributesRead();
 
     /**
      * Computes the value of the derived attribute for one version.

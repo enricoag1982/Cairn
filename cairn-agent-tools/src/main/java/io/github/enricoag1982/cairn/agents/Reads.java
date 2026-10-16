@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.agents;
 
 import io.github.enricoag1982.cairn.data.Change;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
@@ -12,6 +13,7 @@ import io.github.enricoag1982.cairn.data.Step;
 import io.github.enricoag1982.cairn.data.Store;
 import io.github.enricoag1982.cairn.data.UniqueKey;
 import io.github.enricoag1982.cairn.data.View;
+import io.github.enricoag1982.cairn.data.WithheldKeyException;
 import io.github.enricoag1982.cairn.documents.IdLookup;
 import io.github.enricoag1982.cairn.documents.Payloads;
 import io.github.enricoag1982.cairn.documents.Queries;
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.TreeSet;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -45,6 +48,11 @@ import tools.jackson.databind.node.ObjectNode;
  * <p>The tools that start from an entity, {@code cairn_read_entity}, {@code cairn_navigate} and {@code cairn_traverse},
  * name it by its ID ({@code id}) or by a unique key ({@code key}, in the form of payloads), exactly one of the two. A key
  * is found at the call's effective time, through the view; one that no entity has then reads as nothing (ADR-0026).
+ *
+ * <p>Every view the tools read through is restricted to the clearance of the tools (ADR-0036, design D5 of
+ * {@code add-attribute-access-control}): the states in a result list the attributes they {@code withheld}, a query that
+ * names a withheld attribute is a problem {@code ACCESS_DENIED}, and so is a key of one, in the result and not as an
+ * error of the protocol.
  */
 final class Reads {
 
@@ -55,9 +63,11 @@ final class Reads {
     static final int MAXIMUM_CHANGES = 1_000;
 
     private final Store store;
+    private final Clearance clearance;
 
-    Reads(Store store) {
+    Reads(Store store, Clearance clearance) {
         this.store = Objects.requireNonNull(store, "store");
+        this.clearance = Objects.requireNonNull(clearance, "clearance");
     }
 
     /** {@code cairn_read_entity}. */
@@ -316,9 +326,29 @@ final class Reads {
         }
         try {
             return view.entity(key).<Found>map(Found.Entity::new).orElseGet(Found.Nothing::new);
+        } catch (WithheldKeyException withheld) {
+            return new Found.Invalid(List.of(withheldKey(view, withheld)));
         } catch (IllegalArgumentException invalid) {
             return new Found.Invalid(List.of(invalidKey(view.schema(), key, invalid.getMessage())));
         }
+    }
+
+    /**
+     * The problem of a key of a unique attribute that the view withholds, because its clearance covers neither the
+     * classification that the view's schema gives the attribute nor the one in the store's latest schema (ADR-0036):
+     * finding an entity by it would tell its value, so the call is refused as a query that names the attribute is, before
+     * anything is read, whether or not an entity has the value.
+     */
+    private static Problem withheldKey(View view, WithheldKeyException withheld) {
+        Set<String> covered = view.clearance().map(Clearance::classifications).orElse(Set.of());
+        return new Problem(ProblemCode.ACCESS_DENIED, "@arguments.key", "The attribute " + withheld.attribute() + " of "
+                + withheld.entityType() + " is classified " + withheld.classification()
+                + ", which the clearance of this server does not cover, so an entity cannot be found by it.",
+                Optional.of("a clearance that covers " + withheld.classification() + ", or the ID of the entity"),
+                Optional.of(covered.isEmpty() ? "a clearance that covers no classification"
+                        : "a clearance that covers " + String.join(", ", covered)),
+                Optional.of("Name the entity by its ID, or by a unique key of an attribute without a classification "
+                        + "or with one that the clearance covers."));
     }
 
     /** The problem of a key that the schema of the view does not accept, with the unique attributes of its type. */
@@ -341,7 +371,7 @@ final class Reads {
     // ------------------------------------------------------------------ helpers
 
     private View view(Instant effectiveAt, KnownAt knownAt) {
-        return store.view(new Coordinates(effectiveAt, knownAt));
+        return store.view(new Coordinates(effectiveAt, knownAt)).restrictedTo(clearance);
     }
 
     private static ObjectNode result(View view, boolean withEffectiveAt, JsonNode result) {

@@ -17,6 +17,7 @@ import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.rd9Gamma;
 import static io.github.enricoag1982.cairn.fixtures.ReferenceStories.values;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.ConflictCheck;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -266,6 +267,26 @@ class EntityVersionsScenariosTest {
                 .replace(a1, from(6, 1), values("number", "A-1", "balance", money("1000"))).build());
 
         assertProblem(only(problems), ProblemCode.MISSING_REQUIRED_VALUE, a1.value() + ".currency");
+    }
+
+    @Test
+    @DisplayName("Scenario: A replace that leaves out a withheld balance")
+    void aReplaceThatLeavesOutAWithheldBalance() {
+        ReferenceStore classified = ReferenceStore.with(
+                Definitions.withClassification(ReferenceModel.definition(), "Account", "balance", "finance"));
+        EntityId a1 = (EntityId) classified.createAccounts().temporaryIds().get(A1);
+        classified.replay(rd5BalancePatch(a1));
+        classified.replay(rd5BalanceCorrection(a1));
+        classified.recordedOn(on(5, 2));
+
+        classified.commit(Transaction.by("importer").clearance(Clearance.none())
+                .replace(a1, from(5, 1), values("number", "A-1", "currency", "EUR")).build());
+
+        EntityState unrestricted = classified.view(on(5, 1)).entity(a1).orElseThrow();
+        assertThat(unrestricted.values()).containsEntry("balance", Value.of(money("1200")))
+                .containsEntry("number", Value.of("A-1")).containsEntry("currency", Value.of("EUR"));
+        assertThat(classified.view(on(4, 30)).entity(a1).orElseThrow().values())
+                .containsEntry("balance", Value.of(money("1200")));
     }
 
     // ------------------------------------------------------------------ end-dating

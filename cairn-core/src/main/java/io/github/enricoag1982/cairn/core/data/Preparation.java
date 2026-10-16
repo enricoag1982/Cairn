@@ -38,6 +38,10 @@ import java.util.Set;
  * those of the rules, and last those of the re-checks. The problems of a subject are those of its values, which follow
  * the order of the attributes in the schema, and then those of its relationships.
  *
+ * <p>A transaction with a clearance that has a problem {@code ACCESS_DENIED} after its writes are applied ends there,
+ * with those problems only: no cascade, derivation, validation, integrity check or rule runs for it (ADR-0036, design
+ * D4 of {@code add-attribute-access-control}).
+ *
  * <p>A Preparation is used once and by one thread: the one holding the store's writer lock.
  */
 final class Preparation {
@@ -113,8 +117,8 @@ final class Preparation {
             CommitSequence sequence, ReadIndex reads) {
         this.transaction = transaction;
         this.commit = commit;
-        this.workspace = new Workspace(index, ledger, purgedDigests, generator, problems);
-        WriteChecks writeChecks = new WriteChecks(problems);
+        this.workspace = new Workspace(index, ledger, purgedDigests, generator, problems, transaction.clearance());
+        WriteChecks writeChecks = new WriteChecks(problems, transaction.clearance());
         this.creations = new Creations(workspace, writeChecks, commit);
         this.amendments = new Amendments(workspace, writeChecks, commit);
         this.cascades = new Cascades(workspace);
@@ -126,6 +130,47 @@ final class Preparation {
 
     /** Applies and validates the transaction; returns this. */
     Preparation run() {
+        applyWrites();
+        if (transaction.clearance().isPresent() && problems.hasAccessDenied()) {
+            // A transaction that touches what its clearance does not cover is refused as it stands (ADR-0036): nothing
+            // is derived, validated, checked or run over values it may not see, so no outcome can be used to probe them.
+            problems.keepOnlyAccessDenied();
+            return this;
+        }
+        ended = cascades.run(amendments.ended());
+        checkSubjects();
+        boolean onlyRuleProblemsFollow = problems.isEmpty();
+        ruleStage.run();
+        if (onlyRuleProblemsFollow) {
+            Changes changes = Changes.of(workspace);
+            rechecks.run(changes);
+            if (problems.isEmpty()) {
+                readStage.cut(changes.bySubject());
+            }
+        }
+        return this;
+    }
+
+    /**
+     * The problems {@code ACCESS_DENIED} that the writes of the transaction have, judged by the schema the transaction
+     * would be validated against, and nothing else: the writes are applied to the working copies, as they are for
+     * {@link #run()}, but nothing is derived, validated, checked or run. A store asks it of a transaction with a
+     * clearance before it compares the transaction's idempotency key, so that a retry cannot confirm a value that has been
+     * classified since it was first written (ADR-0036, design D4 of {@code add-attribute-access-control}).
+     *
+     * @return the problems, none if the transaction has no clearance or its writes are allowed by it
+     */
+    List<Problem> refusals() {
+        if (transaction.clearance().isEmpty()) {
+            return List.of();
+        }
+        applyWrites();
+        problems.keepOnlyAccessDenied();
+        return problems.all();
+    }
+
+    /** Checks the principal and applies the writes in order to the working copies. */
+    private void applyWrites() {
         if (transaction.principal().isBlank()) {
             problems.add(Problems.of(ProblemCode.MISSING_PRINCIPAL, TRANSACTION_PATH,
                     "The transaction names no principal.", "the principal that submits the transaction, such as "
@@ -142,18 +187,6 @@ final class Preparation {
                 case Write.EndDate endDate -> amendments.endDate(endDate, position);
             }
         }
-        ended = cascades.run(amendments.ended());
-        checkSubjects();
-        boolean onlyRuleProblemsFollow = problems.isEmpty();
-        ruleStage.run();
-        if (onlyRuleProblemsFollow) {
-            Changes changes = Changes.of(workspace);
-            rechecks.run(changes);
-            if (problems.isEmpty()) {
-                readStage.cut(changes.bySubject());
-            }
-        }
-        return this;
     }
 
     /**

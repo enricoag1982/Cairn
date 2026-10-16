@@ -34,6 +34,7 @@ final class SchemaRecordReader {
         definition = DefinitionCodec.readChecks(in, definition);
         definition = DefinitionCodec.readDerivations(in, definition);
         definition = DefinitionCodec.readOutliving(in, definition);
+        definition = DefinitionCodec.readClassifications(in, definition);
         return new SchemaRecord(basis, transactionTime, new Submission(principal, onBehalfOf, reason), origin,
                 definition, new SchemaIdentifiers(types, attributes, nextId));
     }

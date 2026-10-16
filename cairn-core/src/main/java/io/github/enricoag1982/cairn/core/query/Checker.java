@@ -45,6 +45,11 @@ import java.util.stream.Collectors;
  *
  * <p>A name that cannot be resolved binds nothing and ends no check: the parts that depend on it are skipped, so that one
  * mistake is one problem, and the rest of the query is still checked.
+ *
+ * <p>A view restricted to a clearance tells the checker what it withholds (ADR-0036, design D3 of
+ * {@code add-attribute-access-control}): every place where the query names an attribute that the view withholds, in a filter, an order, a group key, an aggregate, a column or the condition of a traversal or a link test, is a
+ * problem {@code ACCESS_DENIED}, and the attribute is treated as one that cannot be resolved. Nothing is read, as for every
+ * problem.
  */
 final class Checker {
 
@@ -81,6 +86,8 @@ final class Checker {
 
     private final Schema schema;
     private final Query query;
+    /** What the view that runs the query withholds; empty for a view that is not restricted, which withholds nothing. */
+    private final Optional<Withholding> withholding;
     private final List<Problem> problems = new ArrayList<>();
     /** The bindings by name, as bound so far. */
     private final Map<String, Binding> names = new LinkedHashMap<>();
@@ -96,20 +103,22 @@ final class Checker {
     /** The keys and aggregates of a grouped query by name; null for a query without grouping. */
     private Map<String, Output> outputs;
 
-    private Checker(Schema schema, Query query) {
+    private Checker(Schema schema, Query query, Optional<Withholding> withholding) {
         this.schema = schema;
         this.query = query;
+        this.withholding = withholding;
     }
 
     /**
      * Checks a query.
      *
-     * @param schema the schema of the view that runs the query
-     * @param query  the query
+     * @param schema    the schema of the view that runs the query
+     * @param query     the query
+     * @param withholding what the view that runs the query withholds, if it is restricted
      * @return the plan, or the problems; reads nothing
      */
-    static Checked check(Schema schema, Query query) {
-        return new Checker(schema, query).run();
+    static Checked check(Schema schema, Query query, Optional<Withholding> withholding) {
+        return new Checker(schema, query, withholding).run();
     }
 
     private Checked run() {
@@ -262,6 +271,11 @@ final class Checker {
         Optional<Attribute> found = binding.attributes().stream().filter(attribute -> attribute.isNamed(name))
                 .findFirst();
         if (found.isPresent()) {
+            Optional<String> blocked = withholding.flatMap(view -> view.blockedBy(found.get()));
+            if (blocked.isPresent()) {
+                denied(path, binding, found.get(), blocked.get());
+                return null;
+            }
             return found.get();
         }
         List<ClosestName.Candidate> candidates = binding.attributes().stream()
@@ -271,6 +285,19 @@ final class Checker {
                 + " has no attribute '" + name + "'.", known.isEmpty() ? "an attribute of " + binding.typeName()
                 : "one of " + known, name, closestOf(name, candidates));
         return null;
+    }
+
+    /** Reports an attribute that the clearance of the view does not cover, or that the store classifies since. */
+    private void denied(String path, Binding binding, Attribute attribute, String classification) {
+        Set<String> covered = withholding.orElseThrow().covered();
+        problem(ProblemCode.ACCESS_DENIED, path, "The query names the attribute " + attribute.name() + " of "
+                + binding.typeName() + ", which is classified " + classification + ", but the clearance of the view "
+                + "that runs it does not cover " + classification + ", so the query would reveal what the view "
+                + "withholds.", "a clearance that covers " + classification,
+                covered.isEmpty() ? "a clearance that covers no classification"
+                        : "a clearance that covers " + String.join(", ", covered),
+                "Leave " + attribute.name() + " out of the query, or run the query through a view whose clearance "
+                + "covers " + classification + ".");
     }
 
     // ------------------------------------------------------------------ steps

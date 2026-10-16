@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -42,7 +43,8 @@ import java.util.function.Function;
  * <p>The keys of a mapping are the names of the components of the Java record it stands for, in the order of the
  * components. A change is the exception: it has the field {@code kind} besides, and the {@code principal},
  * {@code onBehalfOf}, {@code reason} and {@code origin} of its record are at its own level. A component that is an empty {@code Optional}, an empty map or an empty list is left out, except the
- * {@code values} of a state, which are always written. IDs are strings,
+ * {@code values} of a state, which are always written; so a state lists the {@code withheld} attributes only when a view
+ * restricted to a clearance withheld some (ADR-0036). IDs are strings,
  * a temporary ID has its {@code $}, and where the kind of an ID is not fixed by the field, in a receipt, it is written as
  * {@code {"entity": "<id>"}} or {@code {"relationship": "<id>"}}. Instants are ISO 8601 strings in UTC, dates are ISO 8601
  * dates, and values are written as {@link DocumentWriter#literal} writes them.
@@ -94,10 +96,11 @@ final class JsonResults {
                 .put("id", state.id().value())
                 .put("entityType", state.entityType());
         values(mapping, state.values());
-        return mapping
+        mapping
                 .put("period", period(state.period()))
                 .put("recordedAt", state.recordedAt().toString())
                 .put("recordedBasis", plain(state.recordedBasis().value()));
+        return withheld(mapping, state.withheld());
     }
 
     static Mapping relationshipState(RelationshipState state) {
@@ -107,10 +110,11 @@ final class JsonResults {
                 .put("source", state.source().value())
                 .put("target", state.target().value());
         values(mapping, state.values());
-        return mapping
+        mapping
                 .put("period", period(state.period()))
                 .put("recordedAt", state.recordedAt().toString())
                 .put("recordedBasis", plain(state.recordedBasis().value()));
+        return withheld(mapping, state.withheld());
     }
 
     static Mapping link(Link link) {
@@ -253,6 +257,18 @@ final class JsonResults {
         Mapping mapping = new Mapping().put("from", period.from().toString());
         period.until().ifPresent(until -> mapping.put("until", until.toString()));
         return mapping;
+    }
+
+    /**
+     * The names of the attributes whose values a view restricted to a clearance withheld (ADR-0036), as a list of strings
+     * in the order of the schema, so that a reader tells a withheld value from no value; left out when nothing was
+     * withheld.
+     */
+    private static Mapping withheld(Mapping owner, Set<String> withheld) {
+        if (!withheld.isEmpty()) {
+            owner.put("withheld", new Sequence(withheld.stream().<WrittenNode>map(Text::new).toList()));
+        }
+        return owner;
     }
 
     /**

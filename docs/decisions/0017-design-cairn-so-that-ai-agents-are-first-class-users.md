@@ -87,3 +87,4 @@ It does not conflict with the working principle "Agents are contributors, not au
 - Custom validation logic stays in Java: [ADR-0018](0018-validate-with-declarative-constraints-and-named-java-rules.md).
 - Model Context Protocol: <https://modelcontextprotocol.io/>
 - RFC 9457, problem details for HTTP APIs, inspires the problem fields: <https://www.rfc-editor.org/rfc/rfc9457>
+- Agents read and write through the clearance that the agent server's operator gives them, empty by default, as [ADR-0036](0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md) decides.

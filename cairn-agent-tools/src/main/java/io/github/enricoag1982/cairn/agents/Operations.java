@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.agents;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -31,6 +32,12 @@ import tools.jackson.databind.node.ObjectNode;
  * transaction payload (design D2, D4, D5 and D6 of {@code add-agent-tools}). Every method takes the text of a document
  * or payload, never throws for a text that is wrong, and returns the JSON of the outcome. People approving a request
  * run the same code as an agent whose request is allowed, so both get the same outcome for the same state.
+ *
+ * <p>A transaction is submitted with the clearance of the agent that asks (ADR-0036, design D5 of
+ * {@code add-attribute-access-control}), whatever the payload says: a payload has no way to give one, and a person who
+ * approves a request applies it with the clearance it was made with, not a wider one. So is a schema document: a plan
+ * or a registration is checked against the clearance of the agent, which may not change a classification that it does
+ * not cover, nor add a check or a derived attribute that reads one.
  */
 final class Operations {
 
@@ -46,13 +53,17 @@ final class Operations {
 
     // ------------------------------------------------------------------ schema documents
 
-    /** Plans the registration of a document: {@code {outcome, changes, problems}}. */
-    ObjectNode planSchema(String text) {
+    /**
+     * Plans the registration of a document for a clearance: {@code {outcome, changes, problems}}. A change that the
+     * clearance does not allow is a problem {@code ACCESS_DENIED} at the element concerned (ADR-0036, design D5 of
+     * {@code add-attribute-access-control}).
+     */
+    ObjectNode planSchema(String text, Clearance clearance) {
         return switch (SchemaDocuments.read(text)) {
             case DocumentReadResult.Invalid invalid -> plan("rejected", List.of(), invalid.problems());
             case DocumentReadResult.Read read -> {
                 SchemaDocument document = read.document();
-                SchemaPlan plan = store.schema().plan(document.origin(), document.definition());
+                SchemaPlan plan = store.schema().plan(document.origin(), document.definition(), clearance);
                 yield plan(switch (plan.outcome()) {
                     case APPLY -> "wouldApply";
                     case UNCHANGED -> "unchanged";
@@ -62,13 +73,17 @@ final class Operations {
         };
     }
 
-    /** Registers a document for a submission: {@code {outcome: applied | unchanged | rejected, ...}}. */
-    ObjectNode registerSchema(String text, Submission submission) {
+    /**
+     * Registers a document for a submission and a clearance: {@code {outcome: applied | unchanged | rejected, ...}}.
+     * The check of the clearance and the registration are one step of the registry, so nothing comes between them.
+     */
+    ObjectNode registerSchema(String text, Submission submission, Clearance clearance) {
         return switch (SchemaDocuments.read(text)) {
             case DocumentReadResult.Invalid invalid -> rejected(invalid.problems());
             case DocumentReadResult.Read read -> {
                 SchemaDocument document = read.document();
-                yield switch (store.schema().register(document.origin(), document.definition(), submission)) {
+                yield switch (store.schema().register(document.origin(), document.definition(), submission,
+                        clearance)) {
                     case RegistrationResult.Applied applied -> Json.object()
                             .put("outcome", "applied")
                             .put("basis", applied.basis().value())
@@ -85,8 +100,8 @@ final class Operations {
      * The outcome that ends the registration of a document before it is put to a person: rejected, if registering it
      * now would be, or unchanged, if there is nothing to approve. Empty if the registration would be applied.
      */
-    Optional<ObjectNode> schemaPreflight(String text) {
-        ObjectNode plan = planSchema(text);
+    Optional<ObjectNode> schemaPreflight(String text, Clearance clearance) {
+        ObjectNode plan = planSchema(text, clearance);
         return switch (plan.get("outcome").stringValue()) {
             case "wouldApply" -> Optional.empty();
             case "unchanged" -> Optional.of(Json.object().put("outcome", "unchanged"));
@@ -105,9 +120,9 @@ final class Operations {
 
     // ------------------------------------------------------------------ transaction payloads
 
-    /** Runs a payload dry: {@code {outcome: wouldCommit | rejected, problems?}}. */
-    ObjectNode dryRun(String text, String principal, Optional<String> onBehalfOf) {
-        return dryRun(prepare(text, principal, onBehalfOf));
+    /** Runs a payload dry with a clearance: {@code {outcome: wouldCommit | rejected, problems?}}. */
+    ObjectNode dryRun(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        return dryRun(prepare(text, principal, onBehalfOf, clearance));
     }
 
     private ObjectNode dryRun(Prepared prepared) {
@@ -120,9 +135,9 @@ final class Operations {
         };
     }
 
-    /** Commits a payload: {@code {outcome: committed | rejected, receipt?, problems?}}. */
-    ObjectNode commit(String text, String principal, Optional<String> onBehalfOf) {
-        return switch (prepare(text, principal, onBehalfOf)) {
+    /** Commits a payload with a clearance: {@code {outcome: committed | rejected, receipt?, problems?}}. */
+    ObjectNode commit(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        return switch (prepare(text, principal, onBehalfOf, clearance)) {
             case Prepared.Failed failed -> rejected(failed.problems());
             case Prepared.Ready ready -> switch (store.commit(ready.transaction())) {
                 case CommitResult.Committed committed -> Json.object()
@@ -146,8 +161,8 @@ final class Operations {
     }
 
     /** Runs a payload dry, and reads the reason and the party it gives, to put it to a person if the dry run passes. */
-    Preflight commitPreflight(String text, String principal, Optional<String> onBehalfOf) {
-        Prepared prepared = prepare(text, principal, onBehalfOf);
+    Preflight commitPreflight(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        Prepared prepared = prepare(text, principal, onBehalfOf, clearance);
         ObjectNode dryRun = dryRun(prepared);
         if ("wouldCommit".equals(dryRun.get("outcome").stringValue())) {
             Transaction transaction = ((Prepared.Ready) prepared).transaction();
@@ -157,8 +172,8 @@ final class Operations {
     }
 
     /** The refusal of a commit that the approval policy denies, located at the root of the payload. */
-    ObjectNode denyCommit(String text, String principal, Optional<String> onBehalfOf) {
-        return switch (prepare(text, principal, onBehalfOf)) {
+    ObjectNode denyCommit(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
+        return switch (prepare(text, principal, onBehalfOf, clearance)) {
             case Prepared.Failed failed -> rejected(failed.problems());
             case Prepared.Ready ready -> rejected(ready.payload().locate(List.of(denied("@transaction",
                     "committing transactions"))));
@@ -178,12 +193,13 @@ final class Operations {
     }
 
     /**
-     * Reads a payload with the store's latest schema, the IDs it holds and the entities that its unique keys name, and
-     * checks that it names the principal the adapter acts as. A payload that names no party acted for gets the adapter's, if it has one.
+     * Reads a payload with the store's latest schema, the IDs it holds and the entities that its unique keys name, as a
+     * view restricted to the clearance finds them, and checks that it names the principal the adapter acts as. A payload
+     * that names no party acted for gets the adapter's, if it has one. The transaction gets the adapter's clearance.
      */
-    private Prepared prepare(String text, String principal, Optional<String> onBehalfOf) {
+    private Prepared prepare(String text, String principal, Optional<String> onBehalfOf, Clearance clearance) {
         View view = store.view(Coordinates.effectiveAt(Instant.EPOCH));
-        return switch (Payloads.readTransaction(text, view.schema(), IdLookup.fromStore(store))) {
+        return switch (Payloads.readTransaction(text, view.schema(), IdLookup.fromStore(store, clearance))) {
             case PayloadReadResult.Invalid invalid -> new Prepared.Failed(invalid.problems());
             case PayloadReadResult.Read read -> {
                 TransactionPayload payload = read.payload();
@@ -191,10 +207,10 @@ final class Operations {
                 if (!transaction.principal().equals(principal)) {
                     yield new Prepared.Failed(payload.locate(List.of(mismatch(transaction.principal(), principal))));
                 }
-                if (transaction.onBehalfOf().isEmpty() && onBehalfOf.isPresent()) {
-                    transaction = new Transaction(transaction.principal(), onBehalfOf, transaction.reason(),
-                            transaction.idempotencyKey(), transaction.writes());
-                }
+                transaction = new Transaction(transaction.principal(),
+                        transaction.onBehalfOf().isEmpty() ? onBehalfOf : transaction.onBehalfOf(),
+                        transaction.reason(), transaction.idempotencyKey(), transaction.writes(),
+                        Optional.of(clearance));
                 yield new Prepared.Ready(payload, transaction);
             }
         };

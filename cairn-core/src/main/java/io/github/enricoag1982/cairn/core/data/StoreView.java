@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * A view of the in-memory store (design D4 of {@code add-entity-versions} and D2 of {@code add-relationships}): an
@@ -30,12 +31,28 @@ final class StoreView extends NavigableView {
     private final Basis basis;
     private final SchemaIndex index;
     private final Ledger ledger;
+    private final Supplier<Schema> latestSchema;
 
     StoreView(Instant effectiveAt, Basis basis, SchemaIndex index, Ledger ledger) {
+        this(effectiveAt, basis, index, ledger, index::schema);
+    }
+
+    /**
+     * Creates a view that knows the store's latest schema, which a restricted view withholds by too.
+     *
+     * @param latestSchema the store's latest schema, read when a restricted view needs it
+     */
+    StoreView(Instant effectiveAt, Basis basis, SchemaIndex index, Ledger ledger, Supplier<Schema> latestSchema) {
         this.effectiveAt = effectiveAt;
         this.basis = basis;
         this.index = index;
         this.ledger = ledger;
+        this.latestSchema = latestSchema;
+    }
+
+    @Override
+    Schema latestSchema() {
+        return latestSchema.get();
     }
 
     @Override

@@ -3,11 +3,13 @@ package io.github.enricoag1982.cairn.data;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.enricoag1982.cairn.schema.Basis;
 import io.github.enricoag1982.cairn.schema.Value;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /** Reading the values of a state as Java values (design D2 of {@code add-java-type-generation}). */
@@ -97,5 +99,41 @@ class TypedValuesTest {
     void nullArgumentsAreRejected() {
         assertThatThrownBy(() -> TypedValues.requiredString(null, "name")).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> TypedValues.optionalString(VALUES, null)).isInstanceOf(NullPointerException.class);
+    }
+
+    // ------------------------------------------------------------------ withheld attributes (ADR-0036)
+
+    private static final EntityState PERSON = new EntityState(new EntityId("e-1"), "Person",
+            Map.of("name", Value.of("Alice")), EffectivePeriod.from(NOON), NOON, new Basis(1), Set.of("salary"));
+    private static final RelationshipState KNOWS = new RelationshipState(new RelationshipId("r-1"), "Knows",
+            new EntityId("e-1"), new EntityId("e-2"), Map.of(), EffectivePeriod.from(NOON), NOON, new Basis(1),
+            Set.of("since"));
+
+    @Test
+    void anAttributeThatAStateWithheldFailsWithAMessageThatNamesItAndSaysSo() {
+        assertThatThrownBy(() -> TypedValues.requireHeld(PERSON, "salary")).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("salary").hasMessageContaining("e-1").hasMessageContaining("withheld")
+                .hasMessageContaining("entity");
+        assertThatThrownBy(() -> TypedValues.requireHeld(KNOWS, "since")).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("since").hasMessageContaining("r-1").hasMessageContaining("withheld")
+                .hasMessageContaining("relationship");
+    }
+
+    @Test
+    void anAttributeThatAStateDidNotWithholdPasses() {
+        TypedValues.requireHeld(PERSON, "name");
+        TypedValues.requireHeld(KNOWS, "share");
+        TypedValues.requireHeld(new EntityState(new EntityId("e-2"), "Person", Map.of(), EffectivePeriod.from(NOON),
+                NOON, new Basis(1)), "salary");
+    }
+
+    @Test
+    void nullArgumentsOfTheWithheldCheckAreRejected() {
+        assertThatThrownBy(() -> TypedValues.requireHeld((EntityState) null, "name"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> TypedValues.requireHeld(PERSON, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> TypedValues.requireHeld((RelationshipState) null, "since"))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> TypedValues.requireHeld(KNOWS, null)).isInstanceOf(NullPointerException.class);
     }
 }

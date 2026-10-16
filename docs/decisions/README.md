@@ -50,5 +50,6 @@ Architecture Decision Records (ADRs) in [MADR 4](https://adr.github.io/madr/) fo
 | [ADR-0033](0033-name-entities-to-purge-by-unique-keys-that-resolve-over-all-of-effective-time.md) | Name entities to purge by unique keys that resolve over all of effective time | accepted | 2026-10-16 |
 | [ADR-0034](0034-let-relationships-of-a-type-outlive-their-targets-as-records-of-past-facts.md) | Let relationships of a type outlive their targets, as records of past facts | accepted | 2026-10-16 |
 | [ADR-0035](0035-give-expressions-functions-of-cairn-s-own-over-a-version-s-values-starting-with-counts-of-days.md) | Give expressions functions of Cairn's own over a version's values, starting with counts of days | accepted | 2026-10-16 |
+| [ADR-0036](0036-classify-attributes-and-read-and-write-them-through-a-clearance-that-withholds-the-rest.md) | Classify attributes, and read and write them through a clearance that withholds the rest | accepted | 2026-10-16 |
 
 <!-- decision-log:end -->

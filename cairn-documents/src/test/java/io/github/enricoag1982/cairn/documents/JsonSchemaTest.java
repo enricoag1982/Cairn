@@ -84,6 +84,7 @@ class JsonSchemaTest {
                         "  A1: { source: A, target: B, inverseName: a1, targetsPerSource: \"0..1\", sourcesPerTarget: \"1..1\" }",
                         "  A2: { source: A, target: B, inverseName: a2, targetsPerSource: \"0..*\", sourcesPerTarget: \"1..*\" }")),
                 Arguments.of("examples of any scalar", attribute("type: date, examples: [1, 1.5, abc, true, 2026-01-05]")),
+                Arguments.of("a classified attribute", attribute("type: decimal, classification: finance")),
                 Arguments.of("string constraints", attribute(
                         "type: string, allowedValues: [a, b], pattern: \"[a-z]+\", minLength: 0, maxLength: 16")),
                 Arguments.of("an empty range", attribute("type: int, range: {}")),
@@ -155,6 +156,8 @@ class JsonSchemaTest {
                 Arguments.of("aliases with a number", attribute("type: string, aliases: [old, 5]")),
                 Arguments.of("allowed values with a number", attribute("type: string, allowedValues: [a, 5]")),
                 Arguments.of("a pattern that is a number", attribute("type: string, pattern: 5")),
+                Arguments.of("a classification that is a number", attribute("type: string, classification: 5")),
+                Arguments.of("a classification that is a list", attribute("type: string, classification: [pay]")),
                 Arguments.of("a length that is a string", attribute("type: string, minLength: \"3\"")),
                 Arguments.of("a length that is a decimal", attribute("type: string, maxLength: 1.5")),
                 Arguments.of("a length that does not fit 32 bits", attribute("type: string, maxLength: 3000000000")),

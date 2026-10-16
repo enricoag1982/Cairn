@@ -166,6 +166,40 @@ public final class Definitions {
     }
 
     /**
+     * Classifies an attribute of an entity type, relationship type or trait, or removes its classification: the
+     * test-only classifications of the scenarios of attribute access, such as {@code finance} for Account's
+     * {@code balance}.
+     *
+     * @param definition     the definition to change
+     * @param type           the name of the entity type, relationship type or trait that declares the attribute
+     * @param attribute      the attribute's name
+     * @param classification the classification, or {@code null} for none
+     * @return the changed definition
+     */
+    public static SchemaDefinition withClassification(
+            SchemaDefinition definition, String type, String attribute, String classification) {
+        UnaryOperator<AttributeDefinition> classify = old -> new AttributeDefinition(old.name(), old.valueType(),
+                old.required(), old.unique(), old.range(), old.aliases(), old.deprecated(), old.description(),
+                old.examples(), old.allowedValues(), old.pattern(), old.minLength(), old.maxLength(), old.derived(),
+                Optional.ofNullable(classification));
+        if (definition.entityTypes().stream().anyMatch(candidate -> candidate.name().equals(type))) {
+            return changeEntityType(definition, type, entity -> changeAttribute(entity, attribute, classify));
+        }
+        if (definition.traits().stream().anyMatch(candidate -> candidate.name().equals(type))) {
+            return changeTrait(definition, type, trait -> new TraitDefinition(trait.name(),
+                    replace(trait.attributes(), attribute, AttributeDefinition::name, classify), trait.aliases(),
+                    trait.deprecated(), trait.description()));
+        }
+        return changeRelationshipType(definition, type, relationship -> new RelationshipTypeDefinition(
+                relationship.name(), relationship.source(), relationship.target(), relationship.targetsPerSource(),
+                relationship.sourcesPerTarget(), relationship.inverseName(), relationship.inverseAliases(),
+                relationship.kind(), relationship.symmetric(), relationship.outlivesTarget(), relationship.supertype(),
+                replace(relationship.attributes(), attribute, AttributeDefinition::name, classify),
+                relationship.aliases(), relationship.deprecated(), relationship.description(), relationship.rules(),
+                relationship.checks()));
+    }
+
+    /**
      * Removes an entity type.
      *
      * @param definition the definition to change
@@ -266,7 +300,7 @@ public final class Definitions {
         return new AttributeDefinition(name, attribute.valueType(), attribute.required(), attribute.unique(),
                 attribute.range(), List.of(aliases), attribute.deprecated(), attribute.description(),
                 attribute.examples(), attribute.allowedValues(), attribute.pattern(), attribute.minLength(),
-                attribute.maxLength(), attribute.derived());
+                attribute.maxLength(), attribute.derived(), attribute.classification());
     }
 
     private static <T> List<T> replace(

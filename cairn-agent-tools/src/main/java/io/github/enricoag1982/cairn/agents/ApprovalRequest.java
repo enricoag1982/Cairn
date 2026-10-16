@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.agents;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,6 +25,10 @@ import java.util.Optional;
  *                    request is pending
  * @param decidedBy   who approved or rejected the request; empty while it is pending
  * @param decidedAt   when it was decided; empty while it is pending
+ * @param clearance   the clearance of the agent that made the request, with which approving it commits the transaction
+ *                    or registers the schema document (ADR-0036): a person who approves applies the request as the
+ *                    agent could, not with a wider clearance; empty only for a request that was made without one, which
+ *                    is applied with a clearance that covers no classification
  */
 public record ApprovalRequest(
         String id,
@@ -36,7 +41,30 @@ public record ApprovalRequest(
         Status status,
         Optional<String> outcome,
         Optional<String> decidedBy,
-        Optional<Instant> decidedAt) {
+        Optional<Instant> decidedAt,
+        Optional<Clearance> clearance) {
+
+    /**
+     * Creates a request without a clearance, which is applied with a clearance that covers no classification.
+     *
+     * @param id          the ID of the request
+     * @param kind        what the request asks for
+     * @param principal   the principal of the adapter that submitted it
+     * @param onBehalfOf  the party the principal acts for, if any
+     * @param reason      why the agent made the request, if it said
+     * @param submittedAt when the request was submitted
+     * @param content     the request as submitted
+     * @param status      whether the request waits, was approved or was rejected
+     * @param outcome     once decided, the result as JSON text
+     * @param decidedBy   who approved or rejected the request
+     * @param decidedAt   when it was decided
+     */
+    public ApprovalRequest(String id, Kind kind, String principal, Optional<String> onBehalfOf,
+            Optional<String> reason, Instant submittedAt, String content, Status status, Optional<String> outcome,
+            Optional<String> decidedBy, Optional<Instant> decidedAt) {
+        this(id, kind, principal, onBehalfOf, reason, submittedAt, content, status, outcome, decidedBy, decidedAt,
+                Optional.empty());
+    }
 
     /** What a request asks for. */
     public enum Kind {
@@ -75,6 +103,7 @@ public record ApprovalRequest(
         Objects.requireNonNull(outcome, "outcome");
         Objects.requireNonNull(decidedBy, "decidedBy");
         Objects.requireNonNull(decidedAt, "decidedAt");
+        Objects.requireNonNull(clearance, "clearance");
         boolean decided = status != Status.PENDING;
         if (decidedBy.isPresent() != decided || decidedAt.isPresent() != decided || (!decided && outcome.isPresent())) {
             throw new IllegalArgumentException("A request is decided, with who and when, exactly when it is not "

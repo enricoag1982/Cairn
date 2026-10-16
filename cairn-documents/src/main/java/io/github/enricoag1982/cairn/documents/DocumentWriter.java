@@ -139,6 +139,7 @@ final class DocumentWriter {
         attribute.range().ifPresent(range -> mapping.put("range", range(range)));
         strings(mapping, "aliases", attribute.aliases());
         flag(mapping, "deprecated", attribute.deprecated());
+        attribute.classification().ifPresent(classification -> mapping.put("classification", classification));
         attribute.description().ifPresent(description -> mapping.put("description", description));
         if (!attribute.examples().isEmpty()) {
             mapping.put("examples",

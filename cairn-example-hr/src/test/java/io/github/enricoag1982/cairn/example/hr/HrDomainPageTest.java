@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Test;
  * depend on column widths, the order of rows, or the Markdown around a name. It is strict on what the page says: the
  * names, the attributes with whether they are required and unique, their allowed values and patterns, the expression
  * of those that are derived ({@code derived from} and the expression in a code span, among the details of the attribute),
+ * the classification of those that are classified ({@code classified} and the classification in a code span),
  * the kind, whether its relationships outlive their targets, source, target, multiplicities and inverse name of each
  * relationship type, the version, type, description and codes of each rule, and the type, expression and message of each
  * check.
@@ -65,6 +66,7 @@ class HrDomainPageTest {
     private static final Pattern PATTERN_OF_LETTERS = Pattern.compile("(two|three) capital letters");
     private static final Pattern PATTERN_OF_DIGITS = Pattern.compile("`([^`]+)` and (two|three|four) digits");
     private static final Pattern DERIVED = Pattern.compile("derived from `([^`]+)`");
+    private static final Pattern CLASSIFIED = Pattern.compile("classified `([^`]+)`");
     private static final Pattern POSITION = Pattern.compile("(P-\\d+), (.+) \\(([A-Z]+)\\)");
     private static final Pattern SALARY = Pattern.compile("(\\d[\\d,]*) ([A-Z]{3})");
     private static final Map<String, Integer> COUNTS = Map.of("two", 2, "three", 3, "four", 4);
@@ -182,16 +184,16 @@ class HrDomainPageTest {
 
     // ------------------------------------------------------------------ entity types
 
-    /** What the page says about an attribute; a type or a pattern it does not mention is null. */
+    /** What the page says about an attribute; a type, a pattern or a classification it does not mention is null. */
     private record PageAttribute(ValueType type, boolean required, boolean unique, Set<String> allowedValues,
-            String pattern, String derived) {
+            String pattern, String derived, String classification) {
     }
 
     /**
      * Reads the attributes cell: segments separated by commas, each with the code spans before its parenthesis as
      * the attribute names (&quot;{@code a} and {@code b}&quot; are two) and, in the parenthesis, flags separated by
      * commas: required, unique, a type word, a pattern in words, {@code derived from} and the expression in a code
-     * span, or a colon and the allowed values.
+     * span, {@code classified} and the classification in a code span, or a colon and the allowed values.
      */
     private static Map<String, PageAttribute> attributes(String cell) {
         Map<String, PageAttribute> attributes = new TreeMap<>();
@@ -209,15 +211,19 @@ class HrDomainPageTest {
             ValueType type = null;
             String pattern = null;
             String derived = null;
+            String classification = null;
             for (String flag : split(flags, ',')) {
                 String words = plain(flag).toLowerCase(Locale.ROOT);
                 Matcher letters = PATTERN_OF_LETTERS.matcher(words);
                 Matcher digits = PATTERN_OF_DIGITS.matcher(flag.trim());
                 Matcher derivation = DERIVED.matcher(flag.trim());
+                Matcher classified = CLASSIFIED.matcher(flag.trim());
                 if (words.isEmpty()) {
                     continue;
                 } else if (derivation.matches()) {
                     derived = derivation.group(1);
+                } else if (classified.matches()) {
+                    classification = classified.group(1);
                 } else if (words.equals("required")) {
                     required = true;
                 } else if (words.equals("unique")) {
@@ -234,7 +240,8 @@ class HrDomainPageTest {
                 }
             }
             for (String name : names) {
-                assertThat(attributes.put(name, new PageAttribute(type, required, unique, allowed, pattern, derived)))
+                assertThat(attributes.put(name, new PageAttribute(type, required, unique, allowed, pattern, derived,
+                        classification)))
                         .as("attribute %s listed once", name).isNull();
             }
         }
@@ -271,6 +278,8 @@ class HrDomainPageTest {
                 assertThat(actual.pattern()).as("%s pattern", where).isEqualTo(Optional.ofNullable(expected.pattern()));
                 assertThat(actual.derived().map(expression -> expression.replaceAll("\\s+", " ").trim()))
                         .as("%s derived from", where).isEqualTo(Optional.ofNullable(expected.derived()));
+                assertThat(actual.classification()).as("%s classification", where)
+                        .isEqualTo(Optional.ofNullable(expected.classification()));
                 if (expected.type() != null) {
                     assertThat(actual.valueType()).as("%s type", where).isEqualTo(expected.type());
                 }

@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.schema.Problem;
+import io.github.enricoag1982.cairn.schema.ProblemCode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -28,6 +29,16 @@ final class ProblemLog {
     /** Tells whether no problem was found so far. */
     boolean isEmpty() {
         return problems.isEmpty();
+    }
+
+    /** Tells whether a problem found so far has the code {@link ProblemCode#ACCESS_DENIED}. */
+    boolean hasAccessDenied() {
+        return problems.stream().anyMatch(problem -> problem.code() == ProblemCode.ACCESS_DENIED);
+    }
+
+    /** Drops every problem found so far that does not have the code {@link ProblemCode#ACCESS_DENIED}. */
+    void keepOnlyAccessDenied() {
+        problems.removeIf(problem -> problem.code() != ProblemCode.ACCESS_DENIED);
     }
 
     /** A copy of the problems so far, in order. */

@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.example.hr;
 
 import static io.github.enricoag1982.cairn.example.hr.Brightwater.on;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
 import io.github.enricoag1982.cairn.agents.AgentPolicy;
@@ -11,6 +12,7 @@ import io.github.enricoag1982.cairn.agents.ApprovalRequest;
 import io.github.enricoag1982.cairn.core.IdGenerators;
 import io.github.enricoag1982.cairn.core.StoreSettings;
 import io.github.enricoag1982.cairn.core.Stores;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.CommitResult;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.DryRunResult;
@@ -68,6 +70,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -79,7 +83,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The stories HR-1 to HR-17 of the HR domain ({@code docs/reference/hr-domain.md}), one test each: a replay of
+ * The stories HR-1 to HR-18 of the HR domain ({@code docs/reference/hr-domain.md}), one test each: a replay of
  * Brightwater's year on one store, with a clock that moves to the recording date of each story. The store is created
  * with its rules found through the service loader, as an application's would be. The main code of the example uses
  * Cairn's public API only; the tests use it too, and also the {@code cairn-api} test fixture {@code TestClock}, a
@@ -88,8 +92,8 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>The stories replay in the order of their recording dates, not of their numbers, as the stories of the reference
  * domain do, so that the transaction time of each is its recording date: HR-1 and HR-2 (2 January), HR-5 to HR-8
  * (1 to 5 March), HR-16 (9 March), HR-3 (10 March), HR-9 and HR-10 (queries effective 31 March, read at this point of
- * the replay), HR-4 (15 April), HR-11 (20 May and 20 June), HR-13 (1 August), HR-12 (1 October) and HR-17
- * (1 November). HR-9 must read before the purge of HR-12, which takes Gus out of the headcount. A store's transaction times strictly increase, so
+ * the replay), HR-4 (15 April), HR-11 (20 May and 20 June), HR-13 (1 August), HR-12 (1 October), HR-17
+ * (1 November) and HR-18 (2 November). HR-9 must read before the purge of HR-12, which takes Gus out of the headcount. A store's transaction times strictly increase, so
  * the second transaction of a day gets the next microsecond after the first; HR-1 and HR-2 are asserted by their day.
  *
  * <p>HR-15 (1 March) tells HR-5's request again, on a store of its own with HR-1 and HR-2, because a notifier must
@@ -661,11 +665,14 @@ class HrStoriesTest {
         clock.moveTo(on(8, 1));
         ApprovalQueue queue = new ApprovalQueue(store, clock);
         AgentPolicy policy = new AgentPolicy(AgentPolicy.Decision.ALLOW, AgentPolicy.Decision.REQUIRE_APPROVAL);
-        AgentTools tools = new AgentTools(store, policy, queue, Brightwater.HR_ASSISTANT, Optional.empty());
+        // The hire sets pay, which is classified: the person who serves the agent gave it the clearance for pay.
+        AgentTools tools = new AgentTools(store, policy, queue, Brightwater.HR_ASSISTANT, Optional.empty(),
+                Clearance.of(Brightwater.PAY));
 
         // The agent learns what the store holds and how to write to it.
         String description = tools.call("cairn_describe", "{}");
         assertThat(description).contains("\"principal\":\"agent:hr-assistant\"").contains("\"name\":\"hr-model\"")
+                .contains("\"clearance\":[\"pay\"]")
                 .contains("\"dataCommits\":\"requireApproval\"").contains("decided-by-manager/not-a-manager")
                 .contains("vacation-within-entitlement/over-entitlement").contains("no-unit-cycles/cycle")
                 .contains("leave-dates-in-order").contains("self.lastDay >= self.firstDay");
@@ -683,6 +690,13 @@ class HrStoriesTest {
                 .contains("\"key\": { \"name\": \"Brightwater GmbH\" }");
         assertThat(payload).as("the payload holds no ID").doesNotContainPattern("[0-9a-f]{8}-[0-9a-f]{4}-");
         assertThat(tools.call("cairn_dry_run", arguments("payload", payload))).contains("\"outcome\":\"wouldCommit\"");
+
+        // An agent whose clearance does not cover pay cannot set it: the same payload is rejected.
+        AgentTools withoutPay = new AgentTools(store, policy, queue, Brightwater.HR_ASSISTANT, Optional.empty(),
+                Clearance.none());
+        assertThat(withoutPay.call("cairn_dry_run", arguments("payload", payload)))
+                .contains("\"outcome\":\"rejected\"").contains("\"code\":\"ACCESS_DENIED\"")
+                .contains("annualSalary").contains("currency");
 
         // The commit waits: nothing is written until a person decides.
         String pending = tools.call("cairn_commit", arguments("payload", payload));
@@ -892,10 +906,78 @@ class HrStoriesTest {
                 .contains(ProblemCode.END_NOT_EFFECTIVE);
     }
 
-    // ------------------------------------------------------------------ HR-14, a company of its own
+    // ------------------------------------------------------------------ HR-18, recorded 2 November
 
     @Test
     @Order(17)
+    @DisplayName("HR-18: an agent without a clearance lists the employments of Platform without their pay")
+    void hr18AgentWithoutClearanceReadsNoPay() {
+        clock.moveTo(on(11, 2));
+        ApprovalQueue queue = new ApprovalQueue(store, clock);
+        AgentTools orgChart = new AgentTools(store, AgentPolicy.defaults(), queue, Brightwater.ORG_CHART,
+                Optional.empty(), Clearance.none());
+        AgentTools payroll = new AgentTools(store, AgentPolicy.defaults(), queue, Brightwater.HR_ASSISTANT,
+                Optional.empty(), Clearance.of(Brightwater.PAY));
+        String effective = "2026-11-02T00:00:00Z";
+
+        // The agent learns that it has no clearance, and which attributes are classified.
+        String description = orgChart.call("cairn_describe", "{}");
+        assertThat(description).contains("\"principal\":\"agent:org-chart\"").contains("\"clearance\":[]")
+                .contains("classification: pay");
+
+        // It lists the employments of Platform with their numbers and units. Each lists the salary and the currency as
+        // withheld, and no value of either is anywhere in the answer.
+        String listed = orgChart.call("cairn_query", arguments("query", Brightwater.hr18PlatformEmploymentsQuery(),
+                "effectiveAt", effective));
+        assertThat(listed).doesNotContain("\"problems\"");
+        assertThat(employeeNumbers(listed)).as("the employments of Platform, by number").containsExactly("E-003",
+                "E-004", "E-005", "E-008");
+        assertThat(listed.split(Pattern.quote("\"withheld\":[\"annualSalary\",\"currency\"]"), -1))
+                .as("each of the four employments lists its pay as withheld").hasSize(5);
+        assertThat(listed).contains("\"PLT\"").doesNotContain("\"annualSalary\":").doesNotContain("\"currency\":")
+                .doesNotContain("EUR").doesNotContain("72000").doesNotContain("110000");
+
+        // Its query of the average salary is rejected: an aggregate over a withheld attribute would reveal it.
+        String average = orgChart.call("cairn_query", arguments("query", Brightwater.hr18AverageSalaryQuery(),
+                "effectiveAt", effective));
+        assertThat(average).contains("\"code\":\"ACCESS_DENIED\"").contains("\"path\":\"@query.aggregates.0\"");
+
+        // The same query, from an agent whose clearance covers pay, is answered.
+        String answered = payroll.call("cairn_query", arguments("query", Brightwater.hr18AverageSalaryQuery(),
+                "effectiveAt", effective));
+        assertThat(answered).doesNotContain("ACCESS_DENIED").doesNotContain("\"problems\"").contains("\"average\"");
+
+        // The application reads pay through a view that is not restricted, as reports do; a view restricted to a clearance
+        // that does not cover pay reads the generated type without it, and its accessors say that pay was withheld.
+        View november2 = view(on(11, 2));
+        EntityId dev = ids.entity("e004");
+        assertThat(salary(november2.entity(dev).orElseThrow())).isEqualByComparingTo("72000");
+        EntityState restricted = november2.restrictedTo(Clearance.none()).entity(dev).orElseThrow();
+        assertThat(restricted.withheld()).containsExactly("annualSalary", "currency");
+        Employment withheld = Employment.from(restricted);
+        assertThat(withheld.employeeNumber()).isEqualTo("E-004");
+        assertThatThrownBy(withheld::annualSalary).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("annualSalary").hasMessageContaining("withheld");
+        assertThatThrownBy(withheld::currency).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("currency").hasMessageContaining("withheld");
+        assertThat(rows(november2.query(Reports.headcount())).rows()).as("reports are not affected by classifications")
+                .isNotEmpty();
+    }
+
+    /** The employee numbers in an answer of {@code cairn_query}, in the order that they appear. */
+    private static List<String> employeeNumbers(String answer) {
+        Matcher matcher = Pattern.compile("\"employeeNumber\":\"(E-[0-9]{3})\"").matcher(answer);
+        List<String> numbers = new ArrayList<>();
+        while (matcher.find()) {
+            numbers.add(matcher.group(1));
+        }
+        return numbers;
+    }
+
+    // ------------------------------------------------------------------ HR-14, a company of its own
+
+    @Test
+    @Order(18)
     @DisplayName("HR-14: a generated company reads the same from a reopened durable store as from memory")
     void hr14GeneratedCompany(@TempDir Path directory) {
         CompanyGenerator.Company company = CompanyGenerator.generate(CompanyGenerator.SEED);

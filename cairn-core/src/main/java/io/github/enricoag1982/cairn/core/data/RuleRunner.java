@@ -2,6 +2,7 @@ package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.commit.CommitSequence;
 import io.github.enricoag1982.cairn.core.schema.Problems;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityRule;
 import io.github.enricoag1982.cairn.data.EntityState;
@@ -96,12 +97,17 @@ final class RuleRunner {
     private record Reported(String code, String attribute, String message) {
     }
 
+    /** What a rule's problem says about an attribute that the clearance of the transaction does not cover. */
+    private static final String WITHHELD_MESSAGE = "The rule reported a problem about a withheld value.";
+
     private final Rules rules;
     private final ProvisionalView.Source source;
     /** The store as committed before the transaction, which the rules read through {@code before()}. */
     private final ProvisionalView.Source committed;
     private final CommitSequence sequence;
     private final ReadIndex.Stage stage;
+    /** The clearance of the transaction, if it has one: its problems then carry nothing of a value it may not read. */
+    private final Optional<Clearance> clearance;
     private final Set<Ran> ran = new HashSet<>();
     private final Set<RuleReference> reporting = new LinkedHashSet<>();
     /** Whether the runner only learns what rules read, so that a stack overflow in a rule is not fatal. */
@@ -117,11 +123,29 @@ final class RuleRunner {
      * @param stage    where the reads of every run are staged
      */
     RuleRunner(Rules rules, ProvisionalView.Source source, CommitSequence sequence, ReadIndex.Stage stage) {
+        this(rules, source, sequence, stage, Optional.empty());
+    }
+
+    /**
+     * Creates a runner for the transaction of a caller with a clearance (ADR-0036, design D4 of
+     * {@code add-attribute-access-control}): the problem of a rule that threw carries nothing of the error's message, and
+     * the problem of a rule about an attribute that the clearance does not cover carries nothing of the rule's message,
+     * because either can quote the values the rule read.
+     *
+     * @param rules     the rules the store has code for
+     * @param source    the state the rules read
+     * @param sequence  the sequence of the store, which refuses writes while the rules run
+     * @param stage     where the reads of every run are staged
+     * @param clearance the clearance of the transaction, if it has one
+     */
+    RuleRunner(Rules rules, ProvisionalView.Source source, CommitSequence sequence, ReadIndex.Stage stage,
+            Optional<Clearance> clearance) {
         this.rules = rules;
         this.source = source;
         this.committed = source.committed(sequence.latestBasis());
         this.sequence = sequence;
         this.stage = stage;
+        this.clearance = clearance;
     }
 
     /** Tells whether a rule ran for the version of an entity or relationship that starts at an instant. */
@@ -273,7 +297,7 @@ final class RuleRunner {
             if (e instanceof VirtualMachineError error && !(learning && e instanceof StackOverflowError)) {
                 throw error;
             }
-            problems.add(withHint(threw(subject, registered.descriptor(), e), hint));
+            problems.add(withHint(threw(subject, registered.descriptor(), e, clearance.isPresent()), hint));
             return false;
         } finally {
             context.close();
@@ -314,31 +338,42 @@ final class RuleRunner {
     }
 
     /** What a rule reported: a violation, or a failure of the rule if it names a code or an attribute wrongly. */
-    private static Problem problem(Subject subject, Rules.Registered registered, Reported reported) {
+    private Problem problem(Subject subject, Rules.Registered registered, Reported reported) {
         if (!registered.codes().contains(reported.code())) {
             return undeclared(subject, registered, reported);
         }
         if (reported.attribute() == null) {
-            return violation(registered.descriptor(), reported, subject.path());
+            return violation(registered.descriptor(), reported.code(), reported.message(), subject.path());
         }
         Optional<Attribute> attribute = subject.type().attribute(reported.attribute());
-        return attribute.isPresent()
-                ? violation(registered.descriptor(), reported, subject.path() + "." + attribute.get().name())
-                : unknownAttribute(subject, registered.descriptor(), reported);
+        if (attribute.isEmpty()) {
+            return unknownAttribute(subject, registered.descriptor(), reported);
+        }
+        // The message of a rule about an attribute that the clearance does not cover can quote its value.
+        boolean withheld = clearance.isPresent() && !clearance.get().covers(attribute.get());
+        return violation(registered.descriptor(), reported.code(),
+                withheld ? WITHHELD_MESSAGE : reported.message(), subject.path() + "." + attribute.get().name());
     }
 
     // ------------------------------------------------------------------ problems
 
-    private static Problem violation(RuleDescriptor rule, Reported reported, String path) {
-        return new Problem(ProblemCode.RULE_VIOLATION, path, reported.message(), Optional.empty(), Optional.empty(),
-                Optional.empty(), Optional.empty(), Optional.of(rule.name() + "/" + reported.code()));
+    private static Problem violation(RuleDescriptor rule, String code, String message, String path) {
+        return new Problem(ProblemCode.RULE_VIOLATION, path, message, Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.of(rule.name() + "/" + code));
     }
 
-    private static Problem threw(Subject subject, RuleDescriptor rule, Throwable e) {
+    /**
+     * The problem of a rule that threw.
+     *
+     * @param redact whether the transaction has a clearance, so that the message of the error, which can quote the values
+     *               the rule read, is left out; the name of the error's class stays
+     */
+    private static Problem threw(Subject subject, RuleDescriptor rule, Throwable e, boolean redact) {
         String message = e.getMessage();
         return Problems.of(ProblemCode.RULE_FAILED, subject.path(), "The rule " + name(rule) + " threw "
                 + e.getClass().getName() + " while checking " + subject.path() + ".",
-                "a rule that checks without an exception", message != null ? message : e.getClass().getName(),
+                "a rule that checks without an exception",
+                redact ? null : message != null ? message : e.getClass().getName(),
                 "Correct the rule; the transaction is not at fault.");
     }
 

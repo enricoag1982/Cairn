@@ -261,7 +261,7 @@ final class DocumentReader {
         if (properties.isEmpty()) {
             return new AttributeDefinition(name, ValueType.STRING, false, false, Optional.empty(), List.of(), false,
                     Optional.empty(), List.of(), List.of(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty(),
-                    Optional.empty());
+                    Optional.empty(), Optional.empty());
         }
         Map<String, Entry> p = properties.get();
         ValueType valueType = valueType(p.get("type"), path);
@@ -279,7 +279,8 @@ final class DocumentReader {
                 nodes.string(p.get("pattern"), path, "value of 'pattern'"),
                 nodes.integer(p.get("minLength"), path),
                 nodes.integer(p.get("maxLength"), path),
-                derived(p.get("derived"), path));
+                derived(p.get("derived"), path),
+                nodes.string(p.get("classification"), path, "value of 'classification'"));
     }
 
     /**

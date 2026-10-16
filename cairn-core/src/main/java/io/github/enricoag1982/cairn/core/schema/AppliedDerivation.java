@@ -4,6 +4,7 @@ import io.github.enricoag1982.cairn.expressions.CompiledDerivation;
 import io.github.enricoag1982.cairn.schema.Attribute;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * A derived attribute of an entity type or relationship type of a registered schema, as the schema keeps it for running
@@ -35,5 +36,15 @@ public record AppliedDerivation(Attribute attribute, Optional<CompiledDerivation
      */
     public boolean unavailable() {
         return compiled.isEmpty() && failure.isEmpty();
+    }
+
+    /**
+     * The names of the attributes that the derivation reads, which the engine compares with a clearance (ADR-0036). A
+     * derivation that is not compiled reads none.
+     *
+     * @return the names, as the attributes of the type are named
+     */
+    public Set<String> reads() {
+        return compiled.map(CompiledDerivation::attributesRead).orElse(Set.of());
     }
 }

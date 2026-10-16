@@ -1,5 +1,6 @@
 package io.github.enricoag1982.cairn.documents;
 
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.Coordinates;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 /**
  * Tells what an ID names, for reading a payload (capability {@code json-payloads}, design D2).
@@ -113,17 +115,36 @@ public interface IdLookup {
      * @return the lookup
      */
     static IdLookup fromStore(Store store) {
+        return fromStore(store, view -> view);
+    }
+
+    /**
+     * A lookup like {@link #fromStore(Store)} that asks views restricted to a clearance (ADR-0036): a unique key of an
+     * attribute that the clearance does not cover finds nothing, whether or not an entity has the value, so reading a
+     * payload tells the caller nothing about it. The IDs it knows are those of the restricted views, which are all the
+     * IDs there are: restricting a view withholds values and not entities.
+     *
+     * @param store     the store
+     * @param clearance the clearance of the caller
+     * @return the lookup
+     */
+    static IdLookup fromStore(Store store, Clearance clearance) {
+        Objects.requireNonNull(clearance, "clearance");
+        return fromStore(store, view -> view.restrictedTo(clearance));
+    }
+
+    private static IdLookup fromStore(Store store, UnaryOperator<View> restrict) {
         Objects.requireNonNull(store, "store");
         return new IdLookup() {
             @Override
             public Optional<Known> find(String id) {
-                return from(store.view(Coordinates.effectiveAt(Instant.EPOCH))).find(id);
+                return from(restrict.apply(store.view(Coordinates.effectiveAt(Instant.EPOCH)))).find(id);
             }
 
             @Override
             public Optional<Named> find(UniqueKey key, Instant effectiveAt) {
                 try {
-                    return store.view(Coordinates.effectiveAt(effectiveAt)).entity(key)
+                    return restrict.apply(store.view(Coordinates.effectiveAt(effectiveAt))).entity(key)
                             .map(state -> new Named(state.id().value(), state.entityType()));
                 } catch (IllegalArgumentException invalid) {
                     return Optional.empty();

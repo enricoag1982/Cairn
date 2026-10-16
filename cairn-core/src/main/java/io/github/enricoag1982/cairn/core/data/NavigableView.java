@@ -1,6 +1,7 @@
 package io.github.enricoag1982.cairn.core.data;
 
 import io.github.enricoag1982.cairn.core.query.QueryRunner;
+import io.github.enricoag1982.cairn.data.Clearance;
 import io.github.enricoag1982.cairn.data.EntityId;
 import io.github.enricoag1982.cairn.data.EntityState;
 import io.github.enricoag1982.cairn.data.Link;
@@ -56,6 +57,14 @@ abstract class NavigableView implements View {
 
     /** Names the schema in messages: {@code The schema at basis 3}. */
     abstract String schemaName();
+
+    /**
+     * The store's latest schema, which a restricted view consults besides its own: it withholds what is classified there
+     * too (ADR-0036). The schema of the view itself unless the view knows the store.
+     */
+    Schema latestSchema() {
+        return schema();
+    }
 
     /**
      * Every version, at any effective time, of the relationships of the given types that have an entity as their source,
@@ -154,6 +163,17 @@ abstract class NavigableView implements View {
     @Override
     public QueryResult query(Query query) {
         return QueryRunner.run(this, query);
+    }
+
+    /** A view that is not restricted reads every value; the view that results from restricting it is a {@link RestrictedView}. */
+    @Override
+    public View restrictedTo(Clearance clearance) {
+        return new RestrictedView(this, Objects.requireNonNull(clearance, "clearance"));
+    }
+
+    @Override
+    public Optional<Clearance> clearance() {
+        return Optional.empty();
     }
 
     @Override

@@ -353,6 +353,100 @@ class CairnAgentServerTest {
         }
     }
 
+    // ------------------------------------------------------------------ the clearance (ADR-0036)
+
+    private static final String SALARIES = """
+            cairn: 1
+            origin: { name: staff, version: "1.0.0" }
+            entityTypes:
+              Employee:
+                attributes:
+                  name: { type: string, required: true }
+                  salary: { type: int, classification: pay }
+            """;
+
+    private static String hire(String values) {
+        return AgentFixture.payloadOf("agent:demo", "{\"create\": {\"temporaryId\": \"e\", \"entityType\": \"Employee\", "
+                + "\"from\": \"2026-01-01T00:00:00Z\", \"values\": " + values + "}}");
+    }
+
+    @Test
+    void aServerWithoutAClearanceWithholdsAndRefuses() throws Exception {
+        Path staff = Files.writeString(directory.resolve("staff.cairn.yaml"), SALARIES);
+        try (StdioSession session = new StdioSession("--schema", staff.toString(), "--principal", "agent:demo")) {
+            session.initialize();
+
+            JsonNode description = session.callTool("cairn_describe", Json.object());
+            JsonNode refused = session.callTool("cairn_commit", args("payload", hire("{\"name\": \"Ana\", "
+                    + "\"salary\": 3000}")));
+            JsonNode hired = session.callTool("cairn_commit", args("payload", hire("{\"name\": \"Ana\"}")));
+            JsonNode read = session.callTool("cairn_list_entities", args("type", "Employee", "effectiveAt",
+                    "2026-06-01T00:00:00Z"));
+            JsonNode summed = session.callTool("cairn_query", args("query", "{\"from\": {\"type\": \"Employee\", "
+                    + "\"as\": \"e\"}, \"aggregates\": [{\"function\": \"avg\", \"attribute\": \"salary\", \"of\": "
+                    + "\"e\", \"as\": \"average\"}]}", "effectiveAt", "2026-06-01T00:00:00Z"));
+
+            assertThat(description.get("clearance")).isEmpty();
+            assertThat(refused.get("outcome").stringValue()).isEqualTo("rejected");
+            assertThat(refused.get("problems").get(0).get("code").stringValue()).isEqualTo("ACCESS_DENIED");
+            assertThat(hired.get("outcome").stringValue()).isEqualTo("committed");
+            assertThat(read.get("result")).singleElement().satisfies(state -> {
+                assertThat(state.get("values").has("salary")).isFalse();
+                assertThat(state.get("withheld").get(0).stringValue()).isEqualTo("salary");
+            });
+            assertThat(summed.get("problems").get(0).get("code").stringValue()).isEqualTo("ACCESS_DENIED");
+            assertThat(session.finish()).isZero();
+        }
+    }
+
+    @Test
+    void aServerWithAClearanceReadsAndWritesWhatItCovers() throws Exception {
+        Path staff = Files.writeString(directory.resolve("staff.cairn.yaml"), SALARIES);
+        try (StdioSession session = new StdioSession("--schema", staff.toString(), "--principal", "agent:demo",
+                "--clearance", "pay")) {
+            session.initialize();
+
+            JsonNode description = session.callTool("cairn_describe", Json.object());
+            JsonNode hired = session.callTool("cairn_commit", args("payload", hire("{\"name\": \"Ana\", "
+                    + "\"salary\": 3000}")));
+            JsonNode read = session.callTool("cairn_list_entities", args("type", "Employee", "effectiveAt",
+                    "2026-06-01T00:00:00Z"));
+            JsonNode summed = session.callTool("cairn_query", args("query", "{\"from\": {\"type\": \"Employee\", "
+                    + "\"as\": \"e\"}, \"aggregates\": [{\"function\": \"avg\", \"attribute\": \"salary\", \"of\": "
+                    + "\"e\", \"as\": \"average\"}]}", "effectiveAt", "2026-06-01T00:00:00Z"));
+
+            assertThat(description.get("clearance")).singleElement()
+                    .satisfies(name -> assertThat(name.stringValue()).isEqualTo("pay"));
+            assertThat(hired.get("outcome").stringValue()).isEqualTo("committed");
+            assertThat(read.get("result")).singleElement().satisfies(state -> {
+                assertThat(state.get("values").get("salary").intValue()).isEqualTo(3000);
+                assertThat(state.has("withheld")).isFalse();
+            });
+            assertThat(summed.has("problems")).as(summed.toString()).isFalse();
+            assertThat(session.finish()).isZero();
+        }
+    }
+
+    @Test
+    void theStartMessageSaysWhatTheClearanceIs() {
+        Run none = run("--principal", "agent:demo");
+        Run pay = run("--principal", "agent:demo", "--clearance", "pay,identity");
+
+        assertThat(none.err()).contains("with no clearance");
+        assertThat(pay.err()).contains("with the clearance pay, identity.");
+        assertThat(pay.status()).isZero();
+        assertThat(pay.out()).isEmpty();
+    }
+
+    @Test
+    void aClearanceThatIsNotWrittenLikeClassificationsPrintsTheUsageAndExitsWithStatus2() {
+        Run run = run("--principal", "agent:demo", "--clearance", "Pay Roll");
+
+        assertThat(run.status()).isEqualTo(2);
+        assertThat(run.err()).contains("The classification 'Pay Roll'").contains("Usage:").contains("--clearance");
+        assertThat(run.out()).isEmpty();
+    }
+
     // ------------------------------------------------------------------ what the server says at start
 
     @Test

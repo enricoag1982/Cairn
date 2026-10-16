@@ -80,7 +80,10 @@ final class CheckRunner {
                     problems.add(violated(subject, check, version));
                 }
             } catch (ExpressionEvaluationException | RuntimeException | StackOverflowError e) {
-                problems.add(failed(subject, check, version, e));
+                // The message of an evaluation can quote the values it read (ADR-0036): if the check reads an attribute
+                // that the clearance of the transaction does not cover, the problem says only that it gave no result.
+                boolean redact = workspace.readsWithheld(type, applied.reads(type.attributes()));
+                problems.add(redact ? failedWithoutDetail(subject, check, version) : failed(subject, check, version, e));
             }
         }
     }
@@ -114,6 +117,18 @@ final class CheckRunner {
         String reason = error.getMessage() != null ? error.getMessage() : error.toString();
         return Problems.of(ProblemCode.CHECK_FAILED, subject.path, "The check " + check.name() + " gave no result"
                 + version + ": " + reason, "a result that is true or false", reason,
+                "Test an optional attribute with has(self.<name>) before reading it, or correct the expression in a "
+                + "new version of the schema.");
+    }
+
+    /**
+     * The problem of a check that gave no result over attributes that the clearance of the transaction does not cover:
+     * its code, path, name and the author's message, and nothing of the evaluation.
+     */
+    private static Problem failedWithoutDetail(Working subject, Check check, String version) {
+        return Problems.of(ProblemCode.CHECK_FAILED, subject.path, "The check " + check.name() + " gave no result"
+                + version + "." + check.message().map(text -> " " + text).orElse(""),
+                "a result that is true or false", null,
                 "Test an optional attribute with has(self.<name>) before reading it, or correct the expression in a "
                 + "new version of the schema.");
     }

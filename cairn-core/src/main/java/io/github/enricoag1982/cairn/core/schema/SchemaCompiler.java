@@ -326,7 +326,7 @@ final class SchemaCompiler {
                 definition.valueType(), definition.required(), definition.unique(), definition.range(),
                 definition.deprecated(), definition.description(), definition.examples(), definition.allowedValues(),
                 definition.pattern(), definition.minLength(), definition.maxLength(), definition.derived(),
-                declared.declarer());
+                declared.declarer(), definition.classification());
     }
 
     private CompiledSchema.Declaration declaration(Declared declared) {

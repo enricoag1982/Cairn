@@ -127,6 +127,7 @@ The system SHALL apply a registration whose differences from the stored definiti
 - changing a relationship type's source or target to one of its supertypes, unless that end requires a relationship (a minimum of 1) and the change extends it to concrete entity types that already exist
 - relaxing a multiplicity, by lowering a minimum or raising a maximum
 - declaring that an existing relationship type's relationships outlive their targets
+- adding, changing or removing an attribute's classification
 
 #### Scenario: Adding an optional attribute
 
@@ -171,6 +172,11 @@ The system SHALL apply a registration whose differences from the stored definiti
 #### Scenario: Letting relationships outlive their targets
 
 - **WHEN** the stored model of `reference-model` has the test-only association OpenedBy, and a later version declares that OpenedBy outlives its targets
+- **THEN** the registration is applied
+
+#### Scenario: Classifying an existing attribute
+
+- **WHEN** the stored model of `reference-model` is version `1.0.0`, and a later version classifies Account's `balance` as `finance`
 - **THEN** the registration is applied
 
 ### Requirement: Breaking changes are rejected

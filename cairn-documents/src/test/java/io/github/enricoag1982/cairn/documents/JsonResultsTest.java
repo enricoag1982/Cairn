@@ -43,9 +43,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -232,6 +234,51 @@ class JsonResultsTest {
                       "recordedBasis": 3
                     }
                     """);
+        }
+
+        @Test
+        void aStateListsTheAttributesItWithheldLastAndLeavesOutTheListWhenItWithheldNothing() {
+            EntityState withheld = new EntityState(new EntityId("e-1"), "Organization", values("name", Value.of("ACME")),
+                    EffectivePeriod.between(JAN_1, DEC_1), RECORDED, new Basis(3), new LinkedHashSet<>(
+                            List.of("lei", "revenue")));
+            RelationshipState share = new RelationshipState(new RelationshipId("r-1"), "Owns", new EntityId("e-1"),
+                    new EntityId("e-2"), Map.of(), EffectivePeriod.from(JAN_1), RECORDED, new Basis(4),
+                    Set.of("share"));
+
+            Object entity = DocumentTrees.load(Payloads.toJson(withheld));
+            Object relationship = DocumentTrees.load(Payloads.toJson(share));
+
+            assertThat(DocumentTrees.keysOf(entity)).containsExactly("id", "entityType", "values", "period", "recordedAt",
+                    "recordedBasis", "withheld");
+            assertThat(DocumentTrees.at(entity, "withheld")).isEqualTo(List.of("lei", "revenue"));
+            assertThat(DocumentTrees.keysAt(entity, "values")).containsExactly("name");
+            assertThat(DocumentTrees.keysOf(relationship)).containsExactly("id", "relationshipType", "source", "target",
+                    "values", "period", "recordedAt", "recordedBasis", "withheld");
+            assertThat(DocumentTrees.at(relationship, "withheld")).isEqualTo(List.of("share"));
+            assertThat(DocumentTrees.keysOf(DocumentTrees.load(Payloads.toJson(acme())))).doesNotContain("withheld");
+            assertThat(DocumentTrees.keysOf(DocumentTrees.load(Payloads.toJson(owns())))).doesNotContain("withheld");
+        }
+
+        @Test
+        void theStatesInLinksStepsAndListsListWhatTheyWithheld() {
+            EntityState withheld = new EntityState(new EntityId("e-2"), "Organization", values("name", Value.of("Beta")),
+                    EffectivePeriod.from(JAN_1), RECORDED, new Basis(2), Set.of("lei"));
+            RelationshipState share = new RelationshipState(new RelationshipId("r-1"), "Owns", new EntityId("e-1"),
+                    new EntityId("e-2"), Map.of(), EffectivePeriod.from(JAN_1), RECORDED, new Basis(4),
+                    Set.of("share"));
+
+            Object link = DocumentTrees.load(Payloads.toJson(new Link(share, withheld)));
+            Object step = DocumentTrees.load(Payloads.toJson(new Step(withheld, 1, share)));
+            Object entities = DocumentTrees.load(Payloads.entityStatesToJson(List.of(withheld, beta())));
+            Object relationships = DocumentTrees.load(Payloads.relationshipStatesToJson(List.of(share)));
+
+            assertThat(DocumentTrees.at(link, "relationship", "withheld")).isEqualTo(List.of("share"));
+            assertThat(DocumentTrees.at(link, "entity", "withheld")).isEqualTo(List.of("lei"));
+            assertThat(DocumentTrees.at(step, "entity", "withheld")).isEqualTo(List.of("lei"));
+            assertThat(DocumentTrees.at(step, "via", "withheld")).isEqualTo(List.of("share"));
+            assertThat(DocumentTrees.keysOf(((List<?>) entities).get(0))).contains("withheld");
+            assertThat(DocumentTrees.keysOf(((List<?>) entities).get(1))).doesNotContain("withheld");
+            assertThat(DocumentTrees.keysOf(((List<?>) relationships).get(0))).contains("withheld");
         }
 
         @Test

@@ -258,6 +258,10 @@ public final class InMemoryStore implements Store {
         Objects.requireNonNull(transaction, "transaction");
         return sequence.underWriterLock(() -> {
             requireWritable();
+            List<Problem> refused = refusedBeforeItsKey(transaction);
+            if (!refused.isEmpty()) {
+                return new CommitResult.Rejected(refused);
+            }
             if (isPurged(transaction)) {
                 return new CommitResult.Rejected(List.of(purged(transaction)));
             }
@@ -279,6 +283,10 @@ public final class InMemoryStore implements Store {
     public DryRunResult dryRun(Transaction transaction) {
         Objects.requireNonNull(transaction, "transaction");
         return sequence.underWriterLock(() -> {
+            List<Problem> refused = refusedBeforeItsKey(transaction);
+            if (!refused.isEmpty()) {
+                return new DryRunResult.Rejected(refused);
+            }
             if (isPurged(transaction)) {
                 return new DryRunResult.Rejected(List.of(purged(transaction)));
             }
@@ -305,7 +313,8 @@ public final class InMemoryStore implements Store {
                     : requested.compareTo(Basis.NONE) < 0 ? Basis.NONE : requested;
             case KnownAt.AtTransactionTime(Instant time) -> basisAt(time, latest);
         };
-        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), ledger);
+        return new StoreView(coordinates.effectiveAt(), basis, new SchemaIndex(registry.asOf(basis)), ledger,
+                registry::current);
     }
 
     @Override
@@ -470,6 +479,22 @@ public final class InMemoryStore implements Store {
                 "Use a new idempotency key for a new transaction.");
     }
 
+    /**
+     * The problems {@code ACCESS_DENIED} of a transaction with a clearance and an idempotency key that the key would
+     * otherwise answer: a purged key rejects the transaction and a known key returns the receipt of the committed
+     * transaction or rejects it for other content, whatever the transaction would be allowed now (ADR-0036, design D4 of
+     * {@code add-attribute-access-control}). The writes that the clearance does not allow are refused first, judged by the
+     * latest schema, so that a retry cannot confirm a value that has been classified since it was written. None for any
+     * other transaction, which {@link #prepare} refuses in the same way when it comes to it. Called with the lock held.
+     */
+    private List<Problem> refusedBeforeItsKey(Transaction transaction) {
+        if (transaction.clearance().isEmpty() || (!isPurged(transaction) && known(transaction) == null)) {
+            return List.of();
+        }
+        return new Preparation(transaction, new SchemaIndex(registry.current()), ledger, purgedDigests,
+                generator.copy(), sequence.next(), checks, rules, sequence, reads).refusals();
+    }
+
     /** The committed transaction that used the transaction's idempotency key, if any. Called with the lock held. */
     private Keyed known(Transaction transaction) {
         return transaction.idempotencyKey().map(keys::get).orElse(null);
@@ -478,8 +503,9 @@ public final class InMemoryStore implements Store {
     private static Problem reused(Transaction transaction) {
         String key = transaction.idempotencyKey().orElseThrow();
         return Problems.of(ProblemCode.IDEMPOTENCY_KEY_REUSED, Preparation.TRANSACTION_PATH, "The idempotency key '"
-                + key + "' was used by a committed transaction with other writes, principal, party or reason.",
-                "the same writes, principal, party and reason as the committed transaction, or a new key",
+                + key + "' was used by a committed transaction with other writes, principal, party, reason or "
+                + "clearance.",
+                "the same writes, principal, party, reason and clearance as the committed transaction, or a new key",
                 "another transaction with the same key", "Use a new idempotency key for a new transaction.");
     }
 

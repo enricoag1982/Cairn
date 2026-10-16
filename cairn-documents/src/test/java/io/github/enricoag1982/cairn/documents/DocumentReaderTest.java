@@ -100,6 +100,7 @@ class DocumentReaderTest {
                         unique: true
                         aliases: [mail]
                         deprecated: true
+                        classification: contact-data
                         description: The address.
                         examples: [a@example.org]
                         allowedValues: [a@example.org, b@example.org]
@@ -159,7 +160,7 @@ class DocumentReaderTest {
                         new AttributeDefinition("email", STRING, true, true, Optional.empty(), List.of("mail"), true,
                                 Optional.of("The address."), List.of(Value.of("a@example.org")),
                                 List.of("a@example.org", "b@example.org"), Optional.of("[a-z@.]+"), OptionalInt.of(3),
-                                OptionalInt.of(40)),
+                                OptionalInt.of(40), Optional.empty(), Optional.of("contact-data")),
                         AttributeDefinition.builder("age", INT).range(Range.between(
                                 Bound.inclusive(Value.of(0)), Bound.exclusive(Value.of(150))))
                                 .examples(Value.of(42)).build(),
