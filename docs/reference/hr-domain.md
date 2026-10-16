@@ -47,6 +47,7 @@ Person <--EmploymentOf-- Employment --Fills------> Position --BelongsTo--> OrgUn
 | `no-unit-cycles` | 1 | `PartOf` | Following `PartOf` from a unit never leads back to it. | `cycle` |
 | `decided-by-manager` | 1 | `DecidedBy` | The deciding employment is not the requester, and manages the requester's unit, or a unit above it, on the request's first day. | `not-a-manager`, `own-request` |
 | `vacation-within-entitlement` | 1 | `LeaveRequest` | An employment's approved vacation days, of requests whose first days are in one calendar year, add up to at most 25. | `over-entitlement` |
+| `decided-requests-stay` | 1 | `LeaveRequest` | A leave request that was approved or rejected before the transaction keeps its kind, its first and last days and its days; its status may change only to `cancelled`. | `decided` |
 
 Checks ([ADR-0030](../decisions/0030-write-checks-within-one-version-in-cel-evaluated-by-an-optional-module.md)); a request that breaks one is rejected with `CHECK_VIOLATED`:
 

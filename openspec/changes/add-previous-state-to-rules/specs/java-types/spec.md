@@ -2,7 +2,7 @@
 
 ### Requirement: Rule base classes
 
-Every rule that the documents name SHALL get an abstract base class per name and version, which implements the rule interface for its kind of type, holds the rule's name, version and type, and passes each version to a typed check that subclasses write. A base class SHALL also read the checked entity or relationship as it was committed before the transaction, at the start of the version's period, as its generated type, or nothing if the store held none there. The type SHALL be the type that names the rule, or, if several types name it, their closest common supertype. The description and the problem codes SHALL stay in the subclass.
+Every rule that the documents name SHALL get an abstract base class per name and version, which implements the rule interface for its kind of type, holds the rule's name, version and type, and passes each version to a typed check that subclasses write. A base class SHALL also read the versions of the checked entity or relationship that the store held before the transaction during the version's period, in order, as its generated type, so that a rule can compare with each of them and its verdict does not depend on where the period starts. The type SHALL be the type that names the rule, or, if several types name it, their closest common supertype. The description and the problem codes SHALL stay in the subclass.
 
 #### Scenario: A rule written against a generated type
 

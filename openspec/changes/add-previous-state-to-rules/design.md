@@ -31,21 +31,22 @@ Dry runs read the committed state as commits do. Learning reads after recovery r
 
 ### D3. Generated base classes
 
-The base class of a rule gains `protected Optional<T> previous(T version, RuleContext context)`, where `T` is the base class's type:
+The base class of a rule gains `protected List<T> previous(T version, RuleContext context)`, where `T` is the base class's type:
 
-- It returns the entity or relationship with the version's ID, as committed before the transaction, at the start of the version's period, read as `T`.
-- It returns empty if the store held nothing there, for example when the transaction creates it.
+- It returns the versions of the entity or relationship with the version's ID that the store held before the transaction during the checked version's period, in order, read as `T`. It reads them from `context.before()`'s timeline, which is recorded as a timeline read.
+- It returns an empty list when the store held nothing in that period, for example when the transaction creates it.
+- A rule's verdict must hold at each instant of the version's period (`entity-rules`), so a rule compares with every previous version, not only with the one at the start.
 
 ### D4. The test-only rule and the HR example
 
 **The reference domain** adds the test-only rule `lei-kept` version 1, for Organization:
 
-- An organization that had an LEI before the transaction, at the start of the checked version, still has one, with the code `lei-removed`.
+- An organization that had an LEI before the transaction, at any time in the checked version's period, still has one, with the code `lei-removed`.
 - The reference domain page lists it.
 
 **The HR example** adds the rule `decided-requests-stay` version 1, for LeaveRequest:
 
-- A request whose status before the transaction, at the start of the checked version, was `approved` or `rejected` keeps its kind, its first and last days and its days. Its status may change only to `cancelled`.
+- A request whose status before the transaction, at any time in the checked version's period, was `approved` or `rejected` keeps the kind, first and last days and days it had then. Its status may change only to `cancelled`.
 - The code is `decided`.
 - The HR schema document names the rule; the page lists it in the rule table.
 
