@@ -128,11 +128,12 @@ Allowed values, patterns and lengths MUST NOT be declared on attributes of other
 
 ### Requirement: Relationship types
 
-The system SHALL support relationship types that declare a source entity type, a target entity type, an inverse name, two multiplicities, and whether they are a composition or an association. They MAY be marked symmetric, MAY declare attributes, and MAY have at most one relationship supertype.
+The system SHALL support relationship types that declare a source entity type, a target entity type, an inverse name, two multiplicities, and whether they are a composition or an association. They MAY be marked symmetric, MAY declare that their relationships outlive their targets, MAY declare attributes, and MAY have at most one relationship supertype.
 The two multiplicities SHALL state how many targets each source can have and how many sources each target can have. Each multiplicity SHALL be a minimum of 0 or 1 and a maximum of 1 or unbounded.
 Further rules:
 - In a composition, each target MUST have exactly one source, and the relationship type MUST NOT be symmetric.
 - A symmetric relationship type MUST have the same source and target entity type, and the same multiplicity at both ends.
+- A relationship type that outlives its targets (see the `relationships` capability) MUST be an association and MUST NOT be symmetric. It does not pass this to its subtypes.
 - A relationship type with a supertype MUST have a source and a target that are equal to, or subtypes of, the supertype's source and target. It SHALL have the supertype's attributes as well as its own.
 
 #### Scenario: Relationship to an abstract type
@@ -159,6 +160,16 @@ Further rules:
 
 - **WHEN** a relationship type has the supertype Owns and declares the target Address, which is not Party or a subtype of Party
 - **THEN** validation fails with a problem located at that relationship type
+
+#### Scenario: A relationship type that outlives its targets
+
+- **WHEN** the test-only association OpenedBy declares the source Account, the target Person, from 0 to 1 targets per source and from 0 to unbounded sources per target, the inverse name `opened`, and that its relationships outlive their targets
+- **THEN** validation succeeds, and the schema reports that OpenedBy outlives its targets
+
+#### Scenario: A composition that outlives its targets
+
+- **WHEN** the composition HasAddress declares that its relationships outlive their targets
+- **THEN** validation fails with a problem located at HasAddress
 
 ### Requirement: Names
 

@@ -24,4 +24,4 @@
 ## 5. Documentation
 
 - [x] 5.1 Update the glossary, the HR domain page (types, HR-17, gaps), the reference domain page (test-only types) and the architecture page; bump `last-reviewed`
-- [ ] 5.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings
+- [x] 5.2 Run `npm run check` and `./gradlew build`, then a drift review by the `docs-reviewer` subagent, and fix its findings

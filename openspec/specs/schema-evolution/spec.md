@@ -126,6 +126,7 @@ The system SHALL apply a registration whose differences from the stored definiti
 - making an abstract entity type concrete
 - changing a relationship type's source or target to one of its supertypes, unless that end requires a relationship (a minimum of 1) and the change extends it to concrete entity types that already exist
 - relaxing a multiplicity, by lowering a minimum or raising a maximum
+- declaring that an existing relationship type's relationships outlive their targets
 
 #### Scenario: Adding an optional attribute
 
@@ -167,6 +168,11 @@ The system SHALL apply a registration whose differences from the stored definiti
 - **WHEN** the stored model declares the derived attribute `label` on Account, and a later version of the origin declares `label` without `derived`
 - **THEN** the registration is applied
 
+#### Scenario: Letting relationships outlive their targets
+
+- **WHEN** the stored model of `reference-model` has the test-only association OpenedBy, and a later version declares that OpenedBy outlives its targets
+- **THEN** the registration is applied
+
 ### Requirement: Breaking changes are rejected
 
 The system SHALL reject a registration whose differences from the stored definition of its origin include any breaking change. The rejection SHALL list every breaking change with its path and reason, and a hint for fixing it where one applies, and MUST NOT change the stored schema. In these rules, an existing type is a concrete entity type or a relationship type that the stored schema already has: abstract types have no entities of their own. These changes are breaking:
@@ -185,6 +191,7 @@ The system SHALL reject a registration whose differences from the stored definit
 - adding, removing or changing an entity type's or relationship type's supertype
 - making a concrete entity type abstract
 - changing a relationship type between composition and association, or between symmetric and not symmetric
+- no longer declaring that an existing relationship type's relationships outlive their targets
 - changing any other property of an existing element, unless it is listed as a compatible change
 
 #### Scenario: Removing an attribute
@@ -238,6 +245,11 @@ The system SHALL reject a registration whose differences from the stored definit
 
 - **WHEN** the stored model has Account without `label`, and a later version of the origin declares the derived attribute `label` on Account
 - **THEN** the registration is rejected with a breaking change at `Account.label`
+
+#### Scenario: Relationships that no longer outlive their targets
+
+- **WHEN** the stored model of `reference-model` has the test-only association OpenedBy, which outlives its targets, and a later version no longer declares it
+- **THEN** the registration is rejected with a breaking change located at OpenedBy
 
 ### Requirement: Aliases resolve to renamed elements
 
